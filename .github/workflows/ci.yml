@@ -562,6 +562,9 @@ jobs:
       # 2026-11-07: carbon.tests.test_legacy_seeders_stay_deleted joins. Twelve legacy seeders that
       # wrote offset/benchmark/report rows or unsourced claims stay out of the command registry.
       # It does not read the sibling repo.
+      # 2026-11-07: carbon.tests.test_crop_template_detail_claims joins. The live crop template
+      # detail payload carries no `benchmark` and no `carbon_credit_potential`. It does not read
+      # the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -742,6 +745,7 @@ jobs:
             carbon.tests.test_carbon_calculator_gaps \
             carbon.tests.test_retired_claim_routes_stay_retired \
             carbon.tests.test_live_carbon_payloads_carry_no_grade \
+            carbon.tests.test_crop_template_detail_claims \
             carbon.tests.test_offsets_are_not_self_verified \
             carbon.tests.test_factor_provenance \
             carbon.tests.test_emission_factors \

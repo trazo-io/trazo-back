@@ -8,14 +8,9 @@ from history.models import History
 
 from .models import (
     CarbonAuditLog,
-    CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
     CarbonOffsetAction,
-    CarbonOffsetCertificate,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonReport,
     CarbonSource,
     CropType,
     EventTemplate,
@@ -580,54 +575,6 @@ class CarbonCertificationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class CarbonBenchmarkSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CarbonBenchmark
-        fields = [
-            "id",
-            "industry",
-            "year",
-            "average_emissions",
-            "min_emissions",
-            "max_emissions",
-            "company_count",
-            "unit",
-            "source",
-            "last_updated",
-            "usda_factors_used",
-            "crop_type",
-            "region",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "last_updated", "created_at", "updated_at"]
-
-
-class CarbonReportSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CarbonReport
-        fields = [
-            "id",
-            "establishment",
-            "production",
-            "period_start",
-            "period_end",
-            "total_emissions",
-            "total_offsets",
-            "net_footprint",
-            "generated_at",
-            "usda_factors_used",
-            "document",
-            "detailed_breakdown",
-            "trend_analysis",
-            "improvement_tracking",
-            "stakeholder_insights",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "generated_at", "created_at", "updated_at"]
-
-
 class CarbonAuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarbonAuditLog
@@ -635,7 +582,6 @@ class CarbonAuditLogSerializer(serializers.ModelSerializer):
             "id",
             "carbon_entry",
             "certification",
-            "report",
             "user",
             "action",
             "timestamp",
@@ -644,123 +590,3 @@ class CarbonAuditLogSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "timestamp", "created_at"]
-
-
-class CarbonOffsetProjectSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CarbonOffsetProject
-        fields = [
-            "id",
-            "name",
-            "description",
-            "project_type",
-            "location",
-            "total_capacity",
-            "available_capacity",
-            "price_per_ton",
-            "certification_standard",
-            "verification_status",
-            "start_date",
-            "end_date",
-            "is_active",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ("created_at", "updated_at")
-
-
-class CarbonOffsetPurchaseSerializer(serializers.ModelSerializer):
-    project_details = CarbonOffsetProjectSerializer(source="project", read_only=True)
-
-    class Meta:
-        model = CarbonOffsetPurchase
-        fields = [
-            "id",
-            "project",
-            "project_details",
-            "amount",
-            "price_per_ton",
-            "total_price",
-            "status",
-            "transaction_id",
-            "purchase_date",
-            "certificate_url",
-            "notes",
-        ]
-        read_only_fields = ("total_price", "transaction_id", "purchase_date", "certificate_url")
-
-    def validate_amount(self, value):
-        """Validate carbon offset amount"""
-        if value is None:
-            raise serializers.ValidationError("Amount is required")
-
-        # Convert to float to handle both int and float inputs
-        try:
-            amount = float(value)
-        except (ValueError, TypeError):
-            raise serializers.ValidationError("Amount must be a valid number")
-
-        # Validate range (0.01 to 1000 tons CO2e for offsets)
-        if amount < 0.01:
-            raise serializers.ValidationError("Amount must be at least 0.01 tons CO2e")
-
-        if amount > 1000:
-            raise serializers.ValidationError("Amount cannot exceed 1,000 tons CO2e per purchase")
-
-        # Check for reasonable precision (max 2 decimal places for tons)
-        if round(amount, 2) != amount:
-            raise serializers.ValidationError("Amount can have at most 2 decimal places")
-
-        return amount
-
-    def validate_price_per_ton(self, value):
-        """Validate price per ton"""
-        if value is None:
-            raise serializers.ValidationError("Price per ton is required")
-
-        try:
-            price = float(value)
-        except (ValueError, TypeError):
-            raise serializers.ValidationError("Price must be a valid number")
-
-        # Validate reasonable price range ($1 to $500 per ton)
-        if price < 1:
-            raise serializers.ValidationError("Price per ton must be at least $1")
-
-        if price > 500:
-            raise serializers.ValidationError("Price per ton cannot exceed $500")
-
-        return price
-
-    def validate(self, data):
-        project = data.get("project")
-        amount = data.get("amount")
-
-        if project and amount:
-            if amount > project.available_capacity:
-                raise serializers.ValidationError(
-                    f"Requested amount exceeds available capacity. Available: {project.available_capacity} tons"
-                )
-            if amount <= 0:
-                raise serializers.ValidationError("Amount must be greater than 0")
-
-        return data
-
-
-class CarbonOffsetCertificateSerializer(serializers.ModelSerializer):
-    purchase_details = CarbonOffsetPurchaseSerializer(source="purchase", read_only=True)
-
-    class Meta:
-        model = CarbonOffsetCertificate
-        fields = [
-            "id",
-            "purchase",
-            "purchase_details",
-            "certificate_number",
-            "issue_date",
-            "expiry_date",
-            "verification_code",
-            "certificate_url",
-            "metadata",
-        ]
-        read_only_fields = ("certificate_number", "issue_date", "verification_code")
