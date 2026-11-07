@@ -219,21 +219,18 @@ items:
 - ref: D1
   asks: What types of products does this operation grow, produce, process, handle, or sell? Both organic
     and nonorganic product(s) / Organic product(s) only / Organic and transitional product(s).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_0_production.split_operation
-    models:
-    - certifications.parcel_application (page B, transitional status)
-    prints: 00-cover.pdf
-  gap: No explicit tri-state question exists; the answer is derived from `split_operation_declaration`
-    (yes/no/unanswered) plus per-parcel transitional status on the Parcel Application. Because a buffer-row-only
-    farm is currently pushed into declaring split=Yes (see G8.0 C1), an all-organic operation with no
-    transitional land can be forced into 'Both organic and nonorganic' here too.
-  fix: Once G6.0 gains the `nonorganic_product_source` gating radio proposed for G8.0 C1, derive D1 from
-    it plus parcel transitional status, and let the operator confirm the derived value in the contract
-    module.
+    - g6_0_production.nonorganic_product_source
+    - g6_0_production.nonorganic_product_source_other
+    prints: '00-cover.pdf: "Organic and non-organic product", Both / Organic only, with where the non-organic
+      product comes from (buffer-zone crop, parcels not certified, land in transition, bought in, other)'
+  # Closed 2026-11-06. § 205.2 makes any operation producing non-organic product a split operation, buffer crop
+  # sold as non-organic included, so the earlier note that a buffer-only farm was "pushed into" a false Yes was
+  # wrong; the cover now prints the declaration with its source, and "land in transition" is how CCOF's third
+  # option is read.
 - ref: D2
   asks: 'Please indicate any markets you export or plan to export to, directly or indirectly (as an ingredient
     or through brokers/traders, etc.): Canada, Europe/UK, Japan, Korea, Taiwan, Switzerland, Mexico, Other.'
@@ -328,20 +325,17 @@ items:
   asks: 'CDFA California Organic Program Registration number (grower, post-harvest handling, produce broker),
     e.g. 12-123456 — required for operations producing organic product in California prior to first sale.
     Checkboxes: not applicable, not based in California / not applicable, retail or restaurant.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    where: not in this packet; the operation's audit export, a separate document, prints it
     models:
-    - company.StateOrganicRegistration
-    prints: — in the OSP packet and contract module; prints in the audit dossier only
-  gap: '`StateOrganicRegistration` (state, program, operation_type, status, registration_number, county,
-    commodities, prior-year sales, renewal date, document) exists with a serializer and viewset, and prints
-    in the AUDIT DOSSIER — but never on the packet cover nor in the contract module, so a California renewal
-    packet omits the one number CCOF and CDFA both require before first sale.'
-  fix: 'On the packet cover, when `establishment.state == "CA"`, print ''CDFA SOP registration # / renewal
-    date'' from `StateOrganicRegistration`, or ''not on file — required before first sale (FAC § 46000)''
-    if absent; have the contract module read the same row.'
+    - certifications.StateOrganicRegistration.registration_number
+    - certifications.StateOrganicRegistration.status
+    - certifications.StateOrganicRegistration.renewal_date
+    prints: '00-cover.pdf: "California organic registration (CDFA)", the number with its status, county and
+      renewal date; none on file, a missing number or a lapsed registration prints a [REVIEW] line'
+  # Closed 2026-11-06. Food & Agr. Code § 46013.1(a): register "before the first sale"; an exempt operation is
+  # "only exempt from certification ... and [is] still required to be registered". Not-applicable boxes: the
+  # line is printed only for a California operation or one with a registration on file.
 - ref: E2
   asks: CDPH Department of Health Services Organic Registration number (processing), e.g. 12345.
   status: not_covered

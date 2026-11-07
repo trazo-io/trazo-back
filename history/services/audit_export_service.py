@@ -13581,10 +13581,12 @@ class AuditExportService:
                 elements.append(
                     self._body(
                         "No State Organic Program registration is on file for this operation. "
-                        "Under California Food & Agricultural Code §§ 46000-46029, a producer "
-                        "selling more than $5,000/yr of organic product must register with the "
-                        "CDFA State Organic Program before the first organic sale and renew "
-                        "annually (this is separate from CDFA OIM input-material registration)."
+                        "Under California Food & Agricultural Code § 46013.1(a), every operation "
+                        "producing or handling raw agricultural products sold as organic in California "
+                        "must register with the CDFA State Organic Program before the first sale and "
+                        "renew annually; an operation under $5,000 is exempt from certification only, "
+                        "not from registration (this is separate from CDFA OIM input-material "
+                        "registration)."
                     )
                 )
                 elements.append(
@@ -13655,7 +13657,7 @@ class AuditExportService:
                 Paragraph(
                     "<b>[REVIEW] $5,000 exemption exceeded:</b> prior-year organic gross sales "
                     f"of ${gross:,.2f} are above the $5,000 exemption, but the registration is "
-                    "still marked 'Exempt (&lt; $5,000 organic sales)'. Above $5,000 the operation "
+                    "still marked exempt from certification. Above $5,000 the operation "
                     "must hold a current CDFA State Organic Program registration and USDA organic "
                     "certification. Update the registration status.",
                     self._warning_style(),
@@ -18733,9 +18735,10 @@ class AuditExportService:
                         writer.writerow(
                             [
                                 "Registration on file",
-                                "None — CA producers selling > $5,000/yr organic must register with the "
-                                "CDFA State Organic Program before first sale "
-                                "(CA Food & Ag Code §§ 46000-46029). [REVIEW]",
+                                "None. Every California operation producing or handling product sold as "
+                                "organic must register with the CDFA State Organic Program before the first "
+                                "sale, including one exempt from certification "
+                                "(CA Food & Ag Code § 46013.1(a)). [REVIEW]",
                             ]
                         )
                     else:

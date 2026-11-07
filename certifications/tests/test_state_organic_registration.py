@@ -61,9 +61,14 @@ class StateOrganicRegistrationModelTests(TestCase):
         reg = self._reg(status="pending")
         self.assertFalse(reg.is_current)
 
-    def test_exempt_is_current(self):
-        reg = self._reg(status="exempt")
+    def test_exempt_with_its_registration_number_is_current(self):
+        reg = self._reg(status="exempt", registration_number="12-123456")
         self.assertTrue(reg.is_current)
+
+    def test_exempt_without_a_registration_number_is_not_current(self):
+        """Food & Agr. Code § 46013.1(a): exempt from certification only, still required to register."""
+        reg = self._reg(status="exempt")
+        self.assertFalse(reg.is_current)
 
 
 class StateOrganicRegistrationSerializerTests(TestCase):

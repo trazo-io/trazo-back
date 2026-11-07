@@ -92,6 +92,80 @@ G6_0_PRODUCTION = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # CCOF G8.0 C1 and Certification Contract D1, OTCO O1 A-2. § 205.2 makes an operation
+                # that produces or handles any non-organic product a split operation, buffer crop sold
+                # as non-organic included, so the Yes above stays. What a reviewer could not read was
+                # where the non-organic product comes from: a farm whose only non-organic product is
+                # buffer-zone crop and one with conventional fields both printed a bare "Yes".
+                Question(
+                    key="nonorganic_product_source",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Where does the non-organic product come from? Check all that apply.",
+                        "¿De dónde viene el producto no orgánico? Marca todas las que correspondan.",
+                    ),
+                    coaching=text(
+                        "Crop harvested from a buffer zone and sold as non-organic is non-organic product. "
+                        "If it is the only one, check only that box: the reviewer then reads that no parcel "
+                        "is under conventional management.",
+                        "El cultivo cosechado en una zona de amortiguamiento y vendido como no orgánico es "
+                        "producto no orgánico. Si es el único, marca solo esa casilla: así quien revisa lee que "
+                        "ninguna parcela está bajo manejo convencional.",
+                    ),
+                    nop_cite="§ 205.2",
+                    visible_when=(Condition(question="split_operation", op="truthy"),),
+                    compiles_to=CompileRule(
+                        template="Non-organic product comes from: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "buffer_zone_crop",
+                            text(
+                                "Crop harvested from buffer zones, sold as non-organic",
+                                "Cultivo cosechado en zonas de amortiguamiento, vendido como no orgánico",
+                            ),
+                        ),
+                        Option(
+                            "nonorganic_parcels",
+                            text(
+                                "Crops grown on parcels that are not certified organic",
+                                "Cultivos producidos en parcelas que no están certificadas orgánicas",
+                            ),
+                        ),
+                        Option(
+                            "transitional_parcels",
+                            text(
+                                "Crop from land in transition to organic",
+                                "Cultivo de tierra en transición a orgánico",
+                            ),
+                        ),
+                        Option(
+                            "bought_in_nonorganic",
+                            text(
+                                "Non-organic product bought from other operations and resold",
+                                "Producto no orgánico comprado a otras operaciones y revendido",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
+                    key="nonorganic_product_source_other",
+                    kind="text",
+                    required=False,
+                    label=text("Other source of non-organic product", "Otro origen del producto no orgánico"),
+                    nop_cite="§ 205.2",
+                    visible_when=(
+                        Condition(question="split_operation", op="truthy"),
+                        Condition(question="nonorganic_product_source", op="includes", value="other"),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Other source of non-organic product: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 Question(
                     key="split_operation_separation",
                     kind="textarea",

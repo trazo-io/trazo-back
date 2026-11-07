@@ -115,3 +115,54 @@ def split_operation_declaration(establishment) -> str:
     if answer is False:
         return DECLARED_NO
     return DECLARED_YES if establishment.has_split_operation else UNANSWERED
+
+
+def plan_split_declaration(osp) -> str:
+    """`split_operation_declaration` for one plan version rather than the plan of record.
+
+    The packet is built from a given version, and its cover must say what THAT version declares.
+    A column-only `True` still counts, as above: it is a statement made before the binding.
+    """
+    answer = _module_answer(osp, "g6_0_production", "split_operation")
+    if answer is True:
+        return DECLARED_YES
+    if answer is False:
+        return DECLARED_NO
+    return DECLARED_YES if osp.establishment.has_split_operation else UNANSWERED
+
+
+def plan_g2_lists_split_production(osp) -> bool:
+    """`g2_lists_split_production` for one plan version."""
+    answer = _module_answer(osp, "g2_0_fraud_prevention", "fraud_risk_areas")
+    if isinstance(answer, str):
+        answer = [answer]
+    return isinstance(answer, (list, tuple)) and G2_SPLIT_PRODUCTION_OPTION in answer
+
+
+def nonorganic_product_sources(osp) -> list:
+    """The English labels of the plan's `nonorganic_product_source` answer, in the form's order.
+
+    "Other" is replaced by the operator's own words when they gave them. Labels come from the module
+    definition, so the cover and the module PDF cannot word the same answer two ways.
+    """
+    from certifications.osp_modules.g6_0_production import G6_0_PRODUCTION
+
+    chosen = _module_answer(osp, "g6_0_production", "nonorganic_product_source")
+    if isinstance(chosen, str):
+        chosen = [chosen]
+    if not isinstance(chosen, (list, tuple)) or not chosen:
+        return []
+    other = _module_answer(osp, "g6_0_production", "nonorganic_product_source_other")
+    labels = []
+    for page in G6_0_PRODUCTION.pages:
+        for question in page.questions:
+            if question.key != "nonorganic_product_source":
+                continue
+            for option in question.options:
+                if option.value not in chosen:
+                    continue
+                if option.value == "other" and isinstance(other, str) and other.strip():
+                    labels.append(other.strip())
+                else:
+                    labels.append(option.label["en"])
+    return labels

@@ -688,6 +688,9 @@ jobs:
             certifications.tests.test_parcel_tenure \
             certifications.tests.test_parcel_borders \
             certifications.tests.test_roadside_and_streams \
+            certifications.tests.test_split_product_source \
+            certifications.tests.test_cover_state_registration \
+            certifications.tests.test_state_organic_registration \
             certifications.tests.test_material_identity \
             certifications.tests.test_post_harvest_facility_reaches_plan \
             certifications.tests.test_supplier_register \

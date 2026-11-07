@@ -265,7 +265,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   as given and as unconfirmed; its replacement `self_managed_adjacent_precautions` states the fact and asks
 #   the precautions. G4.2 page A asks WSDA AGR 2121 E16: streams, shorelines, gullies or irrigation channels
 #   on or next to certified land. All optional; nothing existing is gated on the new answers.
-CONTENT_VERSION = "2026.11.16"
+# 2026.11.17: G6.0 page A asks, of a split operation, where the non-organic product comes from (buffer-zone
+#   crop sold as non-organic, parcels not certified, land in transition, product bought in and resold,
+#   other). The split answer itself is unchanged: § 205.2 makes any operation producing non-organic product
+#   split, buffer crop included. Optional; nothing existing is gated on it.
+CONTENT_VERSION = "2026.11.17"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

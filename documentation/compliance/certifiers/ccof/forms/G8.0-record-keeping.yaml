@@ -57,12 +57,12 @@ items:
   - ref: "C1"
     asks: "A split operation is one that produces or handles both organic and nonorganic products. Mark all that apply: grow both organic and nonorganic crops; grow identical crops organically and nonorganically; sell organic and nonorganic crops/products, including any sourced from other operations; sell identical organic and nonorganic crops/products, including any sourced from other operations; none of the above — skip to section D."
     status: partial
-    severity: P1
+    severity: P3
     trazo:
-      questions: [g6_0_production.split_operation, g6_0_production.parallel_production, g6_5_sales_soe.sales_soe_supplier_verification]
+      questions: [g6_0_production.split_operation, g6_0_production.nonorganic_product_source, g6_0_production.nonorganic_product_source_other, g6_0_production.parallel_production, g6_5_sales_soe.sales_soe_supplier_verification]
       prints: "modules/G6_0.pdf §A"
-    gap: "Only 2 of CCOF's 4 checkboxes are directly mapped (grow both / grow identical); 'sell … including sourced' is derivable but not asked as its own box. Worse, the module's own coaching ('answer yes even if the conventional share is small') plus a plain Yes/No `split_operation` pushes a buffer-row-only farm — one selling ONLY excluded buffer-zone crop as conventional under § 205.202(c), with no conventional management anywhere — into declaring both split AND parallel production, which the pilot's own annual-update narrative then contradicts inside the same packet."
-    fix: "Add a `nonorganic_product_source` gating radio to G6.0 A = {none, buffer_zone_crop_only, conventional_parcels_products}; for buffer_zone_crop_only, derive `split_operation`/`parallel_production`/these four boxes as 'buffer crop only, excluded under § 205.202(c)' instead of a bare Yes, and derive Contract D1 from the same source."
+    gap: "Since 2026-11-06 three of CCOF's four boxes read straight off the plan: grow both (`split_operation` with its source: buffer-zone crop, parcels not certified, land in transition), grow identical (`parallel_production`), and sell both including sourced (`nonorganic_product_source` = bought in and resold). The fourth, sell IDENTICAL organic and non-organic including sourced, is asked only for what the operation grows; whether a bought-in non-organic product is identical to an organic one it sells is not asked. The earlier note that a buffer-row-only farm was pushed into a false Yes was wrong: § 205.2 defines a split operation as one that 'produces or handles both organic and nonorganic agricultural products', which a farm selling buffer crop as non-organic does."
+    fix: "Add a follow-up to the bought-in option: is any bought-in non-organic product the same crop as an organic one the operation sells."
 
   - ref: "C2"
     asks: "How do your input records distinguish between materials used on organic and nonorganic crops?"

@@ -273,24 +273,16 @@ items:
   asks: RECORDKEEPING FOR ORGANIC AND NON-ORGANIC CROP PRODUCTION — do you produce both organic and non-organic
     crops and/or crop products? No, section not applicable / Yes — identify the non-organic crops and/or crop
     products produced.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_0_production.split_operation
-    - g6_0_production.parallel_production
-    - g6_0_production.split_operation_separation
+    - g6_0_production.nonorganic_crops_products
+    - g6_0_production.nonorganic_product_source
+    - g6_0_production.nonorganic_product_source_other
     prints: modules/G6_0.pdf §A
-  gap: 'Reused from CCOF G8.0 C1 (P1). The module''s coaching ("answer yes even if the conventional share is
-    small") plus a plain Yes/No `split_operation` pushes a buffer-row-only farm — one selling ONLY excluded
-    buffer-zone crop as conventional under § 205.202(c), with no conventional management anywhere — into declaring
-    split AND parallel production, which the annual-update narrative in the same packet then contradicts. OTCO
-    adds "identify the non-organic crops": no field names them; `split_operation_separation` is a separation
-    narrative, and the per-year crop-history rows that carry a production method (organic / conventional /
-    transitional) print on the parcel application, not here.'
-  fix: Reuse C1 — a `nonorganic_product_source` gating radio {none, buffer_zone_crop_only, conventional_parcels_products}
-    on G6.0 A; when conventional, add a `nonorganic_crops_named` text whose suggestion is drawn from crop-history
-    rows marked conventional, for the operator to confirm.
+  # Closed 2026-11-06. The non-organic crops are named (`nonorganic_crops_products`, 2026.11.09) and where the
+  # non-organic product comes from is asked. A buffer-only farm answering Yes is right under § 205.2, not pushed.
 - ref: 12.4-1a
   asks: How do your input records distinguish between materials used on organic and non-organic crops and/or
     crop products?

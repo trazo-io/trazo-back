@@ -2561,6 +2561,112 @@ def _changed_only_cover_flowables(scope, styles) -> list:
     return story
 
 
+CA_REGISTRATION_LABEL = "California organic registration (CDFA)"
+
+
+def _state_registration_cover_lines(est, kv, styles) -> list:
+    """CCOF Certification Contract E1 and OTCO O1 E-1 ask a California operation for its CDFA
+    organic registration number. The number was recorded (`StateOrganicRegistration`) and printed
+    in the audit dossier, but never in the renewal packet, so both agents' forms went out without
+    it. Printed for a California operation, or for any operation that has one on file; nothing for
+    an operation elsewhere with none, because the requirement is California's alone.
+    """
+    from django.db.models import F
+
+    from certifications.models import StateOrganicRegistration
+    from common.us_states import resolve_establishment_state
+
+    reg = (
+        StateOrganicRegistration.objects.filter(establishment=est, state="CA")
+        .order_by(F("registration_date").desc(nulls_last=True), "-pk")
+        .first()
+    )
+    if reg is None:
+        if resolve_establishment_state(est) != "CA":
+            return []
+        return [
+            kv(CA_REGISTRATION_LABEL, "none on file"),
+            Paragraph(
+                "[REVIEW] CCOF's and Oregon Tilth's forms ask a California operation for its CDFA organic "
+                "registration number. Add it under State Organic Program Registration (CDFA) on the "
+                "Organic System Plan page.",
+                styles["meta"],
+            ),
+        ]
+    details = [reg.get_status_display()]
+    if reg.county:
+        details.append(f"{reg.county} County")
+    if reg.renewal_date:
+        details.append(f"renewal date {reg.renewal_date.isoformat()}")
+    lines = [kv(CA_REGISTRATION_LABEL, reg.registration_number or "number not recorded", note=", ".join(details))]
+    if not reg.registration_number:
+        problem = "The registration number is not recorded."
+        if reg.status == "exempt":
+            # Food & Agr. Code § 46013.1(a), quoted: exempt operations "are only exempt from
+            # certification under federal organic standards and are still required to be registered".
+            problem += (
+                " An operation under $5,000 is exempt from certification only; California still requires "
+                "it to register (Food & Agr. Code § 46013.1(a))."
+            )
+    elif not reg.is_current:
+        problem = (
+            "The registration on file is not current (its status is pending or expired, or its renewal date "
+            "has passed)."
+        )
+    else:
+        return lines
+    lines.append(Paragraph(_escape(f"[REVIEW] {problem} Update it before the forms are filed."), styles["meta"]))
+    return lines
+
+
+PRODUCT_TYPES_LABEL = "Organic and non-organic product"
+
+
+def _product_types_cover_lines(osp, kv, styles) -> list:
+    """CCOF Certification Contract D1 and OTCO O1 A-2: "Both organic and nonorganic product(s)" or
+    "Organic product(s) only". Both forms ask it on page one and the packet never said it; the answer
+    is G6.0's split declaration (§ 205.2: an operation that produces or handles both), with where the
+    non-organic product comes from beside it, so a buffer-crop-only farm is read as one.
+    """
+    from certifications.services.split_operation import (
+        DECLARED_NO,
+        DECLARED_YES,
+        nonorganic_product_sources,
+        plan_g2_lists_split_production,
+        plan_split_declaration,
+    )
+
+    declaration = plan_split_declaration(osp)
+    if declaration == DECLARED_YES:
+        sources = nonorganic_product_sources(osp)
+        note = (
+            "non-organic product from: " + "; ".join(s[0].lower() + s[1:] for s in sources)
+            if sources
+            else "the plan does not say where the non-organic product comes from"
+        )
+        return [kv(PRODUCT_TYPES_LABEL, "Both organic and nonorganic product(s)", note=note)]
+    if declaration == DECLARED_NO:
+        lines = [kv(PRODUCT_TYPES_LABEL, "Organic product(s) only")]
+        if plan_g2_lists_split_production(osp):
+            lines.append(
+                Paragraph(
+                    "[REVIEW] The plan's fraud-prevention answers say the operation produces or sells both "
+                    "organic and nonorganic product, and its production answers say it does not. Correct the "
+                    "one that is wrong before the forms are filed.",
+                    styles["meta"],
+                )
+            )
+        return lines
+    return [
+        kv(PRODUCT_TYPES_LABEL, "not stated in the plan"),
+        Paragraph(
+            "[REVIEW] The plan does not say whether the operation produces or handles non-organic product. "
+            "Answer the split-operation question in Production, section A.",
+            styles["meta"],
+        ),
+    ]
+
+
 def _packet_cover_pdf(osp) -> bytes:
     """The cover a certifier reads first.
 
@@ -2679,6 +2785,8 @@ def _packet_cover_pdf(osp) -> bytes:
 
         if packet_agent(osp).slug == est.certifier_client_id_agent:
             story.append(kv("Client ID", est.certifier_client_id, note="as issued by the certifying agent"))
+    story += _product_types_cover_lines(osp, kv, styles)
+    story += _state_registration_cover_lines(est, kv, styles)
     story += [
         kv("Plan submitted", osp.submitted_at.date().isoformat() if osp.submitted_at else "not yet submitted"),
         kv("Packet generated", date.today().isoformat()),
