@@ -125,6 +125,11 @@ def _trigger_answered(module, question_key: str, answers: dict) -> bool:
     return is_answered(effective_value(trigger, answer_value(answers, question_key)))
 
 
+#: Why an unanswered retired question, and anything under it, does not apply. Words, not "<question> =
+#: <answer>" pieces: the question index prints a piece without " = " as written.
+RETIRED_EVIDENCE = "this question was replaced by others that ask it in more detail"
+
+
 def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tuple[str, str] | None:
     """None when the question shows; else ("not_applicable", evidence) or ("unresolved", triggers).
 
@@ -135,7 +140,16 @@ def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tupl
     whose trigger is unanswered, or a trigger hidden only while something upstream is unanswered,
     decides nothing yet.
     """
-    from certifications.osp_modules.conditions import answer_value, evaluate
+    from certifications.osp_modules.conditions import answer_value, effective_value, evaluate, is_answered
+
+    # A retired question is shown only while it still holds an answer (`Question.retired`, as
+    # `conditions._visibility` has it). Unanswered, it does not apply: it was replaced by questions that
+    # ask more, so a row citing both reads as answered once the new ones are (review of back #343).
+    if getattr(question, "retired", False) and not is_answered(
+        effective_value(question, answer_value(answers, question.key))
+    ):
+        # Words, not a "<question> = <answer>" piece: the question index prints it as written.
+        return "not_applicable", RETIRED_EVIDENCE
 
     conditions = tuple(page.visible_when) + tuple(question.visible_when)
     # Each trigger's own state first. Conditions read only earlier questions (`validate_module`), so

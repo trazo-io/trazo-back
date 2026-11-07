@@ -108,5 +108,34 @@ class OnThePage(TestCase):
         self.assertNotIn("Which prevention and cultural practices does your operation use", page)
 
 
+class RowsCitingRetiredQuestions(OnThePage):
+    """Review of back #343: rows cite the retired lists beside the new ones. A plan that answers only the new
+    lists must read those rows as answered, not hold them open on questions it is never asked."""
+
+    def row(self, osp, agent, code, ref):
+        from certifications.services.certifier_register import load_forms
+        from certifications.services.packet_answers import form_answer_states
+
+        form = next(f for f in load_forms(agent) if code in (f.code, f.document_id))
+        return next(r for r in form_answer_states(osp, [form])[id(form)] if r.ref == ref)
+
+    def test_wsda_f_3_reads_answered_from_the_weed_list_alone(self):
+        osp = self.plan({"practices_weeds": ["stale_seed_bed"]})
+        self.assertEqual(self.row(osp, "wsda", "F", "3").state, "answered")
+
+    def test_ccof_a_reads_answered_from_the_four_lists_alone(self):
+        osp = self.plan(
+            {
+                "practices_weeds": ["mowing_grazing"],
+                "practices_insects": ["traps"],
+                "practices_diseases": ["crop_rotation"],
+                "practices_vertebrates": ["none"],
+                "plastic_mulch_used": False,
+                "burns_crop_residue": False,
+            }
+        )
+        self.assertEqual(self.row(osp, "ccof", "ORGB42", "A").state, "answered")
+
+
 def _text(data: bytes) -> str:
     return " ".join(extract_text(io.BytesIO(data)).split())
