@@ -61,9 +61,24 @@ class StateOrganicRegistrationModelTests(TestCase):
         reg = self._reg(status="pending")
         self.assertFalse(reg.is_current)
 
-    def test_exempt_is_current(self):
-        reg = self._reg(status="exempt")
+    def test_exempt_with_its_registration_number_is_current(self):
+        reg = self._reg(status="exempt", registration_number="12-123456")
         self.assertTrue(reg.is_current)
+
+    def test_exempt_without_a_registration_number_is_not_current(self):
+        """Food & Agr. Code § 46013.1(a): exempt from certification only, still required to register."""
+        reg = self._reg(status="exempt")
+        self.assertFalse(reg.is_current)
+
+    def test_each_reason_for_not_current_names_its_own_cause(self):
+        """The dossier and the cover print this reason; it must name the actual cause (back #328 review)."""
+        today = timezone.now().date()
+        self.assertIn("registration number is not recorded", self._reg(status="exempt").not_current_reason)
+        self.assertIn("is pending", self._reg(status="pending").not_current_reason)
+        self.assertIn("is expired", self._reg(status="expired").not_current_reason)
+        lapsed = self._reg(renewal_date=today - timedelta(days=1))
+        self.assertIn(f"renewal date ({lapsed.renewal_date.isoformat()}) has passed", lapsed.not_current_reason)
+        self.assertIsNone(self._reg(renewal_date=today + timedelta(days=5)).not_current_reason)
 
 
 class StateOrganicRegistrationSerializerTests(TestCase):
@@ -158,6 +173,21 @@ class StateOrganicRegistrationExportSectionTests(TestCase):
         text = _para_text(self._section())
         self.assertNotIn("[REVIEW]", text)
         self.assertIn("may not apply", text)
+
+    def test_exempt_without_a_number_is_flagged_for_the_number_not_a_renewal(self):
+        """Back #328 review: the not-current flag named status or renewal date for this case."""
+        StateOrganicRegistration.objects.create(
+            establishment=self.establishment,
+            status="exempt",
+            prior_year_organic_gross_sales="3000.00",
+            registration_date=timezone.now().date() - timedelta(days=30),
+        )
+        text = _para_text(self._section())
+        self.assertIn("The registration number is not recorded", text)
+        self.assertNotIn("renewal date", text.split("[REVIEW]", 1)[1])
+        svc = AuditExportService(self.history, certification_type="organic")
+        csv_text = svc.generate_csv().read().decode("utf-8-sig")
+        self.assertIn("Registration not current. The registration number is not recorded", csv_text)
 
     def test_exempt_over_5000_fires_threshold_flag(self):
         """An 'exempt' registration whose prior-year organic sales exceed $5,000 must

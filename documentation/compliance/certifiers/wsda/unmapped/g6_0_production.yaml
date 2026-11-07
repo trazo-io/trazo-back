@@ -54,6 +54,12 @@ questions:
     Asked by OTCO C9 §9.3 (the runoff mitigation plan). Follows the runoff-risk question above, which this certifier does not ask.
   g6_0_production.harvest_transport_separation: >-
     How organic and non-organic crops are kept apart during harvest and transport. WSDA asks how organic product is kept separate in a shared transport unit (J12a, registered against shared_transport_segregation), not the harvest practices.
+  g6_0_production.nonorganic_product_source: >-
+    Where a split operation's non-organic product comes from (buffer-zone crop, parcels not certified,
+    land in transition, bought in). CCOF G8.0 C1 and Contract D1, OTCO O1 A-2 and C12 12.4-1 ask it; WSDA
+    asks buffer diversion per border on the site application (AGR 2264), which the parcel application answers.
+  g6_0_production.nonorganic_product_source_other: >-
+    The operator's own words for "Other" on the question above; same reason.
   g6_0_production.nonorganic_crops_products: >-
     The non-organic crops a split operation produces. OTCO C9 9.4-1 asks for them; WSDA's AGR 2121 asks how certified and non-certified production is kept apart, not the list.
   g6_0_production.treated_lumber_any: >-

@@ -2743,9 +2743,9 @@ class StateOrganicRegistration(models.Model):
     OMRIProduct / WSDAMaterial — that is an INPUT-material registration. THIS is
     the producer/operation registration.
 
-    California producers selling more than $5,000/yr of organic product must
-    register annually with the CDFA State Organic Program BEFORE their first
-    organic sale (CA Food & Ag Code §§ 46000-46029; 3 CCR 1380-1394), declaring
+    Every California operation producing or handling raw agricultural products sold as
+    organic must register annually with the CDFA State Organic Program BEFORE the first
+    sale (CA Food & Ag Code § 46013.1(a); 3 CCR 1380-1394), declaring
     commodities, operation type, and prior-year organic gross sales, and renew
     each year. A NOP "$5,000-exempt" producer is still subject to CA state
     registration. This is a hard inspection item Trazo previously could not
@@ -2774,7 +2774,10 @@ class StateOrganicRegistration(models.Model):
         ("registered", "Registered"),
         ("pending", "Pending"),
         ("expired", "Expired"),
-        ("exempt", "Exempt (< $5,000 organic sales)"),
+        # Food & Agr. Code § 46013.1(a): an operation under $5,000 is "only exempt from
+        # certification under federal organic standards and [is] still required to be registered".
+        # The label said "Exempt" alone, which read as exempt from registering.
+        ("exempt", "Registered, exempt from certification (under $5,000 organic sales)"),
     ]
 
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -2876,17 +2879,37 @@ class StateOrganicRegistration(models.Model):
 
     @property
     def is_current(self):
-        """True if the operation is covered today: an exempt operation, or a
-        'registered' record whose renewal_date has not passed. Used by the audit
+        """True if the operation is covered today: a 'registered' record, or an exempt one
+        with its registration number, whose renewal_date has not passed. Used by the audit
         export to decide whether to fire the missing/expired-registration REVIEW
         flag, and by any first-organic-sale gate."""
-        if self.status == "exempt":
-            return True
-        if self.status != "registered":
+        # An exempt operation is exempt from certification only, never from registration
+        # (Food & Agr. Code § 46013.1(a)), so it is current only with a number on file.
+        if self.status == "exempt" and not self.registration_number:
+            return False
+        if self.status not in ("registered", "exempt"):
             return False
         if self.renewal_date is None:
             return True
         return self.renewal_date >= timezone.now().date()
+
+    @property
+    def not_current_reason(self):
+        """Why `is_current` is False, in words a reviewer can act on, or None when it is current.
+
+        One wording for the packet cover and the audit dossier (PDF and CSV), so the three cannot name
+        different causes for one registration.
+        """
+        if self.is_current:
+            return None
+        if self.status == "exempt":
+            return (
+                "The registration number is not recorded. An operation under $5,000 is exempt from "
+                "certification only; California still requires it to register (Food & Agr. Code § 46013.1(a))."
+            )
+        if self.status in ("pending", "expired"):
+            return f"The registration on file is {self.status}, not registered."
+        return f"The registration's renewal date ({self.renewal_date.isoformat()}) has passed."
 
 
 class CertifierAccessLink(models.Model):

@@ -13581,10 +13581,12 @@ class AuditExportService:
                 elements.append(
                     self._body(
                         "No State Organic Program registration is on file for this operation. "
-                        "Under California Food & Agricultural Code §§ 46000-46029, a producer "
-                        "selling more than $5,000/yr of organic product must register with the "
-                        "CDFA State Organic Program before the first organic sale and renew "
-                        "annually (this is separate from CDFA OIM input-material registration)."
+                        "Under California Food & Agricultural Code § 46013.1(a), every operation "
+                        "producing or handling raw agricultural products sold as organic in California "
+                        "must register with the CDFA State Organic Program before the first sale and "
+                        "renew annually; an operation under $5,000 is exempt from certification only, "
+                        "not from registration (this is separate from CDFA OIM input-material "
+                        "registration)."
                     )
                 )
                 elements.append(
@@ -13630,12 +13632,14 @@ class AuditExportService:
         elements.append(t)
 
         if not reg.is_current:
+            from xml.sax.saxutils import escape as xml_escape
+
             elements.append(self._spacer(0.1))
             elements.append(
                 Paragraph(
-                    "<b>[REVIEW] CDFA State Organic Program:</b> the registration on file is "
-                    "not current (status is not 'registered', or the renewal date has passed). "
-                    "Confirm the operation renewed before its first organic sale of the cycle.",
+                    "<b>[REVIEW] CDFA State Organic Program:</b> "
+                    f"{xml_escape(reg.not_current_reason)} Update the registration before the first "
+                    "organic sale of the cycle.",
                     self._warning_style(),
                 )
             )
@@ -13655,7 +13659,7 @@ class AuditExportService:
                 Paragraph(
                     "<b>[REVIEW] $5,000 exemption exceeded:</b> prior-year organic gross sales "
                     f"of ${gross:,.2f} are above the $5,000 exemption, but the registration is "
-                    "still marked 'Exempt (&lt; $5,000 organic sales)'. Above $5,000 the operation "
+                    "still marked exempt from certification. Above $5,000 the operation "
                     "must hold a current CDFA State Organic Program registration and USDA organic "
                     "certification. Update the registration status.",
                     self._warning_style(),
@@ -18733,9 +18737,10 @@ class AuditExportService:
                         writer.writerow(
                             [
                                 "Registration on file",
-                                "None — CA producers selling > $5,000/yr organic must register with the "
-                                "CDFA State Organic Program before first sale "
-                                "(CA Food & Ag Code §§ 46000-46029). [REVIEW]",
+                                "None. Every California operation producing or handling product sold as "
+                                "organic must register with the CDFA State Organic Program before the first "
+                                "sale, including one exempt from certification "
+                                "(CA Food & Ag Code § 46013.1(a)). [REVIEW]",
                             ]
                         )
                     else:
@@ -18766,9 +18771,7 @@ class AuditExportService:
                     ]:
                         writer.writerow([label, _val(value)])
                     if not reg.is_current:
-                        writer.writerow(
-                            ["[REVIEW]", "Registration not current (status not 'registered' or renewal date passed)."]
-                        )
+                        writer.writerow(["[REVIEW]", f"Registration not current. {reg.not_current_reason}"])
                     try:
                         over_threshold = gross is not None and gross > Decimal("5000")
                     except (TypeError, InvalidOperation):

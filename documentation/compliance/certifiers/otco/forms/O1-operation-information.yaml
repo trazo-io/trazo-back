@@ -88,21 +88,17 @@ items:
   asks: >-
     The Operation Name listed above produces or handles: Both organic and nonorganic product(s) /
     Organic product(s) only.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_0_production.split_operation
-    prints: modules/G6_0.pdf §A
-  gap: >-
-    Reused from the CCOF Contract D1 (P1). No explicit organic-only / both question exists in the
-    contract module; the answer is derived from `split_operation` (yes/no/unanswered). Because a
-    buffer-row-only farm is currently pushed into declaring split=Yes (CCOF G8.0 C1 — the coaching
-    plus a plain Yes/No), an all-organic operation selling only excluded buffer crop as
-    conventional under § 205.202(c) can be forced into "Both organic and nonorganic" here too.
-  fix: >-
-    Reuse D1 — once G6.0 gains the `nonorganic_product_source` gating radio, derive this line from
-    it and let the operator confirm the derived value in the contract module.
+    - g6_0_production.nonorganic_product_source
+    - g6_0_production.nonorganic_product_source_other
+    prints: >-
+      00-cover.pdf: "Organic and non-organic product", Both / Organic only, with where the non-organic
+      product comes from
+  # Closed 2026-11-06 with the CCOF Contract D1. § 205.2 makes a farm selling buffer crop as non-organic a
+  # split operation, so "Both" is its answer; the source beside it says the buffer crop is all there is.
 - ref: A-3
   asks: >-
     Provide a list of the registered DBA(s) (doing business as) associated with your operation. The
@@ -581,25 +577,18 @@ items:
     Department of Food & Agriculture Organic Registration number (crops, livestock, processed meat,
     fowl or dairy — via the County Agricultural Commissioner; registration required before the first
     sale of organic product).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    where: not in this packet; the operation's audit export, a separate document, prints it
+    where: "00-cover.pdf: California organic registration (CDFA)"
     models:
     - certifications.StateOrganicRegistration.registration_number
     - certifications.StateOrganicRegistration.renewal_date
     - certifications.StateOrganicRegistration.status
-    prints: "— in the OSP packet and contract module; the audit dossier prints it"
-  gap: >-
-    Reused from the CCOF Contract E1 (P1). `StateOrganicRegistration` (state, program, operation
-    type, status, registration number, county, commodities, prior-year sales, renewal date,
-    document) exists with a serializer and viewset and prints in the AUDIT DOSSIER — but never on the
-    packet cover nor in the contract module, so a California renewal packet omits the one number
-    OTCO and CDFA both require before first sale.
-  fix: >-
-    Reuse E1 — on the packet cover, when the establishment's state is CA, print "CDFA SOP
-    registration # / renewal date" from `StateOrganicRegistration`, or "not on file — required
-    before first sale (FAC § 46000)" if absent; have the contract module read the same row.
+    prints: >-
+      00-cover.pdf: "California organic registration (CDFA)", the number with its status, county and
+      renewal date; none on file, a missing number or a lapsed registration prints a [REVIEW] line
+  # Closed 2026-11-06 with the CCOF Contract E1. The N/A box: the line is printed only for a California
+  # operation or one with a registration on file.
 - ref: E-2
   asks: >-
     California Department of Public Health Organic Registration number (all other organic products

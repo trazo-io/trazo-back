@@ -129,6 +129,9 @@ GOLDEN_ANSWER_CASES = {
         "unanswered": {},
         "split": {"split_operation": True},
         "not_split": {"split_operation": False},
+        # Non-organic product source (2026.11.17): its "other" text hangs on split AND the "other" box.
+        "split_source_other": {"split_operation": True, "nonorganic_product_source": ["buffer_zone_crop", "other"]},
+        "not_split_stale_source": {"split_operation": False, "nonorganic_product_source": ["other"]},
         # Treated lumber page E (2026.11.09).
         "lumber_with_policy_other": {"treated_lumber_any": True, "treated_lumber_policy": ["other"]},
         "no_lumber": {"treated_lumber_any": False},

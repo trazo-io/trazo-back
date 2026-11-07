@@ -3410,6 +3410,12 @@
         "at": "2026-11-09T09:00:00+00:00",
         "value": "None grown as a crop. The only non-organic product is the fruit off the buffer rows along the Hartwell grass-seed field (§ 205.202(c)), kept and sold apart under its own -BUF lot code."
        },
+       "nonorganic_product_source": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "buffer_zone_crop"
+        ]
+       },
        "treated_lumber_any": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": false
