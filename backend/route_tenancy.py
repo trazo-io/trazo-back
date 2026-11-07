@@ -149,11 +149,6 @@ ROUTE_TENANCY = {
     "carbon.views.validate_usda_compliance": Route(CATALOG, "query params only"),
     "carbon.views.verify_registry_credentials": Route(USER, "CarbonEntry.objects.get(id=..., created_by=request.user)"),
     "carbon.views.voice_config": Route(COMPANY, "request.user.get_active_company()"),
-    "carbon.views_security_enhanced.create_secure_carbon_offset": Route(
-        COMPANY, "establishment branch checks the caller's companies; production branch raises (500)"
-    ),
-    "carbon.views_security_enhanced.get_user_security_status": Route(USER, "CarbonAuditLog filtered by user"),
-    "carbon.views_security_enhanced.validate_file_upload_security": Route(CATALOG, "pure validation, no tenant rows"),
     # ---------------------------------------------------------------------------------------------
     # certifications, documents. Nested under companies/<company_pk>/establishments/<establishment_pk>/:
     # CompanyNestedViewSet.initial checks membership of company_pk and resolves establishment_pk
@@ -506,7 +501,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 56
+UNPROVEN_CEILING = 54
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
 OPEN_FINDINGS_CEILING = 21

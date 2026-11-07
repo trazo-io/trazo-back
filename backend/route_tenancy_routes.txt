@@ -486,9 +486,6 @@ api/carbon/evidence/validate/	carbon.views.validate_photo_evidence	IsAuthenticat
 api/carbon/methodology-templates/	carbon.views.get_methodology_templates	IsAuthenticated	-
 api/carbon/process-voice-event/	carbon.views.process_voice_event_ai	IsAuthenticated	-
 api/carbon/productions/<int:production_id>/economics/	carbon.views.get_production_carbon_economics	IsAuthenticated	-
-api/carbon/secure/create-carbon-offset/	carbon.views_security_enhanced.create_secure_carbon_offset	IsAuthenticated	-
-api/carbon/secure/user-security-status/	carbon.views_security_enhanced.get_user_security_status	IsAuthenticated	-
-api/carbon/secure/validate-file-upload/	carbon.views_security_enhanced.validate_file_upload_security	IsAuthenticated	-
 api/carbon/smart-product/search/	carbon.views.smart_product_search	IsAuthenticated	-
 api/carbon/smart-product/stats/	carbon.views.smart_product_stats	IsAuthenticated	-
 api/carbon/smart-product/suggestions/	carbon.views.smart_product_suggestions_by_type	IsAuthenticated	-
