@@ -53,23 +53,24 @@ items:
 - ref: 7.1 (facility information)
   asks: ON FARM FACILITY INFORMATION (the site location is shown on the farm map). Facility Name; Site Address,
     City, State/Province, Zip/Postal Code, Country.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     triggered_by:
     - g6_4_handling.handling_activities
     - g6_2_storage.storage_locations
+    questions:
+    - g6_4_handling.on_farm_facility_table
+    - g6_2_storage.on_farm_storage_table
     models:
-    - 'nearest existing field: g6_4_handling.handling_site (describes buildings, pads and equipment in prose
-      — no name or address)'
-    - certifications.PostHarvestFacility.name / address hold a name and address for OFF-farm facilities only
-    prints: —
-  gap: No field anywhere names an on-farm handling or storage facility or gives its address. Same verdict as
-    CCOF G6.4 A1 (Site Name & Location) — `handling_site` describes the buildings and equipment used, not a
-    formal name and address, and `PostHarvestFacility` models the facilities the crop is sent TO, never the
-    operation's own shed or cooler. OTCO asks it of every on-farm facility on the first line of the form.
-  fix: Add `handling_site_name_address` [text] to G6.4 page B (the CCOF A1 fix), visible when handling_activities
-    is truthy and not no_onfarm_handling, and print it as the heading of the G6.4 §B block.
+    - certifications.PostHarvestFacility.operated_by
+    - certifications.PostHarvestFacility.name
+    - certifications.PostHarvestFacility.address
+    - certifications.PostHarvestFacility.postal_code
+    - certifications.PostHarvestFacility.country
+    prints: modules/G6_4.pdf §B and modules/G6_2.pdf §A (each own facility with its full address); the plan's
+      commingling narrative names them under "On-farm handling and storage facilities"
+  # Closed 2026-11-07. The operation's own facilities are facility records operated by this operation, with
+  # name, street, city, state, postal code and country, and no certificate of their own.
 - ref: 7.1-1
   asks: Describe the activities that take place at this facility — Handling/Processing (washing, sorting, mixing,
     drying, blending, packaging) / Storage / Other.
@@ -104,20 +105,17 @@ items:
 - ref: 7.2-1
   asks: Attach a facility layout, either hand drawn or digital, that shows the areas used for organic processing
     and storage. Attached.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g6_4_handling.on_farm_facility_table
+    - g6_2_storage.on_farm_storage_table
     - g6_4_handling.facility_docs
-    prints: attachments/g6_4_handling/facility_docs/ (files uploaded for facility_docs, since 2026-10-01), named
-      on modules/G6_4.pdf
-  gap: '`facility_docs` accepts a site map, but it is optional, lives on the last page of G6.4. Since
-    2026-10-01 a file uploaded for it rides in the packet and is named on the G6.4 page. OTCO makes the facility layout a required attachment for
-    every on-farm facility, so a packet without it draws a request for information the moment the form applies.
-    CCOF G6.4 A3 folds this into the flow-chart ask at P2; OTCO asks for the layout on its own line, hence
-    P1.'
-  fix: In `generate_osp_packet`, pull DMS uploads tagged to facility_docs into `facilities/` and name the file
-    in the G6.4 §D block — the same attachment loop proposed for labels and handler certificates.
+    models:
+    - certifications.PostHarvestFacility.layout_document
+    prints: facilities/<id>-<name>-layout in the packet ZIP, named beside its facility on modules/G6_4.pdf §B and
+      modules/G6_2.pdf §A; a facility without one prints "no layout attached"
+  # Closed 2026-11-07. A layout per own facility, as OTCO asks it, rather than one optional file for the module.
 - ref: 7.2-2
   asks: Attach a flow chart or describe how crops are harvested, received, processed, packaged, and stored.
     Include all equipment, machinery, and storage areas. Attached / Describe.
@@ -399,24 +397,23 @@ items:
 - ref: 7.7-2
   asks: 'Complete the table below to list the storage facilities you use: Storage Facility Name and Location / Products/Crops
     Stored / Type of Storage / Documentation (OC, IS, OWN).'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_2_storage.storage_locations
+    - g6_2_storage.on_farm_storage_table
+    - g6_2_storage.off_farm_storage_table
     - g6_2_storage.uncertified_facility_records
     - g6_2_storage.uncertified_facility_statement_upload
-    - g6_2_storage.off_farm_storage_table
     - g6_2_storage.storage_other_description
     - g6_2_storage.third_party_storage_contracted
-    prints: modules/G6_2.pdf §A; handlers/ and attachments/g6_2_storage/ in the packet ZIP
-  gap: 'OC rides in the packet under handlers/ and IS is an upload on G6.2 §A (2026-11-02). Since 2026-11-09 each
-    off-farm facility prints the crops on the production records linked to it (7.7-2b, off-farm half). Still open:
-    (7.7-2a) on-farm storage is a type checklist with no name or location, so on-farm facilities have no row and
-    no crops; (7.7-2c) on-farm types cannot be attributed to a named facility; OWN is implied by the on-farm options,
-    not stated per facility.'
-  fix: Structured on-farm storage rows {name, location or 'same as establishment', type, crops} on G6.2 page A,
-    printed with the off-farm rows as one table, with the OC / IS / OWN class as a column.
+    models:
+    - certifications.PostHarvestFacility.operated_by
+    prints: modules/G6_2.pdf §A (own facilities, each "under its own certificate (OWN)", and off-farm facilities
+      with their certificate (OC) or the uncertified facility's statement (IS)); handlers/ and facilities/ in the
+      packet ZIP
+  # Closed 2026-11-07. On-farm storage now has rows: name and location, type, the crops on linked production
+  # records, and OWN stated per facility.
 - ref: 7.8 (not applicable)
   asks: FACILITY PEST MANAGEMENT — Not applicable, no crop storage or handling facilities are used (skip to
     section 7.9).

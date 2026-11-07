@@ -39,16 +39,17 @@ items:
     prints as the routing decision it is.
 - ref: A1
   asks: Site Name & Location (full address).
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - g6_4_handling.on_farm_facility_table
     - g6_4_handling.handling_site
-    prints: modules/G6_4.pdf §B (handling_site) — describes buildings/equipment only, no formal name/address
-      field exists
-  gap: No field anywhere on G6.4 captures a formal site name and address. handling_site only describes
-    buildings, pads, or equipment used for handling.
-  fix: Add handling_site_name_address [text] visible when handling_activities is truthy and not no_onfarm_handling.
+    models:
+    - certifications.PostHarvestFacility.operated_by
+    - certifications.PostHarvestFacility.name
+    - certifications.PostHarvestFacility.address
+    prints: modules/G6_4.pdf §B (each own facility with its full address)
+  # Closed 2026-11-07, with OTCO C7 7.1.
 - ref: A2
   asks: List, or attach a list of, all organic products handled here.
   status: partial

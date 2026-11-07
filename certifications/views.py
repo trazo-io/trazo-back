@@ -425,12 +425,18 @@ class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment_id=self.kwargs["establishment_pk"],
             created_by=self.request.user if self.request.user.is_authenticated else None,
         )
-        self._trigger_background_verification(facility)
+        if facility.needs_own_certificate:
+            self._trigger_background_verification(facility)
 
     @action(detail=True, methods=["post"])
     def verify(self, request, **kwargs):
         """Re-check this handler against the USDA Organic Integrity Database."""
         facility = self.get_object()
+        if not facility.needs_own_certificate:
+            return Response(
+                {"detail": "The operation's own facility has no certificate of its own to verify."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         self._trigger_background_verification(facility)
         return Response(
             {"status": "verification_initiated", "facility_id": facility.id},

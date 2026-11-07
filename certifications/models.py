@@ -211,8 +211,21 @@ class PostHarvestFacility(models.Model):
         ("huller", "Huller / Sheller"),
         ("dryer", "Dryer"),
         ("cold_storage", "Cold Storage"),
+        ("dry_storage", "Dry Storage / Warehouse"),
         ("packer", "Packer / Packing Shed"),
         ("custom", "Custom Post-Harvest Handler"),
+    ]
+
+    # Who runs the facility. OTCO C7 7.1 and CCOF G6.4 A1 ask the name and address of the operation's
+    # OWN handling or storage site, and OTCO 7.7-2 lists every storage facility with its documentation
+    # class (OC = another operation's organic certificate, IS = an uncertified facility's statement,
+    # OWN = the operation's own). Until 2026-11-07 this table held only facilities the crop is sent TO,
+    # so a farm's own shed or cooler had no row. An own facility is covered by the operation's own
+    # certificate: it has no certificate of its own to look up, date or attach, and every certificate
+    # check skips it (`needs_own_certificate`).
+    OPERATED_BY_CHOICES = [
+        ("another_operation", "Another operation"),
+        ("this_operation", "This operation (our own facility)"),
     ]
 
     # What the facility DOES for this operation, which is a different axis from what it IS.
@@ -247,9 +260,27 @@ class PostHarvestFacility(models.Model):
         default="",
         help_text="Whether this facility handles the crop, only stores it, or both",
     )
+    operated_by = models.CharField(
+        max_length=20,
+        choices=OPERATED_BY_CHOICES,
+        default="another_operation",
+        help_text="Whether another operation runs this facility, or it is the operation's own",
+    )
     address = models.CharField(max_length=200, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=50, blank=True, null=True)
+    # OTCO C7 7.1 asks the zip or postal code and the country of an on-farm facility.
+    postal_code = models.CharField(max_length=20, blank=True, default="")
+    country = models.CharField(max_length=60, blank=True, default="")
+    # OTCO C7 7.2-1: "Attach a facility layout, either hand drawn or digital, that shows the areas used for
+    # organic processing and storage", per on-farm facility.
+    layout_document = models.FileField(
+        upload_to="facility_layouts/",
+        storage=private_records_storage,
+        blank=True,
+        null=True,
+        help_text="Layout of an own facility showing the areas used for organic handling and storage",
+    )
 
     # Handler's organic certificate (G6.1: must be current, issued within 15 months)
     certification_number = models.CharField(max_length=100, blank=True, null=True)
@@ -307,6 +338,15 @@ class PostHarvestFacility(models.Model):
         return self.verification_status == "verified"
 
     @property
+    def is_own(self) -> bool:
+        return self.operated_by == "this_operation"
+
+    @property
+    def needs_own_certificate(self) -> bool:
+        """False for the operation's own facility: its own certificate covers it."""
+        return not self.is_own
+
+    @property
     def cert_is_current(self):
         """
         CCOF G6.1 / NOP 7 CFR 205.272 freshness rule: a handler's organic
@@ -332,6 +372,10 @@ class PostHarvestFacility(models.Model):
         """
         from certifications.services.usda_organic_verifier import USDAOrganicVerifier
 
+        if self.is_own:
+            # The operation's own facility is not a separate certified operation; looking its name up in
+            # the OID would compare a shed's name against the register of certified businesses.
+            return None
         result = USDAOrganicVerifier().verify(
             self.name, self.state or "", self.certification_number, certifier_name=self.certifier_name
         )

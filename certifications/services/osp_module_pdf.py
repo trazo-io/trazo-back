@@ -897,7 +897,13 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
     The certificate line states what the record supports and no more: `cert_is_current` returns
     None when there is no effective date, and that prints as "not stated", never as current.
     """
-    facilities = list(osp.establishment.post_harvest_facilities.all()) if osp.establishment_id else []
+    # The operation's own facilities print on their own table (`_own_facility_flowables`): they have no
+    # certificate of their own, and the [REVIEW] below would call the farm's own cooler uncertified.
+    facilities = (
+        list(osp.establishment.post_harvest_facilities.exclude(operated_by="this_operation"))
+        if osp.establishment_id
+        else []
+    )
     if not facilities:
         return [
             Paragraph(
@@ -997,6 +1003,52 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
                         "so the plan does not show which crops it handles or stores."
                     ),
                     styles["meta"],
+                )
+            )
+    out.append(Spacer(1, 6))
+    return out
+
+
+def _own_facility_flowables(osp, styles) -> list:
+    """The operation's own handling and storage facilities (CCOF G6.4 A1; OTCO C7 7.1, 7.2-1, 7.7-2).
+
+    Each prints its name, type, role and full address, that it is covered by the operation's own certificate
+    (OTCO's OWN class), its layout (named by its packet path when the packet carries it), and the crops on the
+    production records linked to it. Nothing about a certificate of its own: it has none.
+    """
+    from certifications.services.facility_crops import crops_by_facility, crops_sentence
+    from certifications.services.own_facilities import own_facilities, own_facility_line
+
+    facilities = list(own_facilities(osp.establishment)) if osp.establishment_id else []
+    if not facilities:
+        return [
+            Paragraph("No facility operated by this operation is recorded.", styles["body"]),
+            Spacer(1, 6),
+        ]
+    from certifications.services.packet_attachments import current_manifest, facility_layout_source, state_words
+
+    crops = crops_by_facility(osp.establishment)
+    manifest = current_manifest()
+    out = [Paragraph("<b>Facilities operated by this operation</b>", _sticks_to_next(_style(styles, "body")))]
+    for facility in facilities:
+        out.append(Paragraph(_escape(f"• {own_facility_line(facility)}"), styles["body"]))
+        if facility.layout_document:
+            entries = manifest.for_source(facility_layout_source(facility)) if manifest else []
+            if entries:
+                out.append(Paragraph(_escape(state_words(entries[0])), styles["meta"]))
+        recorded = crops.get(facility.pk) or []
+        detail = [x.strip() for x in (facility.products_detail or "").splitlines() if x.strip()]
+        if recorded:
+            out.append(
+                Paragraph(
+                    _escape(f"Crops on the production records linked to this facility: {crops_sentence(recorded)}."),
+                    styles["meta"],
+                )
+            )
+        if detail:
+            out.append(
+                Paragraph(
+                    _escape("Products, as the operation describes them: " + "; ".join(detail) + "."), styles["meta"]
                 )
             )
     out.append(Spacer(1, 6))
@@ -2145,6 +2197,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _approved_inputs_flowables(osp, styles)
                 elif question.embed == "post_harvest_facilities":
                     rendered = _post_harvest_facility_flowables(osp, styles)
+                elif question.embed == "on_farm_facilities":
+                    rendered = _own_facility_flowables(osp, styles)
                 elif question.embed == "seedling_suppliers":
                     rendered = _seedling_supplier_flowables(osp, styles)
                 elif question.embed == "brand_owners":

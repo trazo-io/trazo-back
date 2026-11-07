@@ -59,7 +59,8 @@ class PostHarvestFacilityAdmin(admin.ModelAdmin):
     @admin.action(description="Verify handler cert against USDA Organic Integrity Database")
     def verify_against_oid(self, request, queryset):
         n = 0
-        for facility in queryset:
+        # An own facility has no certificate of its own to look up.
+        for facility in queryset.exclude(operated_by="this_operation"):
             facility.verify()
             facility.save()
             n += 1

@@ -309,8 +309,19 @@ def _append_post_harvest_facilities(osp, contributions: dict) -> None:
     if not getattr(osp, "pk", None) or not getattr(osp, "establishment_id", None):
         return
 
+    from certifications.services.own_facilities import own_facilities, own_facility_line, third_party_facilities
+
+    # The operation's own facilities first, in their own paragraph: they have no certificate of their own,
+    # and a line reading "no organic certificate on file" beside the farm's own cooler would be false.
+    own = [own_facility_line(f) for f in own_facilities(osp.establishment) if (f.name or "").strip()]
+    if own:
+        contributions.setdefault("commingling_barriers", []).append(
+            "[On-farm handling and storage facilities]\n"
+            "The operation's own handling and storage facilities on file:\n" + "\n".join(own)
+        )
+
     lines = []
-    for facility in osp.establishment.post_harvest_facilities.all():
+    for facility in third_party_facilities(osp.establishment):
         name = (facility.name or "").strip()
         if not name:
             continue

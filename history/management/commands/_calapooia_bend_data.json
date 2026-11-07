@@ -5423,6 +5423,21 @@
    "notes": "Certified organic processor (IQF). Receives process-grade blueberries in bulk flats; also receives the conventional buffer-row fruit under lot prefix CBF-CONV, invoiced separately and never as organic.",
    "state": "OR",
    "verification_status": "self_reported"
+  },
+  {
+   "#establishment": 166,
+   "_id": 6,
+   "address": "31480 Calapooia Rd",
+   "cert_document": "",
+   "city": "Tangent",
+   "country": "USA",
+   "facility_type": "packer",
+   "name": "Calapooia Bend packing shed and cooler",
+   "notes": "The farm's own wash and pack line and walk-in cooler, behind the house. Blueberries are sorted and packed into clamshells and flats here; carrots, onions and spinach are washed and cooled here before they go to OGC.",
+   "operated_by": "this_operation",
+   "postal_code": "97389",
+   "role": "both",
+   "state": "OR"
   }
  ],
  "production_plan_items": [

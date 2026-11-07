@@ -92,7 +92,10 @@ def plan():
             },
             reason=result.notes or result.status,
         )
-    for fac in PostHarvestFacility.objects.filter(verification_status="verified", verification_source=source):
+    # An own facility is never looked up (PostHarvestFacility.verify), so it has nothing to re-evaluate.
+    for fac in PostHarvestFacility.objects.filter(verification_status="verified", verification_source=source).exclude(
+        operated_by="this_operation"
+    ):
         result = verifier.verify(fac.name, fac.state or "", fac.certification_number, certifier_name=fac.certifier_name)
         after = _new_status(result.status, facility=True)
         if after == fac.verification_status:

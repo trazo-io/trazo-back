@@ -325,6 +325,29 @@ G6_2_STORAGE = Module(
                         template="Organic product is stored by another operation under contract: {answer}."
                     ),
                 ),
+                # OTCO C7 7.7-2 lists every storage facility with its documentation class; the operation's own
+                # are OWN. The same records G6.4 §B lists (2026-11-07).
+                Question(
+                    key="on_farm_storage_table",
+                    kind="info",
+                    required=False,
+                    embed="on_farm_facilities",
+                    label=text(
+                        "Your own storage facilities",
+                        "Tus propias instalaciones de almacenamiento",
+                    ),
+                    coaching=text(
+                        "Add each storage facility you run yourself with its name and full address, and attach "
+                        "its layout. Your own certificate covers it, so no certificate is asked.",
+                        "Agrega cada instalación de almacenamiento que operas tú con su nombre y dirección "
+                        "completa, y adjunta su plano. Tu propio certificado la cubre, así que no se pide "
+                        "certificado.",
+                    ),
+                    nop_cite="\u00a7 205.272(a)",
+                    visible_when=(
+                        Condition("storage_locations", "includes_any", ["on_farm_cold", "on_farm_dry", "bins_silos"]),
+                    ),
+                ),
                 # Selecting `certified_handler` used to open nothing at all, so the plan named
                 # a facility class and never the facility — while CCOF G6.2 \u00a7A's attachment is
                 # mandatory the moment that box is ticked. Same records, same embed as G6.1 \u00a7D.

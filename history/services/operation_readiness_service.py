@@ -707,7 +707,10 @@ class OperationReadinessService:
         """
         from certifications.models import PostHarvestFacility
 
-        facilities = list(PostHarvestFacility.objects.filter(establishment=self.establishment))
+        # The operation's own facilities are covered by its own certificate and have none to date.
+        facilities = list(
+            PostHarvestFacility.objects.filter(establishment=self.establishment).exclude(operated_by="this_operation")
+        )
         if not facilities:
             return {
                 "key": "handler_certificates",

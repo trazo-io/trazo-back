@@ -3340,6 +3340,8 @@ class HistorySerializer(serializers.ModelSerializer):
                 "expiry_date": facility.expiry_date,
                 "verification_status": facility.verification_status,
                 "cert_is_current": facility.cert_is_current,
+                # The operation's own facility has no certificate of its own; the card shows no badge for it.
+                "is_own": facility.is_own,
             }
             # `sorted(...)` over `.all()`, NOT `.all().order_by("name")`. The queryset is
             # prefetched by `HistoryViewSet.get_queryset`, and adding an `order_by` to a

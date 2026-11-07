@@ -13671,6 +13671,30 @@ class AuditExportService:
     # Section: Post-Harvest Handling & Storage (7 CFR 205.272 / 205.270)
     # ------------------------------------------------------------------
 
+    def _own_facility_block(self, facility):
+        """An on-farm facility the operation runs itself (OTCO C7 7.1, 7.7-2 OWN; CCOF G6.4 A1): identity and
+        address, covered by the operation's own certificate, so no certificate of its own is shown or asked."""
+        from certifications.services.own_facilities import OWN_COVERAGE, full_address
+
+        elements = [self._body("<b>On-Farm Facility (operated by this operation)</b>")]
+        elements.append(self._spacer(0.04))
+        rows = [
+            ("Facility", facility.name),
+            ("Facility Type", facility.get_facility_type_display() if facility.facility_type else None),
+            ("Role", facility.get_role_display() if facility.role else None),
+            ("Address", full_address(facility) or None),
+            ("Certificate", OWN_COVERAGE[0].upper() + OWN_COVERAGE[1:]),
+            ("Layout", "Attached in Trazo" if facility.layout_document else "Not attached"),
+        ]
+        data = [[self._hdr("Field"), self._hdr("Value")]]
+        for label, value in rows:
+            data.append([self._cell(label, 32), self._cell(_val(value))])
+        t = Table(data, colWidths=[2.0 * inch, 4.0 * inch], repeatRows=1)
+        t.setStyle(self._base_table_style())
+        elements.append(t)
+        elements.append(self._spacer(0.1))
+        return elements
+
     def _facility_cert_block(self, facility):
         """
         Off-farm handler / facility organic-certificate block (Common OSP G6.1 / 7 CFR
@@ -13869,12 +13893,19 @@ class AuditExportService:
         # stopped being asked for. Five of Calapooia Bend's nine shipped lots were exactly
         # that shape.
         try:
-            facilities = sorted(self.production.post_harvest_facilities.all(), key=lambda f: (f.name or "").lower())
+            linked = sorted(self.production.post_harvest_facilities.all(), key=lambda f: (f.name or "").lower())
         except AttributeError:
             # Same defensiveness as `all_events` below, and for the same reason the FK read
             # this replaced used `getattr(..., None)`: a cross-check must never take the
             # packet down.
-            facilities = []
+            linked = []
+        # The operation's own facilities are not certified operations of their own: they print as on-farm
+        # facilities, and only another operation's facility counts toward "handled by N certified operations"
+        # or clears the handler [REVIEW]s below (2026-11-07).
+        own = [f for f in linked if getattr(f, "is_own", False)]
+        facilities = [f for f in linked if not getattr(f, "is_own", False)]
+        for facility in own:
+            elements += self._own_facility_block(facility)
 
         try:
             all_events = list(self.production.history_productionevent_events.all())

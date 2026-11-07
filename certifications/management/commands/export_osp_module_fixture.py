@@ -165,6 +165,9 @@ GOLDEN_ANSWER_CASES = {
             "storage_location_records": ["other"],
         },
         "shared_storage": {"storage_shared_with_nonorganic": True},
+        # 2026.11.20: the own-facility table shows for on-farm storage only.
+        "on_farm_cold": {"storage_locations": ["on_farm_cold"]},
+        "off_farm_only": {"storage_locations": ["certified_handler"]},
     },
     "g7_0_labeling": {
         "unanswered": {},
