@@ -206,6 +206,27 @@ RETIRED_CLAIM_PATHS = {
         "JSON body, about a file it never sent. A check on the caller's own description of a file "
         "proves nothing about the file, and nothing called it."
     ),
+    # Registry "verification", 2026-11-07. carbon/services/verification_service.py and
+    # registry_integration.py were deleted with the four routes; no frontend caller for any.
+    "verify-registry-credentials/": (
+        "verify_registry_credentials: set verification_level 'certified_project' and trust_score "
+        "1.0 on an offset once its registry id passed a check that, for Verra and Gold Standard, "
+        "was SIMULATED: the id only had to match a hardcoded list of real projects (Verra 674, a "
+        "peatland in Indonesia). Typing a famous project's number made the operator's offset "
+        "'certified', with no check of ownership, retirement or vintage. 16 CFR 260.5."
+    ),
+    "entries/1/verification-status/": (
+        "get_verification_status: a GET that ran the same check, saved the matched registry's "
+        "project URL onto the entry as third_party_verification_url, and returned a "
+        "verification_badge for it."
+    ),
+    "bulk-verify/": (
+        "bulk_verify_entries: the same check over many entries at once, each reported 'registry_verified'."
+    ),
+    "methodology-templates/": (
+        "get_methodology_templates: carbon-offset project methodologies (Verra VM-series) for an "
+        "offset marketplace Trazo does not run. Trazo measures the operation's own emissions."
+    ),
 }
 
 #: The DRF basenames those routers would have produced. Kept separate from the prefixes because
@@ -248,6 +269,11 @@ RETIRED_ROUTE_NAMES = (
     "create_secure_carbon_offset",
     "get_user_security_status",
     "validate_file_upload_security",
+    # registry "verification", 2026-11-07
+    "verify_registry_credentials",
+    "get_verification_status",
+    "bulk_verify_entries",
+    "get_methodology_templates",
 )
 
 
@@ -333,8 +359,9 @@ class RetiredClaimRoutesTests(SimpleTestCase):
 
         # 2. multi-segment path, the form RETIRED_CLAIM_PATHS probes — a different branch of the
         #    URLconf than a bare router prefix.
-        deep = resolve("/api/carbon/entries/1/verification-status/")
-        self.assertEqual(deep.url_name, "get_verification_status")
+        #    (Was entries/1/verification-status/ until that route retired on 2026-11-07.)
+        deep = resolve("/api/carbon/evidence/1/photos/")
+        self.assertEqual(deep.url_name, "get_evidence_photos_enhanced")
 
         # 3. a live route that TAKES AN ARGUMENT, which is why the name check uses reverse_dict
         #    rather than reverse(). Two of the retired names are action routes with a

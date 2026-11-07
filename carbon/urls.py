@@ -234,15 +234,10 @@ urlpatterns = [
     # path("blockchain/mint-credits/", views.mint_carbon_credits_batch, ...)
     # path("blockchain/service-stats/", views.get_blockchain_service_stats, ...)
     # path("blockchain/deploy-contract/", views.deploy_carbon_credit_contract, ...)
-    # Third-Party Verification API Endpoints (NEW)
-    path("verify-registry-credentials/", views.verify_registry_credentials, name="verify_registry_credentials"),
-    path(
-        "entries/<int:carbon_entry_id>/verification-status/",
-        views.get_verification_status,
-        name="get_verification_status",
-    ),
-    path("bulk-verify/", views.bulk_verify_entries, name="bulk_verify_entries"),
-    path("methodology-templates/", views.get_methodology_templates, name="get_methodology_templates"),
+    # verify-registry-credentials/, entries/<id>/verification-status/, bulk-verify/ and
+    # methodology-templates/ were retired 2026-11-07 with carbon/services/verification_service.py
+    # and registry_integration.py: no frontend caller, and the registry "verification" behind them
+    # simulated Verra and Gold Standard. Reasons in test_retired_claim_routes_stay_retired.py.
     # secure/create-carbon-offset/, secure/validate-file-upload/ and secure/user-security-status/
     # were retired 2026-11-07 with carbon/views_security_enhanced.py: no frontend caller, and the
     # first wrote offset projects and "verified" entries. The reasons are in

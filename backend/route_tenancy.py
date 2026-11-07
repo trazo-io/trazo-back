@@ -98,7 +98,6 @@ ROUTE_TENANCY = {
     "carbon.views.PublicProductionViewSet": Route(
         COMPANY, "owner-only despite the name: complete_summary filters on the caller's companies"
     ),
-    "carbon.views.bulk_verify_entries": Route(USER, "filter(id__in=..., created_by=request.user)"),
     "carbon.views.calculate_event_carbon_impact": Route(CATALOG, "pure calculation from the request body"),
     "carbon.views.calculate_event_carbon_impact_enhanced": Route(CATALOG, "pure calculation from the request body"),
     "carbon.views.calculate_event_impact": Route(
@@ -117,7 +116,6 @@ ROUTE_TENANCY = {
         finding="the member check reads Company.users, which does not exist: co-members get a 500 "
         "and a stranger gets 404 vs 500, an existence oracle",
     ),
-    "carbon.views.get_methodology_templates": Route(CATALOG, "methodology registry only"),
     "carbon.views.get_production_carbon_economics": Route(
         COMPANY, "404 unless the production is in a caller's company"
     ),
@@ -128,7 +126,6 @@ ROUTE_TENANCY = {
         "no frontend caller; the ownership check reads attributes that do not exist, so every call 500s",
         finding="History.objects.get runs before the broken check: 404 vs 500 existence oracle",
     ),
-    "carbon.views.get_verification_status": Route(USER, "CarbonEntry.objects.get(id=..., created_by=request.user)"),
     "carbon.views.process_voice_event_ai": Route(
         COMPANY, "active company; field note filtered company__in=request.user.companies"
     ),
@@ -147,7 +144,6 @@ ROUTE_TENANCY = {
         finding="get_object_or_404 on any CarbonEntry id first: 404 vs 500 existence oracle",
     ),
     "carbon.views.validate_usda_compliance": Route(CATALOG, "query params only"),
-    "carbon.views.verify_registry_credentials": Route(USER, "CarbonEntry.objects.get(id=..., created_by=request.user)"),
     "carbon.views.voice_config": Route(COMPANY, "request.user.get_active_company()"),
     # ---------------------------------------------------------------------------------------------
     # certifications, documents. Nested under companies/<company_pk>/establishments/<establishment_pk>/:
@@ -501,7 +497,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 54
+UNPROVEN_CEILING = 51
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
 OPEN_FINDINGS_CEILING = 21
