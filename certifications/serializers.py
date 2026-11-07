@@ -70,6 +70,9 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             "agent_review_statement",
             "label_document",
             "label_document_title",
+            "facility_material_type",
+            "where_used",
+            "applied_by_fumigation",
             "national_list_substance",
             "omri_product",
             "wsda_material",
@@ -186,6 +189,26 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        # CCOF §F/§G's three columns belong to a facility pest row only. On any other row they would print
+        # nowhere and read as an answer to a question never asked of that material.
+        category = attrs.get("category", getattr(self.instance, "category", ""))
+        if category != "facility_pest":
+            stray = [
+                f
+                for f in ("facility_material_type", "where_used", "applied_by_fumigation")
+                if attrs.get(f) not in (None, "")
+            ]
+            if stray:
+                raise serializers.ValidationError(
+                    {
+                        f: "Asked only of a material used for pest control in a handling or storage facility."
+                        for f in stray
+                    }
+                )
+            # Moving a row out of facility pest control clears the three answers, so moving it back asks them
+            # again rather than reviving values nobody re-affirmed (review of back #340).
+            if "category" in attrs and getattr(self.instance, "category", "") == "facility_pest":
+                attrs.update({"facility_material_type": "", "where_used": "", "applied_by_fumigation": None})
         return attrs
 
 

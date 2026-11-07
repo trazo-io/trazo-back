@@ -2274,7 +2274,28 @@ class PlanMaterialEntry(models.Model):
         ("pest_disease_weed", "Pest, weed and disease control materials (CCOF §B)"),
         ("production_aid", "Other crop production materials — seed treatments, growing media, adjuvants (CCOF §C)"),
         ("post_harvest", "Post-harvest materials — wash-water additives, sanitizers (CCOF §D)"),
+        ("facility_pest", "Pest control in handling and storage facilities (CCOF §F, §G)"),
         ("other", "Other"),
+    ]
+
+    #: CCOF Materials Application §F lists facility pest control "by National List material type";
+    #: §G any material that "does not fit a §F National List type". § 205.271(c) allows a substance
+    #: on the National List when prevention and mechanical controls are not effective, and (d) a
+    #: synthetic not on it only when the handler and the certifying agent agree on the substance, the
+    #: method and the measures that keep it from the product.
+    FACILITY_MATERIAL_TYPE_CHOICES = [
+        ("ammonium_carbonate", "Ammonium carbonate"),
+        ("boric_acid", "Boric acid"),
+        ("botanical_pesticides", "Botanical pesticides"),
+        ("carbon_dioxide", "Carbon dioxide"),
+        ("diatomaceous_earth", "Diatomaceous earth"),
+        ("nitrogen_gas", "Nitrogen gas"),
+        ("nonsynthetic_bait_lure_repellent", "Nonsynthetic bait, lure or repellent"),
+        ("pheromones", "Pheromones"),
+        ("pyrethrum_pyrethrins", "Pyrethrum or pyrethrins"),
+        ("sticky_traps", "Sticky traps"),
+        ("vitamin_d3", "Vitamin D3"),
+        ("not_national_list", "Not a National List type (CCOF §G)"),
     ]
 
     BASIS_OMRI = "omri"
@@ -2392,6 +2413,13 @@ class PlanMaterialEntry(models.Model):
     #: The use the agent reviewed it for (WSDA: "approved ... for their specific use"); blank when
     #: it is the reason for use above.
     agent_review_use = models.CharField(max_length=300, blank=True, default="")
+    # CCOF §F and §G, asked of a `facility_pest` row only: which National List type it is (or that it is
+    # none), where in the facility it is used, and whether it is applied by fumigation or fogging.
+    facility_material_type = models.CharField(
+        max_length=40, choices=FACILITY_MATERIAL_TYPE_CHOICES, blank=True, default=""
+    )
+    where_used = models.CharField(max_length=200, blank=True, default="")
+    applied_by_fumigation = models.BooleanField(null=True, blank=True)
     #: The product's label, or a photo of its container, filed in the farm's Documents. OTCO C11 11.1
     #: asks for one "for each product that is not OMRI or WSDA listed" (read live 2026-11-04). PROTECT:
     #: the documents route refuses to delete a file a material still names.

@@ -327,35 +327,33 @@ items:
     Carbon dioxide, Diatomaceous earth, Nitrogen gas, Nonsynthetic bait/lure/repellent, Pheromones, Pyrethrum/pyrethrins,
     Sticky traps, Vitamin D3 — each with Used?, Where Used, and Applied by fumigation/fogging? (Yes/No).
     Or 'Not applicable.'
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g9_0_facility_pest.material_tier
-    - g9_0_facility_pest.preventive_measures_documentation
-    prints: —
-  gap: G9.0 collapses all of this to a single `material_tier` radio (none / non-production-only / National
-    List / synthetic-approved); there is no per-type row, no where-used field, and no fumigation/fogging
-    flag anywhere for facility pest control. Only 5 of the 11 National List types are seeded as substances
-    at all (ammonium carbonate, boric acid, sticky traps, pheromones, vitamin D3); the pilot answers `material_tier
-    = none` with snap traps recorded only as a mechanical control.
-  fix: Replace or augment `material_tier` with a checkbox_group of the 11 National List types, each with
-    `where_used` and `applied_by_fumigation`; seed the six missing substances; compile a table from the
-    answers.
+    where: "modules/materials_application.pdf: the facility pest control tables (rows filed under pest control in handling and storage facilities)"
+    models:
+    - certifications.PlanMaterialEntry.category
+    - certifications.PlanMaterialEntry.facility_material_type
+    - certifications.PlanMaterialEntry.where_used
+    - certifications.PlanMaterialEntry.applied_by_fumigation
+    prints: modules/materials_application.pdf, "Pest control in handling and storage facilities, by National List
+      type" (CCOF's eleven types in its order, each Used, products, where used, fumigation or fogging); modules/G9_0.pdf
+      §C states any disagreement between the material answer and the list
+  # Closed 2026-11-07. Materials-list rows filed under facility pest control carry CCOF's three columns. The six
+  # types not seeded as National List substances are still offered: the row is the operator's, typed by type.
 - ref: G
   asks: 'List any pest control material used in a post-harvest handling or crop-storage facility that
     does not fit a §F National List type (e.g., ''MAX Fog Roach Killer / Storage room / Yes''): Non-National
     List Material, Where Used, Applied by fumigation/fogging? Or ''Not applicable.'' / ''Other list attached.'''
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    questions:
-    - g9_0_facility_pest.material_tier
-    prints: —
-  gap: G9.0's `synthetic_approved` option promises materials 'approved by our certifier in advance and
-    entered on our OSP inputs list' — but the registry cannot hold a non-National-List synthetic at all
-    (no free-text row; `verify_input` would return a § 205.105 prohibited hit or nothing). G6.2's free-text
-    description is the only place such a material can be named today.
-  fix: Add category G to the operator-authored row (name, where used, fumigation flag, certifier-approval
-    reference); have G9.0's `synthetic_approved` path link to it instead of asserting an approval Trazo
-    cannot record.
+    where: "modules/materials_application.pdf: the facility pest control tables (rows filed under pest control in handling and storage facilities)"
+    models:
+    - certifications.PlanMaterialEntry.facility_material_type
+    - certifications.PlanMaterialEntry.where_used
+    - certifications.PlanMaterialEntry.applied_by_fumigation
+    - certifications.PlanMaterialEntry.agent_review
+    prints: modules/materials_application.pdf, "Pest control materials that are not a National List type" (each with
+      where used, fumigation or fogging, and the agreement with the certifying agent as recorded); a [REVIEW] when no
+      agreement is recorded (§ 205.271(d))
+  # Closed 2026-11-07. G9.0's "synthetic, approved in advance" answer can now point at rows that record the
+  # agent's review, instead of asserting an approval Trazo could not hold.

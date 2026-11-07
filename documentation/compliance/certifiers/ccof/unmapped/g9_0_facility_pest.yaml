@@ -1,4 +1,8 @@
 questions:
+  g9_0_facility_pest.preventive_measures_documentation: >-
+    How the operation documents that prevention and mechanical controls were not enough before a material is
+    applied (the § 205.271(a)-(d) sequence; WSDA AGR 2121 M asks it). CCOF's Materials Application §F and §G list
+    the materials themselves, which the materials list answers.
   g9_0_facility_pest.uses_pest_control_company: "§205.271 requires notifying any contracted pest control operator that the site
     is certified organic. CCOF's G6.2 form (the only grower form whose B3-B9 substantively maps to G9.0) does not ask whether a
     contracted pest control company is used as its own distinct checkbox. Trazo asks it directly as a named-company gate."

@@ -709,6 +709,7 @@ jobs:
             certifications.tests.test_retail_label_review \
             certifications.tests.test_own_facilities \
             certifications.tests.test_post_harvest_inputs \
+            certifications.tests.test_facility_pest_materials \
             certifications.tests.test_cover_state_registration \
             certifications.tests.test_state_organic_registration \
             certifications.tests.test_material_identity \

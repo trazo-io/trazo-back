@@ -107,6 +107,11 @@ class PlanMaterial:
     #: reference beside the row. `identifier` carries the use the rule lists each under, in the
     #: rule's English, for the certifier's packet; the app is read in Spanish too.
     listing_ref: str = ""
+    #: CCOF §F/§G, on a `facility_pest` row only: the National List type (or `not_national_list`), where in
+    #: the facility it is used, and whether it is applied by fumigation or fogging (None: not stated).
+    facility_material_type: str = ""
+    where_used: str = ""
+    applied_by_fumigation: Optional[bool] = None
 
     @property
     def needs_label(self) -> bool:
@@ -259,6 +264,9 @@ def _fold_into_entry(entry, catalog_rows: list, linked_conditions: Optional[dict
         reason=entry.reason_for_use or "",
         status=entry.status or "",
         category=entry.category or "",
+        facility_material_type=getattr(entry, "facility_material_type", "") or "",
+        where_used=getattr(entry, "where_used", "") or "",
+        applied_by_fumigation=getattr(entry, "applied_by_fumigation", None),
         source_id=source_id,
         entry_id=entry.pk,
         delisted_on=delisted_on,
@@ -557,6 +565,10 @@ def materials_list_rows(osp) -> list[dict]:
                 "agent_review_use": getattr(entry, "agent_review_use", "") or "",
                 "agent_review_statement": getattr(entry, "agent_review_statement", "") or "",
                 "label_document": getattr(entry, "label_document_id", None),
+                # CCOF §F/§G, answered on a facility pest row.
+                "facility_material_type": getattr(entry, "facility_material_type", "") or "",
+                "where_used": getattr(entry, "where_used", "") or "",
+                "applied_by_fumigation": getattr(entry, "applied_by_fumigation", None),
                 "label_document_title": entry.label_document.title if entry and entry.label_document_id else "",
                 # Only an OTCO plan asks for the label; the editor offers the upload on every row.
                 "needs_label": labels_asked and (plan is None or plan.needs_label),
