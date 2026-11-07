@@ -152,50 +152,6 @@ class TheMigrationChainTests(_FarmMixin, TransactionTestCase):
         self.assertEqual(set(step_3.RETIRED), set(RETIRED_CARBON_ENTRY_COLUMNS))
 
 
-class TheDemoSeederTests(_FarmMixin, TestCase):
-    def test_the_demo_seeder_writes_no_fabricated_claim(self):
-        """It wrote fabricated registry and USDA verification claims into these columns (review of #318)."""
-        from pathlib import Path
-
-        import carbon.management.commands.seed_comprehensive_demo_v2 as seeder
-
-        source = Path(seeder.__file__).read_text()
-        for claim in ("usda.gov/verify", "registry.verra.org/report", "USDA Event Registry", '"EXT-', '"SUB-'):
-            self.assertNotIn(claim, source)
-        for column in RETIRED_CARBON_ENTRY_COLUMNS:
-            self.assertNotIn(column, source)
-
-    def test_the_demo_seeders_raw_inserts_name_only_live_columns(self):
-        """Its two INSERTs name columns by hand, so a dropped name would fail at run time.
-
-        Read from the source, not run: both INSERTs have failed since carbon migration 0028 added
-        NOT NULL columns they do not name (`calculation_details`), and the seeder logs the error
-        and moves on. Making them write again would bring back the registry claims they carry.
-        """
-        import ast
-        import re
-        from pathlib import Path
-
-        import carbon.management.commands.seed_comprehensive_demo_v2 as seeder
-
-        live = {f.column for f in CarbonEntry._meta.concrete_fields}
-        inserts = []
-        for node in ast.walk(ast.parse(Path(seeder.__file__).read_text())):
-            if not (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "execute" and node.args):
-                continue
-            sql = node.args[0]
-            if isinstance(sql, ast.Constant) and "INSERT INTO carbon_carbonentry" in str(sql.value):
-                inserts.append((sql.value, node.args[1]))
-        self.assertEqual(len(inserts), 2)
-        for sql, values in inserts:
-            named = [
-                c.strip() for c in re.search(r"carbon_carbonentry \((.*?)\) VALUES", sql, re.S).group(1).split(",")
-            ]
-            self.assertEqual(set(named) - live, set())
-            self.assertEqual(sql.count("%s"), len(named))
-            self.assertEqual(len(values.elts), len(named))
-
-
 def _with_columns(snapshot, columns, counted):
     """`snapshot` as a census would have read it while `columns` were still in the table.
 

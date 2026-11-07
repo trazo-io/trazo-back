@@ -151,10 +151,10 @@ poetry run python manage.py create_comprehensive_production_templates_v2
 # 3. Template i18n keys and picker grouping.
 poetry run python manage.py update_event_template_fields
 
-# 4. Carbon reference data. All three use get_or_create / update_or_create.
-poetry run python manage.py seed_crop_benchmarks
+# 4. Carbon reference data. Uses get_or_create / update_or_create.
+#    seed_crop_benchmarks was deleted 2026-11-07 (it labelled simulated figures with a USDA source)
+#    and seed_sustainability_badges on 2026-11-06 with the badge model. Do not look for them.
 poetry run python manage.py seed_offset_actions
-poetry run python manage.py seed_sustainability_badges
 ```
 
 #### 3.2 Compliance Reference Data (CRITICAL — silent failure if skipped)

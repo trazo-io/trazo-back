@@ -559,6 +559,9 @@ jobs:
       # so every citation printed (i). Pins both rows and that the name search offers every listing.
       # It does not read the sibling repo.
       #
+      # 2026-11-07: carbon.tests.test_legacy_seeders_stay_deleted joins. Twelve legacy seeders that
+      # wrote offset/benchmark/report rows or unsourced claims stay out of the command registry.
+      # It does not read the sibling repo.
       # 2026-11-07: carbon.tests.test_crop_template_detail_claims joins. The live crop template
       # detail payload carries no `benchmark` and no `carbon_credit_potential`. It does not read
       # the sibling repo.
@@ -757,6 +760,7 @@ jobs:
             carbon.tests.test_carbon_claims_2026_11 \
             carbon.tests.test_carbon_entry_activity_link \
             carbon.tests.test_retired_carbon_columns \
+            carbon.tests.test_legacy_seeders_stay_deleted \
             carbon.tests.test_retired_satellite_models \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
