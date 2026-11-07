@@ -2,7 +2,6 @@
 Celery tasks for carbon tracking and blockchain verification.
 
 This module contains background tasks for:
-- Carbon report generation (nightly)
 - Sustainability badge awards (nightly)
 - Audit log cleanup (nightly)
 - Industry benchmark updates (nightly)
@@ -22,27 +21,15 @@ from celery import shared_task
 
 from company.models import Company
 
-from .models import CarbonEntry, CarbonReport
+from .models import CarbonEntry
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def generate_carbon_report(report_id):
-    """
-    Task to generate a carbon report in the background.
-    """
-    try:
-        report = CarbonReport.objects.get(id=report_id)
-        # Placeholder for report generation logic (e.g., PDF creation)
-        print(f"Generating report {report_id} for {report.year}")
-        # Update report status or save generated file path
-        report.document = "path/to/generated/report.pdf"  # Placeholder
-        report.save()
-        return f"Report {report_id} generated"
-    except CarbonReport.DoesNotExist:
-        return f"Report {report_id} not found"
+# NEVER: 2026-11-07 - `generate_carbon_report` was DELETED. Nothing queued it, and it read
+# `report.year`, a field CarbonReport does not have, then saved a placeholder path as the report's
+# document. CarbonReport itself is retiring (see carbon/tests/test_retired_claim_routes_stay_retired.py).
 
 
 # NEVER: 2026-09-30 - `generate_nightly_reports`, `award_sustainability_badges` and

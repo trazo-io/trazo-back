@@ -124,7 +124,6 @@ class NoBlanketAttributionInOutputsTests(SimpleTestCase):
     PY_OUTPUTS = (
         "history/services/audit_export_service.py",
         "history/services/records_export.py",
-        "carbon/services/report_generator.py",
         "carbon/views.py",
         "education/management/commands/seed_education_content.py",
     )

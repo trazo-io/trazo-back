@@ -18,6 +18,11 @@ were the source of the public "Carbon Stored" badge removed the same day
 This guard reads the SOURCE rather than exercising the endpoints: the endpoints demand a
 signed session, a CSRF token and an anti-gaming payload, and a guard nobody can run is a
 guard that does not hold. `self_reported` is the vocabulary certifications already use.
+
+2026-11-07: views_security_enhanced.py and serializers_secure.py were deleted, with the
+`secure/*` routes and carbon/services/verification.py, whose `verify_carbon_entry` still wrote
+"verified" from checks on the caller's own input. views.py is the offset write path left, and
+the deleted modules are held deleted below so the stamp cannot come back with them.
 """
 
 import re
@@ -31,10 +36,16 @@ CARBON = Path(__file__).resolve().parent.parent
 
 # Offset write paths. ⛔ Seeders and one-off management commands are deliberately out of
 # scope: they do not run in production and their rows are not user assertions.
-OFFSET_WRITE_PATHS = (
+OFFSET_WRITE_PATHS = ("views.py",)
+
+#: Deleted 2026-11-07 with the `secure/*` routes. Each one wrote, or built a certificate from, an
+#: offset the operator entered. See carbon/tests/test_retired_claim_routes_stay_retired.py.
+DELETED_OFFSET_MODULES = (
     "views_security_enhanced.py",
     "serializers_secure.py",
-    "views.py",
+    "services/backend_security_validation.py",
+    "services/certificate.py",
+    "services/verification.py",
 )
 
 _COMMENT = re.compile(r"^\s*#")
@@ -82,13 +93,23 @@ class OffsetsAreNotSelfVerified(SimpleTestCase):
             )
 
     def test_request_body_is_never_treated_as_proof(self):
-        """`verification_level` arrives in the payload. ⛔ It is the claimant's assertion and
+        """`verification_level` arrives in the payload. NEVER: it is the claimant's assertion and
         must never, by itself, decide a verification_status."""
-        source = (CARBON / "views_security_enhanced.py").read_text()
-        for lineno, line in _code_lines(CARBON / "views_security_enhanced.py"):
-            if "verification_status" in line and "verification_level" in line:
-                self.fail(
-                    f"views_security_enhanced.py:{lineno} derives a verification_status from "
-                    f"the request body's verification_level: {line.strip()}"
-                )
-        self.assertIn("verification_level", source)  # the field still exists; it just proves nothing
+        for name in OFFSET_WRITE_PATHS:
+            for lineno, line in _code_lines(CARBON / name):
+                if "verification_status" in line and "verification_level" in line:
+                    self.fail(
+                        f"{name}:{lineno} derives a verification_status from the request "
+                        f"body's verification_level: {line.strip()}"
+                    )
+        self.assertIn("verification_level", (CARBON / "views.py").read_text())  # read something
+
+    def test_the_deleted_offset_modules_stay_deleted(self):
+        back = [name for name in DELETED_OFFSET_MODULES if (CARBON / name).exists()]
+        self.assertEqual(
+            back,
+            [],
+            "A deleted offset module is back. Each wrote or certified an offset nobody checked:\n"
+            "re-adding one is a decision about what Trazo asserts, made in "
+            "test_retired_claim_routes_stay_retired.py first.\n  " + "\n  ".join(back),
+        )

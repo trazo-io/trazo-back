@@ -184,6 +184,28 @@ RETIRED_CLAIM_PATHS = {
         "verify_production — so the POST action the class docstring advertised had never "
         "registered at all. Two readings of one route: you get the weaker one."
     ),
+    # secure/*, 2026-11-07. carbon/views_security_enhanced.py, deleted with the four modules only
+    # it reached (backend_security_validation, certificate, verification) and serializers_secure,
+    # which nothing imported. No frontend caller for any of the three.
+    "secure/create-carbon-offset/": (
+        "create_secure_carbon_offset: the last request path that wrote the offset marketplace. "
+        "It created a CarbonOffsetProject labelled certification_standard 'VCS' from a source_id "
+        "in the request body, then tried to build a purchase and a PDF certificate from it, and "
+        "its verification service then stamped verification_status 'verified' on the new "
+        "CarbonEntry whenever the amount was positive, the row was complete and, from 100 kg up, "
+        "the caller had typed any additionality evidence. No third party looked at it. "
+        "16 CFR 260.5, the class offset-projects/-purchases/-certificates were retired for."
+    ),
+    "secure/user-security-status/": (
+        "get_user_security_status: returned an overall_trust_score for the account and listed "
+        "'blockchain_verification': True among its security features, with the blockchain add-on "
+        "withdrawn. A self-assigned grade, and a 'verified' the product does not perform."
+    ),
+    "secure/validate-file-upload/": (
+        "validate_file_upload_security: checked a name, type and size the client declared in a "
+        "JSON body, about a file it never sent. A check on the caller's own description of a file "
+        "proves nothing about the file, and nothing called it."
+    ),
 }
 
 #: The DRF basenames those routers would have produced. Kept separate from the prefixes because
@@ -222,6 +244,10 @@ RETIRED_ROUTE_NAMES = (
     "carbon-impact-examples",
     "trust-comparison-data",
     "education-content",
+    # secure/*, 2026-11-07
+    "create_secure_carbon_offset",
+    "get_user_security_status",
+    "validate_file_upload_security",
 )
 
 

@@ -187,11 +187,6 @@ class SpecimenSurfaceCoverageTests(TestCase):
     #: Modules that build a document but legitimately have no operation to mark, with the
     #: reason. Each entry is checked to still EXIST, so a rename cannot leave a stale pass.
     EXEMPT = {
-        "carbon/services/certificate.py": (
-            "Carbon-offset certificate keyed to a CarbonOffsetPurchase, which reaches no "
-            "Establishment. Dormant besides: BLOCKCHAIN_ENABLED is False and the add-on is "
-            "withdrawn, so it builds nothing today."
-        ),
         "certifications/management/commands/build_omri_seed_csv.py": (
             "Writes certifications/data/omri_seed.csv from OMRI's free public Crop Products "
             "List PDF. The CSV is a CATALOGUE of third-party-listed materials, not an "

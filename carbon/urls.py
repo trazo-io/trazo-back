@@ -2,7 +2,7 @@ from django.urls import include, path
 
 from rest_framework.routers import DefaultRouter
 
-from . import views, views_security_enhanced
+from . import views
 from .views import (
     CarbonEstablishmentSummaryViewSet,
     CarbonProductionSummaryViewSet,
@@ -240,22 +240,10 @@ urlpatterns = [
     ),
     path("bulk-verify/", views.bulk_verify_entries, name="bulk_verify_entries"),
     path("methodology-templates/", views.get_methodology_templates, name="get_methodology_templates"),
-    # Enhanced Security Endpoints
-    path(
-        "secure/create-carbon-offset/",
-        views_security_enhanced.create_secure_carbon_offset,
-        name="create_secure_carbon_offset",
-    ),
-    path(
-        "secure/validate-file-upload/",
-        views_security_enhanced.validate_file_upload_security,
-        name="validate_file_upload_security",
-    ),
-    path(
-        "secure/user-security-status/",
-        views_security_enhanced.get_user_security_status,
-        name="get_user_security_status",
-    ),
+    # secure/create-carbon-offset/, secure/validate-file-upload/ and secure/user-security-status/
+    # were retired 2026-11-07 with carbon/views_security_enhanced.py: no frontend caller, and the
+    # first wrote offset projects and "verified" entries. The reasons are in
+    # carbon/tests/test_retired_claim_routes_stay_retired.py.
     # Photo Evidence Service Endpoints
     path("evidence/upload/", views.upload_evidence_photo_enhanced, name="upload_evidence_photo_enhanced"),
     path(
