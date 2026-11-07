@@ -803,80 +803,6 @@ class CarbonCertification(models.Model):
         return f'{self.certificate_id} ({self.establishment.name if self.establishment else "N/A"})'
 
 
-class CarbonBenchmark(models.Model):
-    industry = models.CharField(max_length=100)
-    year = models.PositiveIntegerField()
-    average_emissions = models.FloatField()
-    min_emissions = models.FloatField(default=0.0)
-    max_emissions = models.FloatField(default=0.0)
-    company_count = models.PositiveIntegerField(default=0)
-    unit = models.CharField(max_length=50)
-    source = models.CharField(max_length=200)
-    last_updated = models.DateField(auto_now=True)
-    usda_factors_used = models.BooleanField(default=False)
-    crop_type = models.CharField(max_length=100, blank=True, help_text="Specific crop type if applicable")
-    region = models.CharField(max_length=100, blank=True, help_text="Geographic region if applicable")
-    created_at = models.DateTimeField(auto_now=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ("industry", "year", "crop_type", "region")
-        indexes = [
-            models.Index(fields=["crop_type"]),
-            models.Index(fields=["region"]),
-            models.Index(fields=["usda_factors_used"], name="carbon_carb_usda_fa_bench_idx"),
-        ]
-
-    def __str__(self):
-        return f"Benchmark {self.industry} - {self.year}"
-
-
-class CarbonReport(models.Model):
-    establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
-    period_start = models.DateField(default="2023-01-01")
-    period_end = models.DateField(default="2023-12-31")
-    total_emissions = models.FloatField(default=0.0)
-    total_offsets = models.FloatField(default=0.0)
-    net_footprint = models.FloatField(default=0.0)
-    generated_at = models.DateTimeField(default=timezone.now)
-    usda_factors_used = models.BooleanField(default=False)
-    document = models.FileField(
-        upload_to="carbon_reports/",
-        storage=private_records_storage,
-        null=True,
-        blank=True,
-        help_text="Report document file",
-    )
-
-    # Enhanced transparency fields from migration 0028
-    detailed_breakdown = models.JSONField(default=dict, help_text="Detailed breakdown of carbon sources and sinks")
-    trend_analysis = models.JSONField(default=dict, help_text="Historical trend analysis and projections")
-    improvement_tracking = models.JSONField(
-        default=dict, help_text="Tracking of improvement initiatives and their impact"
-    )
-    stakeholder_insights = models.JSONField(
-        default=dict, help_text="Insights for different stakeholders (farmers, consumers, regulators)"
-    )
-
-    created_at = models.DateTimeField(auto_now=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.CheckConstraint(
-                check=models.Q(establishment__isnull=False) | models.Q(production__isnull=False),
-                name="either_establishment_or_production_set_report",
-            )
-        ]
-        indexes = [
-            models.Index(fields=["usda_factors_used"], name="carbon_carb_usda_fa_report_idx"),
-        ]
-
-    def __str__(self):
-        return f'{self.establishment.name if self.establishment else "N/A"} - {self.period_start} to {self.period_end}'
-
-
 class CarbonAuditLog(models.Model):
     carbon_entry = models.ForeignKey(
         CarbonEntry, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True
@@ -884,7 +810,8 @@ class CarbonAuditLog(models.Model):
     certification = models.ForeignKey(
         CarbonCertification, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True
     )
-    report = models.ForeignKey(CarbonReport, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True)
+    # `report` (FK to CarbonReport) left the model in carbon migration 0052 with CarbonReport; the
+    # column stays, NULL in every row, until the step-2 migration drops it.
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     action = models.CharField(
         max_length=50,
@@ -918,64 +845,12 @@ class CarbonAuditLog(models.Model):
 # micro-purchase and a shopper gamification score. Their routes were retired in 2026-09 (see
 # carbon/tests/test_retired_claim_routes_stay_retired.py), nothing has written a row in
 # production, and an empty schema for a retired claim is an invitation to wire it back.
-
-
-class CarbonOffsetProject(models.Model):
-    """Model for carbon offset projects available in the marketplace"""
-
-    name = models.CharField(max_length=255)
-    description = models.TextField()
-    project_type = models.CharField(max_length=100)
-    certification_standard = models.CharField(max_length=100)
-    location = models.CharField(max_length=255)
-    price_per_ton = models.DecimalField(max_digits=10, decimal_places=2)
-    available_capacity = models.DecimalField(max_digits=10, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.name
-
-
-class CarbonOffsetPurchase(models.Model):
-    """Model for tracking carbon offset purchases"""
-
-    project = models.ForeignKey(CarbonOffsetProject, on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    price_per_ton = models.DecimalField(max_digits=10, decimal_places=2)
-    total_price = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, default="pending")
-    is_verified = models.BooleanField(default=False)
-    certificate_file = models.FileField(
-        upload_to="certificates/", storage=private_records_storage, null=True, blank=True
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-
-    def __str__(self):
-        return f"{self.user.username} - {self.project.name} - {self.amount} tons"
-
-    def save(self, *args, **kwargs):
-        if not self.total_price:
-            self.total_price = self.amount * self.price_per_ton
-        super().save(*args, **kwargs)
-
-
-class CarbonOffsetCertificate(models.Model):
-    """Model for carbon offset certificates"""
-
-    purchase = models.OneToOneField(CarbonOffsetPurchase, on_delete=models.CASCADE)
-    certificate_number = models.CharField(max_length=100, unique=True)
-    verification_code = models.CharField(max_length=100, unique=True)
-    certificate_url = models.URLField()
-    metadata = models.JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.certificate_number
+#
+# CarbonOffsetProject, CarbonOffsetPurchase, CarbonOffsetCertificate, CarbonBenchmark and
+# CarbonReport left the model in carbon migration 0052 (2026-11-07), 0 rows in every table: the
+# pre-pivot offset marketplace (projects labelled "VCS", purchases, PDF certificates), an industry
+# "benchmark" Trazo computed about itself, and report snapshots that carried a 0-100 carbon score.
+# Their routes, views, services and seeders went first (#329, #332, #333, #337).
 
 
 # IoT Device Management Models
