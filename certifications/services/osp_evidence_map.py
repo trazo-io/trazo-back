@@ -422,6 +422,12 @@ OSP_EVIDENCE_MAP: dict = {
         EVIDENCED,
         source="history.ProductionEvent.harvest_contract_number",
     ),
+    # WSDA AGR 2121 L 11 (2026.11.21).
+    "post_harvest_input_recording": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The operator's description of how each post-harvest input application is recorded; the packing-line "
+        "log it names is the operation's own document.",
+    ),
     # --- G7.0 labeling ----------------------------------------------------------
     "label_states_certifier": EvidenceEntry(
         EVIDENCED,

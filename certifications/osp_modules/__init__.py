@@ -281,7 +281,9 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.11.20: the operation's own handling and storage facilities are records (`PostHarvestFacility.operated_by`
 #   = this_operation, with postal code, country and a layout file), listed by the `on_farm_facilities` embed on
 #   G6.4 §B and G6.2 §A (CCOF G6.4 A1; OTCO C7 7.1, 7.2-1, 7.7-2 OWN). No certificate is asked of them.
-CONTENT_VERSION = "2026.11.20"
+# 2026.11.21: G6.4 page C asks whether any input is applied directly to crops after harvest (WSDA L 8), which
+#   types (L 9, without the two livestock-feed items) and how each application is recorded (L 11). Optional.
+CONTENT_VERSION = "2026.11.21"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

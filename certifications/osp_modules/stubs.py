@@ -1075,6 +1075,104 @@ G6_4_HANDLING = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # WSDA AGR 2121 L 8, 9 and 11 (2026.11.21). Water and sanitizers were asked above; L 8 asks
+                # whether ANY input is applied directly to crops after harvest, certified or not. WSDA's list
+                # also names feed antibiotics and feed coccidiostats, which are livestock inputs; Trazo does
+                # not serve livestock (scope.yaml), so they are not offered.
+                Question(
+                    key="applies_post_harvest_inputs",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you apply any input directly to crops after harvest, certified or not (a wax, a "
+                        "sanitizer wash, a ripening or anti-sprouting agent, a packaging gas)?",
+                        "¿Aplicas algún insumo directamente a los cultivos después de la cosecha, certificados o no "
+                        "(una cera, un lavado sanitizante, un agente de maduración o antibrotación, un gas de "
+                        "empaque)?",
+                    ),
+                    coaching=text(
+                        "List each one on your materials list, under post-harvest materials, with its brand and "
+                        "manufacturer.",
+                        "Anota cada uno en tu lista de materiales, en materiales de poscosecha, con su marca y "
+                        "fabricante.",
+                    ),
+                    nop_cite="§ 205.270",
+                    compiles_to=CompileRule(
+                        template="Inputs are applied directly to crops after harvest ({answer}).",
+                        template_false="No input is applied directly to crops after harvest.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="post_harvest_input_types",
+                    kind="checkbox_group",
+                    required=False,
+                    visible_when=(Condition("applies_post_harvest_inputs", "eq", True),),
+                    label=text(
+                        "Which types of input touch the crop after harvest? Check all that apply.",
+                        "¿Qué tipos de insumo tocan el cultivo después de la cosecha? Marca todas las que "
+                        "correspondan.",
+                    ),
+                    nop_cite="§ 205.270",
+                    compiles_to=CompileRule(
+                        template="Types of input applied directly to crops after harvest: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("anti_foaming", text("Anti-foaming agents", "Agentes antiespumantes")),
+                        Option("anti_fungal", text("Anti-fungal agents", "Agentes antifúngicos")),
+                        Option("anti_microbial", text("Anti-microbial agents", "Agentes antimicrobianos")),
+                        Option("anti_ripening", text("Anti-ripening agents", "Agentes antimaduración")),
+                        Option("antioxidants", text("Antioxidants", "Antioxidantes")),
+                        Option("floatation", text("Floatation agents", "Agentes de flotación")),
+                        Option("packaging_gases", text("Packaging gases", "Gases de empaque")),
+                        Option("preservatives", text("Preservatives", "Conservantes")),
+                        Option("release_agents", text("Release agents", "Agentes desmoldantes")),
+                        Option("ripening", text("Ripening agents", "Agentes de maduración")),
+                        Option("sanitizer_washes", text("Sanitizers or washes", "Sanitizantes o lavados")),
+                        Option("sprouting_inhibitors", text("Sprouting inhibitors", "Inhibidores de brotación")),
+                        Option("waxes_coatings", text("Waxes or coatings", "Ceras o recubrimientos")),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
+                    key="post_harvest_input_types_other",
+                    kind="text",
+                    required=False,
+                    visible_when=(
+                        Condition("applies_post_harvest_inputs", "eq", True),
+                        Condition("post_harvest_input_types", "includes", "other"),
+                    ),
+                    label=text("Other type of input", "Otro tipo de insumo"),
+                    nop_cite="§ 205.270",
+                    compiles_to=CompileRule(
+                        template="Other type of input applied after harvest: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="post_harvest_input_recording",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("applies_post_harvest_inputs", "eq", True),),
+                    label=text(
+                        "How do you record each application of those inputs, to certified and to non-certified "
+                        "product?",
+                        "¿Cómo registras cada aplicación de esos insumos, al producto certificado y al no "
+                        "certificado?",
+                    ),
+                    coaching=text(
+                        "For example: the packing-line log names the wax, the lot and the date for every run, and "
+                        "conventional runs are logged on their own sheet.",
+                        "Por ejemplo: el registro de la línea de empaque indica la cera, el lote y la fecha de cada "
+                        "corrida, y las corridas convencionales se anotan en su propia hoja.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="How each post-harvest input application is recorded: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 # WSDA AGR 2121 L 10 and 10a (2026.11.09).
                 Question(
                     key="noncertified_only_inputs_used",

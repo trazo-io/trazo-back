@@ -1,4 +1,12 @@
 questions:
+  g6_4_handling.applies_post_harvest_inputs: >-
+    Whether any input is applied directly to crops after harvest (WSDA AGR 2121 L 8). CCOF asks the post-harvest materials themselves on the Materials Application (section D), which post_harvest_contact_listed answers, not whether inputs are applied as a separate question.
+  g6_4_handling.post_harvest_input_types: >-
+    The types of those inputs (WSDA L 9); same reason.
+  g6_4_handling.post_harvest_input_types_other: >-
+    The operator's own words for Other on the question above; same reason.
+  g6_4_handling.post_harvest_input_recording: >-
+    How each application is recorded (WSDA L 11); same reason.
   g6_4_handling.commingling_controls: "§205.272(a) commingling-prevention fact. CCOF's G6.4 form is scoped to all-organic,
     single-operation handling where commingling with nonorganic product is defined out of scope by the form's own applicability
     gate (\"this form does not apply if you are handling both organic and nonorganic products\"). Trazo still asks it to cover

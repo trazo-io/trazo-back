@@ -3773,6 +3773,20 @@
        "noncertified_only_inputs_used": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": false
+       },
+       "applies_post_harvest_inputs": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": true
+       },
+       "post_harvest_input_types": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "sanitizer_washes"
+        ]
+       },
+       "post_harvest_input_recording": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": "Each wash run is logged on the packing-line run log: the date, the lot, and the Tsunami 100 concentration checked with a test strip at start-up and every two hours. All product on the line is organic, so there are no non-certified runs to keep apart."
        }
       },
       "completed_at": "2026-08-21T11:28:46.538346+00:00",

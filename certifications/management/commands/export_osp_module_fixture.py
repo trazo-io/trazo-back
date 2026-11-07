@@ -125,6 +125,19 @@ GOLDEN_ANSWER_CASES = {
             "container_cleaning_records": ["sop_attached"],
         },
     },
+    "g6_4_handling": {
+        # 2026.11.21: the input types and recording hang on applying inputs; their "other" also on "other".
+        "inputs_other": {
+            "handling_activities": ["packing"],
+            "applies_post_harvest_inputs": True,
+            "post_harvest_input_types": ["waxes_coatings", "other"],
+        },
+        "no_inputs_stale_types": {
+            "handling_activities": ["packing"],
+            "applies_post_harvest_inputs": False,
+            "post_harvest_input_types": ["other"],
+        },
+    },
     "g6_0_production": {
         "unanswered": {},
         "split": {"split_operation": True},
