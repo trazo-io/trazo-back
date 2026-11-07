@@ -10,13 +10,14 @@
   tradable credits. A carbon-offset claim, 16 CFR 260.5, the class the offset routes were
   retired for.
 
-The test seeds a benchmark that matches the crop and a non-zero projected reduction, so the old
-code would have served both keys with values.
+The test seeds a non-zero projected reduction, so the old code would have served
+`carbon_credit_potential` with a value. It seeded a matching CarbonBenchmark too, until that model
+left the state in carbon migration 0052.
 """
 
 from rest_framework.test import APITestCase
 
-from carbon.models import CarbonBenchmark, CropType, EventTemplate, ProductionTemplate
+from carbon.models import CropType, EventTemplate, ProductionTemplate
 from users.models import User
 
 RETIRED_KEYS = ("benchmark", "carbon_credit_potential")
@@ -58,14 +59,6 @@ class CropTemplateDetailClaimsTests(APITestCase):
             cost_estimate=0.0,
             efficiency_tips="",
             backend_event_type=1,
-        )
-        CarbonBenchmark.objects.create(
-            industry="vegetable",
-            year=2026,
-            average_emissions=1500.0,
-            unit="kg CO2e/ha",
-            source="seeded",
-            crop_type="Detail Crop",
         )
         self.client.force_authenticate(User.objects.create_user(email="detail@t.test", password="x"))
 

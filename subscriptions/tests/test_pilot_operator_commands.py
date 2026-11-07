@@ -240,7 +240,6 @@ class AuthorshipClassificationTests(TestCase):
         ("token_blacklist.OutstandingToken", "user"),
         ("users.VerificationCode", "user"),
         ("users.PasswordResetToken", "user"),
-        ("carbon.CarbonOffsetPurchase", "user"),
         ("support.SupportMessage", "author"),
         ("support.SupportAttachment", "uploaded_by"),
         ("education.UserEducationProgress", "user"),

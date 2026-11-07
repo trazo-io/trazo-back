@@ -4,14 +4,13 @@ Ensures all carbon calculation logic is production-ready and accurate
 """
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import models
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonReport, CarbonSource, CropType
+from carbon.models import CarbonEntry, CarbonSource, CropType
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.emission_factors import emission_factors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
@@ -370,42 +369,6 @@ class TestCarbonReportGeneration(TransactionTestCase):
             year=2024,
             verification_level="certified_project",
         )
-
-    def test_report_calculations(self):
-        """Test report calculations are accurate"""
-        report = CarbonReport.objects.create(
-            establishment=self.establishment,
-            period_start=datetime(2024, 1, 1).date(),
-            period_end=datetime(2024, 12, 31).date(),
-        )
-
-        # Calculate totals
-        emissions = (
-            CarbonEntry.objects.filter(establishment=self.establishment, type="emission", year=2024).aggregate(
-                total=models.Sum("co2e_amount")
-            )["total"]
-            or 0
-        )
-
-        offsets = (
-            CarbonEntry.objects.filter(establishment=self.establishment, type="offset", year=2024).aggregate(
-                total=models.Sum("effective_amount")
-            )["total"]
-            or 0
-        )
-
-        report.total_emissions = emissions
-        report.total_offsets = offsets
-        report.net_footprint = emissions - offsets
-        computed_score = CarbonEntry.calculate_carbon_score(emissions, offsets)
-        report.save()
-
-        self.assertEqual(report.total_emissions, 1500.0)
-        self.assertEqual(report.total_offsets, 300.0)
-        self.assertEqual(report.net_footprint, 1200.0)
-        # `CarbonReport.carbon_score` was dropped 2026-09-30; the method is what this exercises.
-        self.assertGreater(computed_score, 0)
-        self.assertLess(computed_score, 50)
 
 
 class TestEventCarbonCalculator(TestCase):

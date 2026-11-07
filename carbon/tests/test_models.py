@@ -5,7 +5,6 @@ Tests carbon calculation models, USDA integration, and verification systems
 
 import unittest
 from datetime import date, timedelta
-from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
@@ -13,11 +12,8 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from carbon.models import (
-    CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
     CarbonSource,
     CropType,
     EventTemplate,
@@ -621,94 +617,6 @@ class TestUSDAComplianceRecordModel(TransactionTestCase):
         self.assertFalse(good_record.needs_review)
 
 
-class TestCarbonOffsetProjectModel(TestCase):
-    """Test CarbonOffsetProject model functionality"""
-
-    def test_carbon_offset_project_creation(self):
-        """Test carbon offset project creation"""
-        project = CarbonOffsetProject.objects.create(
-            name="Reforestation Project Brazil",
-            description="Large-scale reforestation in Amazon basin",
-            project_type="Forestry",
-            certification_standard="VCS",
-            location="Brazil, Amazon",
-            price_per_ton=Decimal("15.50"),
-            available_capacity=Decimal("10000.00"),
-        )
-
-        self.assertEqual(project.name, "Reforestation Project Brazil")
-        self.assertEqual(project.project_type, "Forestry")
-        self.assertEqual(project.price_per_ton, Decimal("15.50"))
-        self.assertEqual(project.available_capacity, Decimal("10000.00"))
-
-    def test_carbon_offset_project_string_representation(self):
-        """Test string representation"""
-        project = CarbonOffsetProject.objects.create(
-            name="Test Project",
-            description="Test description",
-            project_type="Test",
-            certification_standard="Test",
-            location="Test Location",
-            price_per_ton=Decimal("10.00"),
-            available_capacity=Decimal("1000.00"),
-        )
-
-        self.assertEqual(str(project), "Test Project")
-
-
-class TestCarbonOffsetPurchaseModel(TransactionTestCase):
-    """Test CarbonOffsetPurchase model functionality"""
-
-    def setUp(self):
-        """Set up test data"""
-        self.user = User.objects.create_user(email="test@example.com", password="testpass123")
-
-        self.project = CarbonOffsetProject.objects.create(
-            name="Test Project",
-            description="Test project",
-            project_type="Forestry",
-            certification_standard="VCS",
-            location="Test Location",
-            price_per_ton=Decimal("12.00"),
-            available_capacity=Decimal("5000.00"),
-        )
-
-    def test_carbon_offset_purchase_creation(self):
-        """Test carbon offset purchase creation"""
-        purchase = CarbonOffsetPurchase.objects.create(
-            project=self.project,
-            user=self.user,
-            amount=Decimal("10.0"),
-            price_per_ton=Decimal("12.00"),
-            status="completed",
-            is_verified=True,
-        )
-
-        self.assertEqual(purchase.amount, Decimal("10.0"))
-        self.assertEqual(purchase.total_price, Decimal("120.00"))  # 10 * 12
-        self.assertTrue(purchase.is_verified)
-        self.assertIsNotNone(purchase.certificate_id)
-
-    def test_total_price_auto_calculation(self):
-        """Test automatic total price calculation"""
-        purchase = CarbonOffsetPurchase.objects.create(
-            project=self.project, user=self.user, amount=Decimal("5.0"), price_per_ton=Decimal("15.00")
-        )
-
-        # Should automatically calculate total_price
-        expected_total = Decimal("5.0") * Decimal("15.00")
-        self.assertEqual(purchase.total_price, expected_total)
-
-    def test_carbon_offset_purchase_string_representation(self):
-        """Test string representation"""
-        purchase = CarbonOffsetPurchase.objects.create(
-            project=self.project, user=self.user, amount=Decimal("2.5"), price_per_ton=Decimal("10.00")
-        )
-
-        expected = f"{self.user.username} - {self.project.name} - 2.5 tons"
-        self.assertEqual(str(purchase), expected)
-
-
 class TestCarbonIntegrations(TransactionTestCase):
     """Test carbon model integrations and complex scenarios"""
 
@@ -796,31 +704,6 @@ class TestCarbonIntegrations(TransactionTestCase):
         self.assertTrue(carbon_entry.usda_factors_based)
         self.assertTrue(compliance.is_epa_factors_based)
         self.assertEqual(compliance.confidence_level, "high")
-
-    def test_benchmark_comparison_integration(self):
-        """Test benchmark comparison functionality"""
-        # Create benchmark
-        benchmark = CarbonBenchmark.objects.create(
-            industry="Citrus Production",
-            year=2024,
-            average_emissions=2500.0,
-            min_emissions=1800.0,
-            max_emissions=3200.0,
-            company_count=150,
-            unit="kg CO2e per hectare",
-            source="USDA Agricultural Census",
-            crop_type="Citrus",
-            region="California",
-        )
-
-        # Test carbon score calculation with benchmark
-        score = CarbonEntry.calculate_carbon_score(
-            total_emissions=2000.0, total_offsets=500.0, industry_benchmark=benchmark.average_emissions
-        )
-
-        # Should get a good score for being below industry average
-        self.assertGreater(score, 25)  # Better than worst case
-        self.assertLess(score, 50)  # Still carbon positive
 
 
 if __name__ == "__main__":

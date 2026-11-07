@@ -22,7 +22,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from carbon.models import CarbonEntry, CarbonReport, USDAComplianceRecord
+from carbon.models import CarbonEntry, USDAComplianceRecord
 from carbon.services.blockchain import BlockchainCarbonService
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.circuit_breaker_enhanced import CircuitBreakerManager
@@ -624,41 +624,6 @@ class CarbonReportingTestCase(TestCase):
         self.company = Company.objects.create(name="Reporting Test Farm")
 
         self.establishment = Establishment.objects.create(name="Reporting Test Field", company=self.company)
-
-    def test_carbon_report_generation(self):
-        """Test generation of carbon reports."""
-        # Create carbon entries for report
-        entries = []
-        for i in range(12):  # Monthly data
-            entry = CarbonEntry.objects.create(
-                establishment=self.establishment,
-                source_type="fertilizer",
-                quantity=50.0 + i * 5,
-                co2e_amount=550.0 + i * 55,
-                year=2024,
-                month=i + 1,
-                usda_factors_based=True,
-                created_by=self.user,
-            )
-            entries.append(entry)
-
-        # Generate report
-        report = CarbonReport.objects.create(
-            establishment=self.establishment,
-            report_type="annual",
-            year=2024,
-            data={
-                "total_emissions": sum(e.co2e_amount for e in entries),
-                "emissions_by_month": {str(e.month): e.co2e_amount for e in entries},
-                "usda_factors_used_percentage": 100.0,
-            },
-            generated_by=self.user,
-        )
-
-        self.assertEqual(report.establishment, self.establishment)
-        self.assertEqual(report.report_type, "annual")
-        self.assertEqual(report.year, 2024)
-        self.assertIn("total_emissions", report.data)
 
     def test_carbon_footprint_trends(self):
         """Test carbon footprint trend analysis."""

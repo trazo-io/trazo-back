@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from carbon.models import CarbonBenchmark, CarbonEntry, CropType
+from carbon.models import CarbonEntry, CropType
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
@@ -194,30 +194,6 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
         self.assertIsInstance(result["efficiency_score"], (int, float))
         self.assertGreaterEqual(result["efficiency_score"], 0)
         self.assertLessEqual(result["efficiency_score"], 100)
-
-    def test_benchmark_comparison(self):
-        """Test benchmark comparison functionality"""
-        # Create a benchmark
-        CarbonBenchmark.objects.create(
-            industry="citrus",
-            year=2024,
-            average_emissions=1500.0,
-            min_emissions=800.0,
-            max_emissions=2500.0,
-            unit="kg CO2e per hectare",
-            source="USDA Test Data",
-            usda_factors_used=True,
-            crop_type="citrus",
-        )
-
-        inputs = {"fertilizer": {"nitrogen": 100.0}}  # 1100 kg CO2e
-
-        result = self.calculator.calculate_farm_footprint(inputs=inputs, crop_type="citrus", area=100.0)
-
-        self.assertIn("benchmark", result)
-        if result["benchmark"]:
-            self.assertEqual(result["benchmark"]["industry"], "citrus")
-            self.assertEqual(result["benchmark"]["average_emissions"], 1500.0)
 
 
 class TestEventCarbonCalculator(TestCase):
