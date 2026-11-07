@@ -562,9 +562,14 @@ jobs:
       # 2026-11-07: carbon.tests.test_legacy_seeders_stay_deleted joins. Twelve legacy seeders that
       # wrote offset/benchmark/report rows or unsourced claims stay out of the command registry.
       # It does not read the sibling repo.
+      #
       # 2026-11-07: carbon.tests.test_crop_template_detail_claims joins. The live crop template
       # detail payload carries no `benchmark` and no `carbon_credit_potential`. It does not read
       # the sibling repo.
+      #
+      # 2026-11-07: users.tests.test_superuser_from_environment joins. A superuser comes from
+      # createsuperuser --noinput and the environment; the command that kept its credentials in the
+      # source stays deleted. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -814,6 +819,7 @@ jobs:
             backend.security.tests.test_client_ip \
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \
+            users.tests.test_superuser_from_environment \
             history.tests.test_multi_parcel_activity \
             history.tests.test_multi_parcel_specs \
             history.tests.test_ambiguous_season_refused \

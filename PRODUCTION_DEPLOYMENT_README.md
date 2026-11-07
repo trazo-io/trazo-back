@@ -180,6 +180,16 @@ poetry run python manage.py reverify_certifications --all   # nothing else refre
 curl -s https://<host>/health/ | python3 -m json.tool | grep -A12 reference_data
 ```
 
+#### Creating a superuser
+Django's own command, with the credentials in the environment of that one shell, never in the
+repository. It refuses an email that already exists instead of replacing the account.
+```bash
+DJANGO_SUPERUSER_EMAIL=<email> DJANGO_SUPERUSER_PASSWORD=<password> \
+  python manage.py createsuperuser --noinput
+```
+`create_staging_superuser` was deleted on 2026-11-07: it carried its credentials in the source and
+deleted the existing user of that email before recreating it.
+
 #### ⛔ NEVER run on production
 These write fabricated data or delete real data. Full list and rationale in the runbook.
 
@@ -190,7 +200,6 @@ These write fabricated data or delete real data. Full list and rationale in the 
 | `create_demo_user`, `populate_demo_engagement` | fake farms, fake scans, Unsplash photos as evidence |
 | `create_organic_pilot_farm`, `create_loewen_farm` | fake farms with hardcoded passwords |
 | `create_demo_billing_data` | fake paid invoices; `--clean` deletes real ones |
-| `create_staging_superuser` | hardcoded credentials, deletes the existing user first |
 | `publish_finished_productions` | no dry-run, no scoping; can make unfinished productions publicly scannable |
 
 #### 3.3 Security Implementation (CRITICAL - When Infrastructure Ready)
