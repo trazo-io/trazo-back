@@ -2,9 +2,10 @@
 State Organic Program (CDFA SOP) producer-registration tests
 (2026-06 NOP-alignment audit, P0 A1).
 
-CA producers selling > $5,000/yr organic must register annually with the CDFA
-State Organic Program before their first organic sale (CA Food & Ag Code
-§§ 46000-46029) — distinct from CDFA OIM input-material registration, which was
+Every CA operation producing or handling product sold as organic registers with the
+CDFA State Organic Program before the first sale and renews annually (CA Food & Ag
+Code § 46013.1(a)); an operation under $5,000 is exempt from certification only.
+Distinct from CDFA OIM input-material registration, which was
 the only thing Trazo modeled before. These tests cover the model's currency
 logic, the serializer round-trip, and the certifier audit-export section
 (missing / current / expired).

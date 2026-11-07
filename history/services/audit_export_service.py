@@ -13550,9 +13550,10 @@ class AuditExportService:
     def _build_state_organic_registration_section(self):
         """State Organic Program (CDFA SOP) producer-registration record.
 
-        CA producers selling > $5,000/yr organic must register annually with the
-        CDFA State Organic Program before their first organic sale (CA Food & Ag
-        Code §§ 46000-46029) — distinct from CDFA OIM input-material registration.
+        Every CA operation producing or handling product sold as organic registers with
+        the CDFA State Organic Program before the first sale and renews annually (CA Food
+        & Ag Code § 46013.1(a)); an operation under $5,000 is exempt from certification
+        only, not from registration. Distinct from CDFA OIM input-material registration.
         A missing or expired registration for the operation is a REVIEW item.
         """
         from certifications.models import StateOrganicRegistration
@@ -13644,11 +13645,10 @@ class AuditExportService:
                 )
             )
 
-        # $5,000 threshold: the "exempt" status only holds below $5,000/yr organic
-        # sales. If the recorded prior-year organic gross sales exceed $5,000 while the
-        # operation is still marked exempt, the exemption no longer applies — the
-        # operation must register with the CDFA SOP and be certified (7 CFR 205.101 /
-        # CA Food & Ag Code §§ 46000-46029). Passive audit flag, not a reminder system.
+        # $5,000 threshold: the "exempt" status means exempt from CERTIFICATION, which holds
+        # only below $5,000 of organic sales (7 CFR 205.101(a)(1)); registration is required
+        # either way (CA Food & Ag Code § 46013.1(a)). Above $5,000 while still marked
+        # exempt, the operation must also be certified. Passive audit flag, not a reminder.
         try:
             over_threshold = gross is not None and gross > Decimal("5000")
         except (TypeError, InvalidOperation):
