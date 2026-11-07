@@ -23,6 +23,9 @@ guard that does not hold. `self_reported` is the vocabulary certifications alrea
 `secure/*` routes and carbon/services/verification.py, whose `verify_carbon_entry` still wrote
 "verified" from checks on the caller's own input. views.py is the offset write path left, and
 the deleted modules are held deleted below so the stamp cannot come back with them.
+
+Later the same day the unrouted `CarbonOffsetViewSet` in views.py was deleted too. Offsets now
+enter only through `entries/`, which writes the model default unless a path sets the status.
 """
 
 import re
@@ -30,7 +33,7 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from carbon.models import VERIFICATION_SELF_REPORTED
+from carbon.models import VERIFICATION_SELF_REPORTED, CarbonEntry
 
 CARBON = Path(__file__).resolve().parent.parent
 
@@ -81,16 +84,21 @@ class OffsetsAreNotSelfVerified(SimpleTestCase):
             "artifact is stored.\n  " + "\n  ".join(offenders),
         )
 
-    def test_each_offset_path_uses_the_constant(self):
-        """A path that stopped writing "verified" by deleting the field would pass the test
-        above while leaving the model default in place. Require the explicit constant."""
-        for name in OFFSET_WRITE_PATHS:
-            source = (CARBON / name).read_text()
-            self.assertIn(
-                "VERIFICATION_SELF_REPORTED",
-                source,
-                f"{name} no longer declares an offset verification status explicitly.",
-            )
+    def test_the_unrouted_offset_viewset_stays_deleted(self):
+        """`CarbonOffsetViewSet.create` was the explicit offset write in views.py, and the only
+        user of VERIFICATION_SELF_REPORTED there. Its route was cut on 2026-09-07 and the class
+        was deleted on 2026-11-07, so the constant check that used to stand here has nothing left
+        to read. The class coming back is the regression."""
+        source = (CARBON / "views.py").read_text()
+        self.assertNotIn("class CarbonOffsetViewSet", source)
+        self.assertIn("class CarbonEntryViewSet", source)  # read the real file
+
+    def test_the_model_default_claims_no_verification(self):
+        """What an offset posted to `entries/` gets when no path sets the status. A path that
+        stopped writing "verified" by dropping the field lands here, so the default must not be
+        a verification either."""
+        default = CarbonEntry._meta.get_field("verification_status").default
+        self.assertNotIn("verified", default)
 
     def test_request_body_is_never_treated_as_proof(self):
         """`verification_level` arrives in the payload. NEVER: it is the claimant's assertion and

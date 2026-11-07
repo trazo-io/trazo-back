@@ -81,16 +81,10 @@ from history.models import (
 from history.services.privacy import public_free_text, public_parcel_geo
 
 from .models import (
-    VERIFICATION_SELF_REPORTED,
     CarbonAuditLog,
-    CarbonBenchmark,
     CarbonCertification,
     CarbonEntry,
     CarbonOffsetAction,
-    CarbonOffsetCertificate,
-    CarbonOffsetProject,
-    CarbonOffsetPurchase,
-    CarbonReport,
     CarbonSource,
     CropType,
     EventTemplate,
@@ -98,14 +92,9 @@ from .models import (
 )
 from .serializers import (
     CarbonAuditLogSerializer,
-    CarbonBenchmarkSerializer,
     CarbonCertificationSerializer,
     CarbonEntrySerializer,
     CarbonOffsetActionSerializer,
-    CarbonOffsetCertificateSerializer,
-    CarbonOffsetProjectSerializer,
-    CarbonOffsetPurchaseSerializer,
-    CarbonReportSerializer,
     CarbonSourceSerializer,
     CropTemplateDetailSerializer,
     CropTypeDropdownSerializer,
@@ -2896,18 +2885,6 @@ class CarbonCertificationViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class CarbonBenchmarkViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CarbonBenchmark.objects.all()
-    serializer_class = CarbonBenchmarkSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
-class CarbonReportViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CarbonReport.objects.all()
-    serializer_class = CarbonReportSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
 class CarbonAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """Audit rows the CALLER generated. Superusers see everything.
 
@@ -2936,24 +2913,6 @@ class CarbonAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_superuser:
             return CarbonAuditLog.objects.all()
         return CarbonAuditLog.objects.filter(user=user)
-
-
-class CarbonOffsetProjectViewSet(viewsets.ModelViewSet):
-    queryset = CarbonOffsetProject.objects.all()
-    serializer_class = CarbonOffsetProjectSerializer
-    permission_classes = [ReadOnlyForViewersGlobal]
-
-
-class CarbonOffsetPurchaseViewSet(viewsets.ModelViewSet):
-    queryset = CarbonOffsetPurchase.objects.all()
-    serializer_class = CarbonOffsetPurchaseSerializer
-    permission_classes = [ReadOnlyForViewersGlobal]
-
-
-class CarbonOffsetCertificateViewSet(viewsets.ModelViewSet):
-    queryset = CarbonOffsetCertificate.objects.all()
-    serializer_class = CarbonOffsetCertificateSerializer
-    permission_classes = [ReadOnlyForViewersGlobal]
 
 
 class CarbonFootprintCalculatorViewSet(viewsets.ViewSet):
@@ -3800,359 +3759,6 @@ class PublicProductionViewSet(viewsets.ViewSet):
             )
 
 
-class CarbonOffsetViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-
-    @action(detail=False, methods=["get"], url_path="certified_projects")
-    def certified_projects(self, request):
-        """
-        Get available certified carbon offset projects for purchase.
-        Returns certified projects from database with proper formatting.
-        """
-        from .models import CarbonOffsetProject
-
-        # Get all available projects from database
-        projects = CarbonOffsetProject.objects.all()
-
-        # Format projects for frontend
-        formatted_projects = []
-        for project in projects:
-            # Parse project type for verification badge
-            verification_badges = {
-                "Reforestation": {"color": "green", "text": "VCS Verified", "icon": "shield"},
-                "Soil Carbon": {"color": "blue", "text": "CAR Verified", "icon": "certificate"},
-                "Renewable Energy": {"color": "yellow", "text": "Gold Standard", "icon": "star"},
-                "Methane Reduction": {"color": "purple", "text": "ACR Verified", "icon": "award"},
-                "Grassland Management": {"color": "teal", "text": "VCS Verified", "icon": "leaf"},
-                "Forest Management": {"color": "green", "text": "CAR Verified", "icon": "shield"},
-            }
-
-            badge = verification_badges.get(
-                project.project_type, {"color": "gray", "text": "Verified", "icon": "certificate"}
-            )
-
-            # Parse location for country/region
-            location_parts = project.location.split(", ")
-            country = location_parts[-1] if location_parts else "Unknown"
-            region = location_parts[0] if len(location_parts) > 1 else "Unknown"
-
-            # Generate registry URL based on certification standard
-            registry_urls = {
-                "VCS (Verra)": f"https://registry.verra.org/project/{project.id}",
-                "Climate Action Reserve": f"https://thereserve2.apx.com/mymodule/reg/prjView.asp?id={project.id}",
-                "Gold Standard": f"https://registry.goldstandard.org/projects/{project.id}",
-                "American Carbon Registry": f"https://acr2.apx.com/myModule/rpt/myrpt.asp?r=111&h={project.id}",
-            }
-
-            formatted_project = {
-                "id": str(project.id),
-                "name": project.name,
-                "description": project.description,
-                "project_type": project.project_type.lower().replace(" ", "_"),
-                "verification_standard": project.certification_standard,
-                "verification_badge": badge,
-                "country": country,
-                "region": region,
-                "developer": f"Project Developer {project.id}",  # Placeholder since not in model
-                "price_per_credit": float(project.price_per_ton),
-                "available_credits": int(project.available_capacity),
-                "vintage_year": 2024,  # Placeholder since not in model
-                "co_benefits": ["environmental_protection", "community_development", "sustainable_development"],
-                "featured": project.id % 2 == 1,  # Make every other project featured
-                "trazo_verified": True,
-                "registry_url": registry_urls.get(
-                    project.certification_standard, f"https://registry.example.com/project/{project.id}"
-                ),
-            }
-            formatted_projects.append(formatted_project)
-
-        return Response(
-            {
-                "projects": formatted_projects,
-                "total_projects": len(formatted_projects),
-                "message": "Certified projects from database",
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    def create(self, request):
-        """
-        Create a carbon offset entry with verification system.
-        Expected payload: {
-            "production": "",  # production ID (optional)
-            "establishment": "",  # establishment ID (optional, if no production specified)
-            "amount": 12,      # offset amount in kg CO2e
-            "source_id": "no_till",  # offset project ID
-            "type": "offset",
-            "year": 2025,
-            "verification_level": "self_reported",  # self_reported, certified_project
-            "additionality_evidence": "",  # required for ≥100 kg CO2e
-            "permanence_plan": "",  # required for ≥1000 kg CO2e
-            "methodology_template": "",  # optional
-            "registry_verification_id": "",  # for certified projects
-            "evidence_photos": [],  # optional array of photo URLs
-            "evidence_documents": []  # optional array of document URLs
-        }
-        """
-        try:
-            data = request.data
-
-            # Validate required fields
-            required_fields = ["amount", "source_id", "type", "year"]
-            for field in required_fields:
-                if field not in data:
-                    return Response({"error": f"Missing required field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
-
-            amount = float(data["amount"])
-            source_id = data["source_id"]
-            year = int(data["year"])
-            production_id = data.get("production")
-            verification_level = data.get("verification_level", "self_reported")
-
-            # Validate amount
-            if amount <= 0:
-                return Response({"error": "Amount must be greater than 0"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Import verification service
-            from .services.verification_service import VerificationService
-
-            verification_service = VerificationService()
-
-            # Check verification requirements based on amount
-            if amount >= 1000 and verification_level != "certified_project":
-                return Response(
-                    {
-                        "error": "High-value offsets (≥1000 kg CO₂e) require certified project verification",
-                        "required_verification_level": "certified_project",
-                        "amount_threshold": 1000,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if amount >= 100 and not data.get("additionality_evidence"):
-                return Response(
-                    {
-                        "error": "Medium-value offsets (≥100 kg CO₂e) require additionality evidence",
-                        "required_fields": ["additionality_evidence"],
-                        "amount_threshold": 100,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Get or create offset source
-            offset_source, created = CarbonSource.objects.get_or_create(
-                name=source_id,
-                defaults={
-                    "category": "offset",
-                    "default_emission_factor": -1.0,  # Negative for offset
-                    "unit": "kg CO2e",
-                    "description": f"Carbon offset project: {source_id}",
-                    "usda_factors_used": True if source_id in ["no_till", "cover_crop", "reforestation"] else False,
-                },
-            )
-
-            # Determine establishment
-            establishment = None
-            production = None
-            establishment_id = data.get("establishment")
-
-            if production_id:
-                try:
-                    from history.models import History
-
-                    production = History.objects.get(id=production_id)
-                    establishment = production.establishment
-                except History.DoesNotExist:
-                    return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
-            elif establishment_id:
-                # Handle establishment ID from payload
-                try:
-                    from company.models import Establishment
-
-                    establishment = Establishment.objects.get(id=establishment_id)
-
-                    # Verify user has access to this establishment
-                    user_companies = request.user.companies.all()
-                    if establishment.company not in user_companies:
-                        return Response(
-                            {"error": "Access denied to this establishment"}, status=status.HTTP_403_FORBIDDEN
-                        )
-                except Establishment.DoesNotExist:
-                    return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
-            else:
-                # If no production or establishment specified, try to get user's establishment
-                if hasattr(request.user, "establishment"):
-                    establishment = request.user.establishment
-                elif hasattr(request.user, "company") and request.user.company:
-                    # Get first establishment from user's company
-                    establishment = request.user.company.establishments.first()
-                else:
-                    # Try to get establishment from user's companies
-                    user_companies = request.user.companies.all()
-                    if user_companies.exists():
-                        establishment = user_companies.first().establishment_set.first()
-
-                if not establishment:
-                    return Response({"error": "No establishment found for user"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Create carbon entry with verification fields
-            carbon_entry = CarbonEntry.objects.create(
-                establishment=establishment,
-                production=production,
-                created_by=request.user,
-                type="offset",
-                source=offset_source,
-                amount=amount,
-                year=year,
-                description=f"Carbon offset from {source_id} project: {amount} kg CO2e",
-                usda_factors_based=offset_source.usda_factors_used,
-                # ⛔ was "verified" — on the same call that records the data_source as
-                # "User-created offset". The row contradicted itself.
-                verification_status=VERIFICATION_SELF_REPORTED,
-                data_source=f"User-created offset: {source_id}",
-                # Verification system fields
-                verification_level=verification_level,
-                additionality_evidence=data.get("additionality_evidence", ""),
-                permanence_plan=data.get("permanence_plan", ""),
-                baseline_data=data.get("baseline_data", {}),
-                methodology_template=data.get("methodology_template", ""),
-                registry_verification_id=data.get("registry_verification_id", ""),
-                evidence_requirements_met=self._check_evidence_requirements(data),
-                documentation_complete=self._check_documentation_complete(data),
-                # Evidence files
-                evidence_photos=data.get("evidence_photos", []),
-                evidence_documents=data.get("evidence_documents", []),
-                # Required fields with default values (only valid model fields)
-                trust_score=0.5,  # Will be calculated in save()
-                audit_status="pending",
-                additionality_verified=False,
-            )
-
-            # Run verification check
-            verification_result = verification_service.verify_offset_entry(carbon_entry)
-
-            # Handle anti-gaming violations
-            if verification_result.get("anti_gaming_flags"):
-                # Log gaming attempt for monitoring
-                CarbonAuditLog.objects.create(
-                    carbon_entry=carbon_entry,
-                    user=request.user,
-                    action="gaming_detected",
-                    details=f'Anti-gaming flags detected: {", ".join(verification_result["anti_gaming_flags"])}',
-                )
-
-                # If high-risk gaming detected, reject the offset
-                high_risk_flags = [
-                    "high_cumulative_threshold_exceeded",
-                    "rapid_submission_pattern",
-                    "unrealistic_offset_ratio",
-                    "exceeds_acreage_capacity",
-                ]
-
-                if any(flag in verification_result["anti_gaming_flags"] for flag in high_risk_flags):
-                    return Response(
-                        {
-                            "error": "Offset creation blocked due to anti-gaming policy violations",
-                            "violations": verification_result["anti_gaming_flags"],
-                            "requirements": verification_result["requirements"],
-                            "message": "Please use certified projects or upgrade verification level for large offset claims",
-                            "cumulative_limit_info": {
-                                "monthly_self_reported_limit": "500 kg CO2e",
-                                "requires_verification_upgrade": True,
-                                "certified_projects_recommended": True,
-                            },
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-            # Industry-standard conservative crediting with buffer pool deduction
-            # Following Indigo Ag and Agoro Carbon Alliance practices (10-20% buffer)
-            buffer_pool_percentage = 0.15  # 15% buffer pool
-            if carbon_entry.verification_level == "self_reported":
-                buffer_pool_percentage = 0.20  # 20% buffer for self-reported
-            elif carbon_entry.verification_level == "certified_project":
-                buffer_pool_percentage = 0.10  # 10% buffer for certified projects
-
-            # Apply buffer pool deduction to effective amount
-            carbon_entry.effective_amount = carbon_entry.effective_amount * (1 - buffer_pool_percentage)
-
-            # Update audit status based on verification
-            if verification_result["audit_required"]:
-                carbon_entry.audit_status = "scheduled"
-            elif verification_result["approved"]:
-                carbon_entry.audit_status = "passed"
-            else:
-                carbon_entry.audit_status = "failed"
-
-            carbon_entry.save()
-
-            # Create audit log
-            CarbonAuditLog.objects.create(
-                carbon_entry=carbon_entry,
-                user=request.user,
-                action="create",
-                details=f"Created carbon offset: {amount} kg CO2e from {source_id} project",
-            )
-
-            return Response(
-                {
-                    "success": True,
-                    "carbon_entry_id": carbon_entry.id,
-                    "amount": amount,
-                    "source": source_id,
-                    "establishment_id": establishment.id if establishment else None,
-                    "production_id": production.id if production else None,
-                    # Verification system response
-                    "verification_result": verification_result,
-                    "verification_level": carbon_entry.verification_level,
-                    "trust_score": carbon_entry.trust_score,
-                    "effective_amount": carbon_entry.effective_amount,
-                    "audit_status": carbon_entry.audit_status,
-                    "verification_badge": carbon_entry.verification_badge,
-                },
-                status=status.HTTP_201_CREATED,
-            )
-
-        except ValueError as e:
-            return Response({"error": f"Invalid data format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.error(f"Error creating carbon offset: {str(e)}")
-            return Response({"error": "Failed to create carbon offset"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def _check_evidence_requirements(self, data):
-        """Check if evidence requirements are met based on verification level and amount"""
-        verification_level = data.get("verification_level", "self_reported")
-        amount = float(data.get("amount", 0))
-
-        if verification_level == "certified_project":
-            return bool(data.get("registry_verification_id"))
-        elif amount >= 100:
-            return bool(data.get("additionality_evidence"))
-
-        return True  # Basic requirements met for self-reported
-
-    def _check_documentation_complete(self, data):
-        """Check if documentation is complete for the verification level"""
-        verification_level = data.get("verification_level", "self_reported")
-        amount = float(data.get("amount", 0))
-
-        required_docs = []
-
-        if amount >= 1000:
-            required_docs.extend(["permanence_plan", "additionality_evidence"])
-        elif amount >= 100:
-            required_docs.append("additionality_evidence")
-
-        if verification_level == "certified_project":
-            required_docs.append("registry_verification_id")
-
-        for doc in required_docs:
-            if not data.get(doc):
-                return False
-
-        return True
-
-
 class ProductionSerializer(serializers.ModelSerializer):
     """Flat production row for the producer dashboard's season lists.
 
@@ -4643,22 +4249,6 @@ def get_crop_template_detail(request, template_id):
         # Get related carbon sources (if any)
         carbon_sources = []
 
-        # Get USDA benchmark if available
-        benchmark_data = None
-        try:
-            benchmark = CarbonBenchmark.objects.filter(crop_type=template.crop_type.name).first()
-            if benchmark:
-                benchmark_data = {
-                    "crop_type": benchmark.crop_type,
-                    "region": benchmark.region,
-                    "average_emissions": benchmark.average_emissions,
-                    "min_emissions": benchmark.min_emissions,
-                    "max_emissions": benchmark.max_emissions,
-                    "usda_factors_used": benchmark.usda_factors_used,
-                }
-        except:
-            pass
-
         detailed_template = {
             "id": template_id,
             "template_id": template.id,
@@ -4673,13 +4263,14 @@ def get_crop_template_detail(request, template_id):
             "pest_management": "integrated",  # Default
             "events": events_data,
             "carbon_sources": carbon_sources,
-            "benchmark": benchmark_data,
-            "carbon_credit_potential": (
-                float(template.projected_emissions_reduction) if template.projected_emissions_reduction else 0
-            ),
             "sustainability_opportunities": [],  # Will be populated from template data
             "efficiency_tips": [event["efficiency_tips"] for event in events_data if event["efficiency_tips"]],
             "source": template.compliance_notes,
+            # Removed 2026-11-07, neither rendered: `benchmark` (CarbonBenchmark, an industry average
+            # computed from Trazo's own rows, labelled "USDA benchmark" here) and
+            # `carbon_credit_potential` (projected_emissions_reduction presented as tradable
+            # credits, the 16 CFR 260.5 class). The app reads only `name` and `events`.
+            #
             # Removed 2026-08-19, none of it rendered, all of it unsourced and several pieces
             # forbidden outright by .claude/rules/compliance.md:
             #

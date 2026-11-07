@@ -75,6 +75,7 @@ router.register(r"certifications", views.CarbonCertificationViewSet)
 #
 # router.register(r"benchmarks", views.CarbonBenchmarkViewSet)
 # router.register(r"reports", views.CarbonReportViewSet)
+# The two viewsets and their serializers were deleted 2026-11-07; the models follow in migrations.
 # ⛔ 2026-09-07 — UNREGISTERED, and they must stay unregistered. Guard:
 # `carbon/tests/test_retired_claim_routes_stay_retired.py`.
 #
@@ -97,6 +98,7 @@ router.register(r"audit-logs", views.CarbonAuditLogViewSet)
 # router.register(r"offset-projects", views.CarbonOffsetProjectViewSet)
 # router.register(r"offset-purchases", views.CarbonOffsetPurchaseViewSet)
 # router.register(r"offset-certificates", views.CarbonOffsetCertificateViewSet)
+# The three viewsets and their serializers were deleted 2026-11-07; the models follow in migrations.
 router.register(r"calculator", views.CarbonFootprintCalculatorViewSet, basename="calculator")
 router.register(r"establishments", CarbonEstablishmentSummaryViewSet, basename="carbon-establishment-summary")
 router.register(r"productions", CarbonProductionSummaryViewSet, basename="carbon-production-summary")
@@ -117,6 +119,7 @@ router.register(r"public/productions", PublicProductionViewSet, basename="public
 # a 405.
 #
 # router.register(r"offsets", views.CarbonOffsetViewSet, basename="carbon-offset")
+# The viewset was deleted 2026-11-07, with its unrouted `create`, which wrote offset entries.
 router.register(r"productions-flat", CarbonProductionViewSet, basename="carbon-production-flat")
 # ⛔ 2026-09-08 — UNREGISTERED. Guard:
 # `carbon/tests/test_retired_claim_routes_stay_retired.py`.
