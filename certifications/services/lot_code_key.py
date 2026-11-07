@@ -15,26 +15,43 @@ from typing import Optional
 
 # "=" first: it is what the question asks for. A colon or a spaced dash is accepted because operators
 # write keys that way on paper; an unspaced hyphen is not, because it sits inside codes ("26-HFE").
-_SEPARATORS = re.compile(r"\s*=\s*|\s*:\s+|\s+[-–—]\s+")
+_SEPARATORS = re.compile(r"\s*=\s*|\s*:\s+|\s+[-\u2013\u2014]\s+")
+
+# A code is a short token ("26", "HFE", "CBF-26", "Julian day"), never a clause. Without this a prose
+# answer with an incidental colon ("Lot codes are built like this: farm, year, block") printed one half
+# of a sentence under "Code" (review of back #331).
+_CODE_MAX_CHARS = 24
+_CODE_MAX_SPACES = 2
+
+
+def _looks_like_code(code: str) -> bool:
+    return len(code) <= _CODE_MAX_CHARS and code.count(" ") <= _CODE_MAX_SPACES
 
 
 def key_rows(answer) -> Optional[list]:
-    """`[(code, signifies), ...]` when every non-blank line splits once into two non-empty parts.
+    """`[(code, signifies), ...]` when every non-blank line splits once into a code and its meaning.
 
     None otherwise: a key that does not read as a table is printed as the operator wrote it, never
-    half as a table.
+    half as a table. A one-line answer reads as a table only when it uses "=", the form the question
+    asks for: a lone colon or dash is too often punctuation in a sentence.
     """
     if not isinstance(answer, str):
         return None
-    rows = []
+    rows, separators = [], []
     for line in answer.splitlines():
-        line = line.strip().lstrip("-*• ").strip()
+        line = line.strip().lstrip("-*\u2022 ").strip()
         if not line:
             continue
-        parts = _SEPARATORS.split(line, maxsplit=1)
-        if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+        match = _SEPARATORS.search(line)
+        if match is None:
             return None
-        rows.append((parts[0].strip(), parts[1].strip()))
+        code, meaning = line[: match.start()].strip(), line[match.end() :].strip()
+        if not code or not meaning or not _looks_like_code(code):
+            return None
+        rows.append((code, meaning))
+        separators.append("=" in match.group(0))
+    if len(rows) == 1 and not separators[0]:
+        return None
     return rows or None
 
 

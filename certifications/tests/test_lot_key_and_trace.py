@@ -44,8 +44,20 @@ class KeyRows(SimpleTestCase):
         )
 
     def test_a_spaced_dash_separates_but_a_hyphen_inside_a_code_does_not(self):
-        self.assertEqual(key_rows("CBF-26 - farm and year"), [("CBF-26", "farm and year")])
+        self.assertEqual(
+            key_rows("CBF-26 - farm and year\nHFE - block"), [("CBF-26", "farm and year"), ("HFE", "block")]
+        )
         self.assertIsNone(key_rows("CBF-26-HFE"))
+
+    def test_one_line_reads_as_a_table_only_with_an_equals_sign(self):
+        self.assertEqual(key_rows("26 = harvest year"), [("26", "harvest year")])
+        self.assertIsNone(key_rows("26: harvest year"))
+        self.assertIsNone(key_rows("CBF-26 - farm and year"))
+
+    def test_prose_with_an_incidental_colon_is_not_a_table(self):
+        """Review of back #331: half a sentence printed under "Code"."""
+        self.assertIsNone(key_rows("Lot codes are built like this: farm initials, crop year, block"))
+        self.assertIsNone(key_rows("26 = year\nThe last part of the code is: the block name, written in capitals"))
 
     def test_bullets_and_blank_lines_are_ignored(self):
         self.assertEqual(key_rows("- 26 = year\n\n• O = organic"), [("26", "year"), ("O", "organic")])
