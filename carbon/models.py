@@ -913,9 +913,9 @@ class CarbonAuditLog(models.Model):
         return f"{self.action} by {self.user} at {self.timestamp}"
 
 
-# SustainabilityBadge, MicroOffset and GreenPoints left the model in carbon migration 0050
-# (2026-11-06): a self-assigned sustainability label, a shopper offset micro-purchase and a
-# shopper gamification score. Their routes were retired in 2026-09 (see
+# SustainabilityBadge, MicroOffset and GreenPoints left the model in carbon migration 0050 and
+# their tables in 0051 (2026-11-06): a self-assigned sustainability label, a shopper offset
+# micro-purchase and a shopper gamification score. Their routes were retired in 2026-09 (see
 # carbon/tests/test_retired_claim_routes_stay_retired.py), nothing has written a row in
 # production, and an empty schema for a retired claim is an invitation to wire it back.
 
@@ -1204,7 +1204,7 @@ class USDAComplianceRecord(models.Model):
         return self.compliance_status in ["non_compliant", "validation_error"] or self.confidence_score < 0.7
 
 
-# RegionalEmissionFactor left the model in carbon migration 0050 (2026-11-06): a table of
+# RegionalEmissionFactor left the model in carbon migration 0050 (table dropped in 0051): a table of
 # "regional USDA emission factors" with a usda_api data source that nothing ever filled or read
 # outside its own tests. Factor provenance lives per input class in the calculators
 # (.claude/rules/carbon-methodology.md).
@@ -1316,7 +1316,7 @@ class VerificationAudit(models.Model):
 # and a OneToOne to History is an invitation. Someone wiring a trust widget finds a ready
 # schema and the claim is back with no discussion. Same reasoning as
 # carbon/tests/test_retired_claim_routes_stay_retired.py applies to routes.
-# CarbonIntelligence left the model in carbon migration 0050 (2026-11-06), on the same grounds as
+# CarbonIntelligence left the model in carbon migration 0050 (table dropped in 0051), on the grounds of
 # ConsumerTrustMetric above: "AI-generated insights" and a 0-100 confidence score about one
 # production, which nothing ever wrote. copy_production_to_parcel was its only reader.
 

@@ -49,7 +49,7 @@ VOLATILE_APP_LABELS = {"sessions", "token_blacklist"}
 #: Models whose table may leave the census without counting as a loss, but only when the census
 #: before counted 0 rows in it (see `compare`). Each one names the migration that retired it.
 RETIRED_TABLES = {
-    # carbon 0050 (2026-11-06): out of the model state; a later migration drops the tables.
+    # carbon 0050 (2026-11-06) took them out of the model state; 0051 dropped the tables.
     "carbon.CarbonIntelligence",
     "carbon.GreenPoints",
     "carbon.MicroOffset",
