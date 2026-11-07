@@ -2893,6 +2893,24 @@ class StateOrganicRegistration(models.Model):
             return True
         return self.renewal_date >= timezone.now().date()
 
+    @property
+    def not_current_reason(self):
+        """Why `is_current` is False, in words a reviewer can act on, or None when it is current.
+
+        One wording for the packet cover and the audit dossier (PDF and CSV), so the three cannot name
+        different causes for one registration.
+        """
+        if self.is_current:
+            return None
+        if self.status == "exempt":
+            return (
+                "The registration number is not recorded. An operation under $5,000 is exempt from "
+                "certification only; California still requires it to register (Food & Agr. Code § 46013.1(a))."
+            )
+        if self.status in ("pending", "expired"):
+            return f"The registration on file is {self.status}, not registered."
+        return f"The registration's renewal date ({self.renewal_date.isoformat()}) has passed."
+
 
 class CertifierAccessLink(models.Model):
     """A no-account, read-only link that lets a certifier open an operation's audit dossier.

@@ -63,7 +63,8 @@ class CoverStateRegistrationTests(TestCase):
         )
         text = self._cover()
         self.assertIn(f"{LABEL} 12-123456", text)
-        self.assertIn("[REVIEW] The registration on file is not current", text)
+        self.assertIn("[REVIEW] The registration's renewal date", text)
+        self.assertIn("has passed.", text)
 
     def test_a_registration_without_a_number_says_so(self):
         self._register(registration_number="")

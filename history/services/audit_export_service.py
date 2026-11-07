@@ -13632,12 +13632,14 @@ class AuditExportService:
         elements.append(t)
 
         if not reg.is_current:
+            from xml.sax.saxutils import escape as xml_escape
+
             elements.append(self._spacer(0.1))
             elements.append(
                 Paragraph(
-                    "<b>[REVIEW] CDFA State Organic Program:</b> the registration on file is "
-                    "not current (status is not 'registered', or the renewal date has passed). "
-                    "Confirm the operation renewed before its first organic sale of the cycle.",
+                    "<b>[REVIEW] CDFA State Organic Program:</b> "
+                    f"{xml_escape(reg.not_current_reason)} Update the registration before the first "
+                    "organic sale of the cycle.",
                     self._warning_style(),
                 )
             )
@@ -18769,9 +18771,7 @@ class AuditExportService:
                     ]:
                         writer.writerow([label, _val(value)])
                     if not reg.is_current:
-                        writer.writerow(
-                            ["[REVIEW]", "Registration not current (status not 'registered' or renewal date passed)."]
-                        )
+                        writer.writerow(["[REVIEW]", f"Registration not current. {reg.not_current_reason}"])
                     try:
                         over_threshold = gross is not None and gross > Decimal("5000")
                     except (TypeError, InvalidOperation):

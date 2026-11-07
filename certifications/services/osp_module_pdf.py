@@ -2599,21 +2599,12 @@ def _state_registration_cover_lines(est, kv, styles) -> list:
     if reg.renewal_date:
         details.append(f"renewal date {reg.renewal_date.isoformat()}")
     lines = [kv(CA_REGISTRATION_LABEL, reg.registration_number or "number not recorded", note=", ".join(details))]
-    if not reg.registration_number:
-        problem = "The registration number is not recorded."
-        if reg.status == "exempt":
-            # Food & Agr. Code § 46013.1(a), quoted: exempt operations "are only exempt from
-            # certification under federal organic standards and are still required to be registered".
-            problem += (
-                " An operation under $5,000 is exempt from certification only; California still requires "
-                "it to register (Food & Agr. Code § 46013.1(a))."
-            )
-    elif not reg.is_current:
-        problem = (
-            "The registration on file is not current (its status is pending or expired, or its renewal date "
-            "has passed)."
-        )
-    else:
+    # The model's own reason first (one wording with the audit dossier); a registered row with no
+    # number is current there but still leaves both agents' forms blank.
+    problem = reg.not_current_reason or (
+        "The registration number is not recorded." if not reg.registration_number else None
+    )
+    if problem is None:
         return lines
     lines.append(Paragraph(_escape(f"[REVIEW] {problem} Update it before the forms are filed."), styles["meta"]))
     return lines
