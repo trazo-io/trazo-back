@@ -437,8 +437,6 @@ api/carbon/^entries/bulk_create/$	carbon.views.CarbonEntryViewSet	ReadOnlyForVie
 api/carbon/^entries/bulk_create\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=bulk_create
 api/carbon/^entries/by_entity/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=by_entity
 api/carbon/^entries/by_entity\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=by_entity
-api/carbon/^entries/calculate_emissions/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=calculate_emissions
-api/carbon/^entries/calculate_emissions\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	post=calculate_emissions
 api/carbon/^entries/summary/$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=summary
 api/carbon/^entries/summary\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=summary
 api/carbon/^entries\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonEntryViewSet	ReadOnlyForViewersGlobal	get=list,post=create

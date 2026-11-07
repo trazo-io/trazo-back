@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -40,6 +41,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Case, Count, Q, Sum, When
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -102,7 +104,6 @@ from .serializers import (
     EventTemplateSerializer,
     QuickEventTemplateSerializer,
 )
-from .services import coolfarm_service
 from .services.enhanced_usda_factors import EnhancedUSDAFactors
 from .services.event_carbon_calculator import EventCarbonCalculator
 
@@ -305,32 +306,9 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    @ratelimit(key="user", rate="5/m", method="POST", block=True)
-    @action(detail=False, methods=["post"])
-    def calculate_emissions(self, request):
-        """
-        Calculate emissions using CoolFarmTool API
-        """
-        try:
-            crop_type = request.data.get("crop_type")
-            acreage = float(request.data.get("acreage", 0))
-            inputs = request.data.get("inputs", {})
-            region = request.data.get("region")
-
-            if not crop_type or acreage <= 0:
-                return Response({"error": "Invalid crop type or acreage"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Calculate emissions using CoolFarmTool service
-            result = coolfarm_service.calculate_emissions(
-                crop_type=crop_type, acreage=acreage, inputs=inputs, region=region
-            )
-
-            return Response(result)
-
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"error": "Failed to calculate emissions"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    # NEVER: 2026-11-07 - the `calculate_emissions` action was DELETED. It called
+    # `coolfarm_service.calculate_emissions`, which CoolFarmService does not define, so every call
+    # answered 500, and nothing in the app called it. Guard: test_retired_claim_routes_stay_retired.
 
     @ratelimit(key="user", rate="3/m", method="POST", block=True)
     @action(detail=False, methods=["post"])
@@ -368,45 +346,34 @@ class CarbonEntryViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        # Check if the entry is for production-level tracking and restrict to premium users
-        if serializer.validated_data.get("production") and (
-            not hasattr(self.request.user, "subscription_plan")
-            or self.request.user.subscription_plan not in ["premium", "enterprise"]
-        ):
-            raise permissions.PermissionDenied(
-                detail="Production-level tracking is a premium feature. Upgrade your plan."
+        # An entry tied to a production is computed from that production's activities
+        # (EventCarbonCalculator), never typed in here. Before 2026-11-07 this gate read
+        # `user.subscription_plan`, which User does not have, and raised
+        # `permissions.PermissionDenied`, which rest_framework.permissions does not define: every
+        # such request ended in an AttributeError and a 500, behind a message that sold a
+        # "premium" plan that does not exist. Same refusal, now a 403 with the true reason.
+        rows = serializer.validated_data
+        if any(row.get("production") for row in (rows if isinstance(rows, list) else [rows])):
+            raise PermissionDenied(
+                detail="Carbon for a production is computed from its activities. Log the activity instead."
             )
 
-        # If raw_amount is provided, calculate emissions using CoolFarmTool
-        raw_amount = self.request.data.get("raw_amount")
-        if raw_amount is not None:
-            try:
-                crop_type = self.request.data.get("crop_type")
-                acreage = float(raw_amount)
-                inputs = self.request.data.get("inputs", {})
-                region = self.request.data.get("region")
-
-                if crop_type:
-                    result = coolfarm_service.calculate_emissions(
-                        crop_type=crop_type, acreage=acreage, inputs=inputs, region=region
-                    )
-                    serializer.validated_data["amount"] = result["co2e"]
-                    # Use USDA factors but not actually USDA verified
-                    serializer.validated_data["usda_factors_based"] = True
-                    serializer.validated_data["verification_status"] = "factors_verified"
-                    serializer.validated_data["data_source"] = "USDA Agricultural Research Service"
-            except Exception as e:
-                # Log error but continue with creation
-                logger.error(f"Error calculating emissions: {e}")
-
-        serializer.save(created_by=self.request.user)
-        # Log the creation
-        CarbonAuditLog.objects.create(
-            carbon_entry=serializer.instance,
-            user=self.request.user,
-            action="create",
-            details=f"Created {serializer.instance.type} entry",
-        )
+        # NEVER: 2026-11-07 - a `raw_amount` branch was DELETED here. It called the undefined
+        # `coolfarm_service.calculate_emissions` (the error was logged and swallowed, so the row
+        # saved without it) and would have stamped the entry "factors_verified" with
+        # data_source "USDA Agricultural Research Service", a blanket attribution compliance.md
+        # forbids: factor provenance is stated per input class.
+        # One audit row per entry, and both in one transaction: `bulk_create` saves a list, and a
+        # failure writing the log must not leave entries committed without one (review of #338).
+        with transaction.atomic():
+            saved = serializer.save(created_by=self.request.user)
+            for entry in saved if isinstance(saved, list) else [saved]:
+                CarbonAuditLog.objects.create(
+                    carbon_entry=entry,
+                    user=self.request.user,
+                    action="create",
+                    details=f"Created {entry.type} entry",
+                )
 
     def perform_update(self, serializer):
         serializer.save()
