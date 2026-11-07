@@ -471,7 +471,6 @@ api/carbon/^sources/(?P<pk>[^/.]+)/$	carbon.views.CarbonSourceViewSet	ReadOnlyFo
 api/carbon/^sources/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonSourceViewSet	ReadOnlyForViewersGlobal	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/carbon/^sources\.(?P<format>[a-z0-9]+)/?$	carbon.views.CarbonSourceViewSet	ReadOnlyForViewersGlobal	get=list,post=create
 api/carbon/ai-event-suggestions/	carbon.views.get_ai_event_suggestions	IsAuthenticated	-
-api/carbon/bulk-verify/	carbon.views.bulk_verify_entries	IsAuthenticated	-
 api/carbon/calculate-event-carbon/	carbon.views.calculate_event_carbon_impact_enhanced	IsAuthenticated	-
 api/carbon/calculate-event-impact/	carbon.views.calculate_event_carbon_impact	IsAuthenticated	-
 api/carbon/company-crop-options/	carbon.views.get_company_crop_options	IsAuthenticated	-
@@ -479,11 +478,9 @@ api/carbon/crop-templates/	carbon.views.get_crop_templates	IsAuthenticated	-
 api/carbon/crop-templates/<str:template_id>/	carbon.views.get_crop_template_detail	IsAuthenticated	-
 api/carbon/deepgram-token/	carbon.views.deepgram_token	IsAuthenticated	-
 api/carbon/enhanced-event-impact/	carbon.views.calculate_event_impact	IsAuthenticated	-
-api/carbon/entries/<int:carbon_entry_id>/verification-status/	carbon.views.get_verification_status	IsAuthenticated	-
 api/carbon/evidence/<int:carbon_entry_id>/photos/	carbon.views.get_evidence_photos_enhanced	IsAuthenticated	-
 api/carbon/evidence/upload/	carbon.views.upload_evidence_photo_enhanced	IsAuthenticated	-
 api/carbon/evidence/validate/	carbon.views.validate_photo_evidence	IsAuthenticated	-
-api/carbon/methodology-templates/	carbon.views.get_methodology_templates	IsAuthenticated	-
 api/carbon/process-voice-event/	carbon.views.process_voice_event_ai	IsAuthenticated	-
 api/carbon/productions/<int:production_id>/economics/	carbon.views.get_production_carbon_economics	IsAuthenticated	-
 api/carbon/smart-product/search/	carbon.views.smart_product_search	IsAuthenticated	-
@@ -494,7 +491,6 @@ api/carbon/usda/benchmark-comparison/	carbon.views.get_usda_benchmark_comparison
 api/carbon/usda/compliance-history/<int:production_id>/	carbon.views.get_usda_compliance_history	IsAuthenticated	-
 api/carbon/usda/regional-factors/<str:state>/	carbon.views.get_regional_emission_factors	IsAuthenticated	-
 api/carbon/usda/validate-compliance/	carbon.views.validate_usda_compliance	IsAuthenticated	-
-api/carbon/verify-registry-credentials/	carbon.views.verify_registry_credentials	IsAuthenticated	-
 api/carbon/voice-config/	carbon.views.voice_config	IsAuthenticated	-
 api/certifications/certifying-agents/	certifications.views.certifying_agents	IsAuthenticated	-
 api/certifications/verify-input/	certifications.views.verify_input	IsAuthenticated	-

@@ -49,6 +49,10 @@ DELETED_OFFSET_MODULES = (
     "services/backend_security_validation.py",
     "services/certificate.py",
     "services/verification.py",
+    # Later the same day: the registry "verification" that simulated Verra and Gold Standard, and
+    # the dead `apply_verification_results` that wrote "verified" from its result.
+    "services/verification_service.py",
+    "services/registry_integration.py",
 )
 
 _COMMENT = re.compile(r"^\s*#")
