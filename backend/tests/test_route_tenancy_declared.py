@@ -130,7 +130,7 @@ class RouteTenancyDeclaredTests(SimpleTestCase):
     def test_the_walk_actually_finds_routes(self):
         """Guards the guard: a walker returning nothing would pass both tests above."""
         found = _routes()
-        self.assertGreaterEqual(len(found), 140, f"Only {len(found)} views discovered; the walk is broken.")
+        self.assertGreaterEqual(len(found), 147, f"Only {len(found)} views discovered; the walk is broken.")
         self.assertIn("company.views.CompanyViewSet", found)
         self.assertIn("carbon.views.get_crop_templates", found)  # an @api_view function
 
