@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | facility_layout | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document
+    kind: str  # parcel_map | affidavit | handler_certificate | facility_layout | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document | inspection_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -497,6 +497,13 @@ def _candidates(osp):
                     lambda doc=doc: doc.file.open("rb"),
                 )
             )
+    # The certifier inspection record behind 02s (inspection reports, the agent's letters, the
+    # response files, resolution notices). Guarded on its own: an error listing these must not
+    # empty the manifest of every other file (build_manifest returns nothing on an exception).
+    try:
+        out.extend(_inspection_candidates(osp))
+    except Exception:  # noqa: BLE001
+        logger.exception("Inspection-record attachments could not be listed for OSP %s", getattr(osp, "pk", None))
     return out
 
 
@@ -587,6 +594,50 @@ def facility_table_shown(osp) -> bool:
         if any(q.key == question_key for _page, q in visible_questions(MODULES_BY_KEY[module_key], answers)):
             return True
     return False
+
+
+def inspection_document_source(doc) -> str:
+    """One key per stored file across every inspection route: a file named twice ships once."""
+    return f"inspection-doc:{doc.pk}"
+
+
+def inspection_document_path(prefix: str, doc) -> str:
+    """Where an inspection record's file rides in the ZIP: `inspections/<prefix>-<doc id><ext>`.
+    Built from the document id and the stored file's extension only, never the editable title."""
+    return f"inspections/{prefix}-{doc.pk}{_ext(doc.file.name)}"
+
+
+def _inspection_candidates(osp) -> list:
+    """The files behind what 02s lists from the certifier inspection record: each listed
+    inspection's report, and each listed item's letter, response files and resolution notice."""
+    from certifications.services.certifier_notices import packet_records
+
+    _latest, inspections, notices = packet_records(osp.establishment)
+    out = []
+
+    def add(label, prefix, doc):
+        if doc is None or not doc.file:
+            return
+        out.append(
+            (
+                Attachment(
+                    "inspection_document",
+                    label,
+                    inspection_document_path(prefix, doc),
+                    source_id=inspection_document_source(doc),
+                ),
+                lambda doc=doc: doc.file.open("rb"),
+            )
+        )
+
+    for inspection in inspections:
+        add(f"Inspection report, {inspection.inspected_on.isoformat()}", "report", inspection.report_document)
+    for notice in notices:
+        add(f"Certifying agent's letter: {notice.get_kind_display()}", "letter", notice.notice_document)
+        for link in notice.response_links.all():
+            add("Supporting document sent with the operation's response", "response", link.document)
+        add("Certifying agent's resolution notice", "resolution", notice.resolution_document)
+    return out
 
 
 def notice_document_path(notice) -> str:

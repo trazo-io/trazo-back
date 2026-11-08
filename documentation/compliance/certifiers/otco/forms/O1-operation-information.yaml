@@ -468,12 +468,18 @@ items:
 - ref: D-1E
   asks: Are there any outstanding non-compliances that have been issued by any of the agencies identified above?
     Yes / No.
-  status: not_covered
+  status: partial
   severity: P3
   trazo:
-    prints: —
-  gap: Reused from the CCOF Contract D5 (P3). Nothing in the registry captures open non-compliances issued
-    by a certifying agent.
+    where: "02s-renewal-status-and-routing.pdf: Certifier inspections and notices (operation's record), the count of notices of noncompliance with no resolution notice attached"
+    models:
+    - certifications.models.CertifierNotice.kind
+    - certifications.models.CertifierNotice.resolution_document
+    prints: 02s-renewal-status-and-routing.pdf, the count of notices of noncompliance with no resolution notice
+      attached, and each one
+  gap: The operation's own record of notices of noncompliance and their resolution notices exists
+    (2026-11-08) and 02s counts the ones with no resolution notice attached. It holds what the operation
+    recorded only; the other agencies D-1 lists and their notices are not asked.
   fix: Reuse D5 — part of the optional certification-history page.
 - ref: D-2
   asks: Have you, the responsibly connected, or this operation ever had its certification suspended? No / Yes,
@@ -565,11 +571,18 @@ items:
 - ref: D-7
   asks: If you responded yes to any one of questions 2–6 above, attach a copy of all relevant letter(s) and
     a description of any/all corrective actions — requested documentation is attached.
-  status: not_covered
+  status: partial
   severity: P3
   trazo:
-    prints: —
-  gap: 'Follows from D-2 to D-6: no fields for letters or corrective-action descriptions.'
+    where: "02s-renewal-status-and-routing.pdf: Certifier inspections and notices (operation's record); the agent's letters and the files sent with each response are attached under inspections/"
+    models:
+    - certifications.models.CertifierNotice.notice_document
+    - certifications.models.CertifierNotice.response_text
+    - certifications.models.CertifierNoticeResponseDocument.document
+    prints: 02s-renewal-status-and-routing.pdf, certifier inspections and notices; files under inspections/
+  gap: The letters and corrective-action descriptions have fields (the operation's inspection record,
+    2026-11-08) and print on 02s with the letters attached; D-2 to D-6, which make D-7 apply, are still not
+    asked.
   fix: Reuse D6 — part of the same optional page.
 - ref: E-1
   asks: >-
