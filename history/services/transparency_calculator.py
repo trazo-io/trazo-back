@@ -5,7 +5,6 @@ Facts only: events per category, how many carry a photo, the farming approach. I
 score is retired as a concept (`.claude/rules/transparency-first.md`), so nothing here grades.
 """
 
-import logging
 from typing import Dict, Tuple
 
 from django.db.models import prefetch_related_objects
@@ -23,9 +22,6 @@ from ..models import (
 
 # Establishment / Parcel imports dropped 2026-08-02 — their only uses were the type hints of
 # the deleted calculate_establishment_transparency() cluster.
-
-
-logger = logging.getLogger(__name__)
 
 
 class TransparencyCalculator:
