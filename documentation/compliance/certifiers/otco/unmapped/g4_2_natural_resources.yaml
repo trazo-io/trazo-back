@@ -20,16 +20,14 @@ questions:
     How irrigation efficiency is checked. Asked by WSDA AGR 2121 E10; OTCO C6 2a lists water conservation practices, soil-moisture monitoring among them, without asking how efficiency is checked.
   g4_2_natural_resources.irrigation_efficiency_monitoring_other: >-
     Describes an "other" answer to `irrigation_efficiency_monitoring` above; same reason.
-  g4_2_natural_resources.shared_irrigation_with_prohibited: >-
-    Whether irrigation lines or tailwater are shared with cropland where prohibited materials go into the water. CCOF G6.0 D4 asks it; OTCO's C9 asks only about district water additives (9.2-1b).
-  g4_2_natural_resources.shared_irrigation_responsible: >-
-    Who applies those materials (CCOF G6.0 D4a); same reason.
   g4_2_natural_resources.shared_irrigation_mitigation: >-
-    How contact with those materials is prevented (CCOF G6.0 D5); same reason.
-  g4_2_natural_resources.irrigation_piping_map_upload: >-
-    The piping diagram CCOF G6.0 D5 asks for; same reason.
+    How contact with materials in shared irrigation water is prevented (CCOF G6.0 D5). OTCO C2 2.3-3 asks
+    for the valves and backflow devices on the parcel map or a piping diagram, which
+    `irrigation_piping_map_upload` takes; it never asks for a description of how contact is prevented.
   g4_2_natural_resources.irrigation_district_piping_map_upload: >-
-    The same diagram when the district adds materials to the water (CCOF G6.0 D5); same reason.
+    The piping diagram when the irrigation district adds materials to the water (CCOF G6.0 D5). OTCO asks
+    about district additives in C9 9.2-1b without a diagram, and asks for a diagram (C2 2.3-3) only when the
+    operation's own irrigation carries prohibited materials to non-organic land.
   g4_2_natural_resources.streams_or_channels_adjacent: >-
     WSDA AGR 2121 section E ref 16 asks whether streams, shorelines, gullies or irrigation channels are
     on or adjacent to the certified sites. OTCO C6 asks how water is managed for riparian ecosystems

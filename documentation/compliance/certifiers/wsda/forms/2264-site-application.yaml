@@ -349,24 +349,19 @@ items:
     borders where active buffer management occurs; locations of crops (varieties for perennials); all
     adjacent land uses including land managed by others; and, for livestock, the location/type of established
     fences and the location/source of shade and water.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - parcel_application.map_status
     - parcel_application.map_upload
+    - parcel_application.map_elements_shown
     models:
     - product.Parcel.polygon
     - product.Parcel.buffer_zones
     prints: parcels/parcel-application-<name>.pdf §E; packet ZIP parcels/maps/
-  gap: 'Same fix as CCOF §E: a map is produced and an operator map ships with the packet, one per site.
-    Remaining: WSDA wants the operation name and the SITE name printed on the map graphic itself, which
-    the schematic does not yet do, and the livestock fencing/water/shade annotation when livestock are
-    present. Closed 2026-08-28: the boundary schematic was extracted from the audit-export builder into
-    `certifications/services/parcel_map.py` and now renders in the Parcel Application §E — both documents
-    draw the same parcel from the same code. A `map_upload` question attaches the operator''s own map
-    (linked to the PARCEL, not just the module), it ships in the packet under `parcels/maps/`, and the
-    §E page names the exact file so the page and the ZIP agree. Both `has_map` definitions were changed
-    together as the register warned. Guard: `certifications/tests/test_parcel_map_in_packet.py`.'
-  fix: Stamp the operation and site name onto the rendered schematic for a WSDA-bound packet, and add
-    the livestock annotation when `livestock_present` is true.
+  note: 'Closed 2026-11-08. The operator''s map ships under `parcels/maps/`, one per site, and §E names the file
+    (2026-08-28). `map_elements_shown` asks which elements it shows, WSDA''s among them: the operation name and the
+    site name printed on the map, the site''s borders, the borders where buffers are managed, crop locations with
+    varieties for perennials, adjacent land uses including land managed by others, and fences, shade and water
+    for livestock. §E prints a [REVIEW] naming each WSDA element not ticked (livestock only when the site has
+    livestock). The operator''s statement about their map; Trazo does not read the map.'

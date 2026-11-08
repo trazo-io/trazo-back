@@ -152,26 +152,29 @@ items:
   asks: Are there existing installations of lumber treated with arsenate or other prohibited materials
     within the boundaries of this parcel? No → skip to §B. Yes → identify all treated lumber on the parcel
     map and complete or update G6.0 Production.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - parcel_application.treated_lumber_present
+    - parcel_application.treated_lumber_noncontact_present
+    - parcel_application.map_elements_shown
+    - g6_0_production.treated_lumber_any
     models:
     - product.Parcel.treated_lumber_present
-    prints: parcels/parcel-application-<name>.pdf §A
-  gap: Trazo's label asks whether treated lumber is 'in contact with crops or soil' — the § 205.206(f)
-    test for a NEW installation — while CCOF asks about the presence of any EXISTING installation within
-    the parcel boundary. A legacy CCA end-post that does not touch crop or soil is disclosable to CCOF
-    but answered 'No' in Trazo. There is also no map annotation and no cross-link to G6.0's `prohibited_materials_on_site`.
-  fix: Relabel to CCOF's question; add an optional second boolean for soil/crop contact; cross-link to
-    G6.0 and annotate the map when true.
+    prints: parcels/parcel-application-<name>.pdf §A, §E; modules/G6_0.pdf §E
+  note: 'Closed 2026-11-08. `treated_lumber_present` keeps the § 205.206(f) contact test it always asked (and
+    WSDA AGR 2264 ref 12 asks), so its stored answers keep their meaning. When it is No,
+    `treated_lumber_noncontact_present` asks CCOF''s wider question: any other existing installation within the
+    boundaries, touching neither crops nor soil. "Identify all treated lumber on the parcel map" is the
+    `treated_lumber` element of `map_elements_shown`, named as unmarked in §E when either answer is Yes. The G6.0
+    cross-link: a G6.0 `treated_lumber_any` No beside a parcel saying Yes to either prints a [REVIEW].'
 - ref: A10a
   asks: Describe existing treated lumber (e.g., end post, trellis, stakes).
   status: covered
   trazo:
     questions:
     - parcel_application.treated_lumber_description
+    - parcel_application.treated_lumber_noncontact_description
     models:
     - product.Parcel.treated_lumber_description
     prints: parcels/parcel-application-<name>.pdf §A
@@ -181,6 +184,7 @@ items:
   trazo:
     questions:
     - parcel_application.treated_lumber_install_date
+    - parcel_application.treated_lumber_noncontact_description
     models:
     - product.Parcel.treated_lumber_install_date
     prints: parcels/parcel-application-<name>.pdf §A
@@ -283,27 +287,22 @@ items:
     handling); adjacent land uses labeled; location and width of buffer zones with crop-in-buffer noted;
     natural resources (waterways, woodlands, windbreaks, etc.); livestock needs; and existing treated-lumber
     installations.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - parcel_application.map_status
     - parcel_application.map_upload
+    - parcel_application.map_elements_shown
     models:
     - product.Parcel.polygon
     - product.Parcel.buffer_zones
     prints: parcels/parcel-application-<name>.pdf §E; packet ZIP parcels/maps/
-  gap: 'A map now reaches the packet and the operator can attach their own. Remaining, and why this is
-    P1 rather than closed: Trazo does not VERIFY that the attached map carries CCOF''s eleven elements
-    — the page lists them and asks, it cannot check. The schematic itself carries only the boundary, a
-    north arrow and the adjoining-land labels. Closed 2026-08-28: the boundary schematic was extracted
-    from the audit-export builder into `certifications/services/parcel_map.py` and now renders in the
-    Parcel Application §E — both documents draw the same parcel from the same code. A `map_upload` question
-    attaches the operator''s own map (linked to the PARCEL, not just the module), it ships in the packet
-    under `parcels/maps/`, and the §E page names the exact file so the page and the ZIP agree. Both `has_map`
-    definitions were changed together as the register warned. Guard: `certifications/tests/test_parcel_map_in_packet.py`.'
-  fix: 'Optional: overlay a server-side satellite tile and annotate acreage, APN and per-side buffer widths
-    onto the drawing, so the generated map alone covers more of the list.'
+  note: 'Closed 2026-11-08. The operator''s own map ships under `parcels/maps/` and §E names the file
+    (2026-08-28). `map_elements_shown` asks which elements that map shows, one list for the three agents
+    (`certifications/services/parcel_map_elements.py`); every one of CCOF''s eleven is on it. The answer
+    prints as the operator''s statement, and §E adds a [REVIEW] naming each element CCOF lists that is not
+    ticked (livestock and treated lumber only when the parcel application says they apply). Trazo does not
+    read the map, and nothing printed says the map meets the list. Guard: `certifications/tests/test_parcel_map_elements.py`.'
 - ref: F1
   asks: When did you begin managing this parcel (the date you bought, began leasing, or otherwise became
     responsible for management)?
