@@ -181,19 +181,16 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
         self.assertIn("fuel", result["breakdown"])
         self.assertIn("electricity", result["breakdown"])
         self.assertIn("water", result["breakdown"])
-        self.assertIn("efficiency_score", result)
+        self.assertNotIn("efficiency_score", result)  # retired 2026-11-08
         self.assertIn("recommendations", result)
 
-    def test_efficiency_score_calculation(self):
-        """Test efficiency score is calculated properly"""
+    def test_no_efficiency_score_is_returned(self):
+        """The self-assigned 0-100 score is retired as a concept (2026-11-08)."""
         inputs = {"fertilizer": {"nitrogen": 100.0}}  # Moderate nitrogen use
 
         result = self.calculator.calculate_farm_footprint(inputs=inputs, crop_type="citrus", area=100.0)
 
-        self.assertIn("efficiency_score", result)
-        self.assertIsInstance(result["efficiency_score"], (int, float))
-        self.assertGreaterEqual(result["efficiency_score"], 0)
-        self.assertLessEqual(result["efficiency_score"], 100)
+        self.assertNotIn("efficiency_score", result)
 
 
 class TestEventCarbonCalculator(TestCase):

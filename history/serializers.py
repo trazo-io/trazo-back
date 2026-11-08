@@ -564,7 +564,6 @@ class EventSerializer(serializers.ModelSerializer):
                     factors_based = bool(carbon_entry.usda_factors_based) and not area_estimate
                     return {
                         "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
-                        "efficiency_score": 90.0 if factors_based else 75.0,
                         "usda_factors_based": factors_based,
                         "calculation_basis": "area_estimate" if area_estimate else "reported_or_factor",
                         "verification_status": (

@@ -379,11 +379,11 @@ class USDAAPICircuitBreakers:
 
         # Conservative emission estimates by crop type
         emission_estimates = {
-            "corn": {"co2e": 0.8, "efficiency_score": 65},
-            "soybeans": {"co2e": 0.4, "efficiency_score": 80},
-            "wheat": {"co2e": 0.6, "efficiency_score": 70},
-            "citrus": {"co2e": 1.2, "efficiency_score": 60},
-            "default": {"co2e": 0.7, "efficiency_score": 65},
+            "corn": {"co2e": 0.8},
+            "soybeans": {"co2e": 0.4},
+            "wheat": {"co2e": 0.6},
+            "citrus": {"co2e": 1.2},
+            "default": {"co2e": 0.7},
         }
 
         estimate = emission_estimates.get(crop_lower, emission_estimates["default"])
@@ -391,7 +391,6 @@ class USDAAPICircuitBreakers:
         return {
             "carbon_intensity": estimate["co2e"],
             "total_emissions": estimate["co2e"] * farm_practices.get("area_hectares", 1),
-            "efficiency_score": estimate["efficiency_score"],
             "data_source": "fallback_estimate",
             "confidence_level": "low",
             "warning": "Using conservative estimates due to calculation service unavailability",

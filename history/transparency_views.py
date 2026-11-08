@@ -187,14 +187,10 @@ def production_transparency_detail(request, production_public_id=None):
         # Get carbon data (EXISTING - but without competitive ranking)
         try:
             carbon_data = carbon_service.calculate_production_carbon(history.id)
-            carbon_score = carbon_data.get("total_co2_kg_per_kg", 0)
-            carbon_breakdown = carbon_data.get("breakdown", {})
         except Exception as e:
             logger.warning(f"Carbon calculation failed for history {history.id}: {str(e)}")
             # Don't let carbon calculation errors block transparency data
             carbon_data = {}
-            carbon_score = 0
-            carbon_breakdown = {}
 
         # Build farm information
         establishment = history.parcel.establishment if history.parcel else None

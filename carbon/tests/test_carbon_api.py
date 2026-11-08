@@ -59,7 +59,6 @@ class CarbonCalculationAPITestCase(TestCase):
         # Verify expected fields are present
         expected_fields = [
             "co2e",
-            "efficiency_score",
             "usda_factors_used",
             "calculation_method",
             "event_type",
@@ -67,16 +66,17 @@ class CarbonCalculationAPITestCase(TestCase):
         ]
         for field in expected_fields:
             self.assertIn(field, response.data, f"Missing expected field: {field}")
+        # The self-assigned 0-100 score left every carbon payload on 2026-11-08.
+        self.assertNotIn("efficiency_score", response.data)
 
         # Verify data types
         self.assertIsInstance(response.data["co2e"], (int, float))
-        self.assertIsInstance(response.data["efficiency_score"], (int, float))
         self.assertIsInstance(response.data["usda_factors_used"], bool)
         self.assertIsInstance(response.data["calculation_method"], str)
         self.assertIsInstance(response.data["event_type"], str)
 
         # For general events, should use standard calculation
-        if response.data.get("co2e") == 0.1 and response.data.get("efficiency_score") == 50.0:
+        if response.data.get("co2e") == 0.1:
             self.assertEqual(response.data["calculation_method"], "general_event_standard")
         else:
             # Using sophisticated calculation is also valid
@@ -111,7 +111,7 @@ class CarbonCalculationAPITestCase(TestCase):
 
         # Production events should have more detailed calculations
         self.assertIn("co2e", response.data)
-        self.assertIn("efficiency_score", response.data)
+        self.assertNotIn("efficiency_score", response.data)
 
         # Check if we get sophisticated calculation features
         if "breakdown" in response.data:
@@ -178,8 +178,8 @@ class CarbonCalculationAPITestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreater(response.data["co2e"], 0)
 
-        # Equipment events should include efficiency metrics
-        self.assertIn("efficiency_score", response.data)
+        # No self-assigned efficiency score on equipment events either.
+        self.assertNotIn("efficiency_score", response.data)
 
     def test_api_error_handling(self):
         """Test API error handling for invalid requests"""
@@ -252,7 +252,6 @@ class CarbonCalculationAPITestCase(TestCase):
 
         # Results should be consistent
         self.assertEqual(responses[0].data["co2e"], responses[1].data["co2e"])
-        self.assertEqual(responses[0].data["efficiency_score"], responses[1].data["efficiency_score"])
         self.assertEqual(responses[0].data["calculation_method"], responses[1].data["calculation_method"])
 
     def test_different_event_types_return_different_results(self):
@@ -320,11 +319,8 @@ class CarbonCalculationAPITestCase(TestCase):
         self.assertIsInstance(response_data.get("co2e"), (int, float))
         self.assertGreaterEqual(response_data.get("co2e"), 0)
 
-        # Efficiency score should be numeric between 0 and 100
-        efficiency_score = response_data.get("efficiency_score")
-        self.assertIsInstance(efficiency_score, (int, float))
-        self.assertGreaterEqual(efficiency_score, 0)
-        self.assertLessEqual(efficiency_score, 100)
+        # No self-assigned 0-100 score in the payload (retired 2026-11-08).
+        self.assertNotIn("efficiency_score", response_data)
 
         # USDA factors used should be boolean
         self.assertIsInstance(response_data.get("usda_factors_used"), bool)

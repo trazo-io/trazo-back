@@ -162,36 +162,9 @@ class NotificationService:
             extra_data=extra_data,
         )
 
-    def create_carbon_verification_notification(
-        self, recipient: User, verification_status: str, product_name: str, carbon_score: Optional[float] = None
-    ) -> Optional[Notification]:
-        """
-        Create a notification for carbon verification updates
-        """
-        if verification_status == "verified":
-            title = f"Carbon Verification Complete: {product_name}"
-            message = f"Your product '{product_name}' has been successfully verified"
-            priority = NotificationPriority.HIGH
-        else:
-            title = f"Carbon Verification Failed: {product_name}"
-            message = f"Carbon verification failed for '{product_name}'. Please review the data."
-            priority = NotificationPriority.URGENT
-
-        extra_data = {
-            "product_name": product_name,
-            "verification_status": verification_status,
-            "carbon_score": carbon_score,
-            "verification_time": timezone.now().isoformat(),
-        }
-
-        return self.create_notification(
-            recipient=recipient,
-            notification_type=NotificationType.CARBON_VERIFICATION,
-            title=title,
-            message=message,
-            priority=priority,
-            extra_data=extra_data,
-        )
+    # NEVER: 2026-11-08 - `create_carbon_verification_notification` was DELETED. Nothing called it,
+    # and it announced "Carbon Verification Complete" with a carbon_score in extra_data: a
+    # verification nobody performs, and a self-assigned score.
 
     def mark_notification_as_read(self, notification_id: int, user: User) -> bool:
         """

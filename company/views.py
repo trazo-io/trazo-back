@@ -1471,9 +1471,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "per_hectare": round(per_hectare, 2),
                 "per_production": round(per_production, 2),
                 "total_productions_analyzed": total_productions,
-                "carbon_efficiency_score": (
-                    max(0, 100 - (per_hectare / 1000) * 100) if per_hectare > 0 else 50
-                ),  # Default neutral score
             }
 
         except Exception as e:
@@ -1485,7 +1482,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "per_hectare": 0,
                 "per_production": 0,
                 "total_productions_analyzed": 0,
-                "carbon_efficiency_score": 0,
                 "calculation_error": "Carbon data temporarily unavailable",
             }
 

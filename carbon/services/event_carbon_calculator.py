@@ -29,7 +29,6 @@ def count_amount_result(count, unit, chemical_type=None) -> Dict[str, Any]:
         shown = f"{count} {unit}".strip() if count not in (None, "") else str(unit)
     return {
         "co2e": 0.0,
-        "efficiency_score": 70.0,
         "calculation_method": "amount_is_count_not_converted",
         "verification_status": "insufficient_data",
         "breakdown": {
@@ -397,7 +396,6 @@ class EventCarbonCalculator:
 
             return {
                 "co2e": round(total_emissions, 3),
-                "efficiency_score": 85.0,
                 "calculation_method": "aggregate_fertilizer_epa_usda",
                 "verification_status": "epa_usda_verified_aggregate",
                 "data_sources": [
@@ -422,7 +420,6 @@ class EventCarbonCalculator:
             logger.error(f"Aggregate fertilizer calculation failed: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 70.0,
                 "verification_status": "aggregate_calculation_error",
                 "error": str(e),
             }
@@ -508,7 +505,6 @@ class EventCarbonCalculator:
 
             return {
                 "co2e": round(total_emissions, 3),
-                "efficiency_score": 82.0,
                 "calculation_method": "aggregate_fungicide_epa_usda",
                 "verification_status": "epa_usda_verified_aggregate",
                 "data_sources": [
@@ -532,7 +528,6 @@ class EventCarbonCalculator:
             logger.error(f"Aggregate fungicide calculation failed: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 70.0,
                 "verification_status": "aggregate_calculation_error",
                 "error": str(e),
             }
@@ -595,7 +590,6 @@ class EventCarbonCalculator:
 
             return {
                 "co2e": round(total_emissions, 3),
-                "efficiency_score": 80.0,
                 "calculation_method": "aggregate_herbicide_epa_usda",
                 "verification_status": "epa_usda_verified_aggregate",
                 "data_sources": [
@@ -612,7 +606,6 @@ class EventCarbonCalculator:
             logger.error(f"Aggregate herbicide calculation failed: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 70.0,
                 "verification_status": "aggregate_calculation_error",
                 "error": str(e),
             }
@@ -688,7 +681,6 @@ class EventCarbonCalculator:
 
             return {
                 "co2e": round(total_emissions, 3),
-                "efficiency_score": 80.0,
                 "calculation_method": "aggregate_pesticide_epa_usda",
                 "verification_status": "epa_usda_verified_aggregate",
                 "data_sources": [
@@ -712,7 +704,6 @@ class EventCarbonCalculator:
             logger.error(f"Aggregate pesticide calculation failed: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 70.0,
                 "verification_status": "aggregate_calculation_error",
                 "error": str(e),
             }
@@ -1017,7 +1008,6 @@ class EventCarbonCalculator:
                     )
                     return {
                         "co2e": 0.0,
-                        "efficiency_score": 70.0,
                         "calculation_method": "aggregate_unsupported_chemical_type",
                         "verification_status": "insufficient_data",
                         "breakdown": {"is_aggregate": True, "chemical_type": chemical_type},
@@ -1101,16 +1091,13 @@ class EventCarbonCalculator:
             limitations = calculation_result.get("limitations", "")
             calculation_method = calculation_result["calculation_method"]
 
-            # Calculate efficiency score based on EPA data
             confidence_level = breakdown.get("confidence_level", 0.90)
-            efficiency_score = confidence_level * 100  # Convert to percentage
 
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_chemical_recommendations(event, base_emissions, breakdown)
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": round(efficiency_score, 1),
                 "calculation_method": calculation_method,
                 "verification_status": "epa_usda_verified",
                 "data_sources": data_sources,
@@ -1131,7 +1118,6 @@ class EventCarbonCalculator:
             )
             return {
                 "co2e": 0.0,
-                "efficiency_score": 70.0,
                 "verification_status": "calculation_error",
                 "error": str(e),
                 "calculation_method": "epa_fallback",
@@ -1708,7 +1694,6 @@ class EventCarbonCalculator:
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": self._calculate_production_efficiency_score(breakdown, calculation_method),
                 "calculation_method": calculation_method,
                 "verification_status": (
                     "epa_factors_based" if calculation_method == "verified_usda_factors" else "standard"
@@ -1761,7 +1746,6 @@ class EventCarbonCalculator:
             logger.error(f"Production event calculation error: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 75.0,
                 "calculation_method": "calculation_error",
                 "verification_status": "error",
                 "error": str(e),
@@ -1841,7 +1825,6 @@ class EventCarbonCalculator:
 
             return {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": self._calculate_production_efficiency_score(breakdown, calculation_method),
                 "calculation_method": calculation_method,
                 # Run 8 (R8-04): no energy recorded for post-harvest work is not an EPA figure.
                 "verification_status": "not_estimated" if calculation_method == "not_estimated" else "epa_usda_sourced",
@@ -1857,7 +1840,6 @@ class EventCarbonCalculator:
             logger.error(f"Post-harvest processing calculation error: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 75.0,
                 "calculation_method": "calculation_error",
                 "verification_status": "error",
                 "error": str(e),
@@ -1950,7 +1932,6 @@ class EventCarbonCalculator:
 
             base_emissions = 0.0
             cost_estimate = 0.0
-            efficiency_score = 60.0
 
             if event.type == "FC":  # Fuel Consumption
                 # `fuel_amount` is normalized to **liters** (or kWh for electric) by
@@ -1986,7 +1967,6 @@ class EventCarbonCalculator:
                 # context for the farmer, so it stays in the breakdown and out of the maths.
                 efficiency_modifier = 1.0
                 cost_estimate = fuel_amount * 1.2  # Approximate fuel cost per liter
-                efficiency_score = 90.0 if equipment_data["efficiency"] == "high" else 70.0
 
                 # Equipment type specific adjustments
                 equipment_type = equipment_data["equipment_type"]
@@ -2020,7 +2000,6 @@ class EventCarbonCalculator:
             elif event.type == "CA":  # Calibration
                 base_emissions = 0.0  # No direct emissions from calibration
                 cost_estimate = 50.0
-                efficiency_score = 95.0  # Well-calibrated equipment is efficient
 
             elif event.type == "BD":  # Breakdown
                 # Use actual fuel/repair data if available, otherwise 0
@@ -2038,12 +2017,10 @@ class EventCarbonCalculator:
                 else:
                     base_emissions = 0.0
                 cost_estimate = float(event.maintenance_cost or 0)
-                efficiency_score = 30.0  # Broken equipment is very inefficient
 
             elif event.type == "EI":  # Inspection
                 base_emissions = 0.0  # No direct emissions from inspection
                 cost_estimate = 25.0
-                efficiency_score = 85.0
 
             recommendations = self._generate_equipment_recommendations(
                 event, base_emissions, cost_estimate, equipment_data
@@ -2051,7 +2028,6 @@ class EventCarbonCalculator:
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": efficiency_score,
                 "calculation_method": (
                     "usda_fuel_factors_enhanced" if event.type == "FC" else "equipment_estimation_enhanced"
                 ),
@@ -2081,7 +2057,7 @@ class EventCarbonCalculator:
             return self._add_enhanced_usda_metadata(result, event)
 
         except Exception as e:
-            return {"co2e": 0.0, "efficiency_score": 50.0, "usda_factors_based": False, "error": str(e)}
+            return {"co2e": 0.0, "usda_factors_based": False, "error": str(e)}
 
     def calculate_soil_management_event_impact(self, event) -> Dict[str, Any]:
         """
@@ -2413,7 +2389,6 @@ class EventCarbonCalculator:
 
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": confidence_score,
                 "calculation_method": calculation_method,
                 "data_source": " | ".join(data_sources),
                 "verification_status": "usda_ipcc_factors_verified",
@@ -2515,7 +2490,6 @@ class EventCarbonCalculator:
         except Exception as e:
             return {
                 "co2e": 0.0,  # No phantom emissions on error
-                "efficiency_score": 45.0,
                 "usda_factors_based": False,
                 "verification_status": "calculation_error",
                 "error": str(e),
@@ -2544,7 +2518,6 @@ class EventCarbonCalculator:
 
             result = {
                 "co2e": 0.0,
-                "efficiency_score": 75.0,
                 "calculation_method": "direct_operational_emissions",
                 "data_source": "Trazo Direct Emissions Methodology",
                 "methodology_note": (
@@ -2576,7 +2549,6 @@ class EventCarbonCalculator:
         except Exception as e:
             return {
                 "co2e": 0.0,
-                "efficiency_score": 70.0,
                 "usda_factors_based": False,
                 "verification_status": "calculation_error",
                 "error": str(e),
@@ -2597,7 +2569,6 @@ class EventCarbonCalculator:
             # Sprint 3 Epic 3.1: Enhanced fuel/equipment calculation
             fuel_emissions = 0.0
             base_emissions = 0.0
-            confidence_score = 75.0
             calculation_method = "integrated_pest_management_estimation"
             data_source = "Industry Standards"
             verification_status = "estimated"
@@ -2675,7 +2646,6 @@ class EventCarbonCalculator:
                         f"Pest Management fuel: {fuel_consumed} {fuel_unit} = {fuel_gallons:.2f} gal × {fuel_factor.value} = {fuel_emissions:.2f} kg CO2e"
                     )
 
-                confidence_score = 90.0  # High confidence with fuel data
                 verification_status = "epa_verified"
 
             # Pest management type context - only add base emissions when fuel data proves activity
@@ -2719,7 +2689,6 @@ class EventCarbonCalculator:
 
             result = {
                 "co2e": round(total_emissions, 3),
-                "efficiency_score": confidence_score,
                 "calculation_method": calculation_method,
                 "data_source": data_source,
                 "verification_status": verification_status,
@@ -2759,7 +2728,6 @@ class EventCarbonCalculator:
             logger.error(f"Error calculating pest management impact: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 75.0,
                 "usda_factors_based": False,
                 "verification_status": "calculation_error",
                 "error": str(e),
@@ -2783,7 +2751,6 @@ class EventCarbonCalculator:
             if not event_description or event_description.strip() == "":
                 return {
                     "co2e": 0.0,
-                    "efficiency_score": 100.0,  # Perfect score for no emissions
                     "calculation_method": "empty_general_event",
                     "data_source": "No Activity Specified",
                     "verification_status": "no_activity",
@@ -2820,12 +2787,8 @@ class EventCarbonCalculator:
             # Generate recommendations
             recommendations = self._generate_general_recommendations(event, base_emissions, general_event_type)
 
-            # Calculate efficiency score based on event type and impact
-            efficiency_score = self._calculate_general_efficiency_score(general_event_type, base_emissions)
-
             result = {
                 "co2e": round(base_emissions, 3),
-                "efficiency_score": efficiency_score,
                 "calculation_method": calculation_result["calculation_method"],
                 "data_source": calculation_result["source"],
                 "verification_status": "enhanced_factors",
@@ -2847,7 +2810,6 @@ class EventCarbonCalculator:
             # Fallback to reasonable default instead of hardcoded 0.5
             return {
                 "co2e": 0.1,  # Reduced from 0.5 to more appropriate default
-                "efficiency_score": 60.0,
                 "calculation_method": "general_event_fallback",
                 "data_source": "Default Estimation",
                 "verification_status": "estimated",
@@ -3475,31 +3437,6 @@ class EventCarbonCalculator:
         except Exception as e:
             logger.warning(f"Error generating EPA recommendations: {e}")
             return []
-
-    def _calculate_production_efficiency_score(self, breakdown: Dict, calculation_method: str) -> float:
-        """Calculate efficiency score based on EPA calculation method"""
-        try:
-            base_score = 75.0
-
-            # Higher score for USDA-verified calculations
-            if calculation_method == "verified_usda_factors":
-                base_score = 85.0
-
-            # Adjust based on calculation basis
-            calculation_basis = breakdown.get("calculation_basis", "unknown")
-            if calculation_basis == "actual_fuel_consumption":
-                base_score += 10  # Actual data is more accurate
-            elif calculation_basis == "estimated_from_hours_and_area":
-                base_score += 5  # Good estimation method
-
-            # Consider confidence level
-            confidence = breakdown.get("confidence_level", 0.8)
-            base_score *= confidence
-
-            return min(base_score, 95.0)  # Cap at 95%
-
-        except Exception as e:
-            return 75.0
 
     # Helper methods
     def _parse_npk_content(self, concentration_str: str, chemical_type: str = "FE") -> Dict[str, float]:
@@ -4590,24 +4527,3 @@ class EventCarbonCalculator:
             )
 
         return recommendations
-
-    def _calculate_general_efficiency_score(self, general_event_type: str, base_emissions: float) -> float:
-        """
-        Calculate efficiency score for general events based on type and emissions.
-        """
-        # Base efficiency scores by type
-        base_scores = {
-            "documentation": 80.0,  # Low impact activity
-            "training_session": 65.0,  # Medium impact but high value
-            "farm_visit": 60.0,  # Higher impact due to transportation
-        }
-
-        base_score = base_scores.get(general_event_type, 70.0)
-
-        # Adjust based on emissions level
-        if base_emissions <= 0.5:
-            return min(95.0, base_score + 15.0)  # Very low emissions
-        elif base_emissions <= 2.0:
-            return base_score  # Normal range
-        else:
-            return max(30.0, base_score - (base_emissions * 5))  # Higher emissions reduce score
