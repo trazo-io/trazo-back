@@ -4125,7 +4125,24 @@ def _certifier_inspection_flowables(osp, styles) -> list:
         else:
             out.append(Paragraph("Inspection report: not attached in Trazo.", styles["meta"]))
     if not notices:
-        out.append(Paragraph("No item from the certifying agent is recorded in Trazo.", styles["body"]))
+        # `notices` is windowed (resolved items older than the window drop out), so an empty list is
+        # not an empty record: say which it is (review of back #354).
+        from certifications.models import CertifierNotice
+
+        older = CertifierNotice.objects.filter(establishment=osp.establishment).count()
+        if older:
+            out.append(
+                Paragraph(
+                    _escape(
+                        "No item from the certifying agent is open or was resolved in the last "
+                        f"{RESOLVED_LISTED_FOR_DAYS} days. {older} older resolved "
+                        f"{'item is' if older == 1 else 'items are'} kept in Trazo and not listed here."
+                    ),
+                    styles["body"],
+                )
+            )
+        else:
+            out.append(Paragraph("No item from the certifying agent is recorded in Trazo.", styles["body"]))
         return out
     open_count = sum(1 for n in notices if n.kind == "notice_of_noncompliance" and notice_status(n) != "resolved")
     out.append(

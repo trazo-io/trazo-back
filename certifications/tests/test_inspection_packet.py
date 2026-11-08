@@ -172,6 +172,19 @@ class SelectionTests(_Packet):
         self.assertIn(recent_resolved, notices)
         self.assertIn(old_open, notices)
 
+    def test_an_aged_out_record_is_not_called_empty(self):
+        CertifierNotice.objects.create(
+            establishment=self.est,
+            kind="notice_of_noncompliance",
+            description="old, resolved",
+            resolution_received_on=date.today() - timedelta(days=RESOLVED_LISTED_FOR_DAYS + 30),
+            resolution_document=self.doc("Old resolution"),
+        )
+        _zf, text = self.packet()
+        self.assertNotIn("No item from the certifying agent is recorded in Trazo.", text)
+        self.assertIn("1 older resolved item is kept in Trazo and not listed here.", text)
+        self.assertNotIn("old, resolved", text)
+
     def test_another_farm_record_never_prints(self):
         other = Establishment.objects.create(name="North Orchard", company=self.company, state="WA")
         CertifierNotice.objects.create(establishment=other, kind="notice_of_noncompliance", description="North only")
