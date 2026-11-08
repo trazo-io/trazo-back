@@ -308,6 +308,27 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "material_label_in_use",
                 }
             )
+        if doc.inspection_reports.exists():
+            # PROTECT, like a supplier copy: the farm's record of an inspection names this report.
+            raise ValidationError(
+                {
+                    "detail": "This file is the report of a recorded inspection. Remove it from the inspection first.",
+                    "code": "inspection_document_in_use",
+                }
+            )
+        if (
+            doc.certifier_notice_letters.exists()
+            or doc.certifier_notice_resolutions.exists()
+            or doc.certifier_notice_response_links.exists()
+        ):
+            # The agent's letter, its resolution notice, or a file sent with the response: PROTECT or
+            # RESTRICT on every link.
+            raise ValidationError(
+                {
+                    "detail": "This file belongs to an item from the certifying agent. Remove it from that item first.",
+                    "code": "notice_document_in_use",
+                }
+            )
         if doc.annual_update_links.exists():
             # Same reason: a § 205.406(a) filing names this file as support for its summary, and a
             # signed filing's list of documents is part of what was signed (RESTRICT on the link).

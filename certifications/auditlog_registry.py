@@ -14,6 +14,8 @@ from auditlog.registry import auditlog
 
 from certifications.models import (
     Certification,
+    CertifierInspection,
+    CertifierNotice,
     LandownerAffidavit,
     NationalListSubstance,
     OMRIProduct,
@@ -41,3 +43,8 @@ auditlog.register(
 # National List / OMRI — reference data, tracked for provenance when admins edit.
 auditlog.register(NationalListSubstance, exclude_fields=["updated_at"])
 auditlog.register(OMRIProduct, exclude_fields=["updated_at"])
+
+# The farm's record of its certifier's inspections and the agent's items (§ 205.662): who changed a
+# response or a resolution date, and when, is part of what an inspector may ask about.
+auditlog.register(CertifierInspection, exclude_fields=["updated_at"])
+auditlog.register(CertifierNotice, exclude_fields=["updated_at"], m2m_fields={"response_documents"})

@@ -17,6 +17,8 @@ from .models import (
     CertificationVerificationLog,
     CertifierAccessLink,
     CertifierAccessLog,
+    CertifierInspection,
+    CertifierNotice,
     LandownerAffidavit,
     OrganicSystemPlan,
     OSPAnnualUpdate,
@@ -424,6 +426,155 @@ class BrandOwnerSerializer(CallerScopedRelatedFields, serializers.ModelSerialize
                 {"certificate_issued_on": "Enter the issue date printed on the certificate."}
             )
         return attrs
+
+
+class CertifierInspectionSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    """One inspection of the farm in the URL, as the operation recorded it. The report must be a
+    file in the URL's farm: another farm's or company's id fails exactly like a missing one."""
+
+    caller_scoped_fields = {"report_document": "establishment__company"}
+    establishment_scoped_fields = {"report_document": "establishment_id"}
+
+    inspection_kind_display = serializers.CharField(source="get_inspection_kind_display", read_only=True)
+    report_document_title = serializers.CharField(source="report_document.title", read_only=True, default=None)
+    notice_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CertifierInspection
+        fields = [
+            "id",
+            "public_id",
+            "inspected_on",
+            "certifying_agent",
+            "inspector_name",
+            "inspection_kind",
+            "inspection_kind_display",
+            "report_document",
+            "report_document_title",
+            "notes",
+            "notice_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def get_notice_count(self, obj):
+        return obj.notices.count() if obj.pk else 0
+
+    def validate_certifying_agent(self, value):
+        return " ".join(value.split())
+
+    def validate_inspector_name(self, value):
+        return " ".join(value.split())
+
+
+class CertifierNoticeSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    """One item the certifying agent sent, with the operation's response. Every file and the
+    inspection must belong to the URL's farm; a foreign id fails like a missing one."""
+
+    caller_scoped_fields = {
+        "inspection": "establishment__company",
+        "notice_document": "establishment__company",
+        "resolution_document": "establishment__company",
+        "response_document_ids": "establishment__company",
+    }
+    establishment_scoped_fields = {
+        "inspection": "establishment_id",
+        "notice_document": "establishment_id",
+        "resolution_document": "establishment_id",
+        "response_document_ids": "establishment_id",
+    }
+
+    # Written in order through `CertifierNotice.replace_response_documents`; read back below.
+    response_document_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=GeneratedDocument.objects.all(),
+        source="response_documents",
+        required=False,
+        write_only=True,
+    )
+    response_documents = serializers.SerializerMethodField()
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    response_kind_display = serializers.CharField(source="get_response_kind_display", read_only=True)
+    notice_document_title = serializers.CharField(source="notice_document.title", read_only=True, default=None)
+    resolution_document_title = serializers.CharField(source="resolution_document.title", read_only=True, default=None)
+    #: `services.certifier_notices.notice_status`: resolved, resolution_stated_no_copy,
+    #: respond_by_passed_no_response, response_sent or open. Derived, never stored.
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CertifierNotice
+        fields = [
+            "id",
+            "public_id",
+            "inspection",
+            "kind",
+            "kind_display",
+            "agent_label",
+            "received_on",
+            "description",
+            "notice_document",
+            "notice_document_title",
+            "respond_by",
+            "response_kind",
+            "response_kind_display",
+            "response_text",
+            "response_sent_on",
+            "response_document_ids",
+            "response_documents",
+            "resolution_received_on",
+            "resolution_document",
+            "resolution_document_title",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def get_status(self, obj):
+        from certifications.services.certifier_notices import notice_status
+
+        return notice_status(obj)
+
+    def get_response_documents(self, obj):
+        if obj.pk is None:
+            return []
+        return [{"id": link.document.pk, "title": link.document.title} for link in obj.response_links.all()]
+
+    def validate_description(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Write the item as the agent wrote it.")
+        return value
+
+    def validate(self, attrs):
+        def current(key):
+            return attrs.get(key, getattr(self.instance, key, None))
+
+        kind = current("kind")
+        if kind == "other_item" and not (current("agent_label") or "").strip():
+            # The agent's own word for it ("issue of concern"): Trazo names no category of its own.
+            raise serializers.ValidationError({"agent_label": "Enter what the agent calls this item."})
+        if kind == "notice_of_noncompliance":
+            # A § 205.662(a) notice is named by the rule; a label left over from "other item" would
+            # print beside it as if the agent had used a second word.
+            attrs["agent_label"] = ""
+        return attrs
+
+    # ModelSerializer writes a many field with `.set()`, which loses the attach order.
+    def create(self, validated_data):
+        documents = validated_data.pop("response_documents", None)
+        instance = super().create(validated_data)
+        if documents is not None:
+            instance.replace_response_documents(documents)
+        return instance
+
+    def update(self, instance, validated_data):
+        documents = validated_data.pop("response_documents", None)
+        instance = super().update(instance, validated_data)
+        if documents is not None:
+            instance.replace_response_documents(documents)
+        return instance
 
 
 class ProductionEquipmentSerializer(serializers.ModelSerializer):

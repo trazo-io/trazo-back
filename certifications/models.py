@@ -646,6 +646,169 @@ class BrandOwner(models.Model):
         return self.name
 
 
+class CertifierInspection(models.Model):
+    """One on-site inspection of this farm by its certifying agent, as the operation recorded it.
+
+    The agent keeps its own copy of every report and hands it to the next inspector
+    (§ 205.501(a)(18)); this row is the OPERATION's copy, so it can answer "date of your last organic
+    inspection" (WSDA AGR 2262 5a(i)) and send a past notice with any application to another agent
+    (§ 205.401(c)). The report itself is a file in the farm's Documents; it often arrives weeks after
+    the visit, so it is optional.
+
+    Nothing here is a Trazo judgement of the inspection: every field is what the operator typed or
+    filed.
+    """
+
+    KIND_CHOICES = [
+        ("annual", "Annual inspection"),
+        ("additional", "Additional inspection"),
+        ("unannounced", "Unannounced inspection"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment", on_delete=models.CASCADE, related_name="certifier_inspections"
+    )
+    inspected_on = models.DateField(help_text="Date of the on-site inspection")
+    # The Organic Integrity Database name `CertifyingAgentPicker` stores (or free text under
+    # "Other"). NOT the slug `Establishment.certifier_renewal_date_agent` holds.
+    certifying_agent = models.CharField(max_length=200, blank=True, default="")
+    inspector_name = models.CharField(max_length=200, blank=True, default="")
+    # § 205.403(a)(1) annual, (a)(2) additional, announced or not. Blank: not stated.
+    inspection_kind = models.CharField(max_length=20, choices=KIND_CHOICES, blank=True, default="")
+    # PROTECT, like a supplier certificate: the documents route refuses to delete a file named here.
+    report_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inspection_reports",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_certifier_inspections",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-inspected_on", "-pk"]
+
+    def __str__(self):
+        return f"{self.certifying_agent or 'Inspection'} {self.inspected_on}"
+
+
+class CertifierNotice(models.Model):
+    """One item the certifying agent sent the operation, with the operation's answer to it.
+
+    `notice_of_noncompliance` is the § 205.662(a) notice: a description, the facts, and "the date by
+    which the certified operation must rebut or correct each noncompliance and submit supporting
+    documentation" ((a)(3)). (b) is the agent's written resolution. Anything else the agent sends
+    ("issue of concern", "item for next inspection") is `other_item`, under the agent's OWN words in
+    `agent_label`: the post-SOE rule has no minor-noncompliance or condition category for a certified
+    operation, so Trazo names none.
+
+    Whether an item is resolved is never stored: `services.certifier_notices.notice_status` derives
+    it, and only an attached resolution notice reads as resolved.
+    """
+
+    KIND_CHOICES = [
+        ("notice_of_noncompliance", "Notice of noncompliance (§ 205.662(a))"),
+        ("other_item", "Other item from the certifying agent"),
+    ]
+    # The two answers § 205.662(a)(3) allows: rebut or correct.
+    RESPONSE_KIND_CHOICES = [
+        ("corrected", "Corrected"),
+        ("rebutted", "Rebutted"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment", on_delete=models.CASCADE, related_name="certifier_notices"
+    )
+    # A notice can follow a review or an investigation, not only an inspection (§ 205.662(a)).
+    # PROTECT: an inspection with notices under it is not deleted out from under them.
+    inspection = models.ForeignKey(
+        CertifierInspection, on_delete=models.PROTECT, null=True, blank=True, related_name="notices"
+    )
+    kind = models.CharField(max_length=30, choices=KIND_CHOICES)
+    agent_label = models.CharField(max_length=120, blank=True, default="")
+    received_on = models.DateField(null=True, blank=True, help_text="Date on the agent's letter")
+    description = models.TextField(help_text="The item as the agent wrote it")
+    notice_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="certifier_notice_letters",
+    )
+    respond_by = models.DateField(null=True, blank=True, help_text="§ 205.662(a)(3) rebut-or-correct date")
+    response_kind = models.CharField(max_length=20, choices=RESPONSE_KIND_CHOICES, blank=True, default="")
+    response_text = models.TextField(blank=True, default="")
+    response_sent_on = models.DateField(null=True, blank=True)
+    response_documents = models.ManyToManyField(
+        "documents.GeneratedDocument",
+        through="CertifierNoticeResponseDocument",
+        blank=True,
+        related_name="certifier_notices_supported",
+    )
+    # § 205.662(b): the agent's written notification of noncompliance resolution.
+    resolution_received_on = models.DateField(null=True, blank=True)
+    resolution_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="certifier_notice_resolutions",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_certifier_notices",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-received_on", "-pk"]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} {self.received_on or ''}".strip()
+
+    def replace_response_documents(self, documents):
+        """Set the response's documents in the order given. `.set()` would lose the order."""
+        CertifierNoticeResponseDocument.objects.filter(notice=self).delete()
+        for document in documents:
+            CertifierNoticeResponseDocument.objects.create(notice=self, document=document)
+
+
+class CertifierNoticeResponseDocument(models.Model):
+    """One document the operation sent with its response to a notice (§ 205.662(a)(3) "supporting
+    documentation"). RESTRICT on the document, like an annual update's supporting file: the documents
+    route refuses the delete first, by code."""
+
+    notice = models.ForeignKey(CertifierNotice, on_delete=models.CASCADE, related_name="response_links")
+    document = models.ForeignKey(
+        "documents.GeneratedDocument", on_delete=models.RESTRICT, related_name="certifier_notice_response_links"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["notice", "document"], name="unique_certifier_notice_response_doc"),
+        ]
+
+    def __str__(self):
+        return f"{self.notice_id} supported by document {self.document_id}"
+
+
 class ProductionEquipment(models.Model):
     """A piece of farm equipment that contacts organic crops, seeds, transplants or inputs.
 

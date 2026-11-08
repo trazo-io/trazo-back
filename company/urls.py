@@ -7,6 +7,8 @@ from certifications.views import (
     BrandOwnerViewSet,
     CertificationViewSet,
     CertifierAccessLinkViewSet,
+    CertifierInspectionViewSet,
+    CertifierNoticeViewSet,
     LandownerAffidavitViewSet,
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
@@ -72,6 +74,18 @@ establishment_router.register(
     r"brand-owners",
     BrandOwnerViewSet,
     basename="establishment-brand-owners",
+)
+# The farm's own record of its certifier's inspections and the items the agent sent (§ 205.662),
+# with the operation's responses (WSDA AGR 2262 5a(i); CCOF contract D6; OTCO O1 D-1E, D-7).
+establishment_router.register(
+    r"certifier-inspections",
+    CertifierInspectionViewSet,
+    basename="establishment-certifier-inspections",
+)
+establishment_router.register(
+    r"certifier-notices",
+    CertifierNoticeViewSet,
+    basename="establishment-certifier-notices",
 )
 establishment_router.register(
     r"production-equipment",
