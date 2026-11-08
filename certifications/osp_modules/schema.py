@@ -247,6 +247,11 @@ class ModulePage:
     education: tuple = ()
     questions: tuple = ()
     visible_when: tuple = ()
+    #: Conditions of which AT LEAST ONE must hold, on top of `visible_when` (all of which must). The one OR
+    #: the forms need (2026.11.25): CCOF G3.0 §B and OTCO C3 3.3 apply to non-organic seed OR non-organic
+    #: planting stock. A separate field, as this module's docstring asks, so the AND contract every reader
+    #: of `visible_when` relies on is unchanged. Pages only; empty means no OR gate.
+    visible_when_any: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -323,7 +328,7 @@ def validate_module(module: Module, section_keys: tuple) -> list:
         _check_textmap(page.title, f"{pwhere} title", errors)
         for block in page.education:
             _check_textmap(block, f"{pwhere} education", errors)
-        for cond in page.visible_when:
+        for cond in tuple(page.visible_when) + tuple(page.visible_when_any):
             if cond.op not in CONDITION_OPS:
                 errors.append(f"{pwhere}: unknown condition op '{cond.op}'")
             if cond.question not in seen_keys:
@@ -442,6 +447,11 @@ def serialize_module(m: Module) -> dict:
                 "title": dict(p.title) if p.title else None,
                 "education": [dict(b) for b in p.education],
                 "visible_when": [_serialize_condition(c) for c in p.visible_when],
+                **(
+                    {"visible_when_any": [_serialize_condition(c) for c in p.visible_when_any]}
+                    if p.visible_when_any
+                    else {}
+                ),
                 "questions": [_serialize_question(q) for q in p.questions],
             }
             for p in m.pages

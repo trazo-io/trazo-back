@@ -94,3 +94,7 @@ questions:
     OTCO C9 9.3-3 asks whether the organic land is bordered by a public road and the steps taken against
     roadside management (no-spray signs, notifying the county, city or state, agreements with roadside
     managers). Not asked by WSDA.
+  g6_0_production.drift_agreements_upload: >-
+    Written agreements with neighbors, attached (CCOF G6.0 A2). WSDA AGR 2264 ref 14 and AGR 2121 §E ask about drift safeguards, never for the agreements as attachments.
+  g6_0_production.roadside_agreement_upload: >-
+    A written agreement with the roadside manager, attached (CCOF G6.0 A2). WSDA AGR 2264 ref 14 and AGR 2121 §E ask about drift safeguards, never for the agreements as attachments.
