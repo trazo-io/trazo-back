@@ -119,7 +119,7 @@ def _blank_reads_as_no(module) -> frozenset[str]:
     """
     keys = set()
     for page in module.pages:
-        for cond in page.visible_when:
+        for cond in tuple(page.visible_when) + tuple(getattr(page, "visible_when_any", ())):
             if cond.op == "falsy":
                 keys.add(cond.question)
         for question in page.questions:

@@ -324,7 +324,7 @@ G3_0_SEEDS = Module(
                     nop_cite="§ 205.204(a)(1)",
                     prefill=Prefill(source="seed_search_evidence"),
                     compiles_to=CompileRule(
-                        template="Commercial-availability searches before non-organic seed use: {answer}."
+                        template="Commercial-availability searches before non-organic seed or planting stock is used: {answer}."
                     ),
                     options=(
                         # Retired 2026.11.25: the page opens only when non-organic seed or stock is

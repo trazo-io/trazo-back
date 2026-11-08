@@ -2115,35 +2115,57 @@ _GENERATED_FOR_UPLOAD = {"g8_0_record_keeping.audit_trail_exhibit": "05-audit-tr
 
 
 def _page_does_not_apply(module, page, answers) -> str:
-    """Why a page of the module is not printed, worded from the condition that hides it."""
+    """Why a page of the module is not printed, worded from the conditions that hide it: every one of
+    `visible_when`, and one of `visible_when_any` (the page's OR gate, 2026.11.25; review of back #352,
+    which first left this reader on the AND list alone and printed a gated page as not applying)."""
     conds = tuple(getattr(page, "visible_when", ()) or ())
-    if not conds:
+    any_conds = tuple(getattr(page, "visible_when_any", ()) or ())
+    if not conds and not any_conds:
         return "Does not apply to this operation."
     questions = {q.key: q for p in module.pages for q in p.questions}
-    phrases = []
-    for cond in conds:
+
+    def phrase(cond):
+        """("open", label) when the deciding question is unanswered, ("phrase", words), or None."""
         trigger = questions.get(cond.question)
         if trigger is None:
-            continue
+            return None
         label = _en(trigger.label).rstrip("?.: ")
         if answer_value(answers, cond.question) in (None, "", []):
             # Hidden because the deciding question is open, not because the answer rules it out.
-            return f"Not shown until “{label}” is answered."
+            return "open", label
         names = {o.value: _en(o.label) for o in trigger.options}
         values = cond.value if isinstance(cond.value, (list, tuple)) else [cond.value]
         shown = " or ".join(names.get(v, str(v)) for v in values if v is not None)
-        if cond.op == "truthy":
-            phrases.append(f"the answer to “{label}” is Yes")
-        elif cond.op == "falsy":
-            phrases.append(f"the answer to “{label}” is No")
-        elif cond.op in ("includes", "includes_any"):
-            phrases.append(f"the answer to “{label}” includes {shown}")
-        elif cond.op in ("eq", "one_of"):
-            phrases.append(f"the answer to “{label}” is {shown}")
-        elif cond.op == "ne":
-            phrases.append(f"the answer to “{label}” is not {shown}")
-        elif cond.op == "not_includes":
-            phrases.append(f"the answer to “{label}” does not include {shown}")
+        words = {
+            "truthy": f"the answer to “{label}” is Yes",
+            "falsy": f"the answer to “{label}” is No",
+            "includes": f"the answer to “{label}” includes {shown}",
+            "includes_any": f"the answer to “{label}” includes {shown}",
+            "eq": f"the answer to “{label}” is {shown}",
+            "one_of": f"the answer to “{label}” is {shown}",
+            "ne": f"the answer to “{label}” is not {shown}",
+            "not_includes": f"the answer to “{label}” does not include {shown}",
+        }.get(cond.op)
+        return ("phrase", words) if words else None
+
+    phrases = []
+    for cond in conds:
+        found = phrase(cond)
+        if found and found[0] == "open":
+            return f"Not shown until “{found[1]}” is answered."
+        if found:
+            phrases.append(found[1])
+    if any_conds:
+        either = []
+        for cond in any_conds:
+            found = phrase(cond)
+            if found and found[0] == "open":
+                # One member unanswered decides nothing yet: it could still open the page.
+                return f"Not shown until “{found[1]}” is answered."
+            if found:
+                either.append(found[1])
+        if either:
+            phrases.append(" or ".join(either))
     if not phrases:
         return "Does not apply to this operation."
     return "Does not apply: asked only when " + " and ".join(phrases) + "."

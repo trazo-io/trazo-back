@@ -58,7 +58,8 @@ def _answer_activities(osp):
     answer("g4_1_compost_manure", materials_applied=["purchased_compost"])
     answer("g6_2_storage", storage_shared_with_nonorganic=False)
     answer("g6_5_sales_soe", sales_soe_supplier_verification="no")
-    answer("g3_0_seeds", seeds_used=["organic_untreated"])
+    # Planting stock too: since 2026.11.25 non-organic stock also opens commercial availability.
+    answer("g3_0_seeds", seeds_used=["organic_untreated"], planting_stock_used=["organic"])
     osp.module_responses = {**(osp.module_responses or {}), "modules": modules}
     osp.save(update_fields=["module_responses"])
 

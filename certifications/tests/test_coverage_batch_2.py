@@ -192,3 +192,21 @@ class RegisterRows(SimpleTestCase):
             )
             row = next(i for i in form.items if i.ref == ref)
             self.assertEqual(row.status, "covered", (agent, ref))
+
+
+class PageNotPrinted(_Plan):
+    """Review of back #352: the module PDF words why page B is not printed from both gates."""
+
+    def page(self, answers):
+        osp = self.plan("g3_0_seeds", answers)
+        return " ".join(extract_text(io.BytesIO(generate_module_pdf(osp, "g3_0_seeds"))).split())
+
+    def test_an_unanswered_member_of_the_or_gate_decides_nothing_yet(self):
+        text = self.page({"seeds_used": ["organic_untreated"]})
+        self.assertIn("Not shown until", text)
+        self.assertNotIn("Does not apply to this operation.", text)
+
+    def test_both_members_answered_word_the_gate_with_or(self):
+        text = self.page({"seeds_used": ["organic_untreated"], "planting_stock_used": ["organic"]})
+        self.assertIn("Does not apply: asked only when the answer to", text)
+        self.assertIn(" or the answer to", text)
