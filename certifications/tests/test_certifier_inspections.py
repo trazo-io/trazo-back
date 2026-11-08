@@ -8,6 +8,7 @@ slice the only places for any of it were a Documents upload and the annual updat
 """
 
 from datetime import date, timedelta
+from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
@@ -15,7 +16,7 @@ from django.test import SimpleTestCase, TestCase
 from auditlog.models import LogEntry
 from rest_framework.test import APIClient
 
-from certifications.models import CertifierInspection, CertifierNotice
+from certifications.models import CertifierInspection, CertifierNotice, CertifierNoticeResponseDocument
 from certifications.services.certifier_notices import (
     OPEN,
     RESOLUTION_STATED_NO_COPY,
@@ -228,6 +229,40 @@ class NoticeRecordTests(_Farm):
         )
         row = self.client.get(self.base() + f"certifier-notices/{notice.id}/").json()
         self.assertEqual([d["title"] for d in row["response_documents"]], ["Buffer map"])
+
+    def test_a_file_named_twice_is_linked_once(self):
+        doc = self.upload(title="Buffer map")
+        notice = self.notice(response_document_ids=[doc.id])
+        r = self.client.patch(
+            self.base() + f"certifier-notices/{notice.id}/", {"response_document_ids": [doc.id, doc.id]}, format="json"
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual([d["title"] for d in r.json()["response_documents"]], ["Buffer map"])
+
+    def test_a_failed_replace_keeps_the_links_it_had(self):
+        first, second, third = self.upload(title="A"), self.upload(title="B"), self.upload(title="C")
+        notice = self.notice(response_document_ids=[first.id])
+        real_create = CertifierNoticeResponseDocument.objects.create
+        calls = []
+
+        def failing_create(**kwargs):
+            calls.append(kwargs)
+            if len(calls) == 2:
+                raise RuntimeError("storage went away")
+            return real_create(**kwargs)
+
+        with mock.patch.object(CertifierNoticeResponseDocument.objects, "create", side_effect=failing_create):
+            with self.assertRaises(RuntimeError):
+                notice.replace_response_documents([second, third])
+        self.assertEqual(list(notice.response_links.values_list("document_id", flat=True)), [first.id])
+
+    def test_undated_items_list_after_dated_ones(self):
+        self.notice(description="undated")
+        self.notice(description="older", received_on="2026-06-01")
+        self.notice(description="newer", received_on="2026-08-01")
+        rows = self.client.get(self.base() + "certifier-notices/").json()
+        rows = rows if isinstance(rows, list) else rows["results"]
+        self.assertEqual([r["description"] for r in rows], ["newer", "older", "undated"])
 
     def test_every_file_of_a_notice_is_held_against_delete(self):
         letter, sent, resolution = self.upload(title="Letter"), self.upload(title="Sent"), self.upload(title="Res")

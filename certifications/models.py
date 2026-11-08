@@ -776,16 +776,22 @@ class CertifierNotice(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-received_on", "-pk"]
+        # Newest first, undated last: Postgres puts NULLs FIRST on a DESC sort (review of back #351).
+        ordering = [models.F("received_on").desc(nulls_last=True), "-pk"]
 
     def __str__(self):
         return f"{self.get_kind_display()} {self.received_on or ''}".strip()
 
     def replace_response_documents(self, documents):
-        """Set the response's documents in the order given. `.set()` would lose the order."""
-        CertifierNoticeResponseDocument.objects.filter(notice=self).delete()
-        for document in documents:
-            CertifierNoticeResponseDocument.objects.create(notice=self, document=document)
+        """Set the response's documents in the order given. `.set()` would lose the order.
+
+        Atomic, and a file named twice is linked once: without both, `[5, 5]` deleted every link and
+        then failed on the unique constraint, leaving the response with none (review of back #351).
+        """
+        with transaction.atomic():
+            CertifierNoticeResponseDocument.objects.filter(notice=self).delete()
+            for document in dict.fromkeys(documents):
+                CertifierNoticeResponseDocument.objects.create(notice=self, document=document)
 
 
 class CertifierNoticeResponseDocument(models.Model):

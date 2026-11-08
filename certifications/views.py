@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import connections, transaction
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -554,7 +554,7 @@ class CertifierNoticeViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
             .select_related("notice_document", "resolution_document", "inspection")
             .prefetch_related("response_links__document")
-            .order_by("-received_on", "-pk")
+            .order_by(F("received_on").desc(nulls_last=True), "-pk")
         )
 
     def perform_create(self, serializer):
