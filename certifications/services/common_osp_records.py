@@ -921,6 +921,18 @@ ANSWER_EVIDENCE = {
         "cleaning record for field or harvest equipment",
         "cleaning records for field or harvest equipment",
     ),
+    # CCOF G4.0 B2: "Test results must be available at inspection." A soil test record, or a lab
+    # analysis of soil; leaf and petiole analyses are the tissue tests.
+    "soil_test_records": AnswerEvidence(
+        lambda b: b.soils("ST") + [e for e in b.soils("LA") if getattr(e, "sample_matrix", None) == "soil"],
+        "soil test record",
+        "soil test records",
+    ),
+    "tissue_test_records": AnswerEvidence(
+        lambda b: [e for e in b.soils("LA") if getattr(e, "sample_matrix", None) in ("leaf", "petiole")],
+        "leaf or petiole analysis",
+        "leaf or petiole analyses",
+    ),
     "storage_area_cleanouts": AnswerEvidence(
         lambda b: b.cleanouts("storage"),
         "cleaning record for a storage area or cooler",

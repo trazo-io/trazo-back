@@ -113,16 +113,18 @@ items:
 - ref: B2
   asks: What type of testing do you perform? N/A, no testing performed / soil tests / tissue tests / microbiological
     tests / crop quality testing / other (describe). Test results must be available at inspection.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g4_0_rotation_soil.fertility_monitoring
+    - g4_0_rotation_soil.fertility_monitoring_other
     prints: modules/G4_0.pdf §C
-  gap: Not asked as its own question; soil and tissue tests appear as options inside the B1 monitoring list,
-    so a reviewer cannot see testing type and testing frequency separately. Microbiological and crop-quality
-    testing have no option at all.
-  fix: Same split as B1; add the two missing test types.
+  note: 'Closed 2026-11-08. Every test type CCOF lists is an option of `fertility_monitoring` (no laboratory testing,
+    exclusive; soil tests; leaf or tissue tests; microbiological testing; crop quality analysis; other), and testing
+    frequency is its own question since 2026-11-02 (B2a). The gap said two types had no option; both were added on
+    2026-11-02. "Test results must be available at inspection": under the soil and tissue options the module PDF
+    prints how many soil tests and leaf or petiole analyses are logged in Trazo (`soil_test_records`,
+    `tissue_test_records`), a count, never a statement that the results are complete.'
 - ref: B2a
   asks: How often is testing performed? Daily / weekly / monthly / annually / as needed / other.
   status: covered

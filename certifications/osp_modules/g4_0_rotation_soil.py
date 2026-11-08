@@ -512,8 +512,12 @@ G4_0_ROTATION_SOIL = Module(
                         section_key="monitoring_plan",
                     ),
                     options=(
-                        Option("soil_tests", text("Soil tests", "Análisis de suelo")),
-                        Option("tissue_tests", text("Leaf / tissue tests", "Análisis foliar / de tejido")),
+                        Option("soil_tests", text("Soil tests", "Análisis de suelo"), evidence="soil_test_records"),
+                        Option(
+                            "tissue_tests",
+                            text("Leaf / tissue tests", "Análisis foliar / de tejido"),
+                            evidence="tissue_test_records",
+                        ),
                         Option(
                             "organic_matter", text("Soil organic matter tracking", "Seguimiento de materia orgánica")
                         ),

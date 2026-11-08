@@ -23,3 +23,9 @@ questions:
     Describes an "other" answer to `supplier_approval_controls` above; same reason.
   g2_0_fraud_prevention.supplier_approval_procedure_upload: >-
     A written supplier approval procedure. Asked by WSDA AGR 2121 P5 ("procedures are attached"); no CCOF form asks for one.
+  g2_0_fraud_prevention.residue_screening_method: >-
+    The screening or analysis behind the operation's own product testing (laboratory, residue panel).
+    Asked by WSDA AGR 2121 P 4a; CCOF's G8.0 fraud-prevention section lists product testing as a practice and never asks the method or the response.
+  g2_0_fraud_prevention.residue_detection_response: >-
+    How the operation responds when its own testing detects a pesticide residue. Asked by WSDA AGR 2121
+    P 4b; CCOF's G8.0 fraud-prevention section lists product testing as a practice and never asks the method or the response.

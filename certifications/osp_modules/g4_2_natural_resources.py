@@ -71,6 +71,30 @@ G4_2_NATURAL_RESOURCES = Module(
                 ),
             ),
             questions=(
+                # CCOF G4.2 A1, the first question of the form: the natural resources themselves, before
+                # the practices that protect them.
+                Question(
+                    key="natural_resources_description",
+                    kind="textarea",
+                    label=text(
+                        "Describe the natural resources and biodiversity of your operation and the land around it",
+                        "Describe los recursos naturales y la biodiversidad de tu operación y de la tierra que la rodea",
+                    ),
+                    coaching=text(
+                        "Soil type and condition, bodies of water, nearby wetlands and woodlands, wildlife, "
+                        "windbreaks, hedgerows, native habitat and beneficial plantings. Include problem areas "
+                        "such as erosion or invasive species.",
+                        "Tipo y estado del suelo, cuerpos de agua, humedales y bosques cercanos, fauna silvestre, "
+                        "cortavientos, setos, hábitat nativo y plantaciones benéficas. Incluye las áreas con "
+                        "problemas, como erosión o especies invasoras.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.200",
+                    compiles_to=CompileRule(
+                        template="Natural resources and biodiversity of the operation and its surroundings: {answer}",
+                        section_key="practices_procedures",
+                    ),
+                ),
                 Question(
                     key="soil_water_practices",
                     kind="checkbox_group",
@@ -942,6 +966,16 @@ G4_2_NATURAL_RESOURCES = Module(
                             text("Conservation maps kept up to date", "Mapas de conservación actualizados"),
                         ),
                         Option("farm_logs", text("Farm logs or journals", "Bitácoras o diarios de la finca")),
+                        # CCOF G4.2 B1 names these three; until 2026.11.24 they reached the plan only as "other".
+                        Option(
+                            "cost_trends",
+                            text(
+                                "Fertility and pest control cost trends",
+                                "Tendencias de costos de fertilidad y control de plagas",
+                            ),
+                        ),
+                        Option("water_use_trends", text("Water use trends", "Tendencias del uso de agua")),
+                        Option("water_testing", text("Water testing", "Análisis de agua")),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),

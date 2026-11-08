@@ -419,7 +419,12 @@ G4_1_COMPOST_MANURE = Module(
                         "(§ 205.203(c)(2)).",
                     ),
                     nop_cite="§ 205.203(c)(2)",
-                    visible_when=(Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),),
+                    # Asked of the thermophilic methods only (OTCO C4 4.4-3): vermicompost is judged on
+                    # aerobic conditions and moisture, and a process meeting no standard is raw manure.
+                    visible_when=(
+                        Condition("materials_applied", "includes_any", ("on_farm_compost", "vermicompost")),
+                        Condition("compost_method", "one_of", ("windrow", "static_aerated", "in_vessel")),
+                    ),
                     compiles_to=CompileRule(template="Compost temperature range and days held: {answer}."),
                 ),
                 Question(

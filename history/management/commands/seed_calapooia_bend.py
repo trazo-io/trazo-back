@@ -1143,7 +1143,11 @@ def _specimen_map_pdf(parcel: dict) -> bytes:
 
     answers = parcel.get("application_answers") or {}
     notes = [
-        "Livestock: none kept on this parcel." if answers.get("livestock_present") == "no" else "",
+        (
+            "Livestock: none kept, pastured or grazed on this parcel."
+            if answers.get("livestock_present") == "none"
+            else ""
+        ),
         "Treated lumber: none installed on this parcel." if answers.get("treated_lumber_present") is False else "",
         "Shaded bands: buffer zones, width as labeled.",
     ]

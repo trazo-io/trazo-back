@@ -199,19 +199,18 @@ items:
 - ref: C (not used for livestock)
   asks: 'Checkbox: ''Not used for organic livestock.'' Complete the rest of this section if you plan to use
     this parcel for organic livestock production, pasture, etc.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - parcel_application.livestock_present
+    - parcel_application.livestock_pastured
     models:
     - product.Parcel.application_answers (livestock_present)
-    prints: parcels/parcel-application-<name>.pdf §C (when answered)
-  gap: '`livestock_present` is deliberately excluded from completion, so an unanswered parcel prints no §C
-    at all — all 6 pilot parcels show no section C, even though the farm-wide annual update states ''no livestock''
-    elsewhere in the packet.'
-  fix: Add a `livestock` completion check satisfied by an explicit answer; print 'Not used for organic livestock'
-    for an explicit 'no.'
+    prints: parcels/parcel-application-<name>.pdf §C
+  note: 'Closed 2026-11-08. `livestock_present` asks whether livestock are kept, pastured or grazed; its "none"
+    answer reads "No: not used for livestock (none kept, pastured or grazed)". The parcel application counts livestock
+    as one of its completion checks, so an unanswered parcel is not complete. The earlier "No" (kept only) is retired:
+    it still prints, with a [REVIEW] saying it does not cover grazing, and does not complete the check.'
 - ref: C1
   asks: 'Planned livestock grazing/outdoor access use: Poultry / Ruminants: Meat / Ruminants: Dairy / Non-ruminants.'
   status: not_covered

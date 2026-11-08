@@ -2053,6 +2053,7 @@ PARCEL_APPLICATION_CHECKS = (
     "buffers",
     "land_history",
     "certification_status",
+    "livestock",
 )
 
 

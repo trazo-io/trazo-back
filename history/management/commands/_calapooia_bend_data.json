@@ -3234,6 +3234,10 @@
        "streams_or_channels_adjacent": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": true
+       },
+       "natural_resources_description": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": "Silt loam terraces above the Calapooia River; a riparian strip of Oregon ash and willow along the river; a hedgerow of native shrubs on the north line of the Bottom Ground blocks; owls and raptors use the boxes on the field edges. Problem areas: winter ponding and some streambank erosion on Bottom Ground B, and Himalayan blackberry along the river."
        }
       },
       "completed_at": "2026-08-21T11:28:46.083078+00:00",
@@ -4651,7 +4655,7 @@
    "application_answers": {
     "county": "Linn",
     "currently_certified": "yes",
-    "livestock_present": "no",
+    "livestock_present": "none",
     "no_adjoining_prohibited": false,
     "no_inputs_within_tenure": false,
     "no_lapse_attested": true,
@@ -4781,7 +4785,7 @@
    "application_answers": {
     "county": "Linn",
     "currently_certified": "yes",
-    "livestock_present": "no",
+    "livestock_present": "none",
     "no_adjoining_prohibited": true,
     "no_inputs_within_tenure": false,
     "no_lapse_attested": true,
@@ -4910,7 +4914,7 @@
    "application_answers": {
     "county": "Linn",
     "currently_certified": "yes",
-    "livestock_present": "no",
+    "livestock_present": "none",
     "no_adjoining_prohibited": false,
     "no_inputs_within_tenure": false,
     "no_lapse_attested": true,
@@ -5036,7 +5040,7 @@
    "application_answers": {
     "county": "Linn",
     "currently_certified": "yes",
-    "livestock_present": "no",
+    "livestock_present": "none",
     "no_adjoining_prohibited": true,
     "no_inputs_within_tenure": false,
     "no_lapse_attested": true,
@@ -5168,7 +5172,7 @@
    "application_answers": {
     "county": "Linn",
     "currently_certified": "yes",
-    "livestock_present": "no",
+    "livestock_present": "none",
     "no_adjoining_prohibited": true,
     "no_inputs_within_tenure": false,
     "no_lapse_attested": true,
@@ -5295,7 +5299,7 @@
    "application_answers": {
     "county": "Linn",
     "currently_certified": "yes",
-    "livestock_present": "no",
+    "livestock_present": "none",
     "no_adjoining_prohibited": false,
     "no_inputs_within_tenure": false,
     "no_lapse_attested": true,

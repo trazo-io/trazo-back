@@ -252,6 +252,39 @@ G2_0_FRAUD_PREVENTION = Module(
                     visible_when=(Condition("fraud_mitigation_practices", "includes", "product_testing"),),
                     compiles_to=CompileRule(template="Product testing scope and frequency: {answer}"),
                 ),
+                # WSDA AGR 2121 P 4a asks the screening or analysis performed beside what is sampled and
+                # how often; P 4b how the operation responds when residues are detected.
+                Question(
+                    key="residue_screening_method",
+                    kind="text",
+                    label=text(
+                        "What screening or analysis is performed (for example, the laboratory and the residue panel)?",
+                        "¿Qué análisis o tamizaje se realiza (por ejemplo, el laboratorio y el panel de residuos)?",
+                    ),
+                    required=False,
+                    visible_when=(Condition("fraud_mitigation_practices", "includes", "product_testing"),),
+                    compiles_to=CompileRule(template="Residue screening or analysis performed: {answer}"),
+                ),
+                Question(
+                    key="residue_detection_response",
+                    kind="textarea",
+                    label=text(
+                        "What do you do when a pesticide residue is detected?",
+                        "¿Qué haces cuando se detecta un residuo de plaguicida?",
+                    ),
+                    coaching=text(
+                        "How you find the source of the contamination and decide whether the product keeps its "
+                        "organic status, who is notified and involved (your certifier among them), and how the "
+                        "response is documented.",
+                        "Cómo encuentras el origen de la contaminación y decides si el producto mantiene su "
+                        "condición orgánica, a quién se notifica y quién participa (tu certificador entre ellos), "
+                        "y cómo se documenta la respuesta.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.671",
+                    visible_when=(Condition("fraud_mitigation_practices", "includes", "product_testing"),),
+                    compiles_to=CompileRule(template="Response when a pesticide residue is detected: {answer}"),
+                ),
                 Question(
                     key="fraud_mitigation_other",
                     kind="text",

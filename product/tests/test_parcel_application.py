@@ -33,7 +33,7 @@ class ParcelApplicationStatusTests(TestCase):
         self.assertEqual(status["state"], "not_started")
         self.assertEqual(
             set(status["missing"]),
-            {"identity", "transition", "buffers", "land_history", "certification_status"},
+            {"identity", "transition", "buffers", "land_history", "certification_status", "livestock"},
         )
         # Since 2026-09-24 the map is evidence, not an answer: it is reported on the evidence axis
         # only, so the two axes cannot disagree about it.
@@ -44,7 +44,11 @@ class ParcelApplicationStatusTests(TestCase):
         self.parcel.apn = "042-031-007"
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
-        self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": "no"}
+        self.parcel.application_answers = {
+            "no_adjoining_prohibited": True,
+            "currently_certified": "no",
+            "livestock_present": "none",
+        }
         self.parcel.save()
         for year in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(parcel=self.parcel, year=year, crop_grown="Walnut")
@@ -61,16 +65,24 @@ class ParcelApplicationStatusTests(TestCase):
         self.parcel.apn = "042-031-007"
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
-        self.parcel.application_answers = {"no_adjoining_prohibited": True}
+        self.parcel.application_answers = {"no_adjoining_prohibited": True, "livestock_present": "none"}
         self.parcel.save()
         for year in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(parcel=self.parcel, year=year, crop_grown="Walnut")
         self.assertEqual(parcel_application_status(self.parcel)["missing"], ["certification_status"])
         for answer in ("yes", "no", "previously"):
-            self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": answer}
+            self.parcel.application_answers = {
+                "no_adjoining_prohibited": True,
+                "currently_certified": answer,
+                "livestock_present": "none",
+            }
             self.parcel.save()
             self.assertEqual(parcel_application_status(self.parcel)["missing"], [], answer)
-        self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": ""}
+        self.parcel.application_answers = {
+            "no_adjoining_prohibited": True,
+            "currently_certified": "",
+            "livestock_present": "none",
+        }
         self.parcel.save()
         self.assertEqual(parcel_application_status(self.parcel)["missing"], ["certification_status"])
 
@@ -79,7 +91,11 @@ class ParcelApplicationStatusTests(TestCase):
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
         self.parcel.container_production = True
-        self.parcel.application_answers = {"no_adjoining_prohibited": True, "currently_certified": "no"}
+        self.parcel.application_answers = {
+            "no_adjoining_prohibited": True,
+            "currently_certified": "no",
+            "livestock_present": "none",
+        }
         self.parcel.save()
         self.assertEqual(parcel_application_status(self.parcel)["state"], "complete")
 
@@ -125,7 +141,7 @@ class ParcelApplicationAPITests(TestCase):
                     "date_began_managing": "2020-01-01",
                     "container_production": True,
                     "county": "Yolo",
-                    "livestock_present": "no",
+                    "livestock_present": "none",
                 },
                 "buffer_zones": [
                     {

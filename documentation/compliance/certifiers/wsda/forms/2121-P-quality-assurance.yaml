@@ -93,25 +93,28 @@ items:
 - ref: 4a
   asks: 'If yes, describe your business'' internal sampling system: how you determine which products to sample,
     the frequency samples are pulled, and the screening or analysis performed.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g2_0_fraud_prevention.product_testing_detail
+    - g2_0_fraud_prevention.residue_screening_method
     prints: modules/G2_0.pdf §B
-  gap: '`product_testing_detail` asks what is tested and how often; the screening or analysis performed (laboratory
-    method, panel) has no field.'
-  fix: Add `residue_screening_method`, shown when `fraud_mitigation_practices` includes `product_testing`.
+  note: 'Closed 2026-11-08. `product_testing_detail` asks what is sampled and how often; `residue_screening_method`
+    the screening or analysis performed (laboratory, residue panel). Both shown when `fraud_mitigation_practices`
+    includes product testing.'
 - ref: 4b
   asks: 'Describe how your business responds when pesticide residues are detected: how you determine the source
     of contamination and whether the product maintains its organic status, who is notified and involved, and
     how the response is documented.'
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    prints: —
-  gap: Nothing captures the detection-response protocol.
-  fix: Add `residue_detection_response` [textarea], shown when `fraud_mitigation_practices` includes `product_testing`.
+    questions:
+    - g2_0_fraud_prevention.residue_detection_response
+    prints: modules/G2_0.pdf §B
+  note: 'Closed 2026-11-08. `residue_detection_response` asks how the operation responds when a residue is detected,
+    its coaching naming WSDA''s four parts (finding the source, deciding organic status under § 205.671, who is
+    notified, how it is documented). Shown when `fraud_mitigation_practices` includes product testing; an operation
+    that does not test is answered by P 4''s No.'
 - ref: '5'
   asks: Detail how your business evaluates and approves organic suppliers of seeds, entities providing
     contracted services, or sources of input materials for use in organic production. Include details

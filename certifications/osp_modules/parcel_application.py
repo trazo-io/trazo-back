@@ -336,18 +336,47 @@ PARCEL_APPLICATION = Module(
             key="c_livestock",
             title=text("C. Livestock", "C. Ganado"),
             questions=(
+                # CCOF ORGB49 §C opens on "Not used for organic livestock"; WSDA AGR 2121 E 12 asks whether
+                # livestock are PASTURED on certified sites. The question asked whether livestock are KEPT,
+                # so its "No" said nothing about grazing (a neighbour's sheep on a cover crop): that answer is
+                # retired, read as given and never offered, and "none" says all three. A stored "Yes" (kept)
+                # still answers the wider question truthfully.
                 Question(
                     key="livestock_present",
                     kind="radio",
                     label=text(
-                        "Is livestock kept on this parcel?",
-                        "¿Se mantiene ganado en esta parcela?",
+                        "Is livestock kept, pastured or grazed on this parcel?",
+                        "¿Se mantiene, se pastorea o se alimenta ganado en esta parcela?",
                     ),
                     options=(
-                        Option(value="no", label=text("No", "No")),
+                        Option(
+                            value="none",
+                            label=text(
+                                "No: not used for livestock (none kept, pastured or grazed)",
+                                "No: no se usa para ganado (ninguno se mantiene, se pastorea ni se alimenta aquí)",
+                            ),
+                        ),
                         Option(value="yes", label=text("Yes", "Sí")),
+                        Option(
+                            value="no",
+                            label=text("No livestock kept", "No se mantiene ganado"),
+                            retired=True,
+                            review="This answer was given when the question asked only whether livestock are kept "
+                            "on the parcel; it does not say whether livestock pasture or graze here.",
+                        ),
                     ),
                     required=False,
+                ),
+                Question(
+                    key="livestock_pastured",
+                    kind="boolean",
+                    label=text(
+                        "Do the livestock pasture or graze on this parcel?",
+                        "¿El ganado pastorea o se alimenta en esta parcela?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.239",
+                    visible_when=(Condition(question="livestock_present", op="eq", value="yes"),),
                 ),
                 Question(
                     key="livestock_detail",
