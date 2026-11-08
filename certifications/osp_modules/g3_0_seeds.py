@@ -294,12 +294,13 @@ G3_0_SEEDS = Module(
                     "adaptación regional, sabor, rendimiento.",
                 ),
             ),
-            visible_when=(
-                Condition(
-                    "seeds_used",
-                    "includes_any",
-                    ("non_organic_untreated", "non_organic_treated"),
-                ),
+            # CCOF G3.0 §B and OTCO C3 3.3 apply to non-organic seed OR non-organic planting stock: an
+            # orchard planting non-organic nursery stock with no non-organic seed answers them too
+            # (2026.11.25; until then the page opened on seed alone). The seed-only questions below keep
+            # the seed gate.
+            visible_when_any=(
+                Condition("seeds_used", "includes_any", ("non_organic_untreated", "non_organic_treated")),
+                Condition("planting_stock_used", "includes", "non_organic"),
             ),
             questions=(
                 Question(
@@ -323,15 +324,19 @@ G3_0_SEEDS = Module(
                     nop_cite="§ 205.204(a)(1)",
                     prefill=Prefill(source="seed_search_evidence"),
                     compiles_to=CompileRule(
-                        template="Commercial-availability searches before non-organic seed use: {answer}."
+                        template="Commercial-availability searches before non-organic seed or planting stock is used: {answer}."
                     ),
                     options=(
+                        # Retired 2026.11.25: the page opens only when non-organic seed or stock is
+                        # declared, so "all organic" contradicted the answer that opened it. A stored one
+                        # reads as given and counts unanswered until the operator picks a current option.
                         Option(
                             "all_organic",
                             text(
                                 "Not applicable — all seed and planting stock is organic",
                                 "No aplica — toda la semilla y el material son orgánicos",
                             ),
+                            retired=True,
                         ),
                         Option(
                             "documented_search",
@@ -340,6 +345,15 @@ G3_0_SEEDS = Module(
                                 "characteristics evaluated)",
                                 "Sí — las búsquedas se documentan (fuentes, fechas y las " "características evaluadas)",
                             ),
+                        ),
+                        Option(
+                            "no_documented_search",
+                            text(
+                                "No, no search is documented yet",
+                                "No, todavía no hay una búsqueda documentada",
+                            ),
+                            review="Non-organic seed or planting stock is used with no documented search for an "
+                            "equivalent organic variety (§ 205.204(a)(1)).",
                         ),
                     ),
                 ),
@@ -355,6 +369,9 @@ G3_0_SEEDS = Module(
                         "orgánica cuente como equivalente?",
                     ),
                     required=False,
+                    visible_when=(
+                        Condition("seeds_used", "includes_any", ("non_organic_untreated", "non_organic_treated")),
+                    ),
                     nop_cite="§ 205.204(a)(1)",
                     compiles_to=CompileRule(
                         template="Characteristics required of an equivalent organic seed: {answer}."
@@ -411,6 +428,9 @@ G3_0_SEEDS = Module(
                         "¿Cómo determinas que no hay una semilla orgánica equivalente disponible?",
                     ),
                     required=False,
+                    visible_when=(
+                        Condition("seeds_used", "includes_any", ("non_organic_untreated", "non_organic_treated")),
+                    ),
                     nop_cite="§ 205.204(a)(1)",
                     compiles_to=CompileRule(template="How organic seed availability is searched: {answer}."),
                     options=(
@@ -452,6 +472,9 @@ G3_0_SEEDS = Module(
                         "requisitos de tu sitio y el resultado.",
                     ),
                     required=False,
+                    visible_when=(
+                        Condition("seeds_used", "includes_any", ("non_organic_untreated", "non_organic_treated")),
+                    ),
                     nop_cite="§ 205.103",
                     # No prefill: `seed_search_evidence` answers the radio above with a scalar that is not
                     # one of these options (review of back #252).

@@ -2,9 +2,8 @@
 Per-event record completeness for organic-inspection purposes.
 
 Nothing else in the codebase answers "would THIS event survive an inspection?" at the level of an
-individual record. `TransparencyCalculator` measures whether a production logged roughly as many
-events as expected for its crop (`transparency_calculator.py:251,289` — an evenly-split count
-target, not a field-level check); `AuditExportService.compliance_snapshot_rows()` runs 16
+individual record. `TransparencyCalculator` counts what a production logged per event category (facts for the
+consumer QR page, not a field-level check); `AuditExportService.compliance_snapshot_rows()` runs 16
 CFR-cited checks but none of them look inside a chemical event's own fields. Every field on
 `ChemicalEvent` that a certifier actually reads — commercial name, rate, area, target pest — is
 `blank=True, null=True` at the model level (`history/models.py:1070-1273`), so a farmer can save a

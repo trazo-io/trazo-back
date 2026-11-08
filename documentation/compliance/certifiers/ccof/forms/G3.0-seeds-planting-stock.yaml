@@ -91,13 +91,12 @@ items:
 
   - ref: "B1"
     asks: "Before using non-organic seed and/or planting stock, do you evaluate whether an equivalent organic variety is available in the form, quality, or quantity needed? Not applicable, my operation uses all organic seed and/or planting stock at this time (skip to section D) / Yes (complete this section)."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
       questions: [g3_0_seeds.ca_search_before_use]
       prints: "modules/G3_0.pdf §B; narrative § 205.204(a)(1)"
-    gap: "This page (and page C) is visible only when `seeds_used` includes a non-organic value. CCOF's B/C apply to 'seed and/or planting stock' — an orchard with organic or no seed but non-organic planting stock never sees this page in G3.0 (G3.0b carries a stock-side justification but not this commercial-availability attestation). Separately, `all_organic` is selectable on a page that only renders after non-organic seed was already declared, compiling a self-contradicting narrative line."
-    fix: "Widen `visible_when` to an OR-gate: `seeds_used includes_any (non_organic_*)` OR `planting_stock_used includes non_organic` (the schema's `any_of` condition group exists but pages don't use it yet). Drop the `all_organic` option, or have `plan_review` flag the contradiction."
+    note: "Closed 2026-11-08. G3.0 page B opens on non-organic seed OR non-organic planting stock (`ModulePage.visible_when_any`, content 2026.11.25), so an orchard planting non-organic nursery stock with organic or no seed is asked it. Its seed-only questions (characteristics, search method, search records) keep the seed gate. `all_organic` is retired (it contradicted the answer that opened the page; a stored one reads as given and counts unanswered), and `no_documented_search` says plainly that no search is documented, with a [REVIEW] citing § 205.204(a)(1). CCOF's Not applicable box is the page not opening: a plan with only organic seed and stock reads
+      this row as not applicable, with those answers as the evidence."
 
   - ref: "B1a"
     asks: "For all seed and/or planting stock used, what general characteristics (form, quality, quantity) do you require to evaluate commercial availability? Available as untreated seed / available with allowed treatment (pelleting, inoculant) / available as bare-root nursery stock / germination rate / drought tolerance / pest or disease resistance / regional adaptation / greater crop yield / bulk quantities available / small quantities available / other (describe)."

@@ -183,6 +183,36 @@ def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tupl
             # index turns into words (review of #270: a wrapper printed a raw key and a stray quote).
             return "not_applicable", hidden[1]
     waiting = {c.question for c in failing} | {key for key, state in upstream.items() if state is not None}
+    # The page's OR gate (`ModulePage.visible_when_any`, as `conditions._visibility` reads it): it passes
+    # when one member passes on a shown trigger. When none does, the page does not apply only if EVERY
+    # member is decided (its trigger shown and answered, or itself not applicable); otherwise it waits.
+    any_group = tuple(getattr(page, "visible_when_any", ()))
+    if any_group:
+        member_state = {}
+        for c in any_group:
+            if c.question not in member_state:
+                trigger_page, trigger = _question_and_page(module, c.question)
+                member_state[c.question] = (
+                    None
+                    if trigger is None or trigger is question or _depth > 50
+                    else hidden_state(module, trigger_page, trigger, answers, _depth=_depth + 1)
+                )
+        if not any(member_state[c.question] is None and evaluate(c, answers) for c in any_group):
+            decided_any = all(
+                (member_state[c.question] is None and _trigger_answered(module, c.question, answers))
+                or (member_state[c.question] is not None and member_state[c.question][0] == "not_applicable")
+                for c in any_group
+            )
+            # Decided against, the page cannot show whatever its other conditions hold.
+            if decided_any:
+                pieces = []
+                for c in any_group:
+                    state = member_state[c.question]
+                    piece = state[1] if state is not None else f"{c.question} = {answer_value(answers, c.question)!r}"
+                    if piece not in pieces:
+                        pieces.append(piece)
+                return "not_applicable", "; ".join(pieces)
+            waiting |= {c.question for c in any_group}
     if waiting:
         return "unresolved", ", ".join(sorted(waiting))
     return None

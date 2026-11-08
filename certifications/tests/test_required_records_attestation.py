@@ -63,6 +63,9 @@ class _Plan(TestCase):
             ("g6_2_storage", "storage_shared_with_nonorganic"): False,
             ("g6_5_sales_soe", "sales_soe_supplier_verification"): "no",
             ("g3_0_seeds", "seeds_used"): ["organic_untreated"],
+            # Since 2026.11.25 commercial availability also applies to non-organic planting stock, so
+            # the stock answer decides it too.
+            ("g3_0_seeds", "planting_stock_used"): ["organic"],
         }
         for (module, question), value in answers.items():
             if (module, question) == leave_unanswered:

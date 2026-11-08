@@ -653,7 +653,7 @@ class ProductionsFlatScoreGatingTests(_Base):
         369 SQL queries and ~3.3 s in production for a 3 KB list — and the request fires on every
         admin page (`useMilestones` in `layouts/Admin.tsx`). No frontend consumer read either
         field: `useMilestones` / `useOnboardingChecklist` read `events_count`, `finish_date`,
-        `published`. The score's homes are `transparency/` quick_view and `dashboard_metrics`.
+        `published`. The score has no home now: retired as a concept, column gone in 0237/0238.
         """
         from rest_framework.test import APIClient
 

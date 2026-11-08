@@ -26,3 +26,7 @@ questions:
     How dedicated equipment is kept from prohibited materials and marked (WSDA I 1a). OTCO C9 does not ask it.
   g6_0_production.equipment_notes: >-
     Free space for anything else about equipment (WSDA I 4). OTCO C9 has no such line.
+  g6_0_production.drift_agreements_upload: >-
+    Written agreements with neighbors, attached (CCOF G6.0 A2). OTCO C9 9.3-1 asks for the plan to mitigate drift, never for the agreements as attachments.
+  g6_0_production.roadside_agreement_upload: >-
+    A written agreement with the roadside manager, attached (CCOF G6.0 A2). OTCO C9 9.3-1 asks for the plan to mitigate drift, never for the agreements as attachments.

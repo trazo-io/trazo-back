@@ -660,6 +660,15 @@ G6_0_PRODUCTION = Module(
                                 "Análisis de residuos cuando se sospecha deriva o contacto",
                             ),
                         ),
+                        # CCOF G6.0 A2 "3rd party residue testing for monitoring": on a schedule, not only
+                        # after an incident (2026.11.25).
+                        Option(
+                            "routine_residue_testing",
+                            text(
+                                "Third-party residue testing on a schedule, to monitor for drift",
+                                "Análisis de residuos por un tercero de forma periódica, para vigilar la deriva",
+                            ),
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -692,6 +701,19 @@ G6_0_PRODUCTION = Module(
                     compiles_to=CompileRule(
                         template="Drift monitoring program: {answer}.", section_key="commingling_barriers"
                     ),
+                ),
+                # CCOF G6.0 A2: "written agreement with neighbor (attach)". The file rides in the packet as a
+                # requirement upload.
+                Question(
+                    key="drift_agreements_upload",
+                    kind="upload",
+                    required=False,
+                    visible_when=(Condition(question="drift_safeguards", op="includes", value="no_spray_agreements"),),
+                    label=text(
+                        "Attach your written agreements with neighbors",
+                        "Adjunta tus acuerdos escritos con los vecinos",
+                    ),
+                    nop_cite="§ 205.202(c)",
                 ),
                 Question(
                     # CCOF G6.0 A2 "... takes precautions to avoid drift (describe)".
@@ -855,6 +877,23 @@ G6_0_PRODUCTION = Module(
                     compiles_to=CompileRule(
                         template="Additional roadside step: {answer}.", section_key="commingling_barriers"
                     ),
+                ),
+                # CCOF G6.0 A2: "written agreement with agency managing weed control along roadways (attach)".
+                Question(
+                    key="roadside_agreement_upload",
+                    kind="upload",
+                    required=False,
+                    visible_when=(
+                        Condition(question="borders_public_road", op="truthy"),
+                        Condition(
+                            question="roadside_management_steps", op="includes", value="roadside_manager_agreement"
+                        ),
+                    ),
+                    label=text(
+                        "Attach your written agreement with the roadside manager",
+                        "Adjunta tu acuerdo escrito con quien maneja el borde del camino",
+                    ),
+                    nop_cite="§ 205.202(c)",
                 ),
             ),
         ),

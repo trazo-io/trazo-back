@@ -990,8 +990,8 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         #
         # This was cached for 15 minutes keyed on `production.updated_at`, with a comment
         # claiming "logging an event invalidates it naturally". That was wrong twice over:
-        #   * `History.update_trust_metrics()` saves with
-        #     `update_fields=["confidence_score", "transparency_score"]`, so the `auto_now`
+        #   * `History.update_trust_metrics()` saved with `update_fields=[...]` (confidence only
+        #     since the transparency_score column went in history 0237/0238), so the `auto_now`
         #     `updated_at` is never written — verified: creating an event leaves it unchanged.
         #     The key was effectively frozen for the life of the production.
         #   * The rows also depend on the OSP, certifications and establishment OFPP fields,
@@ -1156,7 +1156,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "optimization_metadata": {
                     "query_count": 3,  # Track query optimization success
                     "load_time_ms": self._calculate_response_time(),
-                    "data_completeness_percentage": dashboard_data.get("data_completeness", 0),
                     "cache_enabled": True,
                     "indexes_used": [
                         "idx_history_establishment_published",
@@ -1222,7 +1221,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "missing_data_opportunities": [],
             "verification_status": {},
             "seasonal_patterns": {},
-            "data_completeness": 0,
             "carbon_intensity_per_hectare": 0,
             "trust_indicators_count": 0,
         }
@@ -1384,10 +1382,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # on every load of this endpoint; the only reader (`CarbonSummaryCard`) shows counts and
         # the carbon summary, and nothing rendered `transparency_metrics`.
 
-        # Calculate overall data completeness
-        total_fields_available = 25  # Estimated total transparency fields available in database
-        fields_displayed = 15  # Currently displayed in dashboard
-        metrics["data_completeness"] = (fields_displayed / total_fields_available) * 100
+        # NEVER: 2026-11-08 - `data_completeness` was DELETED: a hardcoded 15 / 25 * 100 (always 60)
+        # served as `data_completeness_percentage`, a percentage about the farm's own records with
+        # nothing measured behind it. No component rendered it.
 
         # `missing_data_opportunities` (per-production coaching) and the per-production
         # verification tally were dropped 2026-09-05: neither is read by `CarbonSummaryCard`, the
