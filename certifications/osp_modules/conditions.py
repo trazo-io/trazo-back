@@ -86,9 +86,13 @@ def _visibility(module: Module, answers: dict) -> tuple[list, list]:
     def passes(conds) -> bool:
         return all(shown.get(c.question, True) and evaluate(c, answers) for c in conds)
 
+    def any_passes(conds) -> bool:
+        # Empty: no OR gate. Otherwise one condition must pass, on a trigger that is itself shown.
+        return not conds or any(shown.get(c.question, True) and evaluate(c, answers) for c in conds)
+
     pages, questions = [], []
     for page in module.pages:
-        page_shown = passes(page.visible_when)
+        page_shown = passes(page.visible_when) and any_passes(getattr(page, "visible_when_any", ()))
         if page_shown:
             pages.append(page)
         for q in page.questions:

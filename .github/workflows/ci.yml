@@ -733,6 +733,7 @@ jobs:
             certifications.tests.test_parcel_map_elements \
             certifications.tests.test_small_coverage_fixes \
             certifications.tests.test_wsda_agr_2519 \
+            certifications.tests.test_coverage_batch_2 \
             certifications.tests.test_cover_state_registration \
             certifications.tests.test_state_organic_registration \
             certifications.tests.test_material_identity \

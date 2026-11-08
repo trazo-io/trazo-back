@@ -41,13 +41,13 @@ items:
 
   - ref: "2"
     asks: "Do you produce annual seedlings? Yes / No."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
       questions: [g3_0_seeds.seedlings_used]
       prints: "modules/G3_0.pdf §A; modules/G3_0a.pdf; narrative § 205.204(a)"
-    gap: "Reuses CCOF A2's produce-own-organic branch: `seedlings_used`'s `own_organic` option has no prefill even though producing seedlings is logged as a TR event."
-    fix: "Same fix as CCOF A2 — extend the prefill resolver to TR events."
+    note: "Closed 2026-11-08. `seedlings_used`'s `own_organic` (produced on-farm under organic management) is the Yes;
+      an answer without it is the No. No prefill: a transplanting (TR) record does not say whether the seedlings were
+      raised on the farm or bought, so a suggestion would be a guess."
 
   - ref: "2a"
     asks: "If yes, are your annual seedlings grown within the boundary of your site? Yes / No – An Additional Facilities and Third-Parties (AGR 2519) form is attached."

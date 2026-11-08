@@ -297,7 +297,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   water use trends and water testing (B1). The Parcel Application asks whether livestock are kept, pastured or
 #   grazed: the kept-only "no" is retired, "none" added, a grazing follow-up for "yes" (CCOF §C, WSDA E 12), and
 #   livestock is a completion check. All new questions optional.
-CONTENT_VERSION = "2026.11.24"
+# 2026.11.25: G3.0 page B opens on non-organic seed OR non-organic planting stock (`ModulePage.visible_when_any`,
+#   new; CCOF G3.0 B1, OTCO C3 3.3); its seed-only questions keep the seed gate. `ca_search_before_use` retires
+#   "all organic" (it contradicted the answer that opened the page) and adds "no search documented yet" with a
+#   [REVIEW]. G6.0 adds routine third-party residue testing to the drift safeguards and uploads for written
+#   agreements with neighbors and with the roadside manager (CCOF G6.0 A2). All new questions optional.
+CONTENT_VERSION = "2026.11.25"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

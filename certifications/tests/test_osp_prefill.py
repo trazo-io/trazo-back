@@ -94,11 +94,12 @@ class ResolverTests(TestCase):
         out = PREFILL_RESOLVERS["seed_status"](bundle, q)
         self.assertEqual(out["value"], ["organic_untreated", "organic_treated", "non_organic_untreated"])
 
-    def test_seed_search_all_organic(self):
+    def test_seed_search_suggests_nothing_when_all_seed_is_organic(self):
+        # "all_organic" is a retired answer (2026.11.25): the question shows only once non-organic seed
+        # or stock is declared, so all-organic plantings suggest nothing.
         q = _question("g3_0_seeds", "ca_search_before_use")
         bundle = _Bundle(prod=[_ev("PL", seed_certification_status="certified_organic", seed_treatment=None)])
-        out = PREFILL_RESOLVERS["seed_search_evidence"](bundle, q)
-        self.assertEqual(out["value"], "all_organic")
+        self.assertIsNone(PREFILL_RESOLVERS["seed_search_evidence"](bundle, q))
 
     def test_seed_search_silent_when_records_refute(self):
         # Non-organic seed, zero documented searches: a § 205.204(a)(1) gap.

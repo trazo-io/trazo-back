@@ -35,6 +35,11 @@ DEFAULT_OUT = (
 # both bare and enveloped shapes).
 GOLDEN_ANSWER_CASES = {
     "g3_0_seeds": {
+        # Page B's OR gate (2026.11.25): non-organic seed OR non-organic planting stock opens it; the seed-only
+        # questions on it keep their seed gate.
+        "or_gate_stock_only": {"seeds_used": ["organic_untreated"], "planting_stock_used": ["non_organic"]},
+        "or_gate_seed_only": {"seeds_used": ["non_organic_untreated"], "planting_stock_used": ["organic"]},
+        "or_gate_neither": {"seeds_used": ["organic_untreated"], "planting_stock_used": ["organic"]},
         "unanswered": {},
         "all_none": {
             "seeds_used": ["none"],

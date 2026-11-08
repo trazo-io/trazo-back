@@ -173,22 +173,15 @@ def _seed_status(bundle, question):
 
 
 def _seed_search_evidence(bundle, question):
-    """G3.0 ca_search_before_use (radio) — all-organic vs documented-search, from plantings."""
+    """G3.0 ca_search_before_use (radio): documented search, from plantings that used non-organic seed."""
     plantings = [e for e in bundle.prod("PL") if getattr(e, "seed_certification_status", None)]
     if not plantings:
         return None
     non_organic = [e for e in plantings if e.seed_certification_status != "certified_organic"]
     if not non_organic:
-        n = len(plantings)
-        return {
-            "value": "all_organic",
-            "basis": (
-                "the 1 planting event on file used certified-organic seed"
-                if n == 1
-                else f"all {n} planting events used certified-organic seed"
-            ),
-            "count": n,
-        }
+        # "All organic" was retired as an answer (2026.11.25): the question shows only when non-organic seed
+        # or stock is declared, so all-organic plantings suggest nothing here.
+        return None
     searched = [e for e in non_organic if _has_content(getattr(e, "seed_search_attempts", None))]
     if not searched:
         # Non-organic seed with NO documented search is a § 205.204(a)(1) gap, not a
