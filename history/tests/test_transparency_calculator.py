@@ -54,14 +54,11 @@ class FactsOnlyTests(SimpleTestCase):
         self.assertEqual(set(facts) & GRADE_KEYS, set())
 
     @patch.object(TransparencyCalculator, "_ensure_prefetched", side_effect=RuntimeError("boom"))
-    def test_an_error_returns_the_same_keys_so_the_view_can_index_them(self, *_):
-        """The error path used to return only a percentage and a message, and the QR view reads
-        `actual_event_count` by key."""
-        facts = self.calc.calculate_transparency_score(self.history)
-        for key in ("actual_event_count", "farming_approach", "category_breakdown"):
-            self.assertIn(key, facts)
-        self.assertEqual(facts["actual_event_count"], 0)
-        self.assertEqual(set(facts) & GRADE_KEYS, set())
+    def test_an_error_propagates_and_never_reads_as_zero(self, *_):
+        """Zero counts on an error would publish "0 practices documented" for a farm that logged
+        plenty. The error reaches the QR view, which answers 500 (review of #353)."""
+        with self.assertRaisesMessage(RuntimeError, "boom"):
+            self.calc.calculate_transparency_score(self.history)
 
     def test_category_counts_carry_no_grade(self):
         events = {"ProductionEvent": [object(), object()], "ChemicalEvent": [object()]}

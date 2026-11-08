@@ -94,19 +94,18 @@ class TransparencyCalculator:
         CONCEPT, so nothing here computes one any more: the gate stays as a second line.
 
         Returns `actual_event_count`, `farming_approach` and `category_breakdown`
-        ({category: {"actual_count", "photo_verified_count"}}). On an error, the same keys with
-        zero counts, so the view never indexes a key that is not there.
+        ({category: {"actual_count", "photo_verified_count"}}).
+
+        NEVER catch here. An error must reach the view, whose handler answers 500. Returning zero
+        counts instead would publish "0 practices documented" for a farm that logged plenty: an
+        unknown is not a zero (review of #353).
         """
-        try:
-            self._ensure_prefetched(history)
-            return {
-                "actual_event_count": self._count_all_events(history),
-                "farming_approach": self._get_farming_approach(history),
-                "category_breakdown": self._category_counts(history),
-            }
-        except Exception as e:
-            logger.error(f"Transparency facts error for history {history.id}: {str(e)}")
-            return {"actual_event_count": 0, "farming_approach": "", "category_breakdown": {}, "error": str(e)}
+        self._ensure_prefetched(history)
+        return {
+            "actual_event_count": self._count_all_events(history),
+            "farming_approach": self._get_farming_approach(history),
+            "category_breakdown": self._category_counts(history),
+        }
 
     def _category_counts(self, history: History) -> Dict:
         """Per category: events logged, and how many carry a photo that passes the checks."""
