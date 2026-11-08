@@ -52,3 +52,11 @@ questions:
     CCOF ORGB49 F8/F8a ask whether prohibited materials were applied, since the DLPM, to the parcel's
     borders or to land on the same APN or CA pesticide use reporting site ID not submitted for
     certification, and which, when and where. Not asked by WSDA.
+  parcel_application.treated_lumber_noncontact_present: >-
+    Asked by CCOF ORGB49 A10 and OTCO C2 2.3-2, which want every existing treated-lumber installation
+    within the parcel's boundaries. WSDA AGR 2264 ref 12 asks only whether treated wood contacts soil,
+    plants or livestock, which `treated_lumber_present` answers; it never asks about an installation
+    touching neither.
+  parcel_application.treated_lumber_noncontact_description: >-
+    The description and installation date of the installation above (CCOF A10a/A10b, OTCO 2.3-2). Not
+    asked by WSDA, for the same reason.

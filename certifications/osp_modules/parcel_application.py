@@ -25,6 +25,8 @@ on the OSP lifecycle; this one repeats per parcel and binds models, so it is
 served by the parcel `application` endpoint instead.
 """
 
+from certifications.services.parcel_map_elements import MAP_ELEMENTS
+
 from .schema import Condition, Module, ModulePage, Option, Question, text
 
 PARCEL_APPLICATION = Module(
@@ -154,6 +156,42 @@ PARCEL_APPLICATION = Module(
                     required=False,
                     nop_cite="§ 205.206(f)",
                     visible_when=(Condition(question="treated_lumber_present", op="truthy"),),
+                ),
+                # CCOF ORGB49 A10 and OTCO C2 2.3 ask for EVERY existing installation within the
+                # parcel's boundaries and want it on the map; the question above asks the narrower
+                # § 205.206(f) contact test, which WSDA AGR 2264 ref 12 asks. Its stored answers keep
+                # that meaning, so an installation touching neither crops nor soil is asked here.
+                Question(
+                    key="treated_lumber_noncontact_present",
+                    kind="boolean",
+                    label=text(
+                        "Is there any other existing installation of treated lumber within this parcel's "
+                        "boundaries, one that touches neither crops nor soil?",
+                        "¿Hay alguna otra instalación existente de madera tratada dentro de los límites de esta "
+                        "parcela, que no toque cultivos ni suelo?",
+                    ),
+                    coaching=text(
+                        "For example an end post set in concrete, a utility pole, or a structure at the field "
+                        "edge. Mark it on your parcel map.",
+                        "Por ejemplo, un poste esquinero en concreto, un poste de servicios o una estructura al "
+                        "borde del campo. Márcala en el mapa de tu parcela.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.206(f)",
+                    visible_when=(Condition(question="treated_lumber_present", op="eq", value=False),),
+                ),
+                Question(
+                    key="treated_lumber_noncontact_description",
+                    kind="textarea",
+                    label=text(
+                        "Describe it and when it was installed",
+                        "Descríbela e indica cuándo se instaló",
+                    ),
+                    required=False,
+                    visible_when=(
+                        Condition(question="treated_lumber_present", op="eq", value=False),
+                        Condition(question="treated_lumber_noncontact_present", op="truthy"),
+                    ),
                 ),
                 Question(
                     # WSDA AGR 2264 ref 7 ("Do you own this site?") and OTCO C2 2.1-6 ("Do you: Own /
@@ -439,6 +477,27 @@ PARCEL_APPLICATION = Module(
                     ),
                     nop_cite="\u00a7 205.202",
                     required=False,
+                ),
+                # Trazo ships the operator's map and cannot read it. Each agent lists what the map
+                # must show; this asks which of them it does, so the packet can name what is not
+                # marked (`certifications.services.parcel_map_elements`). The operator's statement,
+                # never a check Trazo ran.
+                Question(
+                    key="map_elements_shown",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which of these does your parcel map show?",
+                        "\u00bfCu\u00e1les de estos elementos muestra el mapa de tu parcela?",
+                    ),
+                    coaching=text(
+                        "Tick what is on the map you attach. Certifiers list different elements; the packet names "
+                        "the ones your certifier asks for that are not ticked.",
+                        "Marca lo que aparece en el mapa que adjuntas. Cada certificador pide elementos distintos; "
+                        "el paquete nombra los que pide tu certificador y no est\u00e1n marcados.",
+                    ),
+                    options=tuple(Option(value=e.value, label=text(e.en, e.es)) for e in MAP_ELEMENTS),
+                    required=False,
+                    nop_cite="\u00a7 205.202",
                 ),
             ),
         ),

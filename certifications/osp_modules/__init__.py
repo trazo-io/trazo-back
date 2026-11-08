@@ -287,7 +287,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   diseases and nematodes, vertebrate pests (CCOF G5.0 §A's four columns; WSDA AGR 2121 F 3, G 4, H 3), each with
 #   "Other" and an exclusive none. The untyped `prevention_practices` and `weed_management_practices` are RETIRED
 #   (`Question.retired`, new): shown only to a plan that answered them, never asked anew. All new lists optional.
-CONTENT_VERSION = "2026.11.22"
+# 2026.11.23: the Parcel Application asks which elements the operator's parcel map shows (`map_elements_shown`,
+#   the union of CCOF ORGB49 §E, WSDA AGR 2264 Map and OTCO C2 2.3); the parcel PDF names what the plan's agent
+#   asks for that is not ticked. Page A asks for treated lumber within the boundaries that touches neither crops
+#   nor soil (CCOF A10, OTCO 2.3-2), shown when the contact question is No. All optional.
+CONTENT_VERSION = "2026.11.23"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -164,17 +164,59 @@ def _lot_key_and_trace_lines(osp, module, question, value, answers) -> list:
 
 def _treated_lumber_parcel_lines(osp, module, question, value) -> list:
     """A plan that says no treated lumber is present, beside a parcel application in the same packet
-    that says treated lumber is in contact with crops or soil (`Parcel.treated_lumber_present`)."""
+    that says treated lumber is there: in contact with crops or soil (`Parcel.treated_lumber_present`),
+    or an installation touching neither (`treated_lumber_noncontact_present`)."""
     if module.key != "g6_0_production" or question.key != "treated_lumber_any" or value is not False:
         return []
-    names = [p.name for p in _packet_parcels(osp.establishment).filter(treated_lumber_present=True)]
-    if not names:
-        return []
-    return [
-        "[REVIEW] The parcel application for "
-        + ", ".join(names)
-        + " says treated lumber is in contact with crops or soil."
+    lines = []
+    parcels = list(_packet_parcels(osp.establishment))
+    contact = [p.name for p in parcels if p.treated_lumber_present]
+    if contact:
+        lines.append(
+            "[REVIEW] The parcel application for " + ", ".join(contact) + " says treated lumber is in contact "
+            "with crops or soil."
+        )
+    other = [
+        p.name
+        for p in parcels
+        if not p.treated_lumber_present
+        and (p.application_answers or {}).get("treated_lumber_noncontact_present") is True
     ]
+    if other:
+        lines.append(
+            "[REVIEW] The parcel application for " + ", ".join(other) + " says a treated-lumber installation "
+            "is within the parcel's boundaries."
+        )
+    return lines
+
+
+def _map_element_lines(osp, module, question, value, parcel) -> list:
+    """Under the operator's list of what their parcel map shows: what the plan's agent asks the map to
+    show that the operator did not mark (`certifications.services.parcel_map_elements`)."""
+    if module.key != "parcel_application" or question.key != "map_elements_shown" or parcel is None:
+        return []
+    from certifications.services.packet_attachments import ATTACHED, PARCEL_MAP_REQUIREMENT, current_manifest
+    from certifications.services.packet_coverage import packet_certifier
+    from certifications.services.parcel_map_elements import unmarked_line
+    from product.services.parcel_application_status import parcel_application_values
+
+    lines = []
+    # The list describes the operator's map. Without that map in the reviewer's hands it describes a
+    # document they cannot check (browser pass 2026-11-08: a parcel with no upload printed the list
+    # straight under "No operator-supplied map is attached"). Inside a packet the manifest decides.
+    manifest = current_manifest()
+    if manifest is not None:
+        held = any(e.state == ATTACHED for e in manifest.for_requirement(PARCEL_MAP_REQUIREMENT, parcel_id=parcel.pk))
+    else:
+        held = bool(parcel_map_documents(parcel))
+    if not held:
+        lines.append(
+            "[REVIEW] No operator-supplied map is in this packet, so this list describes a map the reviewer "
+            "does not hold."
+        )
+    agent, own = packet_certifier(osp)
+    line = unmarked_line(value, parcel_application_values(parcel), osp, agent if own else None)
+    return lines + ([line] if line else [])
 
 
 def _answer_evidence_lines(osp, question, value, bundles: dict) -> list:
@@ -2396,6 +2438,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
             for line in _option_review_lines(osp, module, question, value):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _treated_lumber_parcel_lines(osp, module, question, value):
+                story.append(Paragraph(_escape(line), styles["meta"]))
+            for line in _map_element_lines(osp, module, question, value, parcel):
                 story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g9_0_facility_pest" and question.key == "material_tier":
                 from certifications.services.facility_pest import facility_entries, tier_review_lines

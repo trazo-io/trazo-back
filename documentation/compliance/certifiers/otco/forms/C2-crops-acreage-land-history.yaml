@@ -262,47 +262,36 @@ items:
     areas; existing installations of treated lumber; and, if your irrigation source is used to apply prohibited
     materials to non-organic land, a piping diagram of valves and/or backflow prevention devices (or a separate
     diagram).'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - parcel_application.map_status
     - parcel_application.map_upload
+    - parcel_application.map_elements_shown
     - parcel_application.treated_lumber_present
     - parcel_application.treated_lumber_description
     - parcel_application.treated_lumber_install_date
+    - parcel_application.treated_lumber_noncontact_present
+    - parcel_application.treated_lumber_noncontact_description
+    - g4_2_natural_resources.shared_irrigation_with_prohibited
+    - g4_2_natural_resources.shared_irrigation_responsible
+    - g4_2_natural_resources.irrigation_piping_map_upload
     models:
     - product.Parcel.polygon
     - product.Parcel.buffer_zones
     - certifications.services.parcel_map
-    prints: parcels/parcel-application-<parcel>.pdf §E; packet ZIP parcels/maps/
-  gap: 'Same verdict as CCOF §E / WSDA 2264 Map (`map-absent-from-packet`, closed 2026-08-28: a boundary schematic
-    renders in §E and an operator-uploaded map ships under `parcels/maps/`, the page naming the file). Against
-    OTCO''s seven-element list the schematic carries three — the parcel name (caption), north (arrow) and the
-    adjoining land use per compass side — and none of the rest: buffer size and description, buildings and
-    landmarks, organic vs non-organic areas (a farm-wide fact on `g6_0_production.split_operation`, never drawn),
-    treated lumber (2.3-2) and the irrigation piping diagram (2.3-3). Trazo asks for the operator''s own map
-    but cannot verify that it carries the elements; the `map_upload` coaching text lists CCOF''s and WSDA''s
-    elements, not OTCO''s (no mention of buildings, organic/non-organic areas or a piping diagram). (2.3-2)
-    Same as CCOF A10 (P1), not WSDA 12 (P3): OTCO, like CCOF, wants EXISTING installations shown regardless
-    of contact — the parenthetical states the § 205.206(f) contact rule for NEW installations, it does not
-    narrow what the map must show. Trazo''s boolean asks "in contact with crops or soil", so a legacy CCA end-post
-    that touches neither is disclosable to OTCO and answered "No" in Trazo. The description and date print
-    in §A when present; nothing is annotated on the schematic and there is no cross-link to G6.0''s `prohibited_materials_on_site`.
-    (2.3-3) OTCO-specific; neither CCOF ORGB49 nor WSDA 2264 asks it. No Trazo field records that the operation''s
-    OWN irrigation system also carries prohibited materials to non-organic ground (chemigation or fertigation
-    on the conventional side of a split operation), and nothing asks for the valve/backflow diagram. The nearest
-    facts are different questions: `split_operation` says a conventional side exists, `irrigation_water_sources`
-    names the source, and `irrigation_district_additives` asks whether the DISTRICT adds something — the wrong
-    party. `split_operation_separation` is prose that could mention piping but is never printed beside the
-    parcel map. Verified by grep of the live question inventory: no key mentions backflow, piping or a shared
-    irrigation line.'
-  fix: Extend the `map_upload` coaching to name OTCO's elements when the certifier is OTCO; optionally annotate
-    per-side buffer widths and the acreage onto the schematic (the CCOF §E fix). Relabel to "any existing installation
-    within the parcel boundary" with an optional second boolean for soil/crop contact; annotate the map when
-    true; cross-link to G6.0 (the CCOF A10 fix). Add `irrigation_shared_with_nonorganic` (boolean) on page
-    E, visible when `g6_0_production.split_operation` is true, with a diagram upload that rides in the packet
-    beside `parcels/maps/` and is named on the §E page.
+    prints: parcels/parcel-application-<parcel>.pdf §A, §E; packet ZIP parcels/maps/; modules/G4_2.pdf
+  note: 'Closed 2026-11-08. The operator''s map ships under `parcels/maps/` and §E names the file. `map_elements_shown`
+    asks which of OTCO''s seven elements it shows (parcel name or code, north, buffers with their size, buildings
+    and landmarks, organic and non-organic areas, treated lumber, irrigation valves and backflow devices); §E names
+    each one not ticked, the conditional ones only when they apply: organic and non-organic areas when G6.0 says the
+    operation is split, treated lumber when the parcel says it has any, the valves when G4.2 says organic cropland
+    shares irrigation with land where prohibited materials go into the water and no separate piping diagram is
+    filed. (2.3-2) `treated_lumber_noncontact_present` asks for installations touching neither crops nor soil
+    when the contact question is No, so a legacy end post is no longer answered "No". (2.3-3) G4.2 already asks
+    it (2026-11-03, back #273): `shared_irrigation_with_prohibited`, `shared_irrigation_responsible` and the
+    `irrigation_piping_map_upload` diagram, which rides in the packet as a requirement upload. The gap text before
+    this said no question mentions piping; it predated #273.'
 - ref: '2.4'
   asks: LAND HISTORY — provide a complete land history of all crops and applied substances for this parcel
     for the 36 months preceding the first planned harvest of organic crops. If it has been less than 3 years
