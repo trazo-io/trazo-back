@@ -33,6 +33,7 @@ from .models import (
     CertifierAccessLog,
     CertifierInspection,
     CertifierNotice,
+    FacilityProduct,
     LandownerAffidavit,
     NationalListSubstance,
     OMRIProduct,
@@ -54,6 +55,7 @@ from .serializers import (
     CertifierAccessLinkSerializer,
     CertifierInspectionSerializer,
     CertifierNoticeSerializer,
+    FacilityProductSerializer,
     LandownerAffidavitSerializer,
     OrganicSystemPlanListSerializer,
     OrganicSystemPlanSerializer,
@@ -419,10 +421,14 @@ class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     serializer_class = PostHarvestFacilitySerializer
 
     def get_queryset(self):
-        return PostHarvestFacility.objects.filter(
-            establishment_id=self.kwargs.get("establishment_pk"),
-            establishment__company=self.company,
-        ).select_related("establishment")
+        return (
+            PostHarvestFacility.objects.filter(
+                establishment_id=self.kwargs.get("establishment_pk"),
+                establishment__company=self.company,
+            )
+            .select_related("establishment")
+            .prefetch_related("products__ingredient_statement_document")
+        )
 
     def perform_create(self, serializer):
         facility = serializer.save(
@@ -474,6 +480,31 @@ class PostHarvestFacilityViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 daemon=True,
             ).start()
         )
+
+
+class FacilityProductViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The product rows of the farm's facilities (CCOF G6.1 C2, OTCO C7 7.10-2): category, detail,
+    packaging form, label claim, brand and the ingredient statement of a multi-ingredient product.
+
+    Same permissions as the facility route it hangs off. `?facility=<id>` narrows the list to one facility.
+    """
+
+    serializer_class = FacilityProductSerializer
+
+    def get_queryset(self):
+        queryset = FacilityProduct.objects.filter(
+            facility__establishment_id=self.kwargs.get("establishment_pk"),
+            facility__establishment__company=self.company,
+        ).select_related("facility", "ingredient_statement_document")
+        facility = self.request.query_params.get("facility")
+        if facility:
+            if not str(facility).isdigit():
+                return queryset.none()
+            queryset = queryset.filter(facility_id=int(facility))
+        return queryset.order_by("facility_id", "pk")
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)
 
 
 class BrandOwnerViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):

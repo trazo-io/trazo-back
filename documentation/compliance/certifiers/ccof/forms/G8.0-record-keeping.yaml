@@ -93,19 +93,17 @@ items:
       questions: [g2_0_fraud_prevention.fraud_risk_areas, g3_0_seeds.seeds_used, g6_5_sales_soe.sales_soe_supplier_verification, g7_0_labeling.product_leaves_as]
       models: [history.History.post_harvest_facilities]
       prints: "modules/G2_0.pdf §A (risk areas only — no scenario checklist)"
-    gap: "Each scenario is answerable only implicitly, from the presence or absence of data across four different modules (G3.0 seed purchases, G6.5 supplier verification, `PostHarvestFacility` relations, G7.0's `buyer_label` option) plus G2.0's own general `fraud_risk_areas` checklist — there is no single yes/no scenario map matching CCOF's D1, and the 'packs into others' brands' scenario has no downstream verification or monitoring follow-up at all (see G7.0 C1/C2)."
+    gap: "Each scenario is answerable only implicitly, from the presence or absence of data across four different modules (G3.0 seed purchases, G6.5 supplier verification, `PostHarvestFacility` relations, G7.0's brand-owner gate) plus G2.0's own general `fraud_risk_areas` checklist. There is no single yes/no scenario map matching CCOF's D1. Each scenario's verification follow-up is asked where its records live (G2.0 §B, G6.1 §D, G7.0 §C)."
     fix: "Derive a D1-style checklist from the four source modules and print it in G8.0 §D / G2.0, rather than requiring the certifier to infer it from four unrelated pages."
 
   - ref: "D2"
     asks: "For each scenario indicated in D1, how do you verify current organic status? Current organic certificate reviewed with each shipment or transaction; certificate reviewed periodically (monthly / quarterly / annually); other (describe). Certificates must be current — issued within the last 15 months — and complete (listing the product sourced or produced/handled, with brand if any); records must link back to the last certified organic operation."
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g2_0_fraud_prevention.fraud_mitigation_practices, g2_0_fraud_prevention.supplier_certificate_review_frequency, g2_0_fraud_prevention.supplier_certificate_review_frequency_other, g6_1_harvest_transport.handler_cert_verification_method, g6_1_harvest_transport.handler_cert_verification_method_other, g6_1_harvest_transport.handler_cert_verification_frequency, g6_1_harvest_transport.handler_cert_verification_frequency_other]
-      prints: "modules/G2_0.pdf §B; modules/G6_1.pdf §D"
-    gap: "How often supplier certificates are reviewed is asked on G2.0 §B, and how and how often a handler's organic status is checked on G6.1 §D (2026-11-02). Still open: the scenario of packing into another company's brand. There is no brand-owner record, so that operation's certificate and how it is checked cannot be stated (G7.0 C2)."
-    fix: "The brand-owner rows proposed for G7.0 C2, with certificate on file and the check cadence."
-    # Closed 2026-11-02 by the third-party certificates slice.
+      questions: [g2_0_fraud_prevention.fraud_mitigation_practices, g2_0_fraud_prevention.supplier_certificate_review_frequency, g2_0_fraud_prevention.supplier_certificate_review_frequency_other, g6_1_harvest_transport.handler_cert_verification_method, g6_1_harvest_transport.handler_cert_verification_method_other, g6_1_harvest_transport.handler_cert_verification_frequency, g6_1_harvest_transport.handler_cert_verification_frequency_other, g7_0_labeling.brand_owner_certificate_check, g7_0_labeling.brand_owner_certificate_check_other, g7_0_labeling.brand_owner_certificate_frequency, g7_0_labeling.brand_owner_certificate_frequency_other]
+      prints: "modules/G2_0.pdf §B; modules/G6_1.pdf §D; modules/G7_0.pdf §C"
+    # Closed 2026-11-08: the brand-owner scenario's check and cadence have been asked on G7.0 §C since the
+    # brand-owner slice (2026-11-07); the gap text here still said no brand-owner record existed.
 
   - ref: "D3"
     asks: "How do you monitor the effectiveness of your certificate verification practices and procedures? Standard procedure requires sign-off from more than one employee for each transaction; periodic review of records for quality control; other (describe)."

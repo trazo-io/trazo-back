@@ -255,6 +255,35 @@ def _candidates(osp):
                         lambda facility=facility: facility.cert_document.open("rb"),
                     )
                 )
+    # The manufacturer's ingredient statement of each multi-ingredient product on a facility's product table
+    # (CCOF G6.1 C2), when the plan prints the table that lists that facility.
+    from certifications.models import FacilityProduct
+    from certifications.services import facility_products as fp
+
+    shown = {"another_operation": facility_table_shown(osp), "this_operation": own_facility_table_shown(osp)}
+    statements = (
+        FacilityProduct.objects.filter(
+            facility__establishment=est,
+            multi_ingredient="yes",
+            ingredient_statement_document__isnull=False,
+        )
+        .select_related("facility", "ingredient_statement_document")
+        .order_by("facility_id", "pk")
+    )
+    for product in statements:
+        if not shown.get(product.facility.operated_by):
+            continue
+        out.append(
+            (
+                Attachment(
+                    "ingredient_statement",
+                    fp.ingredient_statement_label(product),
+                    fp.ingredient_statement_path(product),
+                    source_id=fp.ingredient_statement_source(product),
+                ),
+                lambda doc=product.ingredient_statement_document: doc.file.open("rb"),
+            )
+        )
     # The layout of each of the operation's own facilities (OTCO C7 7.2-1), when the plan prints the own-facility
     # table on G6.4 or G6.2.
     if own_facility_table_shown(osp):

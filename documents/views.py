@@ -295,6 +295,14 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "code": "brand_owner_document_in_use",
                 }
             )
+        if doc.facility_ingredient_statements.exists():
+            # A product's ingredient statement (CCOF G6.1 C2): the link is PROTECT, like a brand owner's copy.
+            raise ValidationError(
+                {
+                    "detail": "This file is a product's ingredient statement. Remove it from the product first.",
+                    "code": "ingredient_statement_in_use",
+                }
+            )
         if doc.material_labels.exclude(osp__status__in=MATERIAL_LABEL_RELEASED_STATUSES).exists():
             # Same reason: the label of a material on a plan's materials list (OTCO C11 11.1), PROTECT.
             # Only a plan the operator can still change (or one under review, which becomes editable
