@@ -51,6 +51,11 @@ EXEMPT = {
         "OptimizedCarbonCalculation.efficiency_score is a stored column and its index; the model "
         "retires in its own migration slice. Nothing writes it (see the live test)."
     ),
+    "history/models_consumer.py": (
+        "UserLocalRecommendation.carbon_score, a stored 0-100 field on a shopper model with 0 rows "
+        "in production. Its serializer no longer emits it; the shopper models retire in their own "
+        "migration slice (review of #347)."
+    ),
 }
 
 
@@ -66,9 +71,21 @@ def _production_modules():
 
 
 def _string_literals(source):
+    """Every name a module could carry a score under: string literals (dict keys, serializer field
+    lists), variable and field names, attributes, keyword arguments, function and parameter names.
+    Literals alone missed a model field declared as `carbon_score = models.IntegerField(...)`
+    (review of #347)."""
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             yield node.lineno, node.value
+        elif isinstance(node, ast.Name):
+            yield node.lineno, node.id
+        elif isinstance(node, ast.Attribute):
+            yield node.lineno, node.attr
+        elif isinstance(node, (ast.keyword, ast.arg)) and getattr(node, "arg", None):
+            yield getattr(node, "lineno", 0), node.arg
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            yield node.lineno, node.name
 
 
 class NoModuleNamesARetiredScoreTests(APITestCase):
@@ -145,6 +162,9 @@ class LivePayloadsCarryNoScoreTests(APITestCase):
                     {"event_type": event_type, "event_data": event_data},
                     format="json",
                 )
+                # A 500's error dict carries no score either, so a failing route would pass the
+                # walk below for the wrong reason (review of #347).
+                self.assertEqual(response.status_code, 200, response.content)
                 self.assertIsInstance(response.json(), dict, response.content)
                 assert_carries_no_grade(self, response.json(), f"calculate-event-carbon/ ({event_type})")
         self.assertEqual(OptimizedCarbonCalculation.objects.count(), 0)

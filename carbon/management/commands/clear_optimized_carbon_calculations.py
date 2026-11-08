@@ -13,7 +13,9 @@ which refuses to run while a row is left; this command empties the table first, 
 
 Each row's "before" is a serialized copy of the whole row, so `--restore log:<id>` (the report text
 lives on the DataOperationLog row; a container's disk does not survive a deploy) recreates every
-row with its own primary key.
+row with its own primary key. That holds only until the retiring migration drops the model: after
+it, `apps.get_model(MODEL)` cannot resolve and this command cannot restore anything. Restore, if at
+all, BEFORE that migration ships (review of #347).
 """
 
 from django.core import serializers
