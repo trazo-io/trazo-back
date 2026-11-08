@@ -59,6 +59,8 @@ import logging
 from dataclasses import dataclass
 from typing import Callable
 
+from certifications.services.restricted_materials import TISSUE_MATRICES
+
 # Same emptiness rule the PUR export and per-event completeness registry already use:
 # None, "", and whitespace-only all count as missing.
 from common.field_registry import ORGANIC_UNRESOLVED_VALUES
@@ -920,6 +922,20 @@ ANSWER_EVIDENCE = {
         lambda b: b.cleanouts("equipment"),
         "cleaning record for field or harvest equipment",
         "cleaning records for field or harvest equipment",
+    ),
+    # CCOF G4.0 B2: "Test results must be available at inspection." A soil test record, or a lab
+    # analysis of soil; leaf, petiole and hull analyses are the tissue tests.
+    "soil_test_records": AnswerEvidence(
+        lambda b: b.soils("ST") + [e for e in b.soils("LA") if getattr(e, "sample_matrix", None) == "soil"],
+        "soil test record",
+        "soil test records",
+    ),
+    # Hull is a tissue too: hull sampling at harvest is the almond boron test (the same set as
+    # `restricted_materials.TISSUE_MATRICES`; review of back #348).
+    "tissue_test_records": AnswerEvidence(
+        lambda b: [e for e in b.soils("LA") if getattr(e, "sample_matrix", None) in TISSUE_MATRICES],
+        "leaf, petiole or hull analysis",
+        "leaf, petiole or hull analyses",
     ),
     "storage_area_cleanouts": AnswerEvidence(
         lambda b: b.cleanouts("storage"),

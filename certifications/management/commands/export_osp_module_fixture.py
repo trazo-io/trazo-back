@@ -54,6 +54,19 @@ GOLDEN_ANSWER_CASES = {
     },
     # Irrigation sources and shared lines (2026.11.09): `not_includes` is TRUE while unanswered, so the
     # shared-lines question shows until "we do not irrigate" is ticked; the TS twin must agree.
+    # Compost temperature is asked of the thermophilic methods only (2026.11.24, OTCO C4 4.4-3).
+    "g4_1_compost_manure": {
+        "unanswered": {},
+        "windrow": {"materials_applied": ["on_farm_compost"], "compost_method": "windrow"},
+        "vermicompost": {"materials_applied": ["vermicompost"], "compost_method": "vermicompost"},
+        "method_unanswered": {"materials_applied": ["on_farm_compost"]},
+    },
+    # The residue questions open on product testing (2026.11.24, WSDA AGR 2121 P 4a/4b).
+    "g2_0_fraud_prevention": {
+        "unanswered": {},
+        "product_testing": {"fraud_mitigation_practices": ["product_testing"]},
+        "no_testing": {"fraud_mitigation_practices": ["verify_certificates"]},
+    },
     "g4_2_natural_resources": {
         "unanswered": {},
         "not_irrigated": {"irrigation_source_types": ["not_irrigated"]},

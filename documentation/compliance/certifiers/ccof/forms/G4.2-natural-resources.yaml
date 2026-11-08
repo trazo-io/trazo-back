@@ -18,24 +18,15 @@ items:
     including soil type and condition, bodies of water, nearby wetlands and woodlands, wildlife, windbreaks,
     hedgerows, native habitat and beneficial plantings. Include any problem areas such as erosion and
     invasive species.
-  status: not_covered
-  severity: P1
+  status: covered
   trazo:
-    models:
-    - product.Parcel.soil_type
-    - company.Establishment.water_sources
-    - company.Establishment.conservation_practices
-    - company.Establishment.irrigation_methods
-    prints: —
-  gap: 'No free-text narrative field exists for this — the first question on a form every applicant files.
-    Four data points that could seed a draft feed no OSP module or packet section today: `Parcel.soil_type`
-    and three `Establishment` JSON fields (`water_sources`, `conservation_practices`, `irrigation_methods`).
-    `Establishment.soil_types` is itself mislabeled — the column actually stores practices, not soil type
-    — so it cannot answer the ''soil type'' half of this question even if wired up as-is.'
-  fix: Add a required `natural_resources_description` textarea citing § 205.200 / § 205.2, with coaching
-    listing CCOF's elements (soil, water, wetlands/woodlands, wildlife, windbreaks, hedgerows, native
-    habitat, beneficial plantings, problem areas). Prefill a draft (suggest→confirm) from `Parcel.soil_type`
-    per parcel and HD/NS habitat events.
+    questions:
+    - g4_2_natural_resources.natural_resources_description
+    prints: modules/G4_2.pdf §A
+  note: 'Closed 2026-11-08. `natural_resources_description`, the first question of G4.2 page A, asks the description
+    with CCOF''s elements in its coaching (soil type and condition, water, wetlands and woodlands, wildlife, windbreaks,
+    hedgerows, native habitat, beneficial plantings, problem areas). Optional, like every question added to a module
+    plans have already finished. No draft is suggested from parcel or habitat records yet.'
 - ref: A2
   asks: Do you have a current conservation plan or contract with the USDA Natural Resources Conservation
     Service (NRCS) or other conservation agency? No / Yes.
@@ -159,14 +150,14 @@ items:
     control cost trends / document water use trends / plant, animal, insect surveys / observations in
     farm logs and journals / maintain conservation map / water testing / soil testing / periodic expert
     evaluation and report (such as NRCS) / other (describe).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
-    questions: [g4_2_natural_resources.monitoring_method, g4_2_natural_resources.monitoring_method_other]
+    questions:
+    - g4_2_natural_resources.monitoring_method
+    - g4_2_natural_resources.monitoring_method_other
     prints: "modules/G4_2.pdf §C; narrative § 205.201(a)(3)"
-  gap: "Since 2026.11.02 `monitoring_method` is a multi-select (migration wraps stored answers) with photo points, surveys, conservation maps, farm logs and third-party evaluation. CCOF's cost-trend and water-use-trend options still have no option of their own and reach the plan only through other."
-  fix: "Add `cost_trends` and `water_use_trends` options."
-  # Re-read 2026-11-02 by the monitoring slice.
+  note: 'Closed 2026-11-08. `monitoring_method` gains cost trends, water use trends and water testing, the three of
+    CCOF''s ten options that reached the plan only as other.'
 - ref: C (not applicable)
   asks: Conservation Involving Livestock — not applicable, no livestock involved.
   status: not_covered

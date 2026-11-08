@@ -95,6 +95,12 @@ def parcel_application_status(parcel, osp=None) -> dict:
     if answers.get("currently_certified") not in ("yes", "no", "previously"):
         missing.append("certification_status")
 
+    # CCOF ORGB49 §C: the parcel is either "Not used for organic livestock" or the section is
+    # completed, so an unanswered parcel is not complete. The retired "no" (kept only) does not
+    # count: it never said whether livestock graze here (WSDA AGR 2121 E 12).
+    if answers.get("livestock_present") not in ("none", "yes"):
+        missing.append("livestock")
+
     if not missing:
         state = "complete"
     else:

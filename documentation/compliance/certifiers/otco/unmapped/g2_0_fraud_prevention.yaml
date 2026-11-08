@@ -17,3 +17,9 @@
 questions:
   g2_0_fraud_prevention.supplier_approval_procedure_upload: >-
     A written supplier approval procedure. Asked by WSDA AGR 2121 P5; OTCO's fraud prevention plan 2-2 asks which controls are used (supplier_approval_controls), not for the procedure as a document.
+  g2_0_fraud_prevention.residue_screening_method: >-
+    The screening or analysis behind the operation's own product testing (laboratory, residue panel).
+    Asked by WSDA AGR 2121 P 4a; OTCO's OFPP asks whether SUPPLIERS send residue results and notify the operation in writing of a residue (an option of the supplier-approval list), never the operation's own testing method or response.
+  g2_0_fraud_prevention.residue_detection_response: >-
+    How the operation responds when its own testing detects a pesticide residue. Asked by WSDA AGR 2121
+    P 4b; OTCO's OFPP asks whether SUPPLIERS send residue results and notify the operation in writing of a residue (an option of the supplier-approval list), never the operation's own testing method or response.

@@ -83,7 +83,7 @@ class ParcelTwoAxesTests(TestCase):
             date_began_managing=date(2011, 3, 1) if answered else None,
             polygon={"type": "Polygon", "coordinates": [ring]} if polygon else None,
             buffer_zones=[{"direction": "north", "adjoining_land_use": "County road"}] if answered else [],
-            application_answers={"currently_certified": "yes"} if answered else {},
+            application_answers={"currently_certified": "yes", "livestock_present": "none"} if answered else {},
         )
         if answered:
             for year in (2023, 2024, 2025):

@@ -73,3 +73,6 @@ questions:
     CCOF ORGB49 F8/F8a ask whether prohibited materials were applied, since the DLPM, to the parcel's
     borders or to land on the same APN or CA pesticide use reporting site ID not submitted for
     certification, and which, when and where. Not asked by OTCO.
+  parcel_application.livestock_pastured: >-
+    Whether livestock pasture or graze on the parcel, shown when `livestock_present` is yes. Same reason
+    as `livestock_present`: OTCO's crop OSP set has no livestock form.

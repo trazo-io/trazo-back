@@ -190,14 +190,14 @@ items:
 
   - ref: "12"
     asks: "Do you pasture livestock on certified sites?"
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [parcel_application.livestock_present, parcel_application.livestock_detail, g4_1_compost_manure.materials_applied]
+      questions: [parcel_application.livestock_present, parcel_application.livestock_pastured, parcel_application.livestock_detail, g4_1_compost_manure.materials_applied]
       prints: "parcels/parcel-application-<name>.pdf §C; modules/G4_1.pdf §A, §B; narrative § 205.203(c)(1)"
-    gap: "G4.1 now takes planned grazing as its own answer and opens the raw-manure page for it. Still open: `livestock_present` asks whether livestock are KEPT on the parcel, WSDA whether they are PASTURED, and penned or housed animals answer the first without the second."
-    fix: "Reword `livestock_present` to distinguish kept from pastured, and suggest `planned_grazing` from GR events and from the parcels."
-    # Re-read 2026-11-02 by the compost and manure slice.
+    note: "Closed 2026-11-08. Per site: `livestock_present` none (no livestock kept, pastured or grazed) or yes, and
+      for yes `livestock_pastured` asks whether they pasture or graze there, so penned or housed animals answer No.
+      The earlier kept-only No is retired and does not complete the parcel. G4.1 still takes planned grazing for
+      the raw-manure rules. Not done: suggesting `planned_grazing` from grazing events."
 
   - ref: "13"
     asks: "Which of the following practices do you implement to maintain or improve water quality in terms of nutrient contaminants? (Alley cropping / Conservation cover - Perennial / Contour buffer strips / Contour farming / Field border / Filter strip / Grassed waterway / Heavy use area protection / Irrigation water management / Lined waterway or outlet / Micro-irrigation / Nutrient management / Pond / Prescribed grazing / Riparian forest buffer / Riparian herbaceous cover / Seasonal till / Stream crossing / Strip-cropping / Tree-Shrub establishment / Other.)"

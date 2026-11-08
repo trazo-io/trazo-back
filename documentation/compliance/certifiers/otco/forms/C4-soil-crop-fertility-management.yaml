@@ -157,14 +157,14 @@ items:
       15 days, and be turned a minimum of 5 times during the 15-day period / In-vessel or static system — must
       be aerated and reach 131–170 °F for at least 3 days / Manure-fed vermicompost with a 70–90 % moisture level,
       made under aerobic conditions.
-    status: partial
-    severity: P1
+    status: covered
     trazo:
       questions: [g4_1_compost_manure.compost_method, g4_1_compost_manure.compost_temp_and_days, g4_1_compost_manure.compost_turnings, g4_1_compost_manure.vermicompost_moisture, g4_1_compost_manure.vermicompost_conditions_met]
       prints: "modules/G4_1.pdf §C; narrative § 205.203(c)(2)"
-    gap: "The method, the numbers and vermicompost's conditions are all asked and print. Still open: `compost_temp_and_days` is gated on what is applied, not on the method, so a vermicompost producer must still type a thermophilic temperature answer."
-    fix: "Gate `compost_temp_and_days` and `compost_turnings` on `compost_method` rather than `materials_applied`; keep the `vermicompost` option, which is OTCO's own shape."
-    # Re-read 2026-11-02 by the compost and manure slice.
+    note: "Closed 2026-11-08. `compost_temp_and_days` is asked only for windrow, static aerated and in-vessel compost
+      (`compost_method`), so a vermicompost producer answers moisture and aerobic conditions and is not asked a
+      thermophilic temperature; `compost_turnings` was already windrow-only. A process meeting no standard is raw
+      manure and asks neither."
   - ref: 4.4-4
     asks: How and where do you document your composting processes? (will be verified at inspection) Temperature
       log / Turning log / Moisture level log / Other.

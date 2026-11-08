@@ -291,7 +291,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   the union of CCOF ORGB49 §E, WSDA AGR 2264 Map and OTCO C2 2.3); the parcel PDF names what the plan's agent
 #   asks for that is not ticked. Page A asks for treated lumber within the boundaries that touches neither crops
 #   nor soil (CCOF A10, OTCO 2.3-2), shown when the contact question is No. All optional.
-CONTENT_VERSION = "2026.11.23"
+# 2026.11.24: G2.0 asks the residue screening performed and the response when a residue is detected (WSDA AGR 2121
+#   P 4a, 4b). G4.1 asks compost temperature only of the thermophilic methods (OTCO C4 4.4-3). G4.2 page A opens on
+#   a description of the operation's natural resources (CCOF G4.2 A1) and its monitoring list gains cost trends,
+#   water use trends and water testing (B1). The Parcel Application asks whether livestock are kept, pastured or
+#   grazed: the kept-only "no" is retired, "none" added, a grazing follow-up for "yes" (CCOF §C, WSDA E 12), and
+#   livestock is a completion check. All new questions optional.
+CONTENT_VERSION = "2026.11.24"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
