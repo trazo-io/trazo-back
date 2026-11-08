@@ -346,14 +346,14 @@ PARCEL_APPLICATION = Module(
                     kind="radio",
                     label=text(
                         "Is livestock kept, pastured or grazed on this parcel?",
-                        "¿Se mantiene, se pastorea o se alimenta ganado en esta parcela?",
+                        "¿Se mantiene, se apacienta o se pastorea ganado en esta parcela?",
                     ),
                     options=(
                         Option(
                             value="none",
                             label=text(
                                 "No: not used for livestock (none kept, pastured or grazed)",
-                                "No: no se usa para ganado (ninguno se mantiene, se pastorea ni se alimenta aquí)",
+                                "No: no se usa para ganado (ninguno se mantiene, se apacienta ni se pastorea aquí)",
                             ),
                         ),
                         Option(value="yes", label=text("Yes", "Sí")),
@@ -372,7 +372,7 @@ PARCEL_APPLICATION = Module(
                     kind="boolean",
                     label=text(
                         "Do the livestock pasture or graze on this parcel?",
-                        "¿El ganado pastorea o se alimenta en esta parcela?",
+                        "¿El ganado se apacienta o se pastorea en esta parcela?",
                     ),
                     required=False,
                     nop_cite="§ 205.239",

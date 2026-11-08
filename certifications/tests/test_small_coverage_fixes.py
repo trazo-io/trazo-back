@@ -184,10 +184,13 @@ class OnTheModulePages(_Farm):
         SoilManagementEvent.objects.create(
             history=history, type="LA", sample_matrix="water", date=timezone.now(), description="water lab"
         )
+        SoilManagementEvent.objects.create(
+            history=history, type="LA", sample_matrix="hull", date=timezone.now(), description="hull boron"
+        )
         osp = self.plan({"g4_0_rotation_soil": {"fertility_monitoring": ["soil_tests", "tissue_tests"]}})
         text = _text(generate_module_pdf(osp, "g4_0_rotation_soil"))
         self.assertIn("In Trazo: 2 soil test records logged.", text)
-        self.assertIn("In Trazo: 1 leaf or petiole analysis logged.", text)
+        self.assertIn("In Trazo: 2 leaf, petiole or hull analyses logged.", text)
 
     def test_no_tests_logged_says_so_without_claiming_none_exist(self):
         osp = self.plan({"g4_0_rotation_soil": {"fertility_monitoring": ["soil_tests"]}})

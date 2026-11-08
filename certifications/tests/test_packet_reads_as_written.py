@@ -111,7 +111,7 @@ class CertifiedParcelPageTests(_Farm):
 
     def test_the_parcel_page_lists_neither_it_nor_the_file_references_as_open(self):
         page = _text(generate_module_pdf(self.osp, PARCEL_APPLICATION.key, parcel=self.parcel))
-        self.assertIn("Is livestock kept on this parcel? Not answered (optional).", page)
+        self.assertIn("Is livestock kept, pastured or grazed on this parcel? Not answered (optional).", page)
         for label in (
             "Expected first organic harvest",
             "If the certificate copy is kept elsewhere, say where Not answered",

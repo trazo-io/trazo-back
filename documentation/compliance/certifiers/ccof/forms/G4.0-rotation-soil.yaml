@@ -123,7 +123,7 @@ items:
     exclusive; soil tests; leaf or tissue tests; microbiological testing; crop quality analysis; other), and testing
     frequency is its own question since 2026-11-02 (B2a). The gap said two types had no option; both were added on
     2026-11-02. "Test results must be available at inspection": under the soil and tissue options the module PDF
-    prints how many soil tests and leaf or petiole analyses are logged in Trazo (`soil_test_records`,
+    prints how many soil tests and leaf, petiole or hull analyses are logged in Trazo (`soil_test_records`,
     `tissue_test_records`), a count, never a statement that the results are complete.'
 - ref: B2a
   asks: How often is testing performed? Daily / weekly / monthly / annually / as needed / other.
