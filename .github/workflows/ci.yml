@@ -581,9 +581,12 @@ jobs:
       #
       # 2026-11-08: carbon.tests.test_no_score_in_any_carbon_payload joins. No production module
       # names efficiency_score / carbon_efficiency_score / carbon_score (AST walk), and the event
-      # carbon_data and calculate-event-carbon/ payloads carry no grade. With it,
-      # carbon.tests.test_clear_optimized_carbon_calculations: the command that empties the
-      # retired score log before its model retires (dry run, apply, restore). Neither reads the
+      # carbon_data and calculate-event-carbon/ payloads carry no grade. It does not read the
+      # sibling repo.
+      #
+      # 2026-11-08: carbon.tests.test_retired_optimized_carbon_calculation replaces
+      # test_clear_optimized_carbon_calculations (its command went with the model in carbon 0054).
+      # The table stays gone, the migration refuses a row, and it reverses. It does not read the
       # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
@@ -774,7 +777,7 @@ jobs:
             carbon.tests.test_retired_claim_routes_stay_retired \
             carbon.tests.test_live_carbon_payloads_carry_no_grade \
             carbon.tests.test_no_score_in_any_carbon_payload \
-            carbon.tests.test_clear_optimized_carbon_calculations \
+            carbon.tests.test_retired_optimized_carbon_calculation \
             carbon.tests.test_crop_template_detail_claims \
             carbon.tests.test_carbon_entries_create_path \
             carbon.tests.test_offsets_are_not_self_verified \

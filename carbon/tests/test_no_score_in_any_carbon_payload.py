@@ -18,9 +18,9 @@ never exercised:
 A payload nobody renders is still a claim the next component can render. Two guards:
 
 1. SOURCE: no production module may name the keys at all. Routes multiply and fixtures go stale;
-   a string literal cannot hide from an AST walk. `carbon/models.py` is the one exemption, with
-   its reason: `OptimizedCarbonCalculation.efficiency_score` is a stored column, retired in its own
-   slice, and nothing writes it any more (asserted below).
+   a name cannot hide from an AST walk. `history/models_consumer.py` is the one exemption, with its
+   reason. `OptimizedCarbonCalculation.efficiency_score`, the stored score log, left with its model
+   and table in carbon 0054.
 2. LIVE: the event serializer's `carbon_data` and `calculate-event-carbon/` for every event type,
    walked with the same `assert_carries_no_grade` the summary routes use.
 """
@@ -34,7 +34,7 @@ from django.utils import timezone
 
 from rest_framework.test import APITestCase
 
-from carbon.models import CarbonEntry, OptimizedCarbonCalculation
+from carbon.models import CarbonEntry
 from carbon.tests.test_live_carbon_payloads_carry_no_grade import assert_carries_no_grade
 from company.models import Company, Establishment
 from history.models import History, PestManagementEvent
@@ -47,10 +47,6 @@ RETIRED_KEYS = {"efficiency_score", "carbon_efficiency_score", "carbon_score"}
 APPS = ("carbon", "history", "company", "common", "notifications", "certifications", "documents", "backend")
 #: path -> why it may still name a retired key.
 EXEMPT = {
-    "carbon/models.py": (
-        "OptimizedCarbonCalculation.efficiency_score is a stored column and its index; the model "
-        "retires in its own migration slice. Nothing writes it (see the live test)."
-    ),
     "history/models_consumer.py": (
         "UserLocalRecommendation.carbon_score, a stored 0-100 field on a shopper model with 0 rows "
         "in production. Its serializer no longer emits it; the shopper models retire in their own "
@@ -144,7 +140,7 @@ class LivePayloadsCarryNoScoreTests(APITestCase):
         self.assertEqual(carbon_data["co2e"], 4.0)  # the entry was found: the walk reads a real payload
         assert_carries_no_grade(self, carbon_data, "EventSerializer.carbon_data")
 
-    def test_calculate_event_carbon_carries_no_score_and_writes_no_score_row(self):
+    def test_calculate_event_carbon_carries_no_score(self):
         payloads = {
             "chemical": {"volume": "10", "volume_unit": "L", "area": "1", "area_unit": "acres", "type": "HE"},
             "production": {"type": "IR", "area": "1", "area_unit": "acres"},
@@ -167,4 +163,3 @@ class LivePayloadsCarryNoScoreTests(APITestCase):
                 self.assertEqual(response.status_code, 200, response.content)
                 self.assertIsInstance(response.json(), dict, response.content)
                 assert_carries_no_grade(self, response.json(), f"calculate-event-carbon/ ({event_type})")
-        self.assertEqual(OptimizedCarbonCalculation.objects.count(), 0)

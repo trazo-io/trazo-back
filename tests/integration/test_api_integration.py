@@ -7,13 +7,11 @@ import json
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from carbon.models import OptimizedCarbonCalculation
 from company.models import Company, Establishment
 from history.models import History, HistoryScan
 from product.models import Parcel, Product
@@ -241,41 +239,6 @@ class ProductionHistoryIntegrationTests(APITestCase):
         scan_count = HistoryScan.objects.filter(history_id=history_id).count()
         self.assertEqual(scan_count, 1)
 
-    @patch("carbon.services.usda_api.USDAApiService.get_emission_factor")
-    def test_carbon_calculation_integration(self, mock_usda):
-        """Test carbon calculation integration with production history"""
-        # Mock USDA API response
-        mock_usda.return_value = {"emission_factor": 2.5, "unit": "kg_co2_per_kg", "source": "USDA_2024"}
-
-        # Create production history
-        history = History.objects.create(
-            name="Carbon Test Production",
-            parcel=self.parcel,
-            product=self.product,
-            start_date="2024-01-01",
-            published=True,
-        )
-
-        # Request carbon calculation
-        carbon_url = reverse("carbon-calculate")
-        carbon_data = {
-            "history_id": history.id,
-            "crop_type": "tomatoes",
-            "production_amount": 1000,  # kg
-            "farming_practices": ["organic", "no_till"],
-        }
-
-        response = self.client.post(carbon_url, carbon_data)
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn("total_emissions", response.data)
-        self.assertIn("carbon_score", response.data)
-
-        # Verify calculation was stored
-        calculation = OptimizedCarbonCalculation.objects.get(production=history)
-        self.assertEqual(calculation.crop_type, "tomatoes")
-        self.assertEqual(calculation.production_amount, 1000)
-
 
 class SubscriptionIntegrationTests(APITestCase):
     """Test subscription and billing integration"""
@@ -353,60 +316,6 @@ class SubscriptionIntegrationTests(APITestCase):
         response = self.client.get(premium_feature_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-
-class BlockchainIntegrationTests(TransactionTestCase):
-    """Test blockchain integration flows (mocked)"""
-
-    def setUp(self):
-        self.user = User.objects.create_user(email="blockchain@example.com", password="testpass123")
-
-        self.company = Company.objects.create(name="Blockchain Test Farm", country="USA")
-
-        self.establishment = Establishment.objects.create(name="Blockchain Farm", company=self.company, country="USA")
-
-        self.parcel = Parcel.objects.create(name="Blockchain Field", establishment=self.establishment, area=100.0)
-
-    @patch("carbon.services.blockchain_service.BlockchainService.verify_carbon_data")
-    @patch("carbon.services.blockchain_service.BlockchainService.submit_verification")
-    def test_carbon_verification_blockchain_flow(self, mock_submit, mock_verify):
-        """Test complete carbon verification blockchain integration"""
-        # Mock successful blockchain responses
-        mock_submit.return_value = {"transaction_hash": "0x1234567890abcdef", "block_number": 12345, "gas_used": 150000}
-
-        mock_verify.return_value = {
-            "verified": True,
-            "verification_hash": "0xabcdef1234567890",
-            "timestamp": "2024-01-15T10:00:00Z",
-        }
-
-        # Create production history with carbon calculation
-        history = History.objects.create(
-            name="Blockchain Verified Production", parcel=self.parcel, start_date="2024-01-01", published=True
-        )
-
-        carbon_calc = OptimizedCarbonCalculation.objects.create(
-            history=history, crop_type="corn", production_amount=1500, total_emissions=750.0, carbon_score=85
-        )
-
-        # Submit for blockchain verification
-        from rest_framework.test import APIClient
-
-        client = APIClient()
-        client.force_authenticate(user=self.user)
-
-        verification_url = reverse("blockchain-verify-carbon")
-        verification_data = {"calculation_id": carbon_calc.id, "verification_type": "carbon_footprint"}
-
-        response = client.post(verification_url, verification_data)
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn("transaction_hash", response.data)
-        self.assertIn("verification_status", response.data)
-
-        # Verify blockchain submission was called
-        mock_submit.assert_called_once()
-        mock_verify.assert_called_once()
 
 
 class APIPerformanceIntegrationTests(APITestCase):
