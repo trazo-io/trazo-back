@@ -83,17 +83,13 @@ class CoolFarmService:
             # Get industry benchmark if available
             benchmark = self._get_industry_benchmark(crop_type, region)
 
-            # Calculate efficiency score
-            efficiency_score = self._calculate_efficiency_score(total_emissions, area, benchmark)
-
             # Generate recommendations
-            recommendations = self._generate_recommendations(breakdown, benchmark, efficiency_score)
+            recommendations = self._generate_recommendations(breakdown)
 
             return {
                 "total_emissions": total_emissions,
                 "emissions_per_acre": total_emissions / area,
                 "breakdown": breakdown,
-                "efficiency_score": efficiency_score,
                 "benchmark": benchmark,
                 "recommendations": recommendations,
             }
@@ -149,39 +145,13 @@ class CoolFarmService:
         # counts sourced to USDA ARS. There is no benchmark to compare against.
         return None
 
-    def _calculate_efficiency_score(
-        self, total_emissions: float, area: float, benchmark: Optional[Dict[str, Any]]
-    ) -> int:
-        """Calculate efficiency score (0-100) based on emissions and benchmark"""
-        if not benchmark:
-            return 50  # Default score if no benchmark available
+    def _generate_recommendations(self, breakdown: Dict[str, float]) -> List[str]:
+        """Recommendations from the emissions breakdown.
 
-        emissions_per_acre = total_emissions / area
-        benchmark_avg = benchmark["average_emissions"]
-
-        if emissions_per_acre <= benchmark["min_emissions"]:
-            return 100
-        elif emissions_per_acre >= benchmark["max_emissions"]:
-            return 0
-
-        # Linear interpolation between min and max
-        score = 100 * (
-            1
-            - (emissions_per_acre - benchmark["min_emissions"])
-            / (benchmark["max_emissions"] - benchmark["min_emissions"])
-        )
-
-        return max(0, min(100, int(score)))
-
-    def _generate_recommendations(
-        self, breakdown: Dict[str, float], benchmark: Optional[Dict[str, Any]], efficiency_score: int
-    ) -> List[str]:
-        """Generate recommendations based on emissions breakdown and score"""
+        NEVER: 2026-11-08 - the 0-100 efficiency score these were graded on was deleted with the
+        rest of the retired score concept, and the "above the industry average" line with it.
+        """
         recommendations = []
-
-        # General recommendations based on efficiency score
-        if efficiency_score < 50:
-            recommendations.append("Consider implementing a comprehensive carbon reduction strategy")
 
         # Specific recommendations based on emission sources
         if "fertilizer" in breakdown and breakdown["fertilizer"] > 0:
@@ -195,13 +165,6 @@ class CoolFarmService:
 
         if "water" in breakdown and breakdown["water"] > 0:
             recommendations.append("Implement drip irrigation and water conservation practices")
-
-        # Add benchmark-based recommendations
-        if benchmark and efficiency_score < 75:
-            recommendations.append(
-                f"Your emissions are above the {benchmark['year']} industry average. "
-                f"Consider reviewing your practices against industry best practices."
-            )
 
         return recommendations
 

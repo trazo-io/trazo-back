@@ -522,7 +522,6 @@ class UserLocalRecommendationSerializer(serializers.ModelSerializer):
             "establishment_name",
             "establishment_address",
             "distance_miles",
-            "carbon_score",
             "recommendation_score",
             "product_count",
             "is_favorited",

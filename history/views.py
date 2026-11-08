@@ -1232,7 +1232,6 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "repeat_count": getattr(scan, "repeat_count", 0),
                     "ip_address": scan.ip_address,
                     "qr_code": scan.history.qr_code.url if scan.history.qr_code else None,
-                    "carbon_score": getattr(scan.history, "carbon_score", 0),
                     "production_period": scan.history.period if hasattr(scan.history, "period") else None,
                 }
                 scans_data.append(scan_data)

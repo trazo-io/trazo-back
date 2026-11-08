@@ -578,6 +578,13 @@ jobs:
       # 2026-11-07: carbon.tests.test_retiring_offset_benchmark_report joins. The census declares
       # the five tables and CarbonAuditLog.report_id that carbon 0052 retires, keyed by database
       # column, one deploy before 0052. It does not read the sibling repo.
+      #
+      # 2026-11-08: carbon.tests.test_no_score_in_any_carbon_payload joins. No production module
+      # names efficiency_score / carbon_efficiency_score / carbon_score (AST walk), and the event
+      # carbon_data and calculate-event-carbon/ payloads carry no grade. With it,
+      # carbon.tests.test_clear_optimized_carbon_calculations: the command that empties the
+      # retired score log before its model retires (dry run, apply, restore). Neither reads the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -764,6 +771,8 @@ jobs:
             carbon.tests.test_carbon_calculator_gaps \
             carbon.tests.test_retired_claim_routes_stay_retired \
             carbon.tests.test_live_carbon_payloads_carry_no_grade \
+            carbon.tests.test_no_score_in_any_carbon_payload \
+            carbon.tests.test_clear_optimized_carbon_calculations \
             carbon.tests.test_crop_template_detail_claims \
             carbon.tests.test_carbon_entries_create_path \
             carbon.tests.test_offsets_are_not_self_verified \

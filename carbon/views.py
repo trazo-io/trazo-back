@@ -705,7 +705,7 @@ from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 
 # Import optimized models
-from .models import CachedEmissionFactor, OptimizedCarbonCalculation
+from .models import CachedEmissionFactor
 
 
 class OptimizedCarbonCalculator:
@@ -1064,7 +1064,6 @@ class OptimizedCarbonCalculator:
 
                 return {
                     "co2e": round(total_co2e, 3),
-                    "efficiency_score": 80.0,
                     "calculation_method": f"summary_aggregate_{factor_label.replace(' ', '_')}",
                     "breakdown": breakdown,
                     "verification_status": "aggregate_summary",
@@ -1127,10 +1126,6 @@ class OptimizedCarbonCalculator:
             # Add the volume_applied_liters to the response for calculations
             volume_applied_liters = breakdown.get("volume_applied_liters", volume_liters)
 
-            # Calculate efficiency score based on EPA confidence
-            confidence_level = breakdown.get("confidence_level", 0.90)
-            efficiency_score = confidence_level * 100
-
             # INCLUDE ORIGINAL USER INPUT FOR PROPER DISPLAY
             original_volume = processed_event.get("original_volume", volume_applied_liters)
             original_volume_unit = processed_event.get("original_volume_unit", "L")
@@ -1139,7 +1134,6 @@ class OptimizedCarbonCalculator:
 
             result = {
                 "co2e": round(co2e, 3),
-                "efficiency_score": round(efficiency_score, 1),
                 "calculation_method": f"optimized_{calculation_method}",
                 "verification_status": "epa_usda_verified",
                 "breakdown": breakdown,
@@ -1171,7 +1165,6 @@ class OptimizedCarbonCalculator:
 
             return {
                 "co2e": 0.0,
-                "efficiency_score": 50.0,
                 "calculation_method": "optimized_fallback",
                 "verification_status": "calculation_error",
                 "error": str(e),
@@ -1257,7 +1250,6 @@ class OptimizedCarbonCalculator:
                 return {
                     "co2e": None,
                     "not_estimated": True,
-                    "efficiency_score": None,
                     "calculation_method": "not_estimated",
                     "usda_factors_used": False,
                     "breakdown": calculation_result.get("breakdown", {}),
@@ -1269,23 +1261,8 @@ class OptimizedCarbonCalculator:
             # Extract results from USDA calculation
             co2e_kg = calculation_result["co2e_kg"]
 
-            # Calculate efficiency score based on realistic ranges
-            area_hectares = area_covered * 0.404686  # Convert acres to hectares
-            emissions_per_hectare = co2e_kg / area_hectares if area_hectares > 0 else co2e_kg
-
-            # Base efficiency score on realistic emission ranges (lower emissions = higher efficiency)
-            if emissions_per_hectare < 10:
-                efficiency_score = 90
-            elif emissions_per_hectare < 25:
-                efficiency_score = 80
-            elif emissions_per_hectare < 50:
-                efficiency_score = 70
-            else:
-                efficiency_score = 60
-
             return {
                 "co2e": co2e_kg,
-                "efficiency_score": efficiency_score,
                 "calculation_method": f"epa_factors_based_{calculation_result['calculation_method']}",
                 # An estimate from the recorded area is not an EPA/USDA reported-fuel figure.
                 "usda_factors_used": calculation_result.get("verification_status") != "area_estimate",
@@ -1300,7 +1277,6 @@ class OptimizedCarbonCalculator:
             logger.error(f"Error in production calculation: {e}")
             return {
                 "co2e": 0.0,
-                "efficiency_score": 50.0,
                 "calculation_method": "fallback_error",
                 "usda_factors_used": False,
                 "error": str(e),
@@ -1346,8 +1322,6 @@ class OptimizedCarbonCalculator:
                 "calculation_basis": calculation_basis,
             }
 
-            # Efficiency score - electric is generally more efficient
-            efficiency_score = min(90, max(40, 85 - (co2e * 0.5)))
         else:
             # Diesel or other fuel - use liters
             fuel_amount = processed_event.get("fuel_amount_liters") or 0
@@ -1361,11 +1335,9 @@ class OptimizedCarbonCalculator:
                 "calculation_basis": calculation_basis,
             }
 
-            efficiency_score = max(10, min(90, 75 - (co2e * 3)))
 
         return {
             "co2e": round(co2e, 3),
-            "efficiency_score": round(efficiency_score, 1),
             "calculation_method": "optimized_equipment_with_electric_support",
             "usda_factors_used": True,
             "breakdown": breakdown,
@@ -1386,7 +1358,6 @@ class OptimizedCarbonCalculator:
         """
         return {
             "co2e": 0.0,
-            "efficiency_score": 100.0,
             "calculation_method": "general_event_zero_emissions",
             "usda_factors_used": True,
             "data_source": "Trazo Direct Operational Methodology",
@@ -1403,7 +1374,6 @@ class OptimizedCarbonCalculator:
         # Weather events provide transparency value but don't generate direct emissions
         return {
             "co2e": 0.0,  # Weather events don't generate emissions
-            "efficiency_score": 100.0,  # Perfect score - transparency value
             "calculation_method": "weather_transparency",
             "usda_factors_used": False,
             "transparency_note": "Weather events document environmental conditions for agricultural transparency",
@@ -2360,20 +2330,9 @@ def calculate_event_carbon_impact_enhanced(request):
         # Cache result for future identical requests
         cache.set(cache_key, result, 300)  # 5 minutes
 
-        # Log performance metrics
-        try:
-            OptimizedCarbonCalculation.objects.create(
-                production_id=f"api_calc_{int(time.time())}",
-                event_type=event_type,
-                co2e_total=result.get("co2e", 0),
-                efficiency_score=result.get("efficiency_score", 50),
-                calculation_method=result.get("calculation_method", "optimized_v2"),
-                calculation_time_ms=int(response_time),
-                usda_api_calls=0,  # Cached calls
-                cache_hits=1 if cached_result else 0,
-            )
-        except Exception:
-            pass  # Don't fail the request if logging fails
+        # NEVER: 2026-11-08 - an OptimizedCarbonCalculation row was written here on every uncached
+        # call, copying the result's self-assigned 0-100 `efficiency_score`. Nothing ever read those
+        # rows (no view, serializer, admin or ranking query). The model retires in its own slice.
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -2386,7 +2345,6 @@ def calculate_event_carbon_impact_enhanced(request):
             {
                 "error": "Calculation failed",
                 "co2e": 0.0,
-                "efficiency_score": 50.0,
                 "fallback": True,
                 "response_time_ms": (time.time() - start_time) * 1000,
             },
@@ -2735,7 +2693,6 @@ def calculate_event_carbon_impact(request):
             # fuel combustion. Per Trazo methodology: 0 kg CO2e (like weather events).
             calculation_result = {
                 "co2e": 0.0,
-                "efficiency_score": 100.0,
                 "usda_factors_used": True,
                 "calculation_method": "general_event_zero_emissions",
                 "recommendations": [],
@@ -2792,7 +2749,6 @@ def calculate_event_carbon_impact(request):
                 "error": "Failed to calculate carbon impact",
                 "details": str(e),
                 "co2e": 0.0,
-                "efficiency_score": 50.0,
                 "usda_factors_used": False,
                 "calculation_method": "error_fallback",
                 "event_type": event_type if "event_type" in locals() else "unknown",
@@ -2915,14 +2871,14 @@ class CarbonFootprintCalculatorViewSet(viewsets.ViewSet):
             elif event_type == "equipment":
                 result = calculator.calculate_equipment_event_impact(mock_event)
             else:
-                result = {"co2e": 0.1, "efficiency_score": 50.0, "calculation_method": "general_estimation"}
+                result = {"co2e": 0.1, "calculation_method": "general_estimation"}
 
             return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Calculator error: {str(e)}")
             return Response(
-                {"error": "Calculation failed", "co2e": 0.0, "efficiency_score": 50.0},
+                {"error": "Calculation failed", "co2e": 0.0},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
