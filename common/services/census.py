@@ -64,6 +64,8 @@ RETIRED_TABLES = {
     "carbon.CarbonOffsetProject",
     "carbon.CarbonOffsetPurchase",
     "carbon.CarbonReport",
+    # carbon 0054 (2026-11-08): the score log, emptied by clear_optimized_carbon_calculations first.
+    "carbon.OptimizedCarbonCalculation",
 }
 
 #: Loose `(type, id)` pairs that point at an event row by code with no foreign key behind them.

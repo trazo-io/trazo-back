@@ -93,7 +93,7 @@ class Command(BaseCommand):
                 """
                 SELECT table_name 
                 FROM information_schema.tables 
-                WHERE table_name IN ('carbon_cached_emission_factors', 'carbon_optimized_calculations');
+                WHERE table_name IN ('carbon_cached_emission_factors');
             """
             )
             models = cursor.fetchall()
