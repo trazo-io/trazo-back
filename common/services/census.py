@@ -64,7 +64,8 @@ RETIRED_TABLES = {
     "carbon.CarbonOffsetProject",
     "carbon.CarbonOffsetPurchase",
     "carbon.CarbonReport",
-    # carbon 0054 (2026-11-08): the score log, emptied by clear_optimized_carbon_calculations first.
+    # carbon 0054 (2026-11-08): the score log, emptied first by clear_optimized_carbon_calculations
+    # (the command lives in the code up to #347's merge commit c109495a; 0054 deletes it).
     "carbon.OptimizedCarbonCalculation",
 }
 

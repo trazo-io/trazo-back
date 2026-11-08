@@ -10,7 +10,9 @@ foreign key points to or from it, so no delete collector reads it, and since #34
 the previous containers queries it (no view, serializer, admin, task or command).
 
 1. `refuse_if_a_row_exists` refuses if the table holds a row. The deploy then fails and nothing
-   changes: run `clear_optimized_carbon_calculations --apply` first.
+   changes. The command that empties it with a copy of each row is deleted alongside this
+   migration, so on a database that still holds rows (a stale staging copy, a restored snapshot)
+   run it from the code before 0054: #347's merge commit c109495a (review of #350).
 2. `lock_timeout`: fail after 5 s instead of queueing behind a long transaction, both directions.
 3. The model leaves the state, and the table goes with a plain `DROP TABLE`, without the `CASCADE`
    that Django's own DeleteModel would issue: anything else depending on it, a view or a foreign
@@ -50,8 +52,10 @@ def refuse_if_a_row_exists(apps, schema_editor):
         held = rows_held(cursor)
     if held:
         raise RuntimeError(
-            f"carbon 0054: {TABLE} holds {held} rows; nothing was dropped. Run "
-            "`manage.py clear_optimized_carbon_calculations --apply` first, which keeps a copy of each."
+            f"carbon 0054: {TABLE} holds {held} rows; nothing was dropped. Empty it with a copy of "
+            "each row first: from a checkout of commit c109495a (#347, the code before this migration, "
+            "where the command still exists), run `manage.py clear_optimized_carbon_calculations "
+            "--report <path> --apply` against this database. Do not DELETE by hand: that keeps no copy."
         )
 
 
