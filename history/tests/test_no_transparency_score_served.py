@@ -350,3 +350,28 @@ class TheGuardCanActuallyFail(TestCase):
 
     def test_a_clean_payload_passes(self):
         self.assertEqual(forbidden_hits({"events_count": 12, "photos": [{"url": "x"}]}), [])
+
+
+class TheQrPageNeverReadsAnErrorAsZero(_SeasonFixture):
+    """The calculator's error path once returned zero counts. On the public QR page that published
+    "0 practices documented" for a farm that had logged events. An unknown is not a zero: a
+    calculator error reaches the view, which answers 500 (review of #353)."""
+
+    def _get(self):
+        from rest_framework.test import APIClient
+
+        return APIClient().get(f"/api/transparency/{self.history.public_id}/")
+
+    def test_the_page_serves_the_real_count(self):
+        response = self._get()
+        self.assertEqual(response.status_code, 200, response.content)
+        details = response.json()["standard_view"]["transparency_details"]
+        self.assertEqual(details["actual_events"], 1)  # the fixture's one event, read for real
+
+    def test_a_calculator_error_is_a_500_not_a_zero(self):
+        from unittest.mock import patch
+
+        with patch.object(TransparencyCalculator, "_count_all_events", side_effect=RuntimeError("db down")):
+            response = self._get()
+        self.assertEqual(response.status_code, 500, response.content)
+        self.assertNotIn("actual_events", response.content.decode())

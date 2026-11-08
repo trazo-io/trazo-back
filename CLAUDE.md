@@ -110,9 +110,9 @@ SOURCE, never against the code.
 ## ⛔ The transparency score is RETIRED as a CONCEPT
 No weights table, no formula, no 0-100, no percentage, no grade — and **never** described as
 "a silent backend KPI" or "an internal metric", because while the concept exists it gets printed.
-`History.transparency_score` is still written on save and `transparency_calculator.py` still
-exists; **do not treat their existence as permission** to add a reader, a serializer field or a
-nudge. Producer dashboard = COUNTS plus a per-record checklist naming the specific missing
+The `History.transparency_score` column is gone (history 0237/0238) and
+`transparency_calculator.py` returns counts only (2026-11-08); **do not add back** a reader, a
+serializer field, a percentage or a nudge. Producer dashboard = COUNTS plus a per-record checklist naming the specific missing
 document. Consumer/anonymous payloads = factual evidence only.
 
 ## Consumer payload safety

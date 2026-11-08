@@ -51,7 +51,7 @@ QUICK_COMMENTS = [
     "So cool to see every step of the production!",
     "This is exactly the kind of transparency I want from food producers.",
     "Shared this with my family - they were amazed at the detail.",
-    "Great quality product, love the transparency score.",
+    "Great quality product, love seeing the photos from the field.",
     "First time scanning a QR code on produce - very informative!",
     "The IPM approach is impressive. Supporting sustainable farming!",
     "Really appreciate the detailed farming events.",

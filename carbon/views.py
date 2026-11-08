@@ -3689,8 +3689,8 @@ class ProductionSerializer(serializers.ModelSerializer):
     queries, ~3.3 s in production for a 3 KB response), and the request fires on EVERY admin
     page (`useMilestones` in `layouts/Admin.tsx`). No frontend consumer read either field —
     `useMilestones`/`useOnboardingChecklist` read `events_count`, `finish_date`, `published`.
-    The score has its own homes (`transparency/` quick_view, `dashboard_metrics`); the producer
-    score is a backend KPI with no widget (producer-score retirement, 2026-08-11).
+    The score has no home now: it is retired as a concept, and its column went in history
+    0237/0238.
     """
 
     events_count = serializers.SerializerMethodField()

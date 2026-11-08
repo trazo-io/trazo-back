@@ -592,6 +592,10 @@ jobs:
       # test_clear_optimized_carbon_calculations (its command went with the model in carbon 0054).
       # The table stays gone, the migration refuses a row, and it reverses. It does not read the
       # sibling repo.
+      #
+      # 2026-11-08: history.tests.test_transparency_calculator joins (rewritten). The calculator
+      # returns counts and the farming approach only; it no longer computes a percentage, a status
+      # or a level. DB-free. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -614,6 +618,7 @@ jobs:
             history.tests.test_private_note \
             history.tests.test_packet_section_vocabulary.PacketSectionVocabularyTests \
             history.tests.test_no_transparency_score_served \
+            history.tests.test_transparency_calculator \
             history.tests.test_calapooia_fixture_integrity \
             history.tests.test_calapooia_renewal_specimen \
             certifications.tests.test_certified_parcel_branch \
