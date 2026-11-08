@@ -1335,7 +1335,6 @@ class OptimizedCarbonCalculator:
                 "calculation_basis": calculation_basis,
             }
 
-
         return {
             "co2e": round(co2e, 3),
             "calculation_method": "optimized_equipment_with_electric_support",

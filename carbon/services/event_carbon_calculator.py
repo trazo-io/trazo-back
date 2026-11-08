@@ -2787,7 +2787,6 @@ class EventCarbonCalculator:
             # Generate recommendations
             recommendations = self._generate_general_recommendations(event, base_emissions, general_event_type)
 
-
             result = {
                 "co2e": round(base_emissions, 3),
                 "calculation_method": calculation_result["calculation_method"],
@@ -4528,4 +4527,3 @@ class EventCarbonCalculator:
             )
 
         return recommendations
-
