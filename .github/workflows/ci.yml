@@ -468,6 +468,10 @@ jobs:
       # brand-owners/, and CCOF G7.0 C, OTCO C8 8.3 and WSDA N 6-7 held open until each owner has it.
       # Also proves BrandOwnerViewSet's tenancy. Builds its own farms; does not read the sibling repo.
       #
+      # 2026-11-08: certifications.tests.test_certifier_inspections joins. The farm's record of its certifier's
+      # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
+      # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
+      #
       # 2026-11-05: certifications.tests.test_seedling_suppliers_in_plan joins. G3.0a names each supplier a
       # transplant purchase names and whether a copy covers it; the copy rides under suppliers/, and the
       # coverage page holds CCOF A2, OTCO 3.1-2 and WSDA B1/1a open until it does. Imports the supplier
@@ -705,6 +709,7 @@ jobs:
             certifications.tests.test_agent_asks_blank \
             certifications.tests.test_seedling_suppliers_in_plan \
             certifications.tests.test_brand_owners \
+            certifications.tests.test_certifier_inspections \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

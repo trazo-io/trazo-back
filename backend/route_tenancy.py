@@ -186,6 +186,25 @@ ROUTE_TENANCY = {
             ".test_another_farms_document_fails_like_a_missing_one",
         ),
     ),
+    "certifications.views.CertifierInspectionViewSet": Route(
+        COMPANY,
+        "nested; admins and managers only; the report must be the URL's farm",
+        outsider_tests=(
+            "certifications.tests.test_certifier_inspections.InspectionTenancyTests"
+            ".test_another_company_reaches_nothing",
+            "certifications.tests.test_certifier_inspections.InspectionTenancyTests"
+            ".test_another_farms_document_fails_like_a_missing_one",
+        ),
+    ),
+    "certifications.views.CertifierNoticeViewSet": Route(
+        COMPANY,
+        "nested; admins and managers only; every file and the inspection must be the URL's farm",
+        outsider_tests=(
+            "certifications.tests.test_certifier_inspections.NoticeTenancyTests.test_another_company_reaches_nothing",
+            "certifications.tests.test_certifier_inspections.NoticeTenancyTests"
+            ".test_another_farms_files_and_inspection_fail_like_missing_ones",
+        ),
+    ),
     "certifications.views.ProductionEquipmentViewSet": Route(
         COMPANY,
         "nested; admins and managers only; establishment set from the URL",

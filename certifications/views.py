@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import connections, transaction
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -31,6 +31,8 @@ from .models import (
     Certification,
     CertifierAccessLink,
     CertifierAccessLog,
+    CertifierInspection,
+    CertifierNotice,
     LandownerAffidavit,
     NationalListSubstance,
     OMRIProduct,
@@ -50,6 +52,8 @@ from .serializers import (
     BrandOwnerSerializer,
     CertificationSerializer,
     CertifierAccessLinkSerializer,
+    CertifierInspectionSerializer,
+    CertifierNoticeSerializer,
     LandownerAffidavitSerializer,
     OrganicSystemPlanListSerializer,
     OrganicSystemPlanSerializer,
@@ -490,6 +494,67 @@ class BrandOwnerViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
             .select_related("certificate_document", "agreement_document")
             .order_by("name", "pk")
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+        )
+
+
+class CertifierInspectionViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The farm's own record of its certifier's inspections. Admins and farm managers only, like the
+    other registers: an inspection report is the certifier's finding about this operation."""
+
+    serializer_class = CertifierInspectionSerializer
+    permission_classes = [IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)]
+
+    def get_queryset(self):
+        return (
+            CertifierInspection.objects.filter(
+                establishment_id=self.kwargs.get("establishment_pk"),
+                establishment__company=self.company,
+            )
+            .select_related("report_document")
+            .order_by("-inspected_on", "-pk")
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        inspection = self.get_object()
+        if inspection.notices.exists():
+            # PROTECT on the link: say so by code instead of a server error.
+            raise ValidationError(
+                {
+                    "detail": "Items from the agent are recorded under this inspection. Remove or move them first.",
+                    "code": "inspection_has_notices",
+                }
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
+class CertifierNoticeViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """Items the certifying agent sent the farm (§ 205.662 notices and the agent's other items), each
+    with the operation's response and the agent's resolution. Admins and farm managers only."""
+
+    serializer_class = CertifierNoticeSerializer
+    permission_classes = [IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)]
+
+    def get_queryset(self):
+        return (
+            CertifierNotice.objects.filter(
+                establishment_id=self.kwargs.get("establishment_pk"),
+                establishment__company=self.company,
+            )
+            .select_related("notice_document", "resolution_document", "inspection")
+            .prefetch_related("response_links__document")
+            .order_by(F("received_on").desc(nulls_last=True), "-pk")
         )
 
     def perform_create(self, serializer):
