@@ -314,13 +314,20 @@ items:
 - ref: D6
   asks: 'If you answered yes to a, b, c, or d above: list the years and organic certification agencies,
     attach a copy of all relevant letters, and describe all corrective actions taken.'
-  status: not_covered
+  status: partial
   severity: P3
   trazo:
-    prints: —
-  gap: Follows directly from D5's absence — no fields exist for years, agencies, letters, or corrective-action
-    descriptions.
-  fix: Part of the same optional D5 page.
+    where: "02s-renewal-status-and-routing.pdf: Certifier inspections and notices (operation's record); the agent's letters and the files sent with each response are attached under inspections/"
+    models:
+    - certifications.models.CertifierNotice.notice_document
+    - certifications.models.CertifierNotice.response_text
+    - certifications.models.CertifierNoticeResponseDocument.document
+    - certifications.models.CertifierInspection.certifying_agent
+    prints: 02s-renewal-status-and-routing.pdf, certifier inspections and notices; files under inspections/
+  gap: The operation's own record of each agent's letters, its corrective actions and the files it sent
+    exists (2026-11-08) and prints on 02s with the letters attached, but D5a to D5d, the events that make
+    D6 apply, are still not asked, so nothing says which letters D6 is about.
+  fix: Part of the same optional D5 page; list D6 from the inspection record once D5 is answered.
 - ref: E1
   asks: 'CDFA California Organic Program Registration number (grower, post-harvest handling, produce broker),
     e.g. 12-123456 — required for operations producing organic product in California prior to first sale.

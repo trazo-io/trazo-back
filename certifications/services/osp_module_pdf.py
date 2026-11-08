@@ -4026,6 +4026,120 @@ def _unchanged_but_changed_flowables(filing, osp, styles) -> list:
     return story
 
 
+def _inspection_file_line(label: str, doc) -> str:
+    """Where one inspection-record file is: its path in this ZIP, or why it is not in it. Read from
+    the manifest of the build in progress, so the page never names a file the reader will not find."""
+    from certifications.services.packet_attachments import ATTACHED, current_manifest, inspection_document_source
+
+    manifest = current_manifest()
+    shipped = manifest.for_source(inspection_document_source(doc)) if manifest else []
+    if shipped and shipped[0].state == ATTACHED:
+        return f"{label}: attached to this packet as {shipped[0].zip_path}."
+    if shipped:
+        return f"{label}: on file in Trazo, not in this packet ({shipped[0].detail})."
+    return f"{label}: on file in Trazo, not in this packet."
+
+
+_INSPECTION_STATUS_WORDS = {
+    "resolved": "The certifying agent's resolution notice is on file.",
+    "resolution_stated_no_copy": (
+        "A resolution date of {resolved} is recorded; the certifying agent's resolution notice is not attached."
+    ),
+    "respond_by_passed_no_response": "The rebut-or-correct date has passed and no response is recorded.",
+    "response_sent": "A response is recorded. No resolution notice from the certifying agent is recorded yet.",
+    "open": "No response is recorded yet.",
+}
+
+
+def _certifier_inspection_flowables(osp, styles) -> list:
+    """02s: the operation's own record of its certifier's inspections and of the items the agent
+    sent (7 CFR 205.662), with its responses.
+
+    Every line is what the operation recorded; nothing here is a finding by Trazo, and an empty
+    record says it is empty in Trazo, never that the operation has no noncompliance.
+    """
+    from certifications.services.certifier_notices import RESOLVED_LISTED_FOR_DAYS, notice_status, packet_records
+
+    latest, inspections, notices = packet_records(osp.establishment)
+    out = [
+        Spacer(1, 10),
+        Paragraph("Certifier inspections and notices (operation's record)", styles["header"]),
+        Paragraph(
+            _escape(
+                "As recorded by the operation in Trazo; Trazo receives nothing from the certifying agent. "
+                "Listed: the most recent inspection, every item with no resolution notice attached, and "
+                f"items resolved in the last {RESOLVED_LISTED_FOR_DAYS} days."
+            ),
+            styles["meta"],
+        ),
+    ]
+    if latest is None:
+        out.append(Paragraph("No inspection is recorded in Trazo.", styles["body"]))
+    else:
+        out.append(
+            Paragraph(
+                _escape(f"Date of the last organic inspection: {latest.inspected_on.isoformat()}."), styles["body"]
+            )
+        )
+    for inspection in inspections:
+        parts = [f"Inspection on {inspection.inspected_on.isoformat()}"]
+        if inspection.certifying_agent:
+            parts.append(f"by {inspection.certifying_agent}")
+        line = " ".join(parts)
+        extras = []
+        if inspection.inspection_kind:
+            extras.append(inspection.get_inspection_kind_display().lower())
+        if inspection.inspector_name:
+            extras.append(f"inspector {inspection.inspector_name}")
+        if extras:
+            line += f" ({', '.join(extras)})"
+        out.append(Paragraph(_escape(f"• {line}."), styles["body"]))
+        if inspection.report_document_id:
+            out.append(
+                Paragraph(
+                    _escape(_inspection_file_line("Inspection report", inspection.report_document)), styles["meta"]
+                )
+            )
+        else:
+            out.append(Paragraph("Inspection report: not attached in Trazo.", styles["meta"]))
+    if not notices:
+        out.append(Paragraph("No item from the certifying agent is recorded in Trazo.", styles["body"]))
+        return out
+    open_count = sum(1 for n in notices if n.kind == "notice_of_noncompliance" and notice_status(n) != "resolved")
+    out.append(
+        Paragraph(
+            _escape("Notices of noncompliance with no resolution notice attached, as recorded: " f"{open_count}."),
+            styles["body"],
+        )
+    )
+    for notice in notices:
+        name = notice.agent_label if notice.kind == "other_item" else "Notice of noncompliance (§ 205.662(a))"
+        heading = name + (f", dated {notice.received_on.isoformat()}" if notice.received_on else "")
+        if notice.inspection_id:
+            heading += f", from the inspection on {notice.inspection.inspected_on.isoformat()}"
+        out.append(Paragraph(_escape(f"• {heading}: {notice.description}"), styles["body"]))
+        lines = []
+        if notice.notice_document_id:
+            lines.append(_inspection_file_line("The agent's letter", notice.notice_document))
+        if notice.respond_by:
+            lines.append(f"Rebut or correct by {notice.respond_by.isoformat()} (§ 205.662(a)(3)).")
+        if notice.response_kind or (notice.response_text or "").strip() or notice.response_sent_on:
+            response = notice.get_response_kind_display() if notice.response_kind else "Response"
+            if notice.response_sent_on:
+                response += f", sent {notice.response_sent_on.isoformat()}"
+            text = (notice.response_text or "").strip()
+            lines.append(f"{response}: {text}" if text else f"{response}.")
+        for link in notice.response_links.all():
+            lines.append(_inspection_file_line("Sent with the response", link.document))
+        if notice.resolution_document_id:
+            lines.append(_inspection_file_line("Resolution notice (§ 205.662(b))", notice.resolution_document))
+        resolved = notice.resolution_received_on.isoformat() if notice.resolution_received_on else ""
+        lines.append(_INSPECTION_STATUS_WORDS[notice_status(notice)].format(resolved=resolved))
+        for line in lines:
+            out.append(Paragraph(_escape(line), styles["meta"]))
+    return out
+
+
 def _renewal_status_pdf(osp) -> bytes:
     """Document 02s: what happened to the year's filing after it was filed.
 
@@ -4113,6 +4227,7 @@ def _renewal_status_pdf(osp) -> bytes:
             story.append(Spacer(1, 6))
     story += _unchanged_but_changed_flowables(ctx["filing"], osp, styles)
     story += _renewal_routing_flowables(osp, styles)
+    story += _certifier_inspection_flowables(osp, styles)
     story += _changed_sections_flowables(osp, styles)
     story += _land_table_flowables(osp, styles)
     spec = is_specimen(getattr(osp, "establishment", None))

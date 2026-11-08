@@ -94,11 +94,15 @@ items:
     - parcel_application.prior_certifier_name
     - parcel_application.prior_certificate_site_number
     - parcel_application.certificate_card
+    models:
+    - certifications.models.CertifierInspection.inspected_on
     prints: parcels/parcel-application-<name>.pdf §F — certifier, certificate of record and the certificate's
-      site number
+      site number; 02s-renewal-status-and-routing.pdf, the operation's own last inspection date
   gap: The certifier, certificate number and site number are captured (closed 2026-09-09 with AGR 2264 ref
-    6). The date of the last organic inspection (i) has no field.
-  fix: Add `last_inspection_date`.
+    6). The date of the last organic inspection (i) is answered only when the signer is this operation
+    (its own inspection record, printed on 02s since 2026-11-08); a different previous manager's
+    inspection date has no field, and the parcel application does not print it.
+  fix: Print the operation's last inspection date in §F when the prior certifier is the operation's own.
 - ref: 5b
   asks: If yes, will any acreage associated with this site remain under your management? Yes, a portion of
     the site remains on my certificate (acres remaining) / No, site completely removed from my certificate.
