@@ -465,7 +465,7 @@ def _facility_2519(facility, crops) -> dict:
     """One facility's AGR 2519, from its record: what to copy, and what the record leaves empty."""
     from certifications.facility_activities import ACTIVITY_KEYS
 
-    certified = bool((facility.certification_number or "").strip())
+    certified = facility.certificate_on_record
     location = {
         "name": facility.name,
         "address": (facility.address or "").strip(),
@@ -493,7 +493,7 @@ def _facility_2519(facility, crops) -> dict:
         "responsibility": RESPONSIBILITY_CERTIFIED if certified else RESPONSIBILITY_UNCERTIFIED,
         "certificate": (
             {
-                "number": facility.certification_number.strip(),
+                "number": (facility.certification_number or "").strip(),
                 "certifier": (facility.certifier_name or "").strip(),
                 "copy_on_file": bool(facility.cert_document),
             }

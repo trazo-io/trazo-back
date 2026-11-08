@@ -206,3 +206,23 @@ class OnTheModulePage(_Farm):
     def test_a_certified_facility_prints_no_exemption(self):
         self.facility(name="Valley Cold Storage", certification_number="WSDA-1234", exemption_basis="stale text")
         self.assertNotIn("exempt from certification", self.page())
+
+
+class OneDefinitionOfCertified(_Farm):
+    """Review of back #349: the copy sheet read a certificate number only, the PDF a number or a certifier."""
+
+    def test_a_certifier_without_a_number_reads_certified_on_both(self):
+        self.facility(name="Valley Cold Storage", certifier_name="Oregon Tilth", exemption_basis="stale")
+        (entry,) = self.row("facilities_2519")["value"]
+        self.assertEqual(entry["responsibility"], "certified_third_party")
+        self.assertEqual(entry["certificate"]["certifier"], "Oregon Tilth")
+        self.assertNotIn("exemption_basis", entry["missing"])
+        self.assertNotIn("exempt from certification", OnTheModulePage.page(self))
+
+    def test_whitespace_is_no_certificate_on_either(self):
+        self.facility(name="Harbor Brokers", certification_number="  ", exemption_basis="Sealed cartons only")
+        (entry,) = self.row("facilities_2519")["value"]
+        self.assertEqual(entry["responsibility"], "uncertified_third_party")
+        page = OnTheModulePage.page(self)
+        self.assertIn("No organic certificate is on file for this facility", page)
+        self.assertIn("exempt from certification (§ 205.101): Sealed cartons only", page)

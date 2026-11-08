@@ -359,6 +359,14 @@ class PostHarvestFacility(models.Model):
         return self.operated_by == "this_operation"
 
     @property
+    def certificate_on_record(self) -> bool:
+        """Whether the record names an organic certificate for this facility: a certificate number or a
+        certifier. The one definition the module PDF's handler table and the AGR 2519 copy sheet both read,
+        so one packet cannot call a facility certified on one page and uncertified on another (review of
+        back #349). Whitespace is not a value."""
+        return bool((self.certification_number or "").strip() or (self.certifier_name or "").strip())
+
+    @property
     def needs_own_certificate(self) -> bool:
         """False for the operation's own facility: its own certificate covers it."""
         return not self.is_own

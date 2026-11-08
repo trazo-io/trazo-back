@@ -970,7 +970,7 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
             out.append(Paragraph(_escape(where), styles["meta"]))
 
         current = facility.cert_is_current
-        if facility.certification_number or facility.certifier_name:
+        if facility.certificate_on_record:
             cert = " ".join(
                 x
                 for x in (
@@ -1058,7 +1058,7 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
                 Paragraph(_escape("Activities at this facility: " + "; ".join(activities) + "."), styles["meta"])
             )
         exemption = (facility.exemption_basis or "").strip()
-        if exemption and not (facility.certification_number or facility.certifier_name):
+        if exemption and not facility.certificate_on_record:
             out.append(
                 Paragraph(
                     _escape(f"How the operation states it is exempt from certification (§ 205.101): {exemption}"),
