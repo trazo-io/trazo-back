@@ -313,6 +313,23 @@ class PostHarvestFacility(models.Model):
         default="",
         help_text="Products it handles or stores for you, with detail and packaging form, one per line",
     )
+    # WSDA AGR 2519 ("Additional Facilities and Third-Parties"), filed for each such facility when the
+    # crop OSP's §J 13, §K 1 or §L 1 is Yes: which of the form's activities happen there
+    # (`certifications.facility_activities`), as the operator states them. Never inferred from the
+    # facility's type or role.
+    activities = models.JSONField(
+        blank=True,
+        default=list,
+        help_text="The activities that happen at this facility, in WSDA AGR 2519's terms",
+    )
+    # AGR 2519's third responsibility statement: a third party that is not certified "but is responsible
+    # for the activities described", with "Briefly explain how the third-party is exempt from
+    # certification" (§ 205.101). Asked of another operation's facility only.
+    exemption_basis = models.TextField(
+        blank=True,
+        default="",
+        help_text="How an uncertified third party is exempt from certification (§ 205.101)",
+    )
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

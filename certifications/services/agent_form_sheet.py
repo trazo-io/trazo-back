@@ -182,6 +182,18 @@ FORM_ITEM_ROWS = {
             "Table (site, name, changes)": ("site_changes",),
             "Instructions (acreage removed)": ("acreage_removed",),
         },
+        # One form per facility: the facilities ride in one row, as the sites of 2516 do.
+        "2519-additional-facilities": {
+            "Header (business name, cert no)": ("facilities_2519",),
+            "Instructions (which facilities)": ("facilities_2519_when",),
+            "Location Information": ("facilities_2519",),
+            "Activity Information": ("facilities_2519",),
+            "Description": ("facilities_2519",),
+            "Responsibility": ("facilities_2519",),
+            "Responsibility (exemption explanation)": ("facilities_2519",),
+            "Additional Comments": ("facilities_2519_comments",),
+            "Note (who must be certified)": ("facilities_2519_exempt_note",),
+        },
     },
 }
 
@@ -439,6 +451,89 @@ def _wsda_rows(osp, filing, ctx, submission, company) -> list[SheetRow]:
             {"excluded": excluded},
         ),
         SheetRow("2516", "acreage_removed", "note"),
+        *_wsda_2519_rows(est, getattr(company, "name", "") or "", cert_no),
+    ]
+
+
+#: AGR 2519's three responsibility statements, by what the facility record points to. The operator
+#: ticks one; the sheet never does.
+RESPONSIBILITY_CERTIFIED = "certified_third_party"
+RESPONSIBILITY_UNCERTIFIED = "uncertified_third_party"
+
+
+def _facility_2519(facility, crops) -> dict:
+    """One facility's AGR 2519, from its record: what to copy, and what the record leaves empty."""
+    from certifications.facility_activities import ACTIVITY_KEYS
+
+    certified = bool((facility.certification_number or "").strip())
+    location = {
+        "name": facility.name,
+        "address": (facility.address or "").strip(),
+        "city": (facility.city or "").strip(),
+        "state": (facility.state or "").strip(),
+        "postal_code": (facility.postal_code or "").strip(),
+    }
+    activities = [key for key in ACTIVITY_KEYS if key in (facility.activities or [])]
+    products = (facility.products_detail or "").strip()
+    missing = [key for key in ("address", "city", "state", "postal_code") if not location[key]]
+    if not activities:
+        missing.append("activities")
+    if not products and not crops:
+        missing.append("description")
+    if not certified and not (facility.exemption_basis or "").strip():
+        missing.append("exemption_basis")
+    return {
+        "facility_id": facility.pk,
+        **location,
+        "activities": activities,
+        "products_detail": products,
+        "crops": [{"crop": crop, "years": years} for crop, years in crops],
+        # Which statement the record points to: another operation with a certificate number on file, or
+        # without one. The sheet names it; the operator ticks it and gives the attachments.
+        "responsibility": RESPONSIBILITY_CERTIFIED if certified else RESPONSIBILITY_UNCERTIFIED,
+        "certificate": (
+            {
+                "number": facility.certification_number.strip(),
+                "certifier": (facility.certifier_name or "").strip(),
+                "copy_on_file": bool(facility.cert_document),
+            }
+            if certified
+            else None
+        ),
+        "exemption_basis": "" if certified else (facility.exemption_basis or "").strip(),
+        "missing": missing,
+    }
+
+
+def _wsda_2519_rows(est, business_name: str, cert_no: str) -> list[SheetRow]:
+    """WSDA's Additional Facilities and Third-Parties (AGR 2519), one per facility another operation
+    runs for this one (AGR 2121 §J 13, §K 1, §L 1). The operation's own facilities are not listed: the
+    form covers an own facility only at a different address from the primary certified location, which
+    Trazo does not know, so the sheet names them for the operator to decide."""
+    from certifications.models import PostHarvestFacility
+    from certifications.services.facility_crops import crops_by_facility
+
+    facilities = list(PostHarvestFacility.objects.filter(establishment=est).order_by("name", "pk"))
+    third_party = [f for f in facilities if not f.is_own]
+    own = [f.name for f in facilities if f.is_own]
+    crops = crops_by_facility(est) if third_party else {}
+    header = {"business_name": business_name, "cert_no": cert_no, "own_facilities": own}
+    if not third_party:
+        main = SheetRow("2519", "facilities_2519", "note", extra={**header, "reason": "none_on_file"})
+    else:
+        main = SheetRow(
+            "2519",
+            "facilities_2519",
+            "value",
+            [_facility_2519(f, crops.get(f.pk, [])) for f in third_party],
+            "facilities",
+            header,
+        )
+    return [
+        SheetRow("2519", "facilities_2519_when", "note"),
+        main,
+        SheetRow("2519", "facilities_2519_comments", "yours"),
+        SheetRow("2519", "facilities_2519_exempt_note", "note"),
     ]
 
 

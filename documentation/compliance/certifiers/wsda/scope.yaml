@@ -55,23 +55,6 @@ forms:
     commercial-availability search, which this plan does answer.
   note: >-
     INTERNAL. The grower-side equivalent is `g3_0_seeds.ca_search_before_use`.
-- form: Additional Facilities and Third-Parties
-  document_id: AGR 2519
-  disposition: gap
-  triggered_from: "AGR 2121 §B 2 (off-site seedling production); §J 13, §K 1, §L 1 (third-party
-    handling, storage and post-harvest); §O 5 (records held off site)"
-  reason: >-
-    Trazo does not generate this form. Where another operation handles, stores or post-harvest
-    processes this crop, the plan records that operation by name, address, role and certificate
-    status, and prints it in the harvest, storage and post-harvest sections — but the agent's own
-    facilities form is filed directly.
-  note: >-
-    INTERNAL. Five register rows quote this form by name as the demanded attachment, and
-    2121-J ref 13's fix says to generate an equivalent "or state its absence in the coverage
-    page". It was stated nowhere until the published-inventory guard landed, because
-    exclusion_rows() reads scope.yaml alone. The PostHarvestFacility record already holds most
-    of the content.
-
 - form: New Application for Organic Certification
   document_id: AGR 2500
   disposition: decision

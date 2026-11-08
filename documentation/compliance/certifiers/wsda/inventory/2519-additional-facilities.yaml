@@ -1,0 +1,104 @@
+source:
+  file: 2519_Additional_Facilities_and_Third-Parties.pdf
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2519_Additional_Facilities_and_Third-Parties.pdf
+  sha256: abc387eba9b2bda9323040364bcb90198bd3bef09cc822b2cd01e51bfe4d02ef
+  revision: R 01/24
+  retrieved: '2026-11-08'
+extracted_by: extract_form_inventory 1
+overrides:
+- op: add
+  ref: Header (business name, cert no)
+  after: ''
+  text: 'Business Name: / Cert No:'
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Instructions (which facilities)
+  after: Header (business name, cert no)
+  text: Use this form to describe any organic facilities or activities your business or a contracted third-party
+    perform at a different address from your primary certified location. This form should not be used for sites
+    (fields) used to produce organic crops.
+  kind: instruction
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Location Information
+  after: Instructions (which facilities)
+  text: 'Facility or Third-party Name: / Physical Address: / City: / State: / Zip code:'
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Activity Information
+  after: Location Information
+  text: 'Identify the general types of activities occurring at this facility or location: General activities / Production
+    activities / Handling activities that are potentially exempt / Handling activities that require certification'
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Description
+  after: Activity Information
+  text: Provide a description of the organic activities occurring at this location. Include details about the specific
+    organic crop types, livestock, or products involved.
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Responsibility
+  after: Description
+  text: Identify the responsible party and attach the requested information.
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Responsibility (exemption explanation)
+  after: Responsibility
+  text: 'Briefly explain how the third-party is exempt from certification:'
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Additional Comments
+  after: Responsibility (exemption explanation)
+  text: 'Additional Comments:'
+  kind: question
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+- op: add
+  ref: Note (who must be certified)
+  after: Additional Comments
+  text: In general, any business involved in the organic supply chain must be certified. There are only narrow exemptions
+    for retail establishments and some handlers of tamper-evident packaged products. WSDA must be able to verify
+    any uncertified operation in your supply chain qualifies for an exemption under section 205.101 of the USDA
+    organic regulations.
+  kind: instruction
+  reason: 'The form has no numbered items: a header, headed sections and three responsibility statements.'
+items:
+- ref: Header (business name, cert no)
+  text: 'Business Name: / Cert No:'
+  kind: question
+- ref: Instructions (which facilities)
+  text: Use this form to describe any organic facilities or activities your business or a contracted third-party
+    perform at a different address from your primary certified location. This form should not be used for sites
+    (fields) used to produce organic crops.
+  kind: instruction
+- ref: Location Information
+  text: 'Facility or Third-party Name: / Physical Address: / City: / State: / Zip code:'
+  kind: question
+- ref: Activity Information
+  text: 'Identify the general types of activities occurring at this facility or location: General activities / Production
+    activities / Handling activities that are potentially exempt / Handling activities that require certification'
+  kind: question
+- ref: Description
+  text: Provide a description of the organic activities occurring at this location. Include details about the specific
+    organic crop types, livestock, or products involved.
+  kind: question
+- ref: Responsibility
+  text: Identify the responsible party and attach the requested information.
+  kind: question
+- ref: Responsibility (exemption explanation)
+  text: 'Briefly explain how the third-party is exempt from certification:'
+  kind: question
+- ref: Additional Comments
+  text: 'Additional Comments:'
+  kind: question
+- ref: Note (who must be certified)
+  text: In general, any business involved in the organic supply chain must be certified. There are only narrow exemptions
+    for retail establishments and some handlers of tamper-evident packaged products. WSDA must be able to verify
+    any uncertified operation in your supply chain qualifies for an exemption under section 205.101 of the USDA
+    organic regulations.
+  kind: instruction
