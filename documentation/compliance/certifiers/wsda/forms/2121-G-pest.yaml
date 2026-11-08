@@ -39,13 +39,18 @@ items:
 
   - ref: "4"
     asks: "Which preventative pest control strategies do you implement on your operation? (Crop rotation / Insect or rodent traps / Structures for wildlife / Beneficial habitat / Resistant varieties / Mating disruption / Timing of planting / Release of beneficials / Trap crops / Companion planting / Physical barriers / Physical removal / Other.)"
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other]
-      prints: "modules/G5_0.pdf §A; narrative § 205.206(a)"
-    gap: "Same three-way split named in full at F3: WSDA asks this as its own section rather than as extra columns on one matrix, so Trazo's pest-type-blind `prevention_practices` list prints the same generic text here as it does under F (weed) and H (disease) — a WSDA reviewer sees the identical paragraph three times with nothing that says which parts of it are actually about insects, rodents, birds, mites or slugs (the taxa ref 3 asks the grower to name). `Trap crops` and `companion planting` have no matching option in Trazo at all (CCOF's own G5.0 register already names `trap_crops` as `not_covered`); `mating disruption` and 'insect or rodent traps' are absent too — only `beneficial_habitat`, `beneficial_release`, `resistant_varieties`, and `vertebrate_trapping`/`vertebrate_exclusion` (a rough match for 'physical barriers' against vertebrates specifically, not insects or rodents generally) line up. As at F3, this is a request-for-information severity, not a bounce: the content that does exist is substantively responsive."
-    fix: "Same structural fix as F3 — a pest-type dimension on `prevention_practices`. Additionally add `trap_crops` (per CCOF's own register), `companion_planting`, `mating_disruption` and `insect_rodent_traps` as options."
+      questions:
+      - g5_0_pest.practices_insects
+      - g5_0_pest.practices_insects_other
+      - g5_0_pest.practices_vertebrates
+      - g5_0_pest.practices_vertebrates_other
+      - g5_0_pest.prevention_practices
+      - g5_0_pest.prevention_practices_other
+      prints: "modules/G5_0.pdf §A; narrative § 205.206"
+    # Closed 2026-11-07 (content 2026.11.22). Answered by the insect and the vertebrate lists, which offer traps,
+    # structures for wildlife, physical barriers and removal, mating disruption, trap crops and companion planting.
 
   - ref: "5"
     asks: "Describe the records you maintain regarding your preventative pest management efforts."

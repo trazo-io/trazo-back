@@ -283,7 +283,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   G6.4 §B and G6.2 §A (CCOF G6.4 A1; OTCO C7 7.1, 7.2-1, 7.7-2 OWN). No certificate is asked of them.
 # 2026.11.21: G6.4 page C asks whether any input is applied directly to crops after harvest (WSDA L 8), which
 #   types (L 9, without the two livestock-feed items) and how each application is recorded (L 11). Optional.
-CONTENT_VERSION = "2026.11.21"
+# 2026.11.22: G5.0 page A asks the practices by the pest they target: weeds, insects and other invertebrates,
+#   diseases and nematodes, vertebrate pests (CCOF G5.0 §A's four columns; WSDA AGR 2121 F 3, G 4, H 3), each with
+#   "Other" and an exclusive none. The untyped `prevention_practices` and `weed_management_practices` are RETIRED
+#   (`Question.retired`, new): shown only to a plan that answered them, never asked anew. All new lists optional.
+CONTENT_VERSION = "2026.11.22"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

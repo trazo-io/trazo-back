@@ -3282,28 +3282,41 @@
         "at": "2026-08-21T11:28:46.115771+00:00",
         "value": false
        },
-       "prevention_practices": {
-        "at": "2026-08-21T11:28:46.115771+00:00",
+       "practices_weeds": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "crop_rotation",
+         "cover_cropping",
+         "mechanical_cultivation",
+         "hand_weeding",
+         "mowing_grazing",
+         "biodegradable_mulch",
+         "flaming"
+        ]
+       },
+       "practices_insects": {
+        "at": "2026-11-09T09:00:00+00:00",
         "value": [
          "crop_rotation",
          "sanitation",
-         "tool_sanitation",
-         "beneficial_habitat",
-         "resistant_varieties",
-         "spacing_timing",
-         "pruning_canopy",
-         "mulching"
+         "timing_of_planting",
+         "beneficial_habitat"
         ]
        },
-       "weed_management_practices": {
-        "at": "2026-08-21T11:28:46.115771+00:00",
+       "practices_diseases": {
+        "at": "2026-11-09T09:00:00+00:00",
         "value": [
-         "mechanical_cultivation",
-         "hand_weeding",
-         "mowing",
-         "organic_mulch",
-         "flame_weeding",
-         "cover_crop_suppression"
+         "crop_rotation",
+         "resistant_varieties",
+         "crop_spacing",
+         "field_sanitation",
+         "pruning_canopy"
+        ]
+       },
+       "practices_vertebrates": {
+        "at": "2026-11-09T09:00:00+00:00",
+        "value": [
+         "none"
         ]
        },
        "input_use_triggers": {

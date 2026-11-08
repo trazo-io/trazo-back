@@ -51,13 +51,16 @@ items:
 
   - ref: "3"
     asks: "Which preventive weed control strategies do you implement on your operation? (Cover crop - Annual / Crop rotation / Crop spacing / Field preparation / Flame weeding / Hand weeding / Mechanical cultivation / Mowing / Natural mulch / Stale seed bed / Other.)"
-    status: partial
-    severity: P1
+    status: covered
     trazo:
-      questions: [g5_0_pest.weed_management_practices, g5_0_pest.weed_management_other, g5_0_pest.prevention_practices, g5_0_pest.prevention_practices_other]
-      prints: "modules/G5_0.pdf §A, §B; narrative § 205.206(a), § 205.206(c)"
-    gap: "CCOF asks these same practices inside ONE matrix (G5.0 §A, 23 practices × 4 pest-type columns: Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests), already registered `partial`/P1 there because Trazo's `prevention_practices` and `weed_management_practices` carry no pest-type dimension. WSDA makes the same underlying fact harder to answer cleanly, not easier: it splits pest management into three physically separate sections (this form, plus G Pest and H Disease), each expecting its own self-contained answer, instead of one table where a practice repeated across pest-type columns reads as normal. Half of WSDA's F3 list — crop rotation, crop spacing — lives in Trazo's generic, pest-type-blind `prevention_practices`, which a WSDA reviewer would see printed IDENTICALLY under the G and H sections too; in a matrix that reads as intentional (one row, several checked columns), across three independent PDF sections it reads as a copy-pasted answer that never differentiates weed-specific reasoning from disease-specific reasoning. The rest of the list (mechanical cultivation, hand weeding, mowing, natural mulch, flame weeding) does live in the weed-specific `weed_management_practices`, the right shape for this section — but even there, `crop_spacing`, `field_preparation` and `stale_seed_bed` have no matching option. On balance this does not rise to a bounced packet: the substantive content is present and responsive to the question asked. But it is more likely to draw an actual reviewer comment than CCOF's version of the same gap, because WSDA's layout puts the duplication in plain sight across three section headers instead of inside one table's columns, so this stays a P1 (request for information) rather than escalating."
-    fix: "Same structural fix as CCOF's G5.0 §A: add a pest-type dimension to `prevention_practices` (matrix kind, or interim `pest_classes_addressed` checkbox group) so the compiled narrative can print a weed-specific paragraph for this section, a distinct one for G, and a distinct one for H instead of the same list three times. Also add `crop_spacing`, `field_preparation` and `stale_seed_bed` to `weed_management_practices`."
+      questions:
+      - g5_0_pest.practices_weeds
+      - g5_0_pest.practices_weeds_other
+      - g5_0_pest.weed_management_practices
+      - g5_0_pest.weed_management_other
+      prints: "modules/G5_0.pdf §A; narrative § 205.206"
+    # Closed 2026-11-07 (content 2026.11.22). WSDA's weed list as its own list, with crop spacing, field preparation
+    # and stale seed bed. The untyped weed list is retired: shown only to a plan that answered it.
   - ref: '4'
     asks: Do you use plastic mulch or silage tarps for weed control in an annual cropping system? Yes / No.
     status: partial

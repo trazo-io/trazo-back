@@ -25,7 +25,7 @@ from certifications.management.commands.export_osp_module_fixture import (
 )
 from certifications.osp_modules import MODULES_BY_KEY
 from certifications.osp_modules.conditions import evaluate, visible_questions
-from certifications.services.packet_answers import hidden_state
+from certifications.services.packet_answers import RETIRED_EVIDENCE, hidden_state
 
 
 def _chains():
@@ -80,7 +80,9 @@ class CoveragePageAgreesTests(SimpleTestCase):
             for q in page.questions:
                 state = hidden_state(module, page, q, answers)
                 self.assertEqual(state is None, q.key in visible, f"{label}: {module.key}.{q.key}")
-                if state is not None and state[0] == "not_applicable":
+                # A retired question is not closed by another answer: unanswered, it was replaced
+                # (`Question.retired`), and its evidence says so in words.
+                if state is not None and state[0] == "not_applicable" and state[1] != RETIRED_EVIDENCE:
                     # Only a question the grower is shown can close another: a hidden one holds a stale
                     # answer (review of #277).
                     deciders = set(re.findall(r"(?:^|; )([a-z0-9_]+) = ", state[1]))
