@@ -218,9 +218,9 @@ class TransparencyResponseFormatter:
         Generate consumer-friendly carbon context using per-unit data.
         INFORMATIONAL ONLY — no color-coded judgment or competitive ranking.
 
-        Trazo's transparency-first philosophy: the transparency score is the
-        only evaluative metric. Carbon data is factual context for consumers
-        who want to learn more, not a judgment of the farm.
+        Trazo's transparency-first philosophy: no evaluative metric at all (the
+        transparency score is retired as a concept). Carbon data is factual context
+        for consumers who want to learn more, not a judgment of the farm.
 
         Uses kg_per_kg (CO2e per kg of product) for meaningful comparisons.
         EPA factor: 0.35548 kg CO2/mile → miles_per_kg = kg_per_kg / 0.35548

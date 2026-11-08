@@ -57,7 +57,6 @@ SERVER_ASSIGNED = {
     "lot_id": "assigned by the production, not typed on an event",
     "retention_until": "computed from date + § 205.103(b)(4)",
     "verification_level": "derived from photo/blockchain state",
-    "transparency_score": "computed KPI, producer dashboard only",
     "carbon_data": "computed by the carbon service",
     "omri_product": "FK resolved from the OMRI catalog, not typed",
     # Added 2026-09-07. Same shape and same writer as omri_product, one line apart in the

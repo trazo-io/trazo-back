@@ -2522,8 +2522,7 @@ class EventCarbonCalculator:
                 "data_source": "Trazo Direct Emissions Methodology",
                 "methodology_note": (
                     "Business events (certifications, audits, compliance) have negligible "
-                    "direct operational emissions. Indirect/lifecycle benefits are tracked "
-                    "qualitatively via transparency score, not as CO2e values."
+                    "direct operational emissions, so none is counted as CO2e."
                 ),
                 "verification_status": business_data["verification_status"],
                 "breakdown": {
