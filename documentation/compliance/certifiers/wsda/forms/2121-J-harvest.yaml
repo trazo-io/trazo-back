@@ -180,18 +180,24 @@ items:
   asks: Are crops transported to a facility prior to receipt by buyers or packers (e.g. hydrocooling,
     drying, cleaning, storage, consolidation)? Yes — an Additional Facilities and Third-Parties (AGR 2519)
     form is attached. No.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.first_stop_before_buyer
     - g6_1_harvest_transport.handled_by_another_operation
     - g6_1_harvest_transport.off_farm_handler_table
-    prints: modules/G6_1.pdf §C and §D
-  gap: >-
-    Whether the crop goes to a hydrocooler, cold storage or consolidation point before the buyer is asked and printed. The Additional Facilities and Third-Parties form (AGR 2519) the answer calls for is not generated.
-  fix: >-
-    Generate AGR 2519 from the facilities on file, or name it as an attachment the operator files.
+    models:
+    - certifications.PostHarvestFacility
+    prints: modules/G6_1.pdf §C and §D; copy sheet (Additional Facilities and Third-Parties, AGR 2519)
+  note: 'Closed 2026-11-08. Whether the crop goes to a hydrocooler, cold storage or consolidation point before the
+    buyer is asked and printed (`first_stop_before_buyer`), and the facility table names the operation that runs it.
+    AGR 2519 is WSDA''s own form, filed with WSDA, one per facility; it is registered
+    (`wsda/forms/2519-additional-facilities.yaml`) and the copy sheet gives, per facility another operation runs,
+    its name and address, the form''s activities as the operator picked them (`PostHarvestFacility.activities`),
+    the products and the crops on the records linked to it, which responsibility statement the record points to
+    (a certificate number on file or not) and, without one, the exemption the operator stated
+    (`exemption_basis`). A field the record leaves empty is named as not recorded. Trazo never ticks the form''s
+    boxes.'
 - ref: '14'
   asks: Optional space for additional information.
   status: not_covered

@@ -962,7 +962,7 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
     crops = crops_by_facility(osp.establishment)
     out = [Paragraph("<b>Off-farm handlers and storage facilities</b>", _sticks_to_next(_style(styles, "body")))]
     for facility in facilities:
-        where = ", ".join(x for x in (facility.address, facility.city, facility.state) if x)
+        where = ", ".join(x for x in (facility.address, facility.city, facility.state, facility.postal_code) if x)
         role = facility.get_role_display() if facility.role else ""
         head = f"{facility.name} — {facility.get_facility_type_display()}" + (f" ({role})" if role else "")
         out.append(Paragraph(f"• {_escape(head)}", _sticks_to_next(_style(styles, "body"))))
@@ -970,7 +970,7 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
             out.append(Paragraph(_escape(where), styles["meta"]))
 
         current = facility.cert_is_current
-        if facility.certification_number or facility.certifier_name:
+        if facility.certificate_on_record:
             cert = " ".join(
                 x
                 for x in (
@@ -1044,6 +1044,24 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
                         "[REVIEW] No production record is linked to this facility and no products are described, "
                         "so the plan does not show which crops it handles or stores."
                     ),
+                    styles["meta"],
+                )
+            )
+        # What happens there, in the terms of WSDA's Additional Facilities and Third-Parties form
+        # (AGR 2519), as the operation picked them; and, for a facility with no certificate on file, how
+        # the operation says it is exempt (§ 205.101). Both the operation's statements.
+        from certifications.facility_activities import ACTIVITY_KEYS, ACTIVITY_LABELS
+
+        activities = [ACTIVITY_LABELS[k] for k in ACTIVITY_KEYS if k in (facility.activities or [])]
+        if activities:
+            out.append(
+                Paragraph(_escape("Activities at this facility: " + "; ".join(activities) + "."), styles["meta"])
+            )
+        exemption = (facility.exemption_basis or "").strip()
+        if exemption and not facility.certificate_on_record:
+            out.append(
+                Paragraph(
+                    _escape(f"How the operation states it is exempt from certification (§ 205.101): {exemption}"),
                     styles["meta"],
                 )
             )

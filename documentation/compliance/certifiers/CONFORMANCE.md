@@ -20,16 +20,16 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 
 ## Where we stand
 
-| Forms registered | 55 (55 complete) |
+| Forms registered | 56 (56 complete) |
 |---|---|
-| Questions compared | 799 |
-| Rows that are not questions (instructions, Trazo interpretations) | 55 |
-| Covered | 380 |
-| Partial | 238 |
+| Questions compared | 806 |
+| Rows that are not questions (instructions, Trazo interpretations) | 57 |
+| Covered | 389 |
+| Partial | 235 |
 | Not covered | 134 |
-| Out of scope (stated) | 47 |
+| Out of scope (stated) | 48 |
 | Blockers (P0) | 0 |
-| Request-for-information (P1) | 15 |
+| Request-for-information (P1) | 12 |
 | Minor (P2 / P3) | 357 |
 
 These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
@@ -702,7 +702,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When WSDA requires it:** Every Crop Producer OSP — Section J (Harvest and Transportation) is completed by all applicants.
 
-**20 questions** — Covered 17 · Partial 2 · Not covered 1
+**20 questions** — Covered 18 · Partial 1 · Not covered 1
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
@@ -724,7 +724,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 | 11 | How does your company ensure outgoing transport units are cleaned prior to loading loose or bulk certified products? Not applicable, only packaged products are shipped / Clean out records / Clean truck/equipment affidavits / Other. | Covered | — | `g6_1_harvest_transport.transport_unit_cleaning_documentation` · `g6_1_harvest_transport.transport_units_inspected_clean` · `g6_1_harvest_transport.non_own_transport_records` | — |
 | 12 | Are certified crops or products shipped in the same transport units as non-certified products? | Covered | — | `g6_1_harvest_transport.transport_shared_with_noncertified` | — |
 | 12a | If yes, which practices are implemented to segregate certified products? Certified product sealed in impermeable containers / separate area in transport unit / use of separate pallets / other. | Covered | — | `g6_1_harvest_transport.shared_transport_segregation` | — |
-| 13 | Are crops transported to a facility prior to receipt by buyers or packers (e.g. hydrocooling, drying, cleaning, storage, consolidation)? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No. | Partial | P1 | `g6_1_harvest_transport.first_stop_before_buyer` · `g6_1_harvest_transport.handled_by_another_operation` · `g6_1_harvest_transport.off_farm_handler_table` | Whether the crop goes to a hydrocooler, cold storage or consolidation point before the buyer is asked and printed. The Additional Facilities and Third-Parties form (AGR 2519) the answer calls for is not generated. **Fix:** Generate AGR 2519 from the facilities on file, or name it as an attachment the operator files. |
+| 13 | Are crops transported to a facility prior to receipt by buyers or packers (e.g. hydrocooling, drying, cleaning, storage, consolidation)? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No. | Covered | — | `g6_1_harvest_transport.first_stop_before_buyer` · `g6_1_harvest_transport.handled_by_another_operation` · `g6_1_harvest_transport.off_farm_handler_table` · `certifications.PostHarvestFacility` | — |
 | 14 | Optional space for additional information. | Not covered (optional on the form) | P3 | — | Optional free space. Trazo has no general notes field on this module, so nothing extra the operator wants to say here has a place; the agent does not require it. **Fix:** Add an optional additional-notes textarea to the harvest module. |
 
 ### N Labeling
@@ -1003,6 +1003,27 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 | 13 | List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under your management: material name (complete brand name when applicable) and date of application. Or check 'N/A — No input materials have been applied while under my management.' | Partial | P2 | `parcel_application.crop_history` · `parcel_application.no_inputs_within_tenure` · `materials_application.fumigant_prohibited_material_used` · `materials_application.fumigant_prohibited_material_detail` · `product.ParcelCropHistory.substance_applications (material, manufacturer, application_dates)` · `product.ParcelCropHistory.substances_applied` · `history.ChemicalEvent / history.SoilManagementEvent / history.PestManagementEvent (dated inputs)` | Since 2026-10-01 the N/A has its own per-parcel statement (`no_inputs_within_tenure`), asked of every parcel and kept apart from the prohibited-material declaration, and the dated input events print beside the typed history. What remains is the typed years themselves, before the operation kept records in Trazo, whose application dates are still free text (`substance_applications.application_dates`). (OSP alignment audit 2026-10, T17-F2.) **Fix:** Record typed application dates as dates (one row per application) instead of free text. |
 | 14 | Table: for each border (direction), the adjoining land use, and the risk prevention strategy and buffer management practices — including distance from prohibited-material applications, whether a crop is produced within the buffer area, and any other risk-prevention strategies. | Covered | — | `parcel_application.buffer_editor` · `parcel_application.no_adjoining_prohibited` · `parcel_application.parcel_change_notifications` · `parcel_application.contamination_incidents` · `parcel_application.adjoining_affidavit_card` · `g6_0_production.buffer_strategies` · `g6_0_production.buffer_strategy_other` · `g6_0_production.drift_safeguards` · `g6_0_production.drift_safeguards_other` · `product.Parcel.buffer_zones` · `product.services.buffer_zones` | — |
 | Map | A map (8.5x11 max, satellite imagery preferred) must accompany every site application. Required elements: your operation name and site name printed on the map; borders and boundaries of the site; borders where active buffer management occurs; locations of crops (varieties for perennials); all adjacent land uses including land managed by others; and, for livestock, the location/type of established fences and the location/source of shade and water. | Covered | — | `parcel_application.map_status` · `parcel_application.map_upload` · `parcel_application.map_elements_shown` · `product.Parcel.polygon` · `product.Parcel.buffer_zones` | — |
+
+### Additional Facilities and Third-Parties
+
+*AGR 2519 · R 01/24 · retrieved 2026-11-08*  
+<https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2519_Additional_Facilities_and_Third-Parties.pdf>
+
+**When WSDA requires it:** "Use this form to describe any organic facilities or activities your business or a contracted third-party perform at a different address from your primary certified location." AGR 2121 asks for it on a Yes to §J 13 (crop taken to a facility before the buyer), §K 1 (third-party storage) or §L 1 (third-party custom handling).
+
+**7 questions** — Covered 6 · Out of scope 1 · not questions: Instruction (asks nothing) 2
+
+| Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
+|---|---|---|---|---|---|
+| Header (business name, cert no) | Business Name; Cert No. | Covered | — | `company.Company.name` · `certifications.OrganicSystemPlan.approval_certificate_number` | — |
+| Instructions (which facilities) | Use this form to describe any organic facilities or activities your business or a contracted third-party perform at a different address from your primary certified location. This form should not be used for sites (fields) used to produce organic crops. | Instruction (asks nothing) | — | — | — |
+| Location Information | Facility or Third-party Name; Physical Address; City; State; Zip code. | Covered | — | `certifications.PostHarvestFacility.name` · `certifications.PostHarvestFacility.address` · `certifications.PostHarvestFacility.city` · `certifications.PostHarvestFacility.state` · `certifications.PostHarvestFacility.postal_code` | — |
+| Activity Information | Identify the general types of activities occurring at this facility or location. General activities (Equipment storage / Input material storage / Record storage / Retail sales to public). Production activities (Livestock barns or housing / Propagation houses). Handling activities that are potentially exempt (Brokering or marketing packaged products / Storage, cross-docking packaged products). Handling activities that require certification (Importing organic products / Sourcing, trading wholesale ingredients, products / Pre-sizing, sorting, hydrocooling crops / Transloading, combining, or splitting bulk shipments / Storage of bulk, unpackaged organic products / Multi-ingredient processing / Single ingredient processing / Packaging, labeling organic products / Slaughter of livestock). | Covered | — | `certifications.PostHarvestFacility.activities` | — |
+| Description | Provide a description of the organic activities occurring at this location. Include details about the specific organic crop types, livestock, or products involved. | Covered | — | `certifications.PostHarvestFacility.products_detail` · `history.History (crops on the production records linked to the facility)` | — |
+| Responsibility | Identify the responsible party and attach the requested information: the WSDA-certified business performs all activities described (OSP updates attached; location, records and a knowledgeable representative available for inspection) / the third-party is a certified business responsible for all activities described (its organic certificate and addendum attached) / the third-party is not a certified business but is responsible for the activities described. | Covered | — | `certifications.PostHarvestFacility.operated_by` · `certifications.PostHarvestFacility.certification_number` · `certifications.PostHarvestFacility.cert_document` | — |
+| Responsibility (exemption explanation) | Briefly explain how the third-party is exempt from certification. | Covered | — | `certifications.PostHarvestFacility.exemption_basis` | — |
+| Additional Comments | Additional Comments. | Out of scope | — | — | An optional comments box. The sheet leaves it to the operator. |
+| Note (who must be certified) | In general, any business involved in the organic supply chain must be certified. There are only narrow exemptions for retail establishments and some handlers of tamper-evident packaged products. WSDA must be able to verify any uncertified operation in your supply chain qualifies for an exemption under section 205.101 of the USDA organic regulations. | Instruction (asks nothing) | — | — | — |
 
 ### B Transplants
 
@@ -1393,11 +1414,11 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When WSDA requires it:** Triggered when the operation physically stores certified crops or products (WSDA Section K, item 2); item 1 applies regardless when a third party stores on the operation's behalf.
 
-**6 questions** — Covered 3 · Partial 2 · Not covered 1
+**6 questions** — Covered 4 · Partial 1 · Not covered 1
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| 1 | Do you contract with any third parties to store certified crops or products on your behalf? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No. | Partial | P1 | `g6_2_storage.third_party_storage_contracted` · `g6_2_storage.off_farm_storage_table` · `g6_2_storage.uncertified_facility_records` | `third_party_storage_contracted` asks WSDA's actual question — is another operation contracted to store the crop — which no storage-location option could answer, and the facility table names who. Remaining: the AGR 2519 attachment. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`: no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`. **Fix:** Same as AGR 2121 §J ref 13. |
+| 1 | Do you contract with any third parties to store certified crops or products on your behalf? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No. | Covered | — | `g6_2_storage.third_party_storage_contracted` · `g6_2_storage.off_farm_storage_table` · `g6_2_storage.uncertified_facility_records` · `certifications.PostHarvestFacility` | — |
 | 2 | Does your business physically store any certified crops or products? Yes. No — skip to next section. | Partial | P3 | — | The g6_2_storage module carries a not-applicable option that functions as this gate, but there is no discrete question whose answer prints 'yes, we store' or 'no, we do not' the way WSDA's item 2 expects — a certifier sees an absent module, not an explicit no. **Fix:** Low priority — cosmetic difference between an implicit module-level skip and an explicit printed answer; would only matter if the generated packet needs to state the negative explicitly. |
 | 3 | Are all certified crops or products stored in sealed, impermeable packages? | Covered | — | `g6_2_storage.stored_in_sealed_packaging` | — |
 | 3a | If no, how do you prevent certified crops from contamination by prohibited substances and commingling with non-certified crops during storage? Certified crops are stored in rooms permanently dedicated for organic use only / certified crops are stored in rooms that are cleaned and dedicated for organic use for the entire season / certified crops are stored in areas/shelf designated with organic signage / other — describe. | Covered | — | `g6_2_storage.unsealed_storage_controls` · `g6_2_storage.unsealed_storage_controls_other` · `g6_2_storage.organic_storage_area_identification` · `g6_2_storage.storage_shared_with_nonorganic` · `g6_2_storage.storage_shared_separation` | — |
@@ -1411,11 +1432,11 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When WSDA requires it:** Triggered when the operation washes, packs, labels, or otherwise handles crops post-harvest at the farm (WSDA Section L, item 2); item 1 applies regardless when a third party custom-handles on the operation's behalf.
 
-**28 questions** — Covered 15 · Partial 7 · Not covered 6
+**28 questions** — Covered 16 · Partial 6 · Not covered 6
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| 1 | Does your business work with a third-party to process, pack, label, or otherwise custom handle organic crops on your behalf? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No. | Partial | P1 | `g6_1_harvest_transport.handled_by_another_operation` · `g6_1_harvest_transport.off_farm_handler_table` | Section L's first question is now answerable and the facility table substantiates a 'Yes'. Remaining: the AGR 2519 attachment. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`: no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`. **Fix:** Same as AGR 2121 §J ref 13. |
+| 1 | Does your business work with a third-party to process, pack, label, or otherwise custom handle organic crops on your behalf? Yes — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No. | Covered | — | `g6_1_harvest_transport.handled_by_another_operation` · `g6_1_harvest_transport.off_farm_handler_table` · `certifications.PostHarvestFacility` | — |
 | 1a | If yes, describe how you verify the operation is certified according to USDA organic standards for the service. | Covered | — | `g6_1_harvest_transport.handler_cert_verification_method` · `g6_1_harvest_transport.handler_cert_verification_method_other` · `g6_1_harvest_transport.off_farm_handler_table` · `g6_1_harvest_transport.uncertified_handler_records` | — |
 | 1b | How frequently do you verify the third-party's organic certification status? With every order / Monthly / Annually / Other. | Covered | — | `g6_1_harvest_transport.handler_cert_verification_frequency` · `g6_1_harvest_transport.handler_cert_verification_frequency_other` | — |
 | 2 | Do you wash, pack, label, or otherwise handle crops after harvest at your farm? Yes. No, my business does not wash, pack, or label crops post-harvest. Crops remain in the containers they were harvested into and are transported or stored in the same container. Skip to next section. | Covered | — | `g6_4_handling.handling_activities` · `g6_4_handling.handling_activities_other` | — |
@@ -1661,7 +1682,6 @@ A **decision** is an answer; a **gap** is a debt, and names where it is triggere
 | Exempt Handler Affidavit (NOPB107) | G6.1 A2/A3 (uncertified harvester or transporter); G6.2 A (uncertified storage); G6.5 A1 (uncertified supplier) | Trazo does not generate this form. Where an uncertified harvester, transporter, storage site or supplier handles this operation's crop, the affidavit is filed with CCOF directly. |
 | IS – Independent & Off-Site Storage (IS) | C1 routing (stores crops at a non-certified facility that does not open, re-label or process the product, one per facility) and the C7 §7.7 storage table documentation column IS | Trazo does not generate this sheet. It is answered and signed by the manager of the uncertified warehouse or storage facility, and a copy is kept by both parties. Where this operation stores crop it still owns at such a facility, the plan records the facility by name and location in its storage section; the facility's own sheet is filed with the agent directly. |
 | Private Label Agreement (PLA) (Private Label Agreement) | C8 §8.3 — packing organic crop into another company's brand or label when that brand owner is not itself certified | Trazo does not generate this agreement. The plan records, in its labeling section, that crop leaves the operation under a buyer's label and the label claim the operation makes; the brand owner's certificate, or the agreement between the operation and an uncertified brand owner, is collected by the operation and filed with the agent directly. |
-| Additional Facilities and Third-Parties (AGR 2519) | AGR 2121 §B 2 (off-site seedling production); §J 13, §K 1, §L 1 (third-party handling, storage and post-harvest); §O 5 (records held off site) | Trazo does not generate this form. Where another operation handles, stores or post-harvest processes this crop, the plan records that operation by name, address, role and certificate status, and prints it in the harvest, storage and post-harvest sections — but the agent's own facilities form is filed directly. |
 | Organic Label Approval Verification (AGR 2724) | AGR 2121 §N (labeling) — any label bearing an organic claim or the agent's mark | Trazo does not generate this form, and label artwork is not attached to this plan. The labeling section records how product is identified and what claims are used; the artwork itself goes to the agent directly for approval. |
 
 ### Deliberately not built

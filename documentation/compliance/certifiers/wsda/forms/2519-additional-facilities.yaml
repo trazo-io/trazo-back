@@ -1,0 +1,135 @@
+# WSDA — Additional Facilities and Third-Parties (AGR 2519). Source:
+# https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2519_Additional_Facilities_and_Third-Parties.pdf,
+# footer "AGR 2519 (R 01/24)", two pages, retrieved 2026-11-08.
+#
+# Registered 2026-11-08. Until then `scope.yaml` listed it as a gap: five rows of the crop OSP (§B 2,
+# §J 13, §K 1, §L 1, §O 5) name it as the attachment a Yes calls for, and Trazo produced nothing for it.
+#
+# One form per facility or third party, filed with WSDA. Trazo does not fill it in or tick its boxes:
+# the copy sheet (`agent_form_sheet`, "Additional Facilities and Third-Parties (AGR 2519)") gives, per
+# facility on file run by another operation, every value Trazo holds for the operator to copy, and names
+# the field to fill where it holds none. The responsibility statement and its attachments are the
+# operator's to give.
+form:
+  code: ''
+  title: Additional Facilities and Third-Parties
+  document_id: AGR 2519
+  revision: R 01/24
+  url: https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Forms_organic/2519_Additional_Facilities_and_Third-Parties.pdf
+  retrieved: 2026-11-08
+  nop_cites:
+  - § 205.101
+  - § 205.201(a)
+  - § 205.272
+  guide_trigger: >-
+    "Use this form to describe any organic facilities or activities your business or a contracted
+    third-party perform at a different address from your primary certified location." AGR 2121 asks for
+    it on a Yes to §J 13 (crop taken to a facility before the buyer), §K 1 (third-party storage) or §L 1
+    (third-party custom handling).
+  required_of_every_grower: false
+  filed_with_agent: true
+  accepted_format: agent_form
+  format_source: >-
+    AGR 2519 is WSDA's own form, one per facility or third party. It prints no signature line, so none is
+    claimed; its responsibility statements are ticked by the operation.
+  register_status: complete
+  source_sha256: abc387eba9b2bda9323040364bcb90198bd3bef09cc822b2cd01e51bfe4d02ef
+items:
+- ref: Header (business name, cert no)
+  asks: Business Name; Cert No.
+  status: covered
+  trazo:
+    where: '00-cover.pdf: Legal name, Certificate'
+    models:
+    - company.Company.name
+    - certifications.OrganicSystemPlan.approval_certificate_number
+    prints: copy sheet (AGR 2519, each facility); 00-cover.pdf ("Legal name", "Certificate")
+- ref: Instructions (which facilities)
+  kind: instruction
+  asks: Use this form to describe any organic facilities or activities your business or a contracted third-party
+    perform at a different address from your primary certified location. This form should not be used for sites
+    (fields) used to produce organic crops.
+  note: 'Information only. The copy sheet gives one AGR 2519 per facility on file that another operation runs.
+    An own facility at a different address from the primary certified location is also filed on this form;
+    Trazo does not know which own facilities are elsewhere, and the sheet says so.'
+- ref: Location Information
+  asks: Facility or Third-party Name; Physical Address; City; State; Zip code.
+  status: covered
+  trazo:
+    where: 'modules/G6_1.pdf §D and modules/G6_2.pdf §A: Off-farm handlers and storage facilities'
+    models:
+    - certifications.PostHarvestFacility.name
+    - certifications.PostHarvestFacility.address
+    - certifications.PostHarvestFacility.city
+    - certifications.PostHarvestFacility.state
+    - certifications.PostHarvestFacility.postal_code
+    prints: copy sheet (AGR 2519, each facility); the off-farm handler and storage tables
+  note: 'A field the facility record leaves empty is named on the sheet as not recorded, with where to fill it.'
+- ref: Activity Information
+  asks: 'Identify the general types of activities occurring at this facility or location. General activities
+    (Equipment storage / Input material storage / Record storage / Retail sales to public). Production activities
+    (Livestock barns or housing / Propagation houses). Handling activities that are potentially exempt (Brokering
+    or marketing packaged products / Storage, cross-docking packaged products). Handling activities that require
+    certification (Importing organic products / Sourcing, trading wholesale ingredients, products / Pre-sizing,
+    sorting, hydrocooling crops / Transloading, combining, or splitting bulk shipments / Storage of bulk, unpackaged
+    organic products / Multi-ingredient processing / Single ingredient processing / Packaging, labeling organic
+    products / Slaughter of livestock).'
+  status: covered
+  trazo:
+    where: 'modules/G6_1.pdf §D and modules/G6_2.pdf §A: Off-farm handlers and storage facilities'
+    models:
+    - certifications.PostHarvestFacility.activities
+    prints: copy sheet (AGR 2519, each facility)
+  note: 'Closed 2026-11-08. `PostHarvestFacility.activities` holds the form''s seventeen activities by key, picked
+    by the operator per facility (`certifications/facility_activities.py`, labels verbatim). Never inferred from the
+    facility''s type or role.'
+- ref: Description
+  asks: Provide a description of the organic activities occurring at this location. Include details about the
+    specific organic crop types, livestock, or products involved.
+  status: covered
+  trazo:
+    where: 'modules/G6_1.pdf §D and modules/G6_2.pdf §A: Off-farm handlers and storage facilities'
+    models:
+    - certifications.PostHarvestFacility.products_detail
+    - history.History (crops on the production records linked to the facility)
+    prints: copy sheet (AGR 2519, each facility)
+  note: 'The products and their detail the operator gave for the facility (`products_detail`), beside the crops
+    read from the production records linked to it (`facility_crops`).'
+- ref: Responsibility
+  asks: 'Identify the responsible party and attach the requested information: the WSDA-certified business performs
+    all activities described (OSP updates attached; location, records and a knowledgeable representative available
+    for inspection) / the third-party is a certified business responsible for all activities described (its organic
+    certificate and addendum attached) / the third-party is not a certified business but is responsible for the
+    activities described.'
+  status: covered
+  trazo:
+    where: 'modules/G6_1.pdf §D and modules/G6_2.pdf §A: Off-farm handlers and storage facilities'
+    models:
+    - certifications.PostHarvestFacility.operated_by
+    - certifications.PostHarvestFacility.certification_number
+    - certifications.PostHarvestFacility.cert_document
+    prints: copy sheet (AGR 2519, each facility)
+  note: 'The operator ticks the statement and gives the attachments. The sheet names which statement the facility
+    record points to (another operation with a certificate number on file, or without one) and whether a copy of
+    the certificate is on file; it never ticks one.'
+- ref: Responsibility (exemption explanation)
+  asks: Briefly explain how the third-party is exempt from certification.
+  status: covered
+  trazo:
+    where: 'modules/G6_1.pdf §D and modules/G6_2.pdf §A: Off-farm handlers and storage facilities'
+    models:
+    - certifications.PostHarvestFacility.exemption_basis
+    prints: copy sheet (AGR 2519, each facility without a certificate on file)
+  note: 'Closed 2026-11-08. `PostHarvestFacility.exemption_basis`, asked of another operation''s facility only.'
+- ref: Additional Comments
+  asks: Additional Comments.
+  status: out_of_scope
+  scope_basis: not_an_operation_obligation
+  reason: An optional comments box. The sheet leaves it to the operator.
+- ref: Note (who must be certified)
+  kind: instruction
+  asks: In general, any business involved in the organic supply chain must be certified. There are only narrow
+    exemptions for retail establishments and some handlers of tamper-evident packaged products. WSDA must be able to
+    verify any uncertified operation in your supply chain qualifies for an exemption under section 205.101 of the
+    USDA organic regulations.
+  note: Information only. The copy sheet repeats it beside the exemption explanation.

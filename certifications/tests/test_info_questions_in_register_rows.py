@@ -46,8 +46,9 @@ class InfoQuestionsInRowsTests(TestCase):
     def test_wsda_j13_closes_on_its_questions_with_the_handler_table_shown(self):
         self.answer(G61, first_stop_before_buyer=["hydrocooler"], handled_by_another_operation="yes_certified")
         state = self.state("wsda", "J", "13")
-        # J13 is `partial` in the register (AGR 2519 is not generated), so answered reads partial.
-        self.assertEqual(state.state, "partial")
+        # J13 is `covered` since 2026-11-08 (AGR 2519 is registered and filled from the facility
+        # records), so its answered questions read answered. Until then it read partial.
+        self.assertEqual(state.state, "answered")
         self.assertNotIn("off_farm_handler_table", {part[0].split(".")[1] for part in state.parts})
 
     def test_an_unanswered_question_beside_a_panel_still_holds_the_row_open(self):

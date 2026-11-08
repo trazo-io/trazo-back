@@ -17,22 +17,23 @@ items:
 - ref: '1'
   asks: Do you contract with any third parties to store certified crops or products on your behalf? Yes
     — an Additional Facilities and Third-Parties (AGR 2519) form is attached. No.
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_2_storage.third_party_storage_contracted
     - g6_2_storage.off_farm_storage_table
     - g6_2_storage.uncertified_facility_records
-    prints: modules/G6_2.pdf §A; narrative § 205.201(a)(5)
-  gap: '`third_party_storage_contracted` asks WSDA''s actual question — is another operation contracted
-    to store the crop — which no storage-location option could answer, and the facility table names who.
-    Remaining: the AGR 2519 attachment. Closed 2026-08-28: G6.1 page D asks the routing gate (`handled_by_another_operation`:
-    no / certified / uncertified), the `post_harvest_facilities` embed prints the facility table with
-    its certificate status in the module PDF, and `_append_post_harvest_facilities` states the same records
-    in the § 205.201(a)(5) narrative. `PostHarvestFacility.role` distinguishes handling from storage so
-    one record answers both G6.1 §C and G6.2 §A. Guard: `certifications/tests/test_post_harvest_facility_reaches_plan.py`.'
-  fix: Same as AGR 2121 §J ref 13.
+    models:
+    - certifications.PostHarvestFacility
+    prints: modules/G6_2.pdf §A; narrative § 205.201(a)(5); copy sheet (Additional Facilities and Third-Parties, AGR 2519)
+  note: 'Closed 2026-11-08. `third_party_storage_contracted` asks the question and the storage table names who.
+    AGR 2519 is WSDA''s own form, filed with WSDA, one per facility; it is registered
+    (`wsda/forms/2519-additional-facilities.yaml`) and the copy sheet gives, per facility another operation runs,
+    its name and address, the form''s activities as the operator picked them (`PostHarvestFacility.activities`),
+    the products and the crops on the records linked to it, which responsibility statement the record points to
+    (a certificate number on file or not) and, without one, the exemption the operator stated
+    (`exemption_basis`). A field the record leaves empty is named as not recorded. Trazo never ticks the form''s
+    boxes.'
 - ref: '2'
   asks: Does your business physically store any certified crops or products? Yes. No — skip to next section.
   status: partial

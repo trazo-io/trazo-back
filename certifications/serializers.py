@@ -259,6 +259,8 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "verification_source",
             "notes",
             "products_detail",
+            "activities",
+            "exemption_basis",
             "crops_recorded",
             "created_at",
             "updated_at",
@@ -284,6 +286,19 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
 
     _CERTIFICATE_FIELDS = ("certification_number", "certifier_name", "effective_date", "expiry_date", "cert_document")
 
+    def validate_activities(self, value):
+        """AGR 2519's activities, by key, each once, in the form's order."""
+        from certifications.facility_activities import ACTIVITY_KEYS
+
+        if value is None:
+            return []
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise serializers.ValidationError("A list of activity keys.")
+        unknown = sorted(set(value) - set(ACTIVITY_KEYS))
+        if unknown:
+            raise serializers.ValidationError(f"Not an activity on WSDA AGR 2519: {', '.join(unknown)}.")
+        return [key for key in ACTIVITY_KEYS if key in value]
+
     def validate(self, attrs):
         """An own facility is covered by the operation's own certificate, so it carries none of its own.
 
@@ -295,6 +310,15 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
         operated_by = attrs.get("operated_by", getattr(self.instance, "operated_by", "another_operation"))
         if operated_by != "this_operation":
             return attrs
+        # AGR 2519's exemption is asked of a third party; the operation's own facility has no exemption to
+        # explain. Cleared on a switch to "our own" rather than refused, as the category change does for
+        # material rows: the app sends `operated_by` alone.
+        if "exemption_basis" in attrs and attrs["exemption_basis"]:
+            raise serializers.ValidationError(
+                {"exemption_basis": "Asked of another operation's facility only; leave this empty."}
+            )
+        if "operated_by" in attrs and getattr(self.instance, "exemption_basis", ""):
+            attrs["exemption_basis"] = ""
         held = [f for f in self._CERTIFICATE_FIELDS if (attrs[f] if f in attrs else getattr(self.instance, f, None))]
         if held:
             raise serializers.ValidationError(
