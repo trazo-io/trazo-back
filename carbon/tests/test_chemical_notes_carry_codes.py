@@ -7,11 +7,13 @@ and the app's carbon box printed it verbatim: English on a Spanish screen. Each 
 with a `note_code`, which the app turns into a sentence in the reader's language
 (`carbonPreview.note.<code>`); the English `note` stays for anything else that reads it.
 
-The frontend parity test (`carbonNotesHaveCopy.test.ts`) reads the codes from this module's
-source, so a code added here without copy there fails on that side.
+The app's parity test (`carbonNotesHaveCopy.test.tsx`) reads every `note_code` literal from the
+SOURCE of `carbon/services/verified_emission_factors.py` and `carbon/views.py` (not from `CASES`
+below), so a code added in either file without copy in the app fails on that side.
 """
 
 import unittest
+from pathlib import Path
 
 from carbon.services.verified_emission_factors import VerifiedEmissionFactors
 
@@ -52,6 +54,16 @@ class ChemicalNotesCarryCodes(unittest.TestCase):
         # Anti-vacuity: the code travels with a note, not on every breakdown.
         breakdown = _breakdown("PE", "synthetic_pesticide")
         self.assertNotIn("note_code", breakdown)
+
+    def test_the_aggregate_summary_note_carries_its_code_and_count(self):
+        # The multi-application summary note is built in carbon/views.py, behind the optimized
+        # calculate endpoint, out of reach of the service helper above. Check the payload it
+        # builds names the code and the count the app words it with (review of back #357).
+        views = (Path(__file__).resolve().parents[1] / "views.py").read_text()
+        start = views.index('"note": f"Aggregate of {event_count}')
+        block = views[start : start + 400]
+        self.assertIn('"note_code": "aggregate_applications"', block)
+        self.assertIn('"aggregate_application_count": event_count', block)
 
     def test_slow_release_note_makes_no_efficiency_claim(self):
         # It said "has better efficiency", with nothing behind it. The fact is the premium.
