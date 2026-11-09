@@ -422,7 +422,13 @@ def _richer_plan(current, candidate):
 #: How a free-text seed-treatment field says there is no treatment: "none", "None — raw, untreated organic
 #: seed" (the specimen's own records), "N/A", "untreated", "no coating". Not a product name, so not a row.
 _NO_TREATMENT = re.compile(
-    r"^(none|n/?a|untreated|not treated|no(\s+(seed\s+)?(treatment|coating|inoculant|pelleting)s?)?)(?=$|[\s,;.:()\u2014])"
+    # "none", "N/A", "untreated" and "not treated" open a sentence saying there is no treatment.
+    r"^(none|n/?a|untreated|not treated)(?=$|[\s,;.:()\u2014])"
+    # "no treatment", "no seed coating": "no" followed by the kind of treatment it denies.
+    r"|^no\s+(seed\s+)?(treatment|coating|inoculant|pelleting)s?(?=$|[\s,;.:()\u2014])"
+    # A bare "no", alone or before punctuation. Never "no" before another word: "No Till Inoculant" is
+    # a product name (review of back #358).
+    r"|^no(?=$|[,;.:()\u2014])"
 )
 
 
@@ -526,6 +532,9 @@ def _material_rows(establishment, osp=None):
                     kind=existing.kind,
                     event=existing.event,
                     plan=_richer_plan(existing.plan, material),
+                    # A tank-mix partner's maker is on its own entry, not the event: keep it when the
+                    # partner is also on the plan (review of back #358).
+                    maker=existing.maker,
                 )
     _join_by_record_listing(establishment, rows)
     _apply_identity_decisions(establishment, rows)

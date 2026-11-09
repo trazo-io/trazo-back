@@ -109,11 +109,12 @@ class RecordsJoinTheListTests(_Farm):
             self.plant(words, basis="organic_seed")
         self.plant("Some coating", basis="untreated")
         self.plant("No-Till Inoculant")
+        self.plant("No Till Inoculant")  # review of back #358: "no" before another word is a name
         rows = set(self.rows())
         self.assertFalse(
             {"None", "None — raw, untreated organic seed", "N/A", "no coating", "Some coating"} & rows, rows
         )
-        self.assertIn("No-Till Inoculant", rows)
+        self.assertTrue({"No-Till Inoculant", "No Till Inoculant"} <= rows, rows)
 
     def test_a_partner_never_borrows_the_primary_products_listing_or_maker(self):
         spinosad = NationalListSubstance.objects.create(
@@ -133,6 +134,14 @@ class RecordsJoinTheListTests(_Farm):
         partner = self.rows()["Nu-Film P"]
         self.assertIsNone(_material_listing(partner))
         self.assertIsNone(_material_manufacturer(partner))
+
+    def test_a_partner_on_the_plan_keeps_the_maker_its_own_entry_names(self):
+        # Review of back #358: the plan merge rebuilt the row without the partner's maker.
+        self.spray(partners=[{"commercial_name": "Nu-Film P", "manufacturer": "Miller Chemical"}])
+        self.list_it("Nu-Film P")
+        row = self.rows()["Nu-Film P"]
+        self.assertIsNotNone(row.plan)
+        self.assertEqual(_material_manufacturer(row), "Miller Chemical")
 
     def test_they_are_unmatched_until_listed(self):
         self.plant("Rhizobium inoculant XL")
