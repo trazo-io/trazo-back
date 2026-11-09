@@ -18,9 +18,9 @@ never exercised:
 A payload nobody renders is still a claim the next component can render. Two guards:
 
 1. SOURCE: no production module may name the keys at all. Routes multiply and fixtures go stale;
-   a name cannot hide from an AST walk. `history/models_consumer.py` is the one exemption, with its
-   reason. `OptimizedCarbonCalculation.efficiency_score`, the stored score log, left with its model
-   and table in carbon 0054.
+   a name cannot hide from an AST walk. No module is exempt. `OptimizedCarbonCalculation.efficiency_score`,
+   the stored score log, left with its model and table in carbon 0054; `UserLocalRecommendation.carbon_score`,
+   the last exemption, left the state with its model in history 0254.
 2. LIVE: the event serializer's `carbon_data` and `calculate-event-carbon/` for every event type,
    walked with the same `assert_carries_no_grade` the summary routes use.
 """
@@ -45,14 +45,10 @@ from users.models import WorksIn
 BACKEND = Path(__file__).resolve().parents[2]
 RETIRED_KEYS = {"efficiency_score", "carbon_efficiency_score", "carbon_score"}
 APPS = ("carbon", "history", "company", "common", "notifications", "certifications", "documents", "backend")
-#: path -> why it may still name a retired key.
-EXEMPT = {
-    "history/models_consumer.py": (
-        "UserLocalRecommendation.carbon_score, a stored 0-100 field on a shopper model with 0 rows "
-        "in production. Its serializer no longer emits it; the shopper models retire in their own "
-        "migration slice (review of #347)."
-    ),
-}
+#: path -> why it may still name a retired key. Empty since history 0254 retired the shopper models;
+#: an entry here needs a reason a reviewer can check, and `test_the_exemptions_still_need_to_exist`
+#: drops it the day the key leaves.
+EXEMPT = {}
 
 
 def _production_modules():

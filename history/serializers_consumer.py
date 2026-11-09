@@ -15,20 +15,13 @@ from .models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     HistoryScan,
     PestManagementEvent,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
 )
-from .models_consumer import (
-    UserFavorite,
-    UserImpactSummary,
-    UserLocalRecommendation,
-    UserShoppingGoal,
-    UserShoppingInsight,
-)
+from .models_consumer import UserImpactSummary
 from .services.claim_authority import _CONSUMER_WITHHELD_PRODUCTION_SUBTYPES, may_publish_production_subtype
 
 User = get_user_model()
@@ -104,49 +97,6 @@ def get_bulk_event_counts(history_ids):
             event_counts[item["history_id"]] += item["count"]
 
     return event_counts
-
-
-class UserFavoriteSerializer(serializers.ModelSerializer):
-    """Serialize user favorites with product details"""
-
-    product_name = serializers.CharField(source="production.product", read_only=True)
-    farm_name = serializers.CharField(source="production.parcel.establishment.name", read_only=True)
-    location = serializers.SerializerMethodField()
-    # `carbon_score` (an A+-to-F letter grade) was removed 2026-08-04 — see backend/constants.py.
-    # `carbon_footprint` carries the measured figure and is what consumers see.
-    carbon_footprint = serializers.SerializerMethodField()
-    production_public_id = serializers.UUIDField(source="production.public_id", read_only=True)
-
-    class Meta:
-        model = UserFavorite
-        fields = [
-            "id",
-            "production_public_id",
-            "product_name",
-            "farm_name",
-            "location",
-            "carbon_footprint",
-            "created_at",
-        ]
-
-    def get_location(self, obj):
-        if obj.production.parcel and obj.production.parcel.establishment:
-            establishment = obj.production.parcel.establishment
-            return (
-                f"{establishment.city}, {establishment.state}"
-                if establishment.city and establishment.state
-                else "Location unavailable"
-            )
-        return "Location unavailable"
-
-    def get_carbon_footprint(self, obj):
-        """The season's recorded emissions, the figure the QR page states. Until 2026-11-05 this
-        was the LATEST SINGLE entry, one activity's number presented as the season's."""
-        co2e = season_recorded_emissions(obj.production_id)
-        if co2e and co2e > 0:
-            # Shared formatter so the consumer wording cannot drift between surfaces.
-            return format_carbon_amount(co2e)
-        return "Data unavailable"
 
 
 def season_recorded_emissions(history_id):
@@ -275,7 +225,6 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
     carbon_saved = serializers.SerializerMethodField()
     sustainability_practices = serializers.SerializerMethodField()
     is_verified = serializers.SerializerMethodField()
-    is_favorite = serializers.SerializerMethodField()
 
     class Meta:
         model = HistoryScan
@@ -292,7 +241,6 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
             "carbon_saved",
             "sustainability_practices",
             "is_verified",
-            "is_favorite",
             "date",
             "comment",
         ]
@@ -428,112 +376,4 @@ class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
         except Exception:
             return False
 
-    def get_is_favorite(self, obj):
-        """Check if user has favorited this product"""
-        user = self.context.get("request").user if self.context.get("request") else None
-        if user and user.is_authenticated:
-            return UserFavorite.objects.filter(user=user, production=obj.history).exists()
-        return False
-
-
-class ProductComparisonSerializer(serializers.Serializer):
-    """Serializer for product comparison data"""
-
-    products = serializers.ListField(child=serializers.UUIDField(), max_length=5, min_length=2)
-
-    def validate_products(self, value):
-        """Validate that all products exist"""
-        existing_products = History.objects.filter(public_id__in=value).count()
-        if existing_products != len(value):
-            raise serializers.ValidationError("One or more products not found")
-        return value
-
-
-class ProductComparisonResultSerializer(serializers.Serializer):
-    """Serializer for comparison results"""
-
-    public_id = serializers.UUIDField()
-    name = serializers.CharField()
-    farm = serializers.CharField()
-    location = serializers.CharField()
-    # `carbon_score` (A+-to-F) removed 2026-08-04 — see backend/constants.py. Comparison is on the
-    # measured figure: `carbon_footprint` for display, `carbon_kg_co2e` for ranking.
-    carbon_footprint = serializers.CharField()
-    carbon_kg_co2e = serializers.FloatField(allow_null=True, required=False)
-    farming_method = serializers.CharField()
-    certifications = serializers.ListField()
     # Removed: price, distance, sustainability_rating (no real data available)
-
-
-class UserShoppingGoalSerializer(serializers.ModelSerializer):
-    """Serialize user shopping goals"""
-
-    progress_percentage = serializers.ReadOnlyField()
-    is_completed = serializers.ReadOnlyField()
-    days_remaining = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserShoppingGoal
-        fields = [
-            "id",
-            "goal_type",
-            "title",
-            "description",
-            "target_value",
-            "current_value",
-            "unit",
-            "start_date",
-            "target_date",
-            "status",
-            "progress_percentage",
-            "is_completed",
-            "days_remaining",
-        ]
-
-    def get_days_remaining(self, obj):
-        """Calculate days remaining to target date"""
-        from django.utils import timezone
-
-        today = timezone.now().date()
-        if obj.target_date > today:
-            return (obj.target_date - today).days
-        return 0
-
-
-class UserShoppingInsightSerializer(serializers.ModelSerializer):
-    """Serialize user shopping insights"""
-
-    class Meta:
-        model = UserShoppingInsight
-        fields = ["id", "insight_type", "title", "description", "data", "is_read", "created_at", "expires_at"]
-
-
-class UserLocalRecommendationSerializer(serializers.ModelSerializer):
-    """Serialize local recommendations"""
-
-    establishment_name = serializers.CharField(source="establishment.name", read_only=True)
-    establishment_address = serializers.SerializerMethodField()
-    product_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserLocalRecommendation
-        fields = [
-            "id",
-            "establishment_name",
-            "establishment_address",
-            "distance_miles",
-            "recommendation_score",
-            "product_count",
-            "is_favorited",
-        ]
-
-    def get_establishment_address(self, obj):
-        """Get establishment address"""
-        if obj.establishment.parcel_set.exists():
-            parcel = obj.establishment.parcel_set.first()
-            return f"{parcel.city}, {parcel.state}" if parcel.city and parcel.state else "Address unavailable"
-        return "Address unavailable"
-
-    def get_product_count(self, obj):
-        """Get number of recommended products"""
-        return obj.recommended_products.count()

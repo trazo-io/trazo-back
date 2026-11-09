@@ -36,8 +36,6 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from rest_framework import serializers as drf_serializers
-
 from history import serializers_consumer
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -75,7 +73,7 @@ class CarbonGradeIsGoneTests(SimpleTestCase):
 
     def test_no_consumer_serializer_exposes_a_carbon_score_field(self):
         """`carbon_score` was the field name the grade shipped under."""
-        for name in ("UserFavoriteSerializer", "EnhancedHistoryScanSerializer", "ProductComparisonResultSerializer"):
+        for name in ("EnhancedHistoryScanSerializer",):
             serializer_cls = getattr(serializers_consumer, name)
             fields = serializer_cls().get_fields()
             self.assertNotIn(
@@ -86,22 +84,9 @@ class CarbonGradeIsGoneTests(SimpleTestCase):
 
     def test_the_measured_figure_is_still_offered(self):
         """Removing the grade must not remove the fact it was derived from."""
-        for name in ("UserFavoriteSerializer", "EnhancedHistoryScanSerializer"):
+        for name in ("EnhancedHistoryScanSerializer",):
             fields = getattr(serializers_consumer, name)().get_fields()
             self.assertIn("carbon_footprint", fields, f"{name} lost the measured carbon figure")
-
-    def test_comparison_result_ranks_on_a_number_not_a_letter(self):
-        fields = serializers_consumer.ProductComparisonResultSerializer().get_fields()
-        self.assertIn("carbon_kg_co2e", fields)
-        self.assertIsInstance(fields["carbon_kg_co2e"], drf_serializers.FloatField)
-
-    def test_comparison_summary_no_longer_min_sorts_letter_grades(self):
-        """`min()` over "A+"/"A"/"B" is alphabetical, not a ranking: "A" sorts before "A+"."""
-        self.assertLess("A", "A+", "documents why min() over grades was never a real ranking")
-
-        source = (BACKEND_ROOT / "history/views_consumer.py").read_text()
-        self.assertNotIn("best_carbon_score", source)
-        self.assertIn("lowest_carbon_kg_co2e", source)
 
 
 class CarbonAmountFormatterTests(SimpleTestCase):

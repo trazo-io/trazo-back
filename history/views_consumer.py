@@ -7,38 +7,21 @@ import time
 from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Max, Min, Prefetch
+from django.db.models import Max, Min
 from django.utils import timezone
 
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
 
-from backend.constants import EngagementMilestones, format_carbon_amount
+from backend.constants import EngagementMilestones
 from certifications.constants import CONSUMER_LISTED_STATUSES
 
-from .models import (
-    BusinessEvent,
-    ChemicalEvent,
-    EquipmentEvent,
-    GeneralEvent,
-    History,
-    HistoryScan,
-    PestManagementEvent,
-    ProductionEvent,
-    SoilManagementEvent,
-    WeatherEvent,
-)
-from .models_consumer import UserFavorite, UserImpactSummary, UserProductComparison, UserShoppingGoal
-from .serializers_consumer import (
-    EnhancedHistoryScanSerializer,
-    ProductComparisonSerializer,
-    UserFavoriteSerializer,
-    UserImpactSummarySerializer,
-    UserShoppingGoalSerializer,
-)
+from .models import HistoryScan
+from .models_consumer import UserImpactSummary
+from .serializers_consumer import EnhancedHistoryScanSerializer, UserImpactSummarySerializer
 
 User = get_user_model()
 
@@ -108,10 +91,6 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         timings["serialize_recent_scans"] = time.time() - t0
 
         t0 = time.time()
-        favorite_count = UserFavorite.objects.filter(user=user).count()
-        timings["query_favorite_count"] = time.time() - t0
-
-        t0 = time.time()
         recommendations = self._get_retailer_recommendations()
         timings["get_recommendations"] = time.time() - t0
 
@@ -126,7 +105,6 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
             "quick_stats": {
                 "better_choices": impact_summary.better_choices_made,
                 "local_farms": impact_summary.local_farms_found,
-                "favorite_count": favorite_count,
             },
             "recommendations": recommendations,
             "achievements": achievements,
@@ -148,7 +126,6 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
         # A `carbon_score` filter ("A+, A, B, ...") was read here and never applied to the
         # queryset — dead since it was written. Removed 2026-08-04 with the letter grade itself
         # (see backend/constants.py); there is no grade left to filter on.
-        is_favorite = request.query_params.get("is_favorite", "").lower() == "true"
 
         # Base queryset
         queryset = (
@@ -172,11 +149,6 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 queryset = queryset.filter(date__lte=date_to)
             except ValueError:
                 pass
-
-        # Apply favorite filter
-        if is_favorite:
-            favorite_production_ids = UserFavorite.objects.filter(user=user).values_list("production_id", flat=True)
-            queryset = queryset.filter(history_id__in=favorite_production_ids)
 
         # Pagination
         page_size = int(request.query_params.get("page_size", 20))
@@ -207,204 +179,6 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                     "total_pages": (total_count + page_size - 1) // page_size,
                 },
                 "summary": summary_stats,
-            }
-        )
-
-    @action(detail=False, methods=["post"])
-    def compare_products(self, request):
-        """Compare multiple products side-by-side"""
-        serializer = ProductComparisonSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        product_ids = serializer.validated_data["products"]
-
-        # Get products with carbon data and optimized event queries.
-        #
-        # Filter on `public_id`, not `id` (fixed 2026-08-04). `ProductComparisonSerializer`
-        # validates the incoming values as UUIDs against `public_id__in`, then this queryset
-        # matched them against the integer primary key — so a request that passed validation
-        # always selected ZERO rows and the endpoint returned an empty comparison to everyone.
-        # Pre-existing; surfaced when the carbon letter grade was removed and the path was
-        # finally exercised end to end.
-        products = (
-            History.objects.filter(public_id__in=product_ids)
-            .select_related("parcel__establishment")
-            .prefetch_related(
-                "carbonentry_set",
-                # Prefetch all 8 event types with albums and images
-                Prefetch(
-                    "history_weatherevent_events",
-                    queryset=WeatherEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_chemicalevent_events",
-                    queryset=ChemicalEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_productionevent_events",
-                    queryset=ProductionEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_generalevent_events",
-                    queryset=GeneralEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_equipmentevent_events",
-                    queryset=EquipmentEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_soilmanagementevent_events",
-                    queryset=SoilManagementEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_pestmanagementevent_events",
-                    queryset=PestManagementEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-                Prefetch(
-                    "history_businessevent_events",
-                    queryset=BusinessEvent.objects.select_related("album").prefetch_related("album__images"),
-                ),
-            )
-        )
-
-        comparison_results = []
-
-        for product in products:
-            # The season's recorded emissions, the QR page's figure; until 2026-11-05 the LATEST
-            # SINGLE entry, one activity's number compared as if it were the season's.
-            from history.serializers_consumer import season_recorded_emissions
-
-            season_co2e = season_recorded_emissions(product.pk)
-
-            # Distance removed - no real location data available
-            # Will implement when user location and establishment coordinates are available
-
-            # Get establishment location
-            location = "Location unavailable"
-            if product.parcel and product.parcel.establishment:
-                establishment = product.parcel.establishment
-                if establishment.city and establishment.state:
-                    location = f"{establishment.city}, {establishment.state}"
-
-            # The measured amount, not a grade. `carbon_kg` is the number the comparison ranks
-            # on; `carbon_footprint` is the same value formatted for display.
-            carbon_kg = None
-            carbon_footprint = "Data unavailable"
-
-            if season_co2e and season_co2e > 0:
-                carbon_kg = float(season_co2e)
-                carbon_footprint = format_carbon_amount(carbon_kg)
-
-            # Get certifications from establishment-level verified data
-            certifications = []
-            farming_method = "Conventional"
-            if product.parcel and product.parcel.establishment:
-                try:
-                    from certifications.models import Certification
-
-                    # 🔴 2026-09-24 — THE SIBLING. `serializers_consumer.py` was corrected on
-                    # 2026-09-16 and this view, which does the same job for the compare screen,
-                    # was not. Both defects were here:
-                    #
-                    #   * "(verified)" was appended from `cert.verification_status == "verified"`,
-                    #     the RAW column an admin edit, a CSV import or a fixture can set. It is
-                    #     not evidence a USDA Organic Integrity Database match ever happened —
-                    #     `Certification.consumer_display_status` exists to say so.
-                    #   * the comment below claimed "Only a DATABASE-VERIFIED organic certificate"
-                    #     while the filter underneath it read that same raw column. A comment is
-                    #     not a gate.
-                    #
-                    # Neither path asked whether the OPERATION was fabricated, so a specimen farm
-                    # published "USDA Organic (verified)" and "Farming Method: Organic" to a
-                    # signed-in shopper. `consumer_certification_status` is the one authority that
-                    # answers both questions, and it is what every other consumer surface reads.
-                    from certifications.services.consumer_claim_validator import consumer_certification_status
-
-                    est_certs = list(
-                        Certification.objects.filter(
-                            establishment=product.parcel.establishment,
-                            verification_status__in=CONSUMER_LISTED_STATUSES,
-                        ).select_related("establishment")
-                    )
-                    consumer_status = {c.pk: consumer_certification_status(c) for c in est_certs}
-                    for cert in est_certs:
-                        label = cert.get_certification_type_display()
-                        if consumer_status[cert.pk] == "verified_via_database":
-                            label += " (verified)"
-                        certifications.append(label)
-                    # The bare word "Organic" is a flat assertion with no qualifier attached, so
-                    # it is reserved for a certificate Trazo actually matched against the
-                    # registry — never a farmer-typed one, and never a fabricated operation.
-                    if any(
-                        c.certification_type == "usda_organic" and consumer_status[c.pk] == "verified_via_database"
-                        for c in est_certs
-                    ):
-                        farming_method = "Organic"
-                except Exception:
-                    pass
-            # An emission factor's provenance is not a certification, and "EPA/USDA-Sourced" is
-            # the blanket wording compliance.md forbids: nothing is appended here (2026-11-05).
-
-            comparison_results.append(
-                {
-                    "public_id": str(product.public_id),
-                    # `History.product` is a FK to Product, not a string — this put a model
-                    # INSTANCE into the response dict and into the `comparison_data` JSONField,
-                    # so the endpoint 500'd on json.dumps as soon as it actually found products.
-                    "name": product.product.name if product.product else "Unknown Product",
-                    "farm": (
-                        product.parcel.establishment.name
-                        if product.parcel and product.parcel.establishment
-                        else "Unknown Farm"
-                    ),
-                    "location": location,
-                    "carbon_footprint": carbon_footprint,
-                    "carbon_kg_co2e": carbon_kg,
-                    "farming_method": farming_method,
-                    "certifications": certifications,
-                }
-            )
-
-        # Save comparison for analytics.
-        #
-        # `product_ids` are UUID objects out of `validated_data`, and `comparison_data` is a
-        # JSONField — `json.dumps` raises "Object of type UUID is not JSON serializable", so this
-        # endpoint returned a 500 for every authenticated caller, which is every caller
-        # (permission_classes = IsAuthenticated). Pre-existing; found 2026-08-04 when the carbon
-        # letter grade was removed from this response and the path was exercised end to end.
-        if request.user.is_authenticated:
-            comparison = UserProductComparison.objects.create(
-                user=request.user,
-                comparison_data={
-                    "product_ids": [str(pid) for pid in product_ids],
-                    "results": comparison_results,
-                    "timestamp": timezone.now().isoformat(),
-                },
-            )
-            comparison.products.set(products)
-
-        # Rank on the MEASURED intensity. This previously did `min()` over letter-grade strings,
-        # which compares them alphabetically: "A" sorts before "A+", and the ordering only
-        # resembled a ranking because the alphabet happens to run A, B, C, D, F. The grade is gone
-        # (see backend/constants.py) and the comparison now uses the number it was derived from.
-        valid_intensities = [
-            result["carbon_kg_co2e"] for result in comparison_results if result["carbon_kg_co2e"] is not None
-        ]
-
-        return Response(
-            {
-                "comparison_id": comparison.id if request.user.is_authenticated else None,
-                "products": comparison_results,
-                "comparison_summary": {
-                    "lowest_carbon_kg_co2e": (min(valid_intensities) if valid_intensities else None),
-                    "lowest_carbon_footprint": (
-                        format_carbon_amount(min(valid_intensities)) if valid_intensities else None
-                    ),
-                    "total_products": len(comparison_results),
-                    "epa_usda_sourced_products": len(
-                        [r for r in comparison_results if "EPA/USDA-Sourced Data" in r.get("certifications", [])]
-                    ),
-                },
             }
         )
 
@@ -544,52 +318,3 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
             )
 
         return achievements
-
-
-class UserFavoriteViewSet(viewsets.ModelViewSet):
-    """Manage user favorites"""
-
-    serializer_class = UserFavoriteSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return UserFavorite.objects.filter(user=self.request.user).select_related(
-            "production", "production__parcel__establishment"
-        )
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    @action(detail=False, methods=["post"])
-    def toggle_favorite(self, request):
-        """Toggle favorite status for a product"""
-        production_id = request.data.get("production_id")
-
-        if not production_id:
-            return Response({"error": "production_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            production = History.objects.get(id=production_id)
-        except History.DoesNotExist:
-            return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        favorite, created = UserFavorite.objects.get_or_create(user=request.user, production=production)
-
-        if not created:
-            favorite.delete()
-            return Response({"is_favorite": False, "message": "Removed from favorites"})
-        else:
-            return Response({"is_favorite": True, "message": "Added to favorites"})
-
-
-class UserShoppingGoalViewSet(viewsets.ModelViewSet):
-    """Manage user shopping goals"""
-
-    serializer_class = UserShoppingGoalSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return UserShoppingGoal.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)

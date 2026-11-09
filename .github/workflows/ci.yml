@@ -616,6 +616,10 @@ jobs:
       # 2026-11-09: carbon.tests.test_chemical_notes_carry_codes joins. Every explanatory note on an
       # input calculation carries a note_code the app words in the reader's language, and the
       # slow-release note makes no efficiency claim. DB-free. It does not read the sibling repo.
+      #
+      # 2026-11-09: history.tests.test_retired_shopper_models joins. Five shopper models leave the
+      # state in history 0254 with their tables kept; the step refuses a row, waits at most 5 s for
+      # a lock and reverses, and their routes stay unrouted. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -833,6 +837,7 @@ jobs:
             carbon.tests.test_legacy_seeders_stay_deleted \
             carbon.tests.test_retired_satellite_models \
             carbon.tests.test_retiring_offset_benchmark_report \
+            history.tests.test_retired_shopper_models \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \
