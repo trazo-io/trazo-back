@@ -317,10 +317,13 @@ items:
     and a per-product where-used text, so Used / Rinsed / Where Used all print — as two lists and a text rather
     than one three-column table per type, and 'where used' is free prose the operator writes per product, not
     a cell per type. Nothing prefills the types from the equipment-maintenance records' `cleaning_materials_used`
-    text, and § 205.605 rows are still not seeded in the National List catalogue, so a sanitizer attached from
-    the catalogue cites § 205.601.
+    text. (Corrected 2026-11-09, review of back PR 359.) The catalogue has held the § 205.605(b) sanitizers since
+    migration 0038 (chlorine materials, hydrogen peroxide, ozone, peracetic acid, acidified sodium chlorite), and
+    one attached from it cites § 205.605. The table's other types (detergents, phosphoric acid, alcohols, citric
+    acid, quaternary ammonium) are not catalogue rows; a row for one is the operator's own and prints the listing
+    basis the operator states.
   fix: Render the two groups plus the text as one table in the module PDF; suggest types from `cleaning_materials_used`
-    (suggest→confirm); seed the § 205.605 rows.
+    (suggest→confirm).
 - ref: F
   asks: Table, by National List material type — Ammonium carbonate, Boric acid, Botanical pesticides,
     Carbon dioxide, Diatomaceous earth, Nitrogen gas, Nonsynthetic bait/lure/repellent, Pheromones, Pyrethrum/pyrethrins,
