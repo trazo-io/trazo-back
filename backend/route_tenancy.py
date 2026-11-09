@@ -380,19 +380,10 @@ ROUTE_TENANCY = {
         ),
     ),
     "history.views.audit_export_by_uuid": Route(COMPANY, "WorksIn on the production's company (any role)"),
-    "history.views_consumer.ConsumerDashboardViewSet": Route(
-        USER,
-        "impact and shopping filtered on the user",
-        finding="compare_products filters public_id__in with no published check: an unpublished "
-        "season's farm name, location, carbon and certifications to any UUID holder",
-    ),
-    "history.views_consumer.UserFavoriteViewSet": Route(
-        USER,
-        "list filtered on the user",
-        finding="toggle_favorite takes any integer production id, published or not; the favorites "
-        "list then returns its public UUID, farm name, location and carbon (turns ids into UUIDs)",
-    ),
-    "history.views_consumer.UserShoppingGoalViewSet": Route(USER, "filter(user=request.user)"),
+    # compare_products and UserFavoriteViewSet carried the two findings here (an unpublished
+    # season served to any UUID holder; integer ids turned into public UUIDs). Both were retired
+    # with their models in history 0254, which closed the findings.
+    "history.views_consumer.ConsumerDashboardViewSet": Route(USER, "impact and shopping filtered on the user"),
     "fieldnotes.views.CrewSenderViewSet": Route(
         COMPANY, "company__in=user.companies; writes need CA/FM in the row's company"
     ),
@@ -526,7 +517,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 51
+UNPROVEN_CEILING = 49
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 21
+OPEN_FINDINGS_CEILING = 19

@@ -37,8 +37,6 @@ from history import serializers_consumer as sc
 CONSUMER_SERIALIZERS = (
     sc.EnhancedHistoryScanSerializer,
     sc.UserImpactSummarySerializer,
-    sc.UserFavoriteSerializer,
-    sc.UserShoppingGoalSerializer,
 )
 
 #: Substrings that may never name a declared field on those serializers. Shape-matched, because

@@ -67,6 +67,15 @@ RETIRED_TABLES = {
     # carbon 0054 (2026-11-08): the score log, emptied first by clear_optimized_carbon_calculations
     # (the command lives in the code up to #347's merge commit c109495a; 0054 deletes it).
     "carbon.OptimizedCarbonCalculation",
+    # Retiring 2026-11-09: history 0254 takes the shopper models out of the model state, its step 2
+    # drops the tables. Production held 0 rows in each on 2026-11-09.
+    "history.UserFavorite",
+    "history.UserLocalRecommendation",
+    "history.UserLocalRecommendation_recommended_products",
+    "history.UserProductComparison",
+    "history.UserProductComparison_products",
+    "history.UserShoppingGoal",
+    "history.UserShoppingInsight",
 }
 
 #: Loose `(type, id)` pairs that point at an event row by code with no foreign key behind them.

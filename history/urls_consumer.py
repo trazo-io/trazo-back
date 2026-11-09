@@ -6,13 +6,12 @@ from django.urls import include, path
 
 from rest_framework.routers import DefaultRouter
 
-from .views_consumer import ConsumerDashboardViewSet, UserFavoriteViewSet, UserShoppingGoalViewSet
+from .views_consumer import ConsumerDashboardViewSet
 
 # Create router for consumer APIs
 consumer_router = DefaultRouter()
 consumer_router.register(r"dashboard", ConsumerDashboardViewSet, basename="consumer-dashboard")
-consumer_router.register(r"favorites", UserFavoriteViewSet, basename="user-favorites")
-consumer_router.register(r"goals", UserShoppingGoalViewSet, basename="user-goals")
+# favorites/ and goals/ were retired with their models in history 0254 (2026-11-09).
 
 urlpatterns = [
     # Consumer API endpoints
