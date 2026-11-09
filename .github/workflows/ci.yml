@@ -604,6 +604,10 @@ jobs:
       # 2026-11-08: history.tests.test_transparency_calculator joins (rewritten). The calculator
       # returns counts and the farming approach only; it no longer computes a percentage, a status
       # or a level. DB-free. It does not read the sibling repo.
+      #
+      # 2026-11-09: carbon.tests.test_chemical_notes_carry_codes joins. Every explanatory note on an
+      # input calculation carries a note_code the app words in the reader's language, and the
+      # slow-release note makes no efficiency claim. DB-free. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -803,6 +807,7 @@ jobs:
             carbon.tests.test_crop_template_detail_claims \
             carbon.tests.test_carbon_entries_create_path \
             carbon.tests.test_offsets_are_not_self_verified \
+            carbon.tests.test_chemical_notes_carry_codes \
             carbon.tests.test_factor_provenance \
             carbon.tests.test_emission_factors \
             carbon.tests_emission_factors \

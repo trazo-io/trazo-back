@@ -1054,6 +1054,9 @@ class OptimizedCarbonCalculator:
                     "epa_diesel_factor_kg_co2_per_gallon": app_factor.value if fuel_for_calc > 0 else None,
                     # Explanatory note
                     "note": f"Aggregate of {event_count} {factor_label} applications. Total active ingredient: {active_ingredient_kg} kg.",
+                    # The app words the note from these, in the reader's language (2026-11-09).
+                    "note_code": "aggregate_applications",
+                    "aggregate_application_count": event_count,
                     # Display fields
                     "volume_applied_liters": original_volume,
                     "area_treated_hectares": original_area,
