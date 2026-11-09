@@ -7,307 +7,260 @@ form:
   retrieved: 2026-10-24
   nop_cites: ["§ 205.200", "§ 205.201", "§ 205.202", "§ 205.272"]
   guide_trigger: "Item 3 — production not in the ground, and/or in greenhouses, shadehouses or buildings"
+  trazo_module: g3_1_container_greenhouse
   register_status: complete
   source_sha256: 1753ac5bc41e83031c803b44f27c58f50e719502d380deee3210843bec427253
 
 items:
-  - ref: Preamble (applicability)
-    asks: Complete this form if your organic system includes any crop or plant production that does not take
-      place in the ground (annual seedlings/transplants; planting stock or nursery production in pots; edible
-      sprouts; wheatgrass/microgreens; mushrooms; or crops grown to harvest/maturity in containers), and/or any
-      crop production in greenhouses, shadehouses, and/or buildings.
-    status: not_covered
-    severity: P1
+  - ref: "Preamble (applicability)"
+    asks: "Complete this form if your organic system includes any crop or plant production that does not take place in the ground (annual seedlings/transplants; planting stock or nursery production in pots; edible sprouts; wheatgrass/microgreens; mushrooms; or crops grown to harvest/maturity in containers), and/or any crop production in greenhouses, shadehouses, and/or buildings."
+    status: covered
     trazo:
-      triggered_by:
-      - g3_0_seeds.seedlings_used
-      - g3_2_planting_stock.stock_sold_as_organic
-      - g4_0_rotation_soil.system_type
-      models:
-      - product.Parcel.container_production
-      - history.History.is_outdoor
-      prints: —
-    gap: 'Trazo has no G3.1 module, so it can neither attest N/A nor capture the content this form covers — a
-      reviewer sees silence, which reads as ''not answered'', not ''not applicable''. Five live Trazo facts already
-      point at this form with nowhere to land: G3.0''s `seedlings_used = own_organic`, G3.0b''s `stock_sold_as_organic
-      = sold_organic_stock` (CCOF explicitly says ''describe in G3.1''), G4.0''s `system_type` including container,
-      the Parcel Application''s `container_production` flag, and the production-level indoor/greenhouse flag
-      (`History.is_outdoor=False`). A 2026-08-08 parity plan promised this form would ship as an N/A-able stub;
-      only W2.0 shipped.'
-    fix: Ship G3.1 as an N/A-able stub (the `stubs._describe_and_attach` pattern already used for W2.0) with
-      real code G3.1; prompt it — never auto-answer it — whenever one of the five triggers fires.
-
+      questions:
+      - g3_1_container_greenhouse.structure_production_types
+      prints: "modules/G3_1.pdf (the not-applicable attestation, CCOF A1's \"None of these\", with a [REVIEW] line for each fact elsewhere in the plan or the records that says otherwise; or §A when it applies)"
   - ref: "A1"
     asks: "Which of the following do you produce organically? Check all that apply. None of these (stop) / Annual seedlings — for on-farm use / for sale / Planting stock (other than annual seedlings) or other nursery production in pots — for on-farm use / for sale / Edible sprouts (including fodder for livestock) / Wheatgrass, microgreens, pea/sunflower shoots, or similar / Mushrooms (also complete G3.2) / Crops grown to harvest/maturity in containers (substrate/growing media, and/or hydroponic, aeroponic, or aquaponic systems) / Crops grown in the ground (not in containers) within greenhouses, shadehouses and/or buildings."
-    status: not_covered
-    severity: P1
-    gap: "Nothing captures any of these eight production types. Two are real for the ICP — on-farm annual seedling production and planting-stock/nursery production in pots — and have no home; mushrooms, edible sprouts and hydroponic/aeroponic/aquaponic-to-maturity are the part of this battery a wholesale orchard would not use."
-    fix: "Add checkbox_group `structure_production_types` (8 options, two carrying on-farm-use/for-sale sub-flags) as the first question of the G3.1 stub — the one battery that decides whether the rest of the form (B3, B4, C) applies."
-
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.structure_production_types
+      - g3_1_container_greenhouse.annual_seedlings_use
+      - g3_1_container_greenhouse.potted_stock_use
+      prints: "modules/G3_1.pdf §A"
   - ref: "A2"
     asks: "For the production types indicated in A1, are all growing locations within the boundaries of a certified organic parcel? Yes / No (submit Parcel Application(s))."
-    status: not_covered
-    severity: P2
-    gap: "No question ties a structure to a certified parcel. CCOF's own Parcel Application map checklist separately asks growers to mark annual-seedling-production areas on the parcel map; Trazo's parcel map embed has no such item either."
-    fix: "Add boolean `locations_within_certified_parcel`, with coaching to add the structure to the parcel map."
-  - ref: B1
-    asks: Do you use growing media (including substrate, planting mix, potting soils, etc.)?
-    status: not_covered
-    severity: P2
-    gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
-      Application module has none.
-    fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
-      panel.
-  - ref: B1a
-    asks: Are all components of your growing media (e.g. peat moss, coconut fiber, vermiculite, perlite, sand,
-      compost, microbial
-    status: not_covered
-    severity: P2
-    gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
-      Application module has none.
-    fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
-      panel.
-  - ref: B1b
-    asks: Is new growing media used for each production cycle? Spent growing media from nonorganic production
-      may not be reused
-    status: not_covered
-    severity: P2
-    gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
-      Application module has none.
-    fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
-      panel.
-  - ref: B1c
-    asks: How is growing media disposed of at the end of the production cycle? Spent growing media must be managed
-      in a way that
-    status: not_covered
-    severity: P2
-    gap: Growing-media use, its Materials List status, reuse policy and disposal method are captured nowhere.
-      The Grower Materials Application (ORGB41 §C) lists growing media as its own category; Trazo's Materials
-      Application module has none.
-    fix: Add the three sub-questions to the G3.1 stub; add a growing-media category to the Materials Application
-      panel.
-
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.locations_within_certified_parcel
+      prints: "modules/G3_1.pdf §A (a No prints a [REVIEW] line asking for the Parcel Applications)"
+  - ref: "B1"
+    asks: "Do you use growing media (including substrate, planting mix, potting soils, etc.)?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.uses_growing_media
+      prints: "modules/G3_1.pdf §B"
+  - ref: "B1a"
+    asks: "Are all components of your growing media (e.g. peat moss, coconut fiber, vermiculite, perlite, sand, compost, microbial"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.growing_media_components_listed
+      prints: "modules/G3_1.pdf §B"
+  - ref: "B1b"
+    asks: "Is new growing media used for each production cycle? Spent growing media from nonorganic production may not be reused"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.growing_media_new_each_cycle
+      - g3_1_container_greenhouse.growing_media_reuse_source
+      prints: "modules/G3_1.pdf §B"
+  - ref: "B1c"
+    asks: "How is growing media disposed of at the end of the production cycle? Spent growing media must be managed in a way that"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.growing_media_disposal
+      - g3_1_container_greenhouse.growing_media_disposal_other
+      prints: "modules/G3_1.pdf §B"
   - ref: "B2"
     asks: "How do you manage irrigation water effluent and/or runoff to avoid contamination of the surrounding environment (waterways, soil, etc.)? Recaptured/reused / other (explain)."
-    status: not_covered
-    severity: P2
-    gap: "Structure irrigation effluent/runoff has no question. G4.2 covers field irrigation water sources and quality, not structure effluent or runoff."
-    fix: "Add a radio + explanatory text to the G3.1 stub."
-  - ref: B3
-    asks: Do you produce organic edible sprouts?
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: B3a
-    asks: Do you always use organic seed to produce edible sprouts? Yes
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: B3b
-    asks: Are all sanitizers used on the seed listed on your Grower Materials Application (OSP Materials List)?
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: B4
-    asks: Do you produce organic crops grown to harvest/maturity in containers?
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4a
-    asks: Photographs of the system.
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4b
-    asks: Type of system (e.g. substrate production in pots/bags/troughs or other containers, hydroponic, aeroponic,
-      aquaponic, etc).
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4c
-    asks: The stages and length of the production cycle for each crop grown.
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4d
-    asks: If substrate/growing media is not used, explain how plants/roots are supported (e.g. net pots, trays,
-      polystyrene sheets, etc).
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4e
-    asks: If substrate/growing media is used, explain if it contains biological activity and/or organic matter,
-      and whether it provides
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4f
-    asks: If liquid nutrition is used, explain how it is delivered to the plant roots (e.g. indirectly via application
-      to substrate/growing media,
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: B4g
-    asks: Whether fish are integrated into the system (aquaponics).
-    status: not_covered
-    severity: P2
-    gap: Nothing captures container-to-maturity production. A real gap only for substrate-pot container blueberry
-      or raspberry operations, which exist in the WA/CA ICP footprint — most field orchards would answer 'no'.
-    fix: Add a describe-and-attach stub page listing CCOF's a-g items as coaching, gated on the A1 tick for this
-      production type.
-  - ref: C1
-    asks: Does your organic production indicated in section A take place in greenhouses, shadehouses, or buildings?
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C2
-    asks: Does your operation also have nonorganic production in greenhouses, shadehouses, or buildings?
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C3
-    asks: 'Mark all that apply to describe your nonorganic production in greenhouses, shadehouses, or buildings:'
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C3a
-    asks: How do you identify organic and nonorganic growing areas?
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C3b
-    asks: How do you label or distinguish between organic and nonorganic plants from production through shipment/sale?
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C3c
-    asks: How do you prevent mixing or commingling of growing media and fertility materials for organic and nonorganic
-      production,
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C3d
-    asks: How do you prevent drift of prohibited materials through shared ventilation systems?
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: C3e
-    asks: How do you prevent contact with prohibited materials applied through shared irrigation systems?
-    status: not_covered
-    severity: P2
-    gap: Split organic/nonorganic production inside the same structures — signage, tray tagging, commingling
-      SOPs, shared-ventilation and shared-irrigation safeguards — is captured nowhere. Real for WA/CA nurseries
-      and propagation operations running both organic and conventional lines; a certified-organic-only operation
-      would end the form at the first question of this section.
-    fix: Add a stub page gated on 'organic production in structures = yes AND nonorganic production in structures
-      = yes'.
-  - ref: D (not applicable)
-    asks: 'Alternating Production: not applicable, not seeking approval to use organic growing areas for nonorganic
-      production. Stop, this form is complete.'
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: D1
-    asks: Which of the following apply to the organic growing location(s) you wish to use for alternating production?
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: D1a
-    asks: List all organic growing locations (e.g. parcel name/greenhouse or building number) you wish to use
-      for alternating production
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: D1b
-    asks: When do you anticipate using these organic growing locations for nonorganic production?
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: D2
-    asks: Describe or attach your Standard Operating Procedure (SOP) for cleaning all equipment and surfaces
-      to remove residue of
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
-  - ref: D2a
-    asks: How do you document the following?
-    status: not_covered
-    severity: P3
-    gap: Applies only to sprout, microgreen or alternating container production. Trazo asks nothing that says
-      whether the operation does either, so it cannot show this does not apply.
-    fix: Ask the production-system question (G3.1 A1) and make these rows conditional on its answer.
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.irrigation_effluent_management
+      - g3_1_container_greenhouse.irrigation_effluent_other
+      prints: "modules/G3_1.pdf §B"
+  - ref: "B3"
+    asks: "Do you produce organic edible sprouts?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.structure_production_types
+      prints: "modules/G3_1.pdf §A (the edible sprouts option) and §B (the sprout questions, shown only when it is ticked)"
+  - ref: "B3a"
+    asks: "Do you always use organic seed to produce edible sprouts? Yes"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.sprout_seed_always_organic
+      prints: "modules/G3_1.pdf §B"
+  - ref: "B3b"
+    asks: "Are all sanitizers used on the seed listed on your Grower Materials Application (OSP Materials List)?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.sprout_seed_sanitizers
+      - g3_1_container_greenhouse.sprout_seed_sanitizing_procedure
+      prints: "modules/G3_1.pdf §B"
+  - ref: "B4"
+    asks: "Do you produce organic crops grown to harvest/maturity in containers?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.structure_production_types
+      - g3_1_container_greenhouse.container_system_photos
+      prints: "modules/G3_1.pdf §B4 (shown only when crops grown to harvest in containers is ticked in §A); the photographs under attachments/g3_1_container_greenhouse/ in the packet"
+  - ref: "B4a"
+    asks: "Photographs of the system."
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_system_photos
+      prints: "modules/G3_1.pdf §B4; the photographs under attachments/g3_1_container_greenhouse/ in the packet"
+  - ref: "B4b"
+    asks: "Type of system (e.g. substrate production in pots/bags/troughs or other containers, hydroponic, aeroponic, aquaponic, etc)."
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_system_types
+      - g3_1_container_greenhouse.container_system_types_other
+      prints: "modules/G3_1.pdf §B4"
+  - ref: "B4c"
+    asks: "The stages and length of the production cycle for each crop grown."
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_production_cycle
+      prints: "modules/G3_1.pdf §B4"
+  - ref: "B4d"
+    asks: "If substrate/growing media is not used, explain how plants/roots are supported (e.g. net pots, trays, polystyrene sheets, etc)."
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_root_support
+      prints: "modules/G3_1.pdf §B4"
+  - ref: "B4e"
+    asks: "If substrate/growing media is used, explain if it contains biological activity and/or organic matter, and whether it provides"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_media_biology
+      prints: "modules/G3_1.pdf §B4"
+  - ref: "B4f"
+    asks: "If liquid nutrition is used, explain how it is delivered to the plant roots (e.g. indirectly via application to substrate/growing media,"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_liquid_nutrition
+      prints: "modules/G3_1.pdf §B4"
+  - ref: "B4g"
+    asks: "Whether fish are integrated into the system (aquaponics)."
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.container_fish_integrated
+      prints: "modules/G3_1.pdf §B4"
+  - ref: "C1"
+    asks: "Does your organic production indicated in section A take place in greenhouses, shadehouses, or buildings?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.organic_in_structures
+      prints: "modules/G3_1.pdf §C; narrative § 205.201(a)(5)"
+  - ref: "C2"
+    asks: "Does your operation also have nonorganic production in greenhouses, shadehouses, or buildings?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.nonorganic_in_structures
+      prints: "modules/G3_1.pdf §C; narrative § 205.201(a)(5)"
+  - ref: "C3"
+    asks: "Mark all that apply to describe your nonorganic production in greenhouses, shadehouses, or buildings:"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.nonorganic_structure_arrangement
+      prints: "modules/G3_1.pdf §C; narrative § 205.201(a)(5)"
+  - ref: "C3a"
+    asks: "How do you identify organic and nonorganic growing areas?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.organic_area_identification
+      - g3_1_container_greenhouse.organic_area_identification_other
+      prints: "modules/G3_1.pdf §C"
+  - ref: "C3b"
+    asks: "How do you label or distinguish between organic and nonorganic plants from production through shipment/sale?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.organic_plant_distinction
+      - g3_1_container_greenhouse.organic_plant_distinction_other
+      prints: "modules/G3_1.pdf §C"
+  - ref: "C3c"
+    asks: "How do you prevent mixing or commingling of growing media and fertility materials for organic and nonorganic production,"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.media_fertility_commingling_prevention
+      - g3_1_container_greenhouse.commingling_sop_upload
+      - g3_1_container_greenhouse.media_fertility_commingling_other
+      prints: "modules/G3_1.pdf §C (an SOP answer with no file prints a [REVIEW] line); the SOP under attachments/g3_1_container_greenhouse/ in the packet"
+  - ref: "C3d"
+    asks: "How do you prevent drift of prohibited materials through shared ventilation systems?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.shared_ventilation_drift
+      - g3_1_container_greenhouse.shared_ventilation_other
+      prints: "modules/G3_1.pdf §C"
+  - ref: "C3e"
+    asks: "How do you prevent contact with prohibited materials applied through shared irrigation systems?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.shared_irrigation_contact
+      - g3_1_container_greenhouse.shared_irrigation_other
+      prints: "modules/G3_1.pdf §C"
+  - ref: "D (not applicable)"
+    asks: "Alternating Production: not applicable, not seeking approval to use organic growing areas for nonorganic production. Stop, this form is complete."
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.nonorganic_structure_arrangement
+      prints: "modules/G3_1.pdf §C (section D is shown only when alternating production is ticked there)"
+  - ref: "D1"
+    asks: "Which of the following apply to the organic growing location(s) you wish to use for alternating production?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.alternating_flooring
+      - g3_1_container_greenhouse.alternating_flooring_photos
+      - g3_1_container_greenhouse.alternating_ground_protection
+      prints: "modules/G3_1.pdf §D; the photographs under attachments/g3_1_container_greenhouse/ in the packet"
+  - ref: "D1a"
+    asks: "List all organic growing locations (e.g. parcel name/greenhouse or building number) you wish to use for alternating production"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.alternating_locations
+      prints: "modules/G3_1.pdf §D"
+  - ref: "D1b"
+    asks: "When do you anticipate using these organic growing locations for nonorganic production?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.alternating_timing
+      - g3_1_container_greenhouse.alternating_schedule
+      prints: "modules/G3_1.pdf §D"
+  - ref: "D2"
+    asks: "Describe or attach your Standard Operating Procedure (SOP) for cleaning all equipment and surfaces to remove residue of"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.alternating_cleaning_sop
+      - g3_1_container_greenhouse.alternating_cleaning_sop_upload
+      prints: "modules/G3_1.pdf §D"
+  - ref: "D2a"
+    asks: "How do you document the following?"
+    status: covered
+    trazo:
+      questions:
+      - g3_1_container_greenhouse.alternating_documentation
+      - g3_1_container_greenhouse.alternating_documentation_other
+      prints: "modules/G3_1.pdf §D"
+  # Closed 2026-11-09: every row is answered by the G3.1 module (content 2026.11.27), or by its not-applicable
+  # attestation, which is CCOF A1's "None of these".

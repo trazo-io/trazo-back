@@ -553,6 +553,29 @@ OSP_EVIDENCE_MAP: dict = {
             "ships 'For Export Only' — revisit before selling into that segment."
         ),
     ),
+    # --- G3.1 container & greenhouse --------------------------------------------
+    "organic_area_identification": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note=(
+            "How organic and nonorganic growing areas in greenhouses, shadehouses or buildings are told apart "
+            "(signage). Matched for the word identified; it states a practice, not that a record exists, and "
+            "is asked only of an operation with nonorganic production in such structures."
+        ),
+    ),
+    "organic_area_identification_other": EvidenceEntry(
+        OUT_OF_SCOPE, note="Free-text rider on organic_area_identification."
+    ),
+    "alternating_documentation": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Names the records (production records, cleaning logs) that document alternating production in a "
+            "structure; Trazo records no alternating-production cycle, so nothing here corroborates it. Asked "
+            "only of an operation seeking CCOF's alternating-production approval."
+        ),
+    ),
+    "alternating_documentation_other": EvidenceEntry(
+        NOT_EVIDENCED, note="Free-text rider on alternating_documentation."
+    ),
     # --- G9.0 facility pest -----------------------------------------------------
     "pest_control_records": EvidenceEntry(
         EVIDENCED,

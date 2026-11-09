@@ -17,6 +17,7 @@ from certifications.models import OSP_SECTION_KEYS
 
 from .g2_0_fraud_prevention import G2_0_FRAUD_PREVENTION
 from .g3_0_seeds import G3_0_SEEDS
+from .g3_1_container_greenhouse import G3_1_CONTAINER_GREENHOUSE
 from .g3_2_planting_stock import G3_2_PLANTING_STOCK
 from .g4_0_rotation_soil import G4_0_ROTATION_SOIL
 from .g4_1_compost_manure import G4_1_COMPOST_MANURE
@@ -307,7 +308,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   treatments, growing media and adjuvants. Seed treatments on planting records and tank-mix partners on
 #   application records join the Materials List and its reconciliation. G4.0's "all fertility materials are
 #   listed" is gated on the same reconciliation as the Materials Application's fertilizer statement.
-CONTENT_VERSION = "2026.11.26"
+# 2026.11.27: G3.1 Container & Greenhouse/Shadehouse Production (CCOF ORGB46), a new module after G3.0b. Its
+#   not-applicable attestation is CCOF A1's "None of these"; sections B4 and D open only on the answers that make
+#   them apply. Every question is new, so no stored answer changes meaning.
+CONTENT_VERSION = "2026.11.27"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
@@ -317,6 +321,7 @@ MODULE_REGISTRY: tuple = (
     G3_0_SEEDS,
     G3_1_SEEDLINGS,
     G3_2_PLANTING_STOCK,
+    G3_1_CONTAINER_GREENHOUSE,
     G4_0_ROTATION_SOIL,
     G4_1_COMPOST_MANURE,
     G4_2_NATURAL_RESOURCES,

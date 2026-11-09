@@ -2322,6 +2322,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
         story.append(Paragraph(_escape(f"Not applicable{stamp}: {na_text}"), styles["body"]))
         if module.key in _NA_REVIEW:
             story.append(Paragraph(_escape(f"[REVIEW] {_NA_REVIEW[module.key]}"), styles["meta"]))
+        if module.key == "g3_1_container_greenhouse":
+            # CCOF G3.1's "None of these" set against the plan and the records that say otherwise.
+            from certifications.services.structure_production import na_contradictions
+
+            for line in na_contradictions(osp):
+                story.append(Paragraph(_escape(line), styles["meta"]))
     else:
         pairs = visible_questions(module, answers)
         # Where the "nothing answered" line goes, so it leads the questions it summarises instead of
@@ -2518,6 +2524,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _map_element_lines(osp, module, question, value, parcel):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g3_1_container_greenhouse":
+                from certifications.services.structure_production import answer_contradictions
+
+                for line in answer_contradictions(question.key, value, answers):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g9_0_facility_pest" and question.key == "material_tier":
                 from certifications.services.facility_pest import facility_entries, tier_review_lines
 

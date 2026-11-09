@@ -472,6 +472,10 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_g3_1_container_greenhouse joins. G3.1 Container & Greenhouse/Shadehouse
+      # Production: the not-applicable box is CCOF A1's "None of these", sections open on the answers that make them
+      # apply, and a G3.1 marked not applicable prints a [REVIEW] per fact that says otherwise. Builds its own farm.
+      #
       # 2026-11-09: certifications.tests.test_materials_post_harvest_d joins. CCOF Materials Application §D end to
       # end: a logged sanitizer brand holds the "listed" statement until the operator ties it to the plan's row, and
       # the §D table prints brand, manufacturer and reason, a gas row included. Builds its own farm.
@@ -743,6 +747,7 @@ jobs:
             certifications.tests.test_facility_products \
             certifications.tests.test_materials_production_aids \
             certifications.tests.test_materials_post_harvest_d \
+            certifications.tests.test_g3_1_container_greenhouse \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
