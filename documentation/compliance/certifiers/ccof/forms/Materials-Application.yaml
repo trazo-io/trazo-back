@@ -246,8 +246,7 @@ items:
   asks: 'If you conduct post-harvest handling: list materials that directly contact organic crops during handling
     (wash water additives, sanitizers, gases): Brand Name, Manufacturer, Reason for use. Or check ''Not applicable,
     no post-harvest handling OR none of these used.'''
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - materials_application.post_harvest_contact_listed
@@ -259,30 +258,24 @@ items:
     - certifications.PlanMaterialEntry.category
     - certifications.services.plan_materials.logged_post_harvest_sanitizers
     - history.ProductionEvent.sanitizer_name
+    - certifications.services.material_identity.record_decision
     prints: 'modules/materials_application.pdf §A — ''Post-harvest contact materials'' block (rows filed under
       the post_harvest category: product — manufacturer — listing — reason); workbooks/Materials List.xlsx
       (logged wash-water sanitizers as rows of their own); the [REVIEW] reconciliation line on both'
-  gap: 'The row shape is CCOF''s (brand, manufacturer, reason — a missing cell stated as missing) and the N/A
-    is the operator''s `post_harvest_contact_none_used` statement, checked against the post-harvest records
-    since 2026-09-12. Two things remain: the logged sanitizer (`sanitizer_name`, a brand or a substance as
-    the operator typed it) reaches the Materials List workbook and the [REVIEW] unmatched-names line, but is
-    not resolved to the plan''s row by anything smarter than an exact name match — ''SaniDate 5.0'' on the
-    log and ''Peracetic acid'' on the plan still read as two products; and ''gases'' (CO2, ethylene) have no
-    record source at all. Authority: Only § 205.601 National List rows are seeded (crop-production substances),
-    annotated ''equipment, seed, and asexual plant material disinfection only'' — an annotation that excludes
-    the wash-flume use the packet itself describes. § 205.605 has a defined choice slot but zero seeded rows,
-    so the pilot''s sanitizer record cites the wrong section.'
-  fix: Offer the plan's post-harvest rows in the post-harvest activity wizard so the event stores the row's
-    FK (the same fix Header F proposes for crop inputs); add a gas option to the post-harvest event. Seed §
-    205.605(a)/(b) rows (chlorine materials, hydrogen peroxide, ozone, peracetic acid, alcohols, citric acid,
-    phosphoric acid, sodium carbonate); bias `verify_input` toward § 205.605 when the caller is a post-harvest
-    or equipment event.
+  # Closed 2026-11-09 after checking each open claim against the code (certifications/tests/
+  # test_materials_post_harvest_d.py). § 205.605(b) rows are seeded by migration 0038. A logged sanitizer brand
+  # ('SaniDate 5.0') and the plan's row for it read as one product once the operator records an identity
+  # decision tying the two, which is the design (never a fuzzy match); until then the §D "listed" statement is
+  # refused and the name prints under logged names not on the plan. Gases are listed as rows of their own with
+  # brand, manufacturer and reason; no record names a gas, so the list is their only source, as for growing media.
 - ref: D (authority)
   kind: interpretation
   asks: (The CFR authority for post-harvest sanitizers is § 205.605(b), handling — distinct from § 205.601,
     crop production.)
   trazo:
-    prints: history/audit-export dossier (cites § 205.601(a)(6) where § 205.605 applies)
+    prints: history/audit-export dossier (post-harvest sanitizer events under 'Post-Harvest Sanitation (7 CFR
+      205.272 + § 205.605)', each with the reference the operator recorded); modules/materials_application.pdf
+      (the [REVIEW] line when the records log a wash-water sanitizer and the plan lists none under § 205.605)
   reason: 'Not on the form: the CFR section that governs §D''s materials. Its gap is carried by D.'
 - ref: D (listing evidence)
   kind: interpretation

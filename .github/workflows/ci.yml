@@ -472,6 +472,10 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_materials_post_harvest_d joins. CCOF Materials Application §D end to
+      # end: a logged sanitizer brand holds the "listed" statement until the operator ties it to the plan's row, and
+      # the §D table prints brand, manufacturer and reason, a gas row included. Builds its own farm.
+      #
       # 2026-11-09: certifications.tests.test_materials_production_aids joins. CCOF Materials Application §C: seed
       # treatments on planting records and tank-mix partners on application records join the Materials List and its
       # reconciliation; G4.0's "all fertility materials are listed" is gated on it. Builds its own farm.
@@ -734,6 +738,7 @@ jobs:
             certifications.tests.test_inspection_packet \
             certifications.tests.test_facility_products \
             certifications.tests.test_materials_production_aids \
+            certifications.tests.test_materials_post_harvest_d \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
