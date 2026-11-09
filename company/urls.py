@@ -9,6 +9,7 @@ from certifications.views import (
     CertifierAccessLinkViewSet,
     CertifierInspectionViewSet,
     CertifierNoticeViewSet,
+    FacilityProductViewSet,
     LandownerAffidavitViewSet,
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
@@ -68,6 +69,12 @@ establishment_router.register(
     r"suppliers",
     SupplierViewSet,
     basename="establishment-suppliers",
+)
+# The product rows of the farm's facilities (CCOF G6.1 C2, OTCO C7 7.10-2).
+establishment_router.register(
+    r"facility-products",
+    FacilityProductViewSet,
+    basename="establishment-facility-products",
 )
 # Companies whose brands the farm packs into (CCOF G7.0 C, OTCO C8 8.3, WSDA 2121 N 6-7).
 establishment_router.register(

@@ -19,6 +19,7 @@ from .models import (
     CertifierAccessLog,
     CertifierInspection,
     CertifierNotice,
+    FacilityProduct,
     LandownerAffidavit,
     OrganicSystemPlan,
     OSPAnnualUpdate,
@@ -214,6 +215,74 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
         return attrs
 
 
+class FacilityProductSerializer(CallerScopedRelatedFields, serializers.ModelSerializer):
+    """One product row of a facility (CCOF G6.1 C2, OTCO C7 7.10-2). The facility and the ingredient
+    statement must both be the URL's farm: another farm's or company's id fails exactly like an id that
+    does not exist."""
+
+    caller_scoped_fields = {
+        "facility": "establishment__company",
+        "ingredient_statement_document": "establishment__company",
+    }
+    establishment_scoped_fields = {
+        "facility": "establishment_id",
+        "ingredient_statement_document": "establishment_id",
+    }
+
+    packaging_form_display = serializers.CharField(source="get_packaging_form_display", read_only=True)
+    label_claim_display = serializers.CharField(source="get_label_claim_display", read_only=True)
+    # default=None: with no document the key reads null instead of dropping out of the row (review of #268).
+    ingredient_statement_document_title = serializers.CharField(
+        source="ingredient_statement_document.title", read_only=True, default=None
+    )
+
+    class Meta:
+        model = FacilityProduct
+        fields = [
+            "id",
+            "public_id",
+            "facility",
+            "category",
+            "detail",
+            "packaging_form",
+            "packaging_form_display",
+            "label_claim",
+            "label_claim_display",
+            "brand_name",
+            "multi_ingredient",
+            "ingredient_statement_document",
+            "ingredient_statement_document_title",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def validate_category(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Name the product category, e.g. Almonds.")
+        return value
+
+    def validate(self, attrs):
+        """The ingredient statement is asked of a multi-ingredient product only.
+
+        Naming a statement on a product stated single-ingredient (or not stated) is refused; switching a
+        product away from multi-ingredient unlinks its statement rather than refusing the switch, as the
+        facility's exemption is cleared on a switch to "our own": the file stays in the farm's Documents.
+        """
+        attrs = super().validate(attrs)
+        multi = attrs.get("multi_ingredient", getattr(self.instance, "multi_ingredient", ""))
+        if multi == "yes":
+            return attrs
+        if attrs.get("ingredient_statement_document") is not None:
+            raise serializers.ValidationError(
+                {"ingredient_statement_document": "Asked for a multi-ingredient product only."}
+            )
+        if "multi_ingredient" in attrs and getattr(self.instance, "ingredient_statement_document_id", None):
+            attrs["ingredient_statement_document"] = None
+        return attrs
+
+
 class PostHarvestFacilitySerializer(serializers.ModelSerializer):
     """Producer-dashboard CRUD for off-farm post-harvest handlers (CCOF G6.1)."""
 
@@ -227,6 +296,8 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
     #: The crops on the production records linked to this facility, by season year
     #: (`facility_crops.crops_by_facility`); read from the records, never typed.
     crops_recorded = serializers.SerializerMethodField()
+    #: The facility's product rows (`FacilityProduct`), written through the farm's facility-products route.
+    products = FacilityProductSerializer(many=True, read_only=True)
 
     class Meta:
         model = PostHarvestFacility
@@ -261,6 +332,7 @@ class PostHarvestFacilitySerializer(serializers.ModelSerializer):
             "verification_source",
             "notes",
             "products_detail",
+            "products",
             "activities",
             "exemption_basis",
             "crops_recorded",

@@ -1037,7 +1037,9 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
                     _escape("Products, as the operation describes them: " + "; ".join(detail) + "."), styles["meta"]
                 )
             )
-        if not recorded and not detail:
+        products = _facility_product_table(facility, styles)
+        out.extend(products)
+        if not recorded and not detail and not products:
             out.append(
                 Paragraph(
                     _escape(
@@ -1111,8 +1113,26 @@ def _own_facility_flowables(osp, styles) -> list:
                     _escape("Products, as the operation describes them: " + "; ".join(detail) + "."), styles["meta"]
                 )
             )
+        out.extend(_facility_product_table(facility, styles))
     out.append(Spacer(1, 6))
     return out
+
+
+def _facility_product_table(facility, styles) -> list:
+    """The facility's product rows (CCOF G6.1 C2, OTCO C7 7.10-2), one table row each, in the operator's words.
+
+    Under a multi-ingredient product, where its ingredient statement is in the packet, or a [REVIEW] that none
+    is on file. Nothing when the facility has no product rows: the lines above say what the records show.
+    """
+    from certifications.services import facility_products as fp
+    from certifications.services.packet_attachments import current_manifest
+
+    products = fp.products_of(facility)
+    if not products:
+        return []
+    manifest = current_manifest()
+    items = [(fp.product_cells(p), fp.product_notes(p, manifest)) for p in products]
+    return [_register_table(fp.HEADER, fp.WIDTHS, items, styles)]
 
 
 def _approved_inputs_flowables(osp, styles) -> list:

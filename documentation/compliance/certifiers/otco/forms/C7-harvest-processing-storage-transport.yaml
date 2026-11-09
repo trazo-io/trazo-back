@@ -653,25 +653,23 @@ items:
   asks: 'Complete the following table (or attach a list) with all required information about each product that will
     be included in your organic certification and is processed by another operation: Type of Product / Product Detail
     (optional) / Organic Label Claim / Label or Brand Name / Name of operation doing the processing / Certifier.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     triggered_by:
     - g6_1_harvest_transport.handled_by_another_operation
-    - g7_0_labeling.product_leaves_as
-    models:
-    - history.SalesRecord.buyer_name is a bare string; no brand or brand-owner entity exists (CCOF G7.0 C1 / C2,
-      WSDA §N 6 / 7)
-    prints: —
     questions:
     - g6_1_harvest_transport.off_farm_handler_table
-    - g7_0_labeling.organic_label_categories
-  gap: '(7.10-2a) Since 2026-11-09 each processor prints the crops on the production records linked to it and the
-    products the operation describes on the facility record, which can carry detail and the label claim. Still open:
-    the brand a processed product is sold under is not tied to the product (the brand-owner register names brand
-    owners the operation packs for, not the label of a product another operation processes), and the label claim
-    is free text, not a column.'
-  fix: A brand and label-claim column on structured product rows per facility, defaulting the claim from organic_label_categories.
+    models:
+    - certifications.FacilityProduct.category
+    - certifications.FacilityProduct.detail
+    - certifications.FacilityProduct.label_claim
+    - certifications.FacilityProduct.brand_name
+    - certifications.PostHarvestFacility.certifier_name
+    prints: modules/G6_1.pdf §D (each processor's line names the operation and its certifier; under it, a product
+      table with type and detail, organic label claim and label or brand name, "Not stated" where the operator left
+      a column empty)
+  # Closed 2026-11-08 by the product-rows slice: the label claim is a column picked per product (never defaulted
+  # from G7.0's label categories) and the brand is typed per product.
 - ref: 7.10-3
   asks: Attach a valid organic certificate for each processing facility listed above. Attached.
   status: covered

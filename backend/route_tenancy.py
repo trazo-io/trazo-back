@@ -177,6 +177,16 @@ ROUTE_TENANCY = {
         ),
     ),
     "certifications.views.PostHarvestFacilityViewSet": Route(COMPANY, "nested; establishment read-only"),
+    "certifications.views.FacilityProductViewSet": Route(
+        COMPANY,
+        "nested; the facility and the ingredient statement must be the URL's farm",
+        outsider_tests=(
+            "certifications.tests.test_facility_products.FacilityProductTenancyTests"
+            ".test_another_company_reaches_nothing",
+            "certifications.tests.test_facility_products.FacilityProductTenancyTests"
+            ".test_another_farms_facility_or_document_fails_like_a_missing_one",
+        ),
+    ),
     "certifications.views.BrandOwnerViewSet": Route(
         COMPANY,
         "nested; admins and managers only; both documents must be the URL's farm",

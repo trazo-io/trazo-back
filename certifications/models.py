@@ -418,6 +418,73 @@ class PostHarvestFacility(models.Model):
         return result
 
 
+class FacilityProduct(models.Model):
+    """One finished product a facility handles, processes or stores for this operation, as a row of the
+    agents' product tables.
+
+    CCOF G6.1 C2 asks, per product: Product Category / Product Detail (if any) / Packaging Form (retail,
+    nonretail, unpackaged) / Certified Operation where Product is Handled or Processed, and for each
+    multi-ingredient product the manufacturer's ingredient statement (not required if the co-packer is
+    CCOF certified). OTCO C7 7.10-2 asks: Type of Product / Product Detail (optional) / Organic Label Claim
+    (100% Organic, Organic, Made With Organic) / Label or Brand Name / Name of operation doing the
+    processing / Certifier. The facility row carries the operation and its certifier; this row carries the
+    rest.
+
+    Every column is what the operator typed or picked. Blank is "not stated" and prints as such: the label
+    claim is never defaulted from G7.0's label categories, because a default would print a claim nobody
+    made for this product. `PostHarvestFacility.products_detail` stays, as the operator's free text.
+    """
+
+    PACKAGING_FORM_CHOICES = [
+        ("retail", "Retail"),
+        ("nonretail", "Nonretail"),
+        ("unpackaged", "Unpackaged"),
+    ]
+    # § 205.301(a)-(c), in OTCO's words and order.
+    LABEL_CLAIM_CHOICES = [
+        ("100_percent_organic", "100% Organic"),
+        ("organic", "Organic"),
+        ("made_with_organic", "Made With Organic"),
+    ]
+    MULTI_INGREDIENT_CHOICES = [
+        ("yes", "Multi-ingredient"),
+        ("no", "Single ingredient"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    facility = models.ForeignKey(PostHarvestFacility, on_delete=models.CASCADE, related_name="products")
+    category = models.CharField(max_length=120, help_text="Product category or type, e.g. Almonds")
+    detail = models.CharField(max_length=200, blank=True, default="", help_text="Product detail, e.g. Shelled")
+    packaging_form = models.CharField(max_length=20, choices=PACKAGING_FORM_CHOICES, blank=True, default="")
+    label_claim = models.CharField(max_length=30, choices=LABEL_CLAIM_CHOICES, blank=True, default="")
+    brand_name = models.CharField(max_length=200, blank=True, default="", help_text="Label or brand name, if any")
+    multi_ingredient = models.CharField(max_length=5, choices=MULTI_INGREDIENT_CHOICES, blank=True, default="")
+    # The manufacturer's ingredient statement CCOF G6.1 C2 asks for a multi-ingredient product. A file in the
+    # farm's Documents; PROTECT, like a brand owner's certificate: the documents route refuses to delete it.
+    ingredient_statement_document = models.ForeignKey(
+        "documents.GeneratedDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="facility_ingredient_statements",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_facility_products",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["facility_id", "pk"]
+
+    def __str__(self):
+        return f"{self.category} at {self.facility.name}"
+
+
 def normalize_supplier_name(name) -> str:
     """The one spelling rule a record's supplier text is compared with: trim, casefold, single
     spaces. Nothing looser. "Gurney's" and "Gurneys" stay two spellings until the grower says

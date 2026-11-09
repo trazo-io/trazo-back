@@ -172,19 +172,23 @@ items:
     from the manufacturer to compare to your label (not required if co-packer is CCOF certified). Table columns:
     Product Category / Product Detail (if any) / Packaging Form (retail, nonretail, unpackaged) / Certified Operation
     where Product is Handled or Processed.'
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.off_farm_handler_table
     - g6_1_harvest_transport.uncertified_handler_records
-    prints: modules/G6_1.pdf §D; handlers/ in the packet ZIP; narrative § 205.201(a)(5)
-  gap: 'Each handler prints with its address, role, certificate line and copy (handlers/ in the ZIP), and since
-    2026-11-09 the crops on the production records linked to it, by season, plus the products and packaging form
-    the operation describes on the facility record. Still open: CCOF asks a manufacturer''s ingredient statement
-    for each multi-ingredient product, and nothing asks whether any product is multi-ingredient. Dormant for a raw-crop
-    grower.'
-  fix: A multi-ingredient yes/no on G6.1 page D with an ingredient-statement upload per product when yes.
+    models:
+    - certifications.FacilityProduct.category
+    - certifications.FacilityProduct.detail
+    - certifications.FacilityProduct.packaging_form
+    - certifications.FacilityProduct.multi_ingredient
+    - certifications.FacilityProduct.ingredient_statement_document
+    prints: modules/G6_1.pdf §D (under each handler, a product table with category and detail, packaging form and
+      single or multi-ingredient; under a multi-ingredient product, its ingredient statement's path in the packet
+      or a [REVIEW] that none is on file); handlers/ in the packet ZIP; narrative § 205.201(a)(5)
+  # Closed 2026-11-08 by the product-rows slice: each facility carries structured product rows in CCOF's columns,
+  # the certified operation is the facility line above the table, and a multi-ingredient product's manufacturer
+  # ingredient statement ships under handlers/.
 - ref: C3
   asks: Attach organic certificates for all handlers/processors listed above. Certificates must be current
     (issued within the last 15 months) and complete, listing the specific finished products above and
