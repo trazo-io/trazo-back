@@ -272,32 +272,25 @@ items:
     well provides drinking water for the household / Water is tested regularly for contaminants / Water is
     treated with an approved disinfectant following the Safe Drinking Water Act (list the materials used to
     treat the water) / Other (describe).
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g6_4_handling.uses_water
-    models:
-    - 'nearest existing field: g6_4_handling.water_source_sanitizer (free prose; nothing prompts potability)'
-    prints: —
-  gap: Reuses WSDA §L 14 / 14a / 14b and the SDWA half of CCOF G6.1 B3. Nothing asks how non- municipal water
-    is shown potable — household use, regular testing, or SDWA-conformant treatment — and no field names the
-    treatment materials. The G4.2 water-quality questions are about irrigation water, a different use.
-  fix: Add `post_harvest_water_potability` [checkbox_group] {household_drinking_water, tested_regularly, treated_sdwa,
-    other} plus a treatment-materials text, visible when the 7.5-2 source is not municipal; cite § 205.605(b).
+    questions:
+    - g6_4_handling.post_harvest_water_potability
+    - g6_4_handling.post_harvest_water_treatment_materials
+    - g6_4_handling.post_harvest_water_potability_other
+    prints: "modules/G6_4.pdf §C (shown when the water source is a well or other; \"Not shown potable yet\" prints a [REVIEW] line)"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.5-1c
   asks: If you test the water, have any tests come back positive for contaminants? Yes / No. If yes, explain;
     test results are attached.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g6_4_handling.uses_water
-    prints: —
-  gap: No field records a positive water test or attaches results for post-harvest water. `g4_2_natural_resources.water_quality_tested`
-    is the irrigation-water fact and is not scoped to handling water. Companion to 7.5-3.
-  fix: A `post_harvest_water_positive_test` [boolean] + explanation textarea, visible when tested_regularly
-    is selected in the 7.5-3 group; results through the attachment loop.
+    questions:
+    - g6_4_handling.post_harvest_water_positive_test
+    - g6_4_handling.post_harvest_water_positive_explanation
+    - g6_4_handling.post_harvest_water_test_results
+    prints: "modules/G6_4.pdf §C (a positive test prints a [REVIEW] line); the results under attachments/g6_4_handling/ in the packet"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.5-1d
   asks: If you add chlorine to water that directly contacts organic products, explain how you make sure the
     chlorine level stays at or below the limit allowed by the Safe Drinking Water Act (4 ppm) where the water
@@ -533,19 +526,13 @@ items:
   asks: What types of packaging do you use that come into direct contact with the organic product? (select
     all that apply) Flexible plastic (bags or wraps) / Glass containers / Metal cans or tins / Paper / Hard
     plastic (containers or jars) / Compostable or biodegradable packaging / Cardboard / Twine / Other (specify).
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g6_1_harvest_transport.container_types
-    - g7_0_labeling.product_leaves_as
-    prints: —
-  gap: Reuses WSDA §J 6 / §L 16. No packaging-MATERIAL question exists — `container_types` names the harvest
-    container's form (field bins, totes, lugs, single-use cartons), not what it is made of, and `product_leaves_as`
-    names how product is packaged for sale, not the material. The material is what 7.9-2 to 7.9-4 are gated
-    on.
-  fix: Add `packaging_material` [checkbox_group] mirroring OTCO's nine options on G6.1 page B, sharing the
-    fix proposed for WSDA J6 / L16 and feeding the three follow-ups below.
+    questions:
+    - g6_1_harvest_transport.packaging_materials
+    - g6_1_harvest_transport.packaging_materials_other
+    prints: "modules/G6_1.pdf §B"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.9-2
   asks: 'If you use paper packaging, cardboard boxes, or twine (such as jute, hemp, or sisal), do you have
     proof from the manufacturer or supplier that these materials were not treated with prohibited materials
@@ -553,85 +540,63 @@ items:
     or twine in use / A composition or specification sheet is attached / A letter of guarantee from the manufacturer
     or supplier is attached / Other documentation is attached (specify). Note: active or smart packaging that
     could contaminate organic products is not allowed.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.packaging_free_of_prohibited
     - g6_1_harvest_transport.packaging_prohibited_detail
-    prints: modules/G6_1.pdf §B (packaging_free_of_prohibited tri-state, detail)
-  gap: Reuses WSDA §L 17 / CCOF G6.4 C. The § 205.272(b)(1) fact prints as a tri-state — confirmed with the
-    supplier or from product documentation / believed free but unconfirmed / no — and the coaching says to
-    answer from documentation rather than memory. OTCO asks WHICH proof (specification sheet, letter of guarantee,
-    other) and asks for it attached; Trazo records neither the document type nor the document, and the answer
-    is not scoped to paper, cardboard and twine.
-  fix: A `packaging_proof_type` [checkbox_group] {spec_sheet, letter_of_guarantee, other} visible when packaging_free_of_prohibited=confirmed,
-    with an upload carried by the attachment loop.
+    - g6_1_harvest_transport.packaging_untreated_proof
+    - g6_1_harvest_transport.packaging_documents_upload
+    prints: "modules/G6_1.pdf §B (an answer that says a document is attached with none filed prints a [REVIEW] line; no documentation prints one too); the documents under attachments/g6_1_harvest_transport/ in the packet"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.9-3
   asks: If you use compostable or biodegradable packaging, how do you make sure it is non-GMO (not made with
     genetically modified materials)? N/A – no compostable or biodegradable packaging in use / Documentation
     from the manufacturer or supplier is attached / The label attached states it is non-GMO / Other documentation
     is attached (specify).
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g6_1_harvest_transport.container_types
-    prints: —
-  gap: OTCO-only ask with no CCOF or WSDA counterpart in the registered forms. No field anywhere records compostable
-    or biodegradable packaging, let alone its excluded-methods status; the excluded-methods questions in Trazo
-    are about seed (G3.0). An operation using compostable clamshells or bags cannot state the N/A either.
-  fix: '`compostable_packaging_non_gmo_proof` [checkbox_group] {not_applicable, supplier_documentation, label_states_non_gmo,
-    other} visible when the 7.9-1 material group includes compostable; cite § 205.105(e) / § 205.272.'
+    questions:
+    - g6_1_harvest_transport.compostable_packaging_non_gmo_proof
+    - g6_1_harvest_transport.packaging_documents_upload
+    prints: "modules/G6_1.pdf §B; the documents under attachments/g6_1_harvest_transport/ in the packet"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.9-4
   asks: For single use packaging used for crops intended for human consumption, how do you make sure that the
     packaging is food grade? N/A – no single-use packaging in use / A certificate of compliance or guarantee
     letter from the manufacturer or supplier is attached / Product specification sheet attached / The label
     attached states it is food grade / Other documentation is attached (specify).
-  status: not_covered
-  severity: P2
-  trazo:
-    triggered_by:
-    - g6_1_harvest_transport.container_types
-    prints: —
-  gap: OTCO-only ask. `container_types` can indicate single-use cartons are used, but nothing asks for food-grade
-    proof or its document type. This is a food-contact assurance OTCO asks alongside the organic-integrity
-    ones; no Trazo field and no CCOF/WSDA grower row covers it.
-  fix: '`single_use_packaging_food_grade_proof` [checkbox_group] {not_applicable, certificate_or_letter, spec_sheet,
-    label_states_food_grade, other} visible when container_types includes single_use_cartons or the 7.9-1 group
-    is non-empty.'
-- ref: 7.9-5
-  asks: Do you reuse packaging? No, not applicable / Yes (describe).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_1_harvest_transport.single_use_packaging_food_grade_proof
+    - g6_1_harvest_transport.packaging_documents_upload
+    prints: "modules/G6_1.pdf §B; the documents under attachments/g6_1_harvest_transport/ in the packet"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
+- ref: 7.9-5
+  asks: Do you reuse packaging? No, not applicable / Yes (describe).
+  status: covered
+  trazo:
+    questions:
+    - g6_1_harvest_transport.packaging_reused
+    - g6_1_harvest_transport.packaging_reuse_description
     - g6_1_harvest_transport.container_safeguards
     - g6_1_harvest_transport.containers_cleaning_method
-    prints: modules/G6_1.pdf §B (container_safeguards — only_new vs cleaned_prior / lined_prior; containers_cleaning_method)
-  gap: 'Reuse is implied, never asked: `only_new` states no reuse, `cleaned_prior` / `lined_prior` state reuse,
-    and `containers_cleaning_method` is the "describe". But the group covers HARVEST containers, not packaging
-    generally, and a `reusable_lugs` selection with no safeguard ticked reads as nothing rather than as "yes,
-    reused".'
-  fix: A `packaging_reused` [boolean] + description on G6.1 page B, pre-filled from container_safeguards.
+    prints: "modules/G6_1.pdf §B"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.9-6
   asks: Has any reused packaging ever been used for non-organic products? No, reused packaging was only used
     for organic products / Yes, products are protected from contact with possible residue (describe).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_1_harvest_transport.reused_packaging_held_nonorganic
+    - g6_1_harvest_transport.reused_packaging_protection
     - g6_1_harvest_transport.containers_reused_from_prohibited
     - g6_1_harvest_transport.containers_reused_barrier
     - g6_1_harvest_transport.container_safeguards
-    prints: modules/G6_1.pdf §B (containers_reused_from_prohibited, containers_reused_barrier; container_safeguards
-      — organic_only is the stated 'No')
-  gap: 'Reuses WSDA §J 7a. Trazo''s gate is narrower than OTCO''s: it asks whether a container that held a
-    PROHIBITED SUBSTANCE (pesticide, fertilizer, fuel) was reused, per § 205.272(b)(2); OTCO asks whether reused
-    packaging ever held NON-ORGANIC PRODUCT — the commingling case, which `organic_only` answers only for harvest
-    containers. The barrier textarea is the "describe", in prose, gated on the narrower boolean.'
-  fix: Widen the reuse gate to "previously held a prohibited substance OR non-organic product" and make the
-    barrier textarea visible on either — the WSDA 7a fix.
+    prints: "modules/G6_1.pdf §B (reused packaging that held non-organic product with nothing in place prints a [REVIEW] line)"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 7.10 (not applicable)
   asks: Not applicable, no off-site facility used.
   status: covered

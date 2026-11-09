@@ -259,30 +259,30 @@ items:
   note: Closed 2026-09-12.
 - ref: '14'
   asks: Is water treated on-site? (e.g. UV, carbon filtration, water softeners, pH adjustment)
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No question asks about on-site water treatment.
-  fix: Add `post_harvest_water_treated_onsite` [boolean], gating items 14a/14b.
+    questions:
+    - g6_4_handling.water_treated_onsite
+    prints: "modules/G6_4.pdf §C"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 14a
   asks: If yes, is treated water still considered potable and meet the standards outlined in the Safe
     Drinking Water Act?
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: Companion detail to item 14 — no field exists.
-  fix: boolean visible when item 14 is true, cite § 205.605(b).
+    questions:
+    - g6_4_handling.treated_water_meets_sdwa
+    prints: "modules/G6_4.pdf §C (not confirmed or No prints a [REVIEW] line)"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: 14b
   asks: If yes, describe how you manage your water system for safe drinking and quality purposes. Include
     details about your water monitoring practices.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: Companion detail to item 14 — no field exists.
-  fix: textarea visible when item 14 is true.
+    questions:
+    - g6_4_handling.water_system_management
+    prints: "modules/G6_4.pdf §C"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: '15'
   asks: Are chlorine materials used in wash water or flume water while handling certified crops?
   status: covered
@@ -313,34 +313,28 @@ items:
 - ref: '16'
   asks: 'What material are packages or containers made of? Check all that apply: Plastic / Metal / Cloth
     / Wood / Cardboard / Other.'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No packaging-material question exists — the same gap Section J item 6 describes for harvest containers,
-    now for packaging/shipping containers.
-  fix: Add `packaging_material` [checkbox_group] {plastic, metal, cloth, wood, cardboard, other} — can
-    share the fix proposed for J6.
+    questions:
+    - g6_1_harvest_transport.packaging_materials
+    - g6_1_harvest_transport.packaging_materials_other
+    prints: "modules/G6_1.pdf §B"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: '17'
   asks: Identify how you ensure packaging, storage, or shipping containers do not contaminate organic
     crops with prohibited substances. Only new containers are used / reused containers are permanently
     and clearly stamped with organic designation / reused containers made of plastic, metal, or cloth
     are cleaned after use with nonorganic products / containers made of cardboard have not been exposed
     to prohibited materials / containers made of wood are completely lined with plastic / other — describe.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_1_harvest_transport.packaging_free_of_prohibited
     - g6_1_harvest_transport.packaging_prohibited_detail
-    prints: modules/G6_1.pdf §B (packaging_free_of_prohibited) — not re-printed on G6.4
-  gap: packaging_free_of_prohibited is a single radio {confirmed, unconfirmed, no}; WSDA's item 17 wants
-    a material-specific checkbox across five distinct safeguards (new-only / stamped organic / plastic-metal-cloth
-    cleaned / cardboard unexposed / wood lined), which the radio cannot distinguish. Answered on G6.1,
-    not G6.4, with no cross-reference from this form either — same discoverability gap CCOF's own G6.4
-    §C register row notes.
-  fix: Convert packaging_free_of_prohibited to the five-option checkbox_group, and add a coaching cross-reference
-    on this module pointing to Harvest & Transport §B.
+    - g6_1_harvest_transport.packaging_contamination_safeguards
+    - g6_1_harvest_transport.packaging_contamination_safeguards_other
+    prints: "modules/G6_1.pdf §B"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: '18'
   asks: Optional space for additional information.
   status: not_covered

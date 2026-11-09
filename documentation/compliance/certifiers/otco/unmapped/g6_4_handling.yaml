@@ -41,3 +41,7 @@ questions:
     Post-harvest inputs used only on non-certified crops. WSDA AGR 2121 L 10 asks it; OTCO's C7 does not.
   g6_4_handling.noncertified_inputs_monitoring: >-
     How certified product is kept from those inputs; same reason (WSDA L 10a).
+  g6_4_handling.crop_wash_location: "CCOF G6.1 B3 asks whether crops are washed in the field. OTCO C7 7.5 asks whether water contacts the product and its source, not where crops are washed."
+  g6_4_handling.water_treated_onsite: "WSDA L 14 and CCOF G6.1 B3a ask about water treated on site (UV, filtration, softening, pH). OTCO C7 7.5-1b asks how non-municipal water is shown potable, which is registered there; on-site treatment is not one of its questions."
+  g6_4_handling.treated_water_meets_sdwa: "WSDA L 14 and CCOF G6.1 B3a ask about water treated on site (UV, filtration, softening, pH). OTCO C7 7.5-1b asks how non-municipal water is shown potable, which is registered there; on-site treatment is not one of its questions."
+  g6_4_handling.water_system_management: "WSDA L 14 and CCOF G6.1 B3a ask about water treated on site (UV, filtration, softening, pH). OTCO C7 7.5-1b asks how non-municipal water is shown potable, which is registered there; on-site treatment is not one of its questions."

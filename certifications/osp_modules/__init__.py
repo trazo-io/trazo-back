@@ -311,7 +311,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.11.27: G3.1 Container & Greenhouse/Shadehouse Production (CCOF ORGB46), a new module after G3.0b. Its
 #   not-applicable attestation is CCOF A1's "None of these"; sections B4 and D open only on the answers that make
 #   them apply. Every question is new, so no stored answer changes meaning.
-CONTENT_VERSION = "2026.11.27"
+# 2026.11.28: post-harvest water and packaging. G6.4 asks where crops are washed (CCOF G6.1 B3), how
+#   non-municipal water is shown potable and whether a test came back positive (OTCO C7 7.5-1b/c), and whether water
+#   is treated on site and still meets the Safe Drinking Water Act (WSDA L 14, CCOF G6.1 B3a). G6.1 asks what
+#   packaging touches the product and its safeguards (OTCO 7.9-1, WSDA L 16/17), the proof for paper, cardboard,
+#   twine, compostable and single-use packaging (OTCO 7.9-2 to 7.9-4) and packaging reuse (7.9-5/6). All optional
+#   or gated on a new answer, so no finished module reopens.
+CONTENT_VERSION = "2026.11.28"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

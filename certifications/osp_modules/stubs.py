@@ -924,6 +924,213 @@ G6_4_HANDLING = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # CCOF G6.1 B3: "Do you wash crops in the field?" The water questions above ask whether and why water
+                # touches the crop; this asks where it is washed (2026.11.28).
+                Question(
+                    key="crop_wash_location",
+                    kind="checkbox_group",
+                    label=text("Where are crops washed?", "¿Dónde se lavan los cultivos?"),
+                    required=False,
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("post_harvest_water_uses", "includes", "crop_washing"),),
+                    compiles_to=CompileRule(
+                        template="Crops are washed: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("in_field", text("In the field", "En el campo")),
+                        Option(
+                            "at_facility",
+                            text("At a handling or packing facility", "En una instalación de manejo o empaque"),
+                        ),
+                    ),
+                ),
+                # OTCO C7 7.5-1b: how water that is not from a municipal source is shown to be safe to drink.
+                Question(
+                    key="post_harvest_water_potability",
+                    kind="checkbox_group",
+                    label=text(
+                        "The water is not only from a municipal source. How do you make sure it is safe to drink "
+                        "(potable)?",
+                        "El agua no viene solo de la red municipal. ¿Cómo te aseguras de que sea apta para beber "
+                        "(potable)?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.272",
+                    visible_when=(
+                        Condition("uses_water", "truthy"),
+                        Condition("post_harvest_water_source", "includes_any", ["on_site_well", "other"]),
+                    ),
+                    compiles_to=CompileRule(
+                        template="How non-municipal water is shown potable: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "household_drinking_water",
+                            text(
+                                "The well provides drinking water for the household",
+                                "El pozo da el agua para beber de la casa",
+                            ),
+                        ),
+                        Option(
+                            "tested_regularly",
+                            text(
+                                "The water is tested regularly for contaminants", "El agua se analiza con regularidad"
+                            ),
+                        ),
+                        Option(
+                            "treated_sdwa",
+                            text(
+                                "The water is treated with an approved disinfectant following the Safe Drinking Water "
+                                "Act",
+                                "El agua se trata con un desinfectante aprobado según la Ley de Agua Potable Segura",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otro")),
+                        Option(
+                            "not_shown",
+                            text("Not shown potable yet", "Todavía no se demuestra que sea potable"),
+                            exclusive=True,
+                            review=(
+                                "Water from a non-municipal source contacts the crop and is not shown to be potable."
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="post_harvest_water_treatment_materials",
+                    kind="textarea",
+                    label=text(
+                        "List the materials used to treat the water.",
+                        "Indica los materiales que se usan para tratar el agua.",
+                    ),
+                    nop_cite="§ 205.605",
+                    visible_when=(Condition("post_harvest_water_potability", "includes", "treated_sdwa"),),
+                    compiles_to=CompileRule(
+                        template="Materials used to treat the water: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="post_harvest_water_potability_other",
+                    kind="textarea",
+                    label=text(
+                        "Describe how else the water is shown potable.",
+                        "Describe de qué otra forma se demuestra que el agua es potable.",
+                    ),
+                    visible_when=(Condition("post_harvest_water_potability", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Water shown potable, other: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # OTCO C7 7.5-1c.
+                Question(
+                    key="post_harvest_water_positive_test",
+                    kind="radio",
+                    label=text(
+                        "Has any water test come back positive for contaminants?",
+                        "¿Algún análisis del agua salió positivo para contaminantes?",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("post_harvest_water_potability", "includes", "tested_regularly"),),
+                    compiles_to=CompileRule(template="A water test came back positive for contaminants: {answer}."),
+                    options=(
+                        Option("no", text("No", "No")),
+                        Option(
+                            "yes",
+                            text("Yes", "Sí"),
+                            review="A test of water that contacts the crop came back positive for contaminants.",
+                        ),
+                    ),
+                ),
+                Question(
+                    key="post_harvest_water_positive_explanation",
+                    kind="textarea",
+                    label=text(
+                        "Explain the result and what was done about it.",
+                        "Explica el resultado y lo que se hizo al respecto.",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("post_harvest_water_positive_test", "eq", "yes"),),
+                    compiles_to=CompileRule(template="Positive water test and response: {answer}"),
+                ),
+                Question(
+                    key="post_harvest_water_test_results",
+                    kind="upload",
+                    label=text("Water test results", "Resultados de los análisis del agua"),
+                    required=False,
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("post_harvest_water_potability", "includes", "tested_regularly"),),
+                ),
+                # WSDA AGR 2121 L 14, 14a, 14b and CCOF G6.1 B3a: water treated on site (UV, carbon filtration,
+                # softening, pH adjustment, reverse osmosis), and whether it still meets the Safe Drinking Water Act.
+                Question(
+                    key="water_treated_onsite",
+                    kind="boolean",
+                    label=text(
+                        "Is the water treated on site (e.g. UV, carbon filtration, reverse osmosis, water softeners, "
+                        "pH adjustment)?",
+                        "¿El agua se trata en el sitio (p. ej. UV, filtro de carbón, ósmosis inversa, suavizadores, "
+                        "ajuste de pH)?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("uses_water", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Water treated on site: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="treated_water_meets_sdwa",
+                    kind="radio",
+                    label=text(
+                        "Does the treated water still meet the Safe Drinking Water Act standards?",
+                        "¿El agua tratada sigue cumpliendo las normas de la Ley de Agua Potable Segura?",
+                    ),
+                    coaching=text(
+                        "Ask the treatment manufacturer if you are unsure. Your certifier may ask for documentation.",
+                        "Pregunta al fabricante del tratamiento si tienes dudas. Tu certificadora puede pedir "
+                        "documentación.",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("water_treated_onsite", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Treated water meets the Safe Drinking Water Act standards: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("yes", text("Yes", "Sí")),
+                        Option(
+                            "not_confirmed",
+                            text("Not confirmed yet", "Todavía no se confirma"),
+                            review="Water treated on site is not yet confirmed to meet the Safe Drinking Water Act.",
+                        ),
+                        Option(
+                            "no",
+                            text("No", "No"),
+                            review="Water treated on site does not meet the Safe Drinking Water Act standards.",
+                        ),
+                    ),
+                ),
+                Question(
+                    key="water_system_management",
+                    kind="textarea",
+                    label=text(
+                        "Describe how you manage the water system for safe drinking and quality, including how you "
+                        "monitor the water.",
+                        "Describe cómo manejas el sistema de agua para que sea segura para beber y de calidad, "
+                        "incluido cómo vigilas el agua.",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("water_treated_onsite", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Water system management and monitoring: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 Question(
                     key="wash_water_additives_added",
                     kind="boolean",

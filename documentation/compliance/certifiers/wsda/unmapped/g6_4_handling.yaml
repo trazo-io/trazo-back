@@ -50,3 +50,10 @@ questions:
     kept separate, which is the split-operation case and is answered by `commingling_controls`
     there. Keeping one grower's certified lot apart from another's is a traceability problem,
     not a contamination one.
+  g6_4_handling.crop_wash_location: "CCOF G6.1 B3 asks whether crops are washed in the field. WSDA L 12 asks what post-harvest water is used for, not where crops are washed."
+  g6_4_handling.post_harvest_water_potability: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
+  g6_4_handling.post_harvest_water_potability_other: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
+  g6_4_handling.post_harvest_water_treatment_materials: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
+  g6_4_handling.post_harvest_water_positive_test: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
+  g6_4_handling.post_harvest_water_positive_explanation: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
+  g6_4_handling.post_harvest_water_test_results: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."

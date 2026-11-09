@@ -102,3 +102,5 @@ questions:
     How organic product is kept separate in a shared unit. OTCO asks it within C9 §9.4-2, registered against harvest_transport_separation.
   g6_1_harvest_transport.first_stop_before_buyer: >-
     Whether the crop stops at a hydrocooler, cold storage or consolidation point before the buyer. OTCO asks about off-site processing in C7 §7.10, registered against handled_by_another_operation.
+  g6_1_harvest_transport.packaging_contamination_safeguards: "WSDA L 17's packaging safeguards (new only, stamped organic, cleaned, cardboard unexposed, wood lined). OTCO C7 asks packaging proof and reuse (7.9-2 to 7.9-6), each registered there, not this checklist."
+  g6_1_harvest_transport.packaging_contamination_safeguards_other: "WSDA L 17's packaging safeguards (new only, stamped organic, cleaned, cardboard unexposed, wood lined). OTCO C7 asks packaging proof and reuse (7.9-2 to 7.9-6), each registered there, not this checklist."
