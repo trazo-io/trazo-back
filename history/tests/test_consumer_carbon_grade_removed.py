@@ -36,7 +36,6 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-
 from history import serializers_consumer
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
