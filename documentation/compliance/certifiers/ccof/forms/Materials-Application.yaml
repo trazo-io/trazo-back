@@ -61,6 +61,7 @@ items:
     - materials_application.fertilizers_none_used
     - materials_application.pest_disease_weed_none_used
     - materials_application.production_aids_none_used
+    - materials_application.crop_production_aids_none_used
     - materials_application.post_harvest_contact_none_used
     - materials_application.materials_list_complete
     models:
@@ -221,21 +222,26 @@ items:
   asks: 'List any other crop production materials not listed in §A/§B — seed treatments (coatings, pelleting,
     inoculants), growing media (substrate, planting mix, potting soil), adjuvants, etc.: Full product
     name, Full manufacturer name, Reason for Use. Or check ''Not applicable, none of these.'''
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
+    - materials_application.crop_production_aids_none_used
+    - materials_application.crop_production_aids_listed
     - materials_application.production_aids_listed
-    prints: —
-  gap: 'Seed treatments are attested (`seed_treatment` free text on planting events, plus a boolean) but
-    never enumerated onto a list or the workbook. Adjuvant partners already exist as structured data (`tank_mix_partners`:
-    name, manufacturer, organic-approved) but nothing reads them into §C. Growing media/substrate has
-    no field anywhere. The register previously also carried a second §C row whose `asks` was a paraphrase
-    of Trazo''s own G3.0 seed-treatment verification rather than CCOF''s text, marked `covered`. Deleted
-    2026-08-28: §C asks for a LIST — product, manufacturer, reason, including growing media and adjuvants
-    — and `treatment_verification` lists none of that. Answering a different question well is not coverage.'
-  fix: Read `seed_treatment` names and `tank_mix_partners` into the materials rows (category C); add a
-    growing-media field to the operator-authored row for container/nursery operations.
+    models:
+    - certifications.PlanMaterialEntry.category
+    - history.ProductionEvent.seed_treatment
+    - history.ChemicalEvent.tank_mix_partners
+    prints: 'modules/materials_application.pdf §A (the rows filed under Production aids, again
+      under "Crop production aids", each with product, manufacturer, listing and reason; logged names not on the
+      list); §B (the none-used statement, or the listed statement with a [REVIEW] line naming the logged seed
+      treatments and tank-mix partners the list does not hold); workbooks/Materials List.xlsx (logged seed
+      treatments and tank-mix partners as rows of their own)'
+  # Closed 2026-11-09. The two statements asked about adjuvants and wetting agents only; retired for two that ask
+  # CCOF's list (seed treatments, growing media, adjuvants). Seed treatments on planting records and tank-mix
+  # partners on application records join the Materials List and the reconciliation that gates "listed"; growing
+  # media have no record of their own and are listed as operator rows. The old second §C row deleted 2026-08-28
+  # stays deleted.
 - ref: D
   asks: 'If you conduct post-harvest handling: list materials that directly contact organic crops during handling
     (wash water additives, sanitizers, gases): Brand Name, Manufacturer, Reason for use. Or check ''Not applicable,

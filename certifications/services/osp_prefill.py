@@ -327,7 +327,44 @@ MATERIALS_CATEGORIES = {
     "fertilizers_listed": (("FE",), "soil-fertility"),
     "pest_disease_weed_listed": (("PE", "HE", "FU"), "pest, weed or disease"),
     "post_harvest_contact_listed": (("PH",), "post-harvest contact"),
+    # CCOF Materials Application §C: seed treatments on planting records and tank-mix partners on
+    # application records (growing media have no record of their own; the list is their only source).
+    "crop_production_aids_listed": ((), "seed treatment or adjuvant"),
 }
+
+#: Statements elsewhere in the plan that say the same thing as a Materials Application row, read against
+#: that row's products: CCOF G4.0 A3 "List all fertility materials planned for use on your Grower Materials
+#: Application" is the fertilizer row's statement asked on G4.0.
+MATERIALS_CATEGORY_OF = {"fertility_inputs_listed": "fertilizers_listed"}
+
+
+def materials_category(question_key):
+    """The Materials Application row a statement is read against, or None."""
+    key = MATERIALS_CATEGORY_OF.get(question_key, question_key)
+    return key if key in MATERIALS_CATEGORIES else None
+
+
+def _seed_treatment_names(events) -> list:
+    """(event, name) for each planting record naming a seed treatment, less "untreated" and its spellings."""
+    from certifications.services.common_osp_workbooks import names_a_treatment
+
+    out = []
+    for e in events:
+        name = (getattr(e, "seed_treatment", "") or "").strip()
+        if getattr(e, "seed_treatment_allowed_basis", "") == "untreated" or not names_a_treatment(name):
+            continue
+        out.append((e, name))
+    return out
+
+
+def _tank_mix_names(events) -> list:
+    """(event, name) for each tank-mix partner an application record names."""
+    out = []
+    for e in events:
+        for partner in getattr(e, "tank_mix_partners", None) or []:
+            if isinstance(partner, dict):
+                out.append((e, (partner.get("commercial_name") or "").strip()))
+    return out
 
 
 def category_applications(bundle, question_key):
@@ -339,11 +376,15 @@ def category_applications(bundle, question_key):
     as soil management events, not chemical ones, and the row's own question covers "all
     fertilizer and soil amendment materials" (review of back #279).
     """
+    question_key = materials_category(question_key)
     spec = MATERIALS_CATEGORIES.get(question_key)
     if spec is None:
         return [], [], 0
     types, _label = spec
-    if question_key == "post_harvest_contact_listed":
+    if question_key == "crop_production_aids_listed":
+        named = _seed_treatment_names(getattr(bundle, "production_events", []))
+        named += _tank_mix_names(getattr(bundle, "chemical", []))
+    elif question_key == "post_harvest_contact_listed":
         # NOTE: dead until 2026-09-12. This branch filtered ChemicalEvent for type "PH", a code that
         # model never carries (FE/PE/FU/HE only). A post-harvest sanitizer is a ProductionEvent
         # of type PH with `sanitizer_name` set, so the suggestion could not fire whatever was
@@ -367,11 +408,19 @@ def logged_category_names(establishment, question_key) -> list[str]:
     `EvidenceBundle` loads every production with six event relations to answer it."""
     from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
 
+    question_key = materials_category(question_key)
     spec = MATERIALS_CATEGORIES.get(question_key)
     if spec is None:
         return []
     types, _label = spec
     scope = {"history__parcel__establishment": establishment}
+    if question_key == "crop_production_aids_listed":
+        planting = (
+            ProductionEvent.objects.filter(**scope).exclude(seed_treatment__isnull=True).exclude(seed_treatment="")
+        )
+        applied = ChemicalEvent.objects.filter(**scope).exclude(tank_mix_partners=[])
+        named = _seed_treatment_names(planting) + _tank_mix_names(applied)
+        return sorted({n for _e, n in named if n})
     if question_key == "post_harvest_contact_listed":
         names = ProductionEvent.objects.filter(type="PH", **scope).values_list("sanitizer_name", flat=True)
     else:

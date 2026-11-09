@@ -4042,6 +4042,10 @@
         "at": "2026-10-28T16:00:00+00:00",
         "value": true
        },
+       "crop_production_aids_none_used": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": true
+       },
        "post_harvest_contact_none_used": {
         "at": "2026-10-28T16:00:00+00:00",
         "value": false
