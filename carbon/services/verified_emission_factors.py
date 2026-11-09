@@ -3682,6 +3682,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": organic_pesticide_factor.value,
                         "pesticide_subtype": "organic",
                         "note": "Organic pesticide (neem, pyrethrin) uses lower emission factor than synthetic pesticides",
+                        "note_code": "organic_pesticide",
                         "confidence_level": min(
                             organic_pesticide_factor.confidence_level, fuel_factor.confidence_level
                         ),
@@ -3698,6 +3699,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": biological_pesticide_factor.value,
                         "pesticide_subtype": "biological",
                         "note": "Biological pesticide (Bt, Spinosad) uses lower emission factor due to fermentation-based production",
+                        "note_code": "biological_pesticide",
                         "confidence_level": min(
                             biological_pesticide_factor.confidence_level, fuel_factor.confidence_level
                         ),
@@ -3728,6 +3730,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": organic_herbicide_factor.value,
                         "herbicide_subtype": "organic",
                         "note": "Organic herbicide (acetic acid/vinegar) uses lower emission factor than synthetic herbicides",
+                        "note_code": "organic_herbicide",
                         "confidence_level": min(
                             organic_herbicide_factor.confidence_level, fuel_factor.confidence_level
                         ),
@@ -3758,6 +3761,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": copper_fungicide_factor.value,
                         "fungicide_subtype": "copper",
                         "note": "Copper-based fungicide uses higher emission factor due to copper mining/refining energy intensity",
+                        "note_code": "copper_fungicide",
                         "confidence_level": min(copper_fungicide_factor.confidence_level, fuel_factor.confidence_level),
                     }
                 )
@@ -3772,6 +3776,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": sulfur_fungicide_factor.value,
                         "fungicide_subtype": "sulfur",
                         "note": "Sulfur-based fungicide uses lower emission factor as sulfur is often a byproduct of oil/gas refining",
+                        "note_code": "sulfur_fungicide",
                         "confidence_level": min(sulfur_fungicide_factor.confidence_level, fuel_factor.confidence_level),
                     }
                 )
@@ -3786,6 +3791,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": biological_fungicide_factor.value,
                         "fungicide_subtype": "biological",
                         "note": "Biological fungicide (Bacillus, Trichoderma) uses lower emission factor due to fermentation-based production",
+                        "note_code": "biological_fungicide",
                         "confidence_level": min(
                             biological_fungicide_factor.confidence_level, fuel_factor.confidence_level
                         ),
@@ -3801,6 +3807,7 @@ class VerifiedEmissionFactors:
                         "emission_factor_kg_co2_per_kg": organic_fungicide_factor.value,
                         "fungicide_subtype": "organic",
                         "note": "Organic fungicide (neem oil, potassium bicarbonate) uses lower emission factor due to natural extraction",
+                        "note_code": "organic_fungicide",
                         "confidence_level": min(
                             organic_fungicide_factor.confidence_level, fuel_factor.confidence_level
                         ),
@@ -3845,6 +3852,7 @@ class VerifiedEmissionFactors:
                             "Refinement direct + indirect). Field N2O depends on the nitrogen, "
                             "not on how it was made."
                         ),
+                        "note_code": "organic_fertilizer",
                         "confidence_level": min(
                             organic_fertilizer_factor.confidence_level,
                             field_n2o_factor.confidence_level,
@@ -3864,7 +3872,9 @@ class VerifiedEmissionFactors:
                         "epa_phosphorus_factor_kg_co2_per_kg_p": phosphorus_factor.value,
                         "epa_potassium_factor_kg_co2_per_kg_k": potassium_factor.value,
                         "coating_premium_percent": 10,
-                        "note": "Slow-release fertilizer includes 10% coating premium but has better efficiency",
+                        # "has better efficiency" was an unsourced benefit claim; the factual part is the premium.
+                        "note": "Slow-release fertilizer: the factor includes a 10% premium for the coating.",
+                        "note_code": "slow_release_fertilizer",
                         "confidence_level": min(
                             nitrogen_factor.confidence_level,
                             phosphorus_factor.confidence_level,
