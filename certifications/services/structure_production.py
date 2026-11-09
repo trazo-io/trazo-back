@@ -55,3 +55,24 @@ def na_contradictions(osp) -> list[str]:
                 f"{indoor} production{'s are' if indoor != 1 else ' is'} recorded as indoor."
             )
     return lines
+
+
+def answer_contradictions(question_key, value, answers) -> list[str]:
+    """[REVIEW] lines for a G3.1 answer that its own A1 contradicts (review of back #361).
+
+    A1 can say crops are grown in the ground within greenhouses, shadehouses or buildings while C1 says no organic
+    production takes place in such structures. Both stay as the operator gave them; the line names the disagreement,
+    since C1's No also closes the rest of section C.
+    """
+    from certifications.osp_modules.conditions import answer_value
+
+    if question_key != "organic_in_structures" or value is not False:
+        return []
+    types = answer_value(answers, "structure_production_types") or []
+    if isinstance(types, list) and "in_ground_in_structures" in types:
+        return [
+            "[REVIEW] A1 says crops are grown in the ground within greenhouses, shadehouses or buildings, but this "
+            "answer says no organic production takes place in such structures; the rest of section C is not asked "
+            "on it."
+        ]
+    return []

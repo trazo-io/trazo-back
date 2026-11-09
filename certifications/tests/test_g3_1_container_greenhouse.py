@@ -203,6 +203,36 @@ class OnThePageTests(_Plan):
         self.assertNotIn("alternating production you want", page)
 
 
+class ReviewFindingsTests(_Plan):
+    """Review of back #361."""
+
+    def test_a_sanitizer_not_on_the_list_is_answerable_and_asks_the_procedure(self):
+        question = next(q for p in G31.pages for q in p.questions if q.key == "sprout_seed_sanitizers")
+        option = next(o for o in question.options if o.value == "not_listed")
+        self.assertIn("not on the materials list", option.review)
+        shown = _shown({"structure_production_types": ["edible_sprouts"], "sprout_seed_sanitizers": "not_listed"})
+        self.assertIn("sprout_seed_sanitizing_procedure", shown)
+
+    def test_in_ground_in_structures_against_no_organic_production_in_structures_prints_a_review(self):
+        osp = self.plan(
+            {
+                "g3_1_container_greenhouse": self.answered(
+                    {"structure_production_types": ["in_ground_in_structures"], "organic_in_structures": False}
+                )
+            }
+        )
+        page = _text(generate_module_pdf(osp, "g3_1_container_greenhouse"))
+        self.assertIn("[REVIEW] A1 says crops are grown in the ground within greenhouses", page)
+        consistent = self.plan(
+            {
+                "g3_1_container_greenhouse": self.answered(
+                    {"structure_production_types": ["annual_seedlings"], "organic_in_structures": False}
+                )
+            }
+        )
+        self.assertNotIn("[REVIEW] A1 says", _text(generate_module_pdf(consistent, "g3_1_container_greenhouse")))
+
+
 class RegisterRowsTests(TestCase):
     def test_every_row_is_covered_and_the_form_declares_the_module(self):
         from certifications.services.certifier_register import load_forms

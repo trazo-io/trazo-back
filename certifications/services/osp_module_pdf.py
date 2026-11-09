@@ -2524,6 +2524,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _map_element_lines(osp, module, question, value, parcel):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g3_1_container_greenhouse":
+                from certifications.services.structure_production import answer_contradictions
+
+                for line in answer_contradictions(question.key, value, answers):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g9_0_facility_pest" and question.key == "material_tier":
                 from certifications.services.facility_pest import facility_entries, tier_review_lines
 

@@ -373,6 +373,19 @@ G3_1_CONTAINER_GREENHOUSE = Module(
                                 "Sí, y cada uno está en mi lista de materiales",
                             ),
                         ),
+                        # Review of back #361: a sanitizer not on the list is a true answer the operator must be able
+                        # to give, and the procedure is asked of it too.
+                        Option(
+                            "not_listed",
+                            text(
+                                "Yes, but not every one is on my materials list yet",
+                                "Sí, pero todavía no todos están en mi lista de materiales",
+                            ),
+                            review=(
+                                "A sanitizer used on sprouting seed is not on the materials list; CCOF G3.1 B3b asks "
+                                "that every one be listed."
+                            ),
+                        ),
                     ),
                 ),
                 Question(
@@ -382,7 +395,7 @@ G3_1_CONTAINER_GREENHOUSE = Module(
                         "Describe the seed sanitizing and rinsing procedures.",
                         "Describe los procedimientos de sanitización y enjuague de la semilla.",
                     ),
-                    visible_when=(Condition("sprout_seed_sanitizers", "eq", "listed"),),
+                    visible_when=(Condition("sprout_seed_sanitizers", "one_of", ["listed", "not_listed"]),),
                     compiles_to=CompileRule(template="Sprouting seed sanitizing and rinsing: {answer}"),
                 ),
             ),
