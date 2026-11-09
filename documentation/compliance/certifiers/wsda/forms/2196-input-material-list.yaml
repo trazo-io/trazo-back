@@ -37,6 +37,7 @@ items:
     - materials_application.fertilizers_listed
     - materials_application.pest_disease_weed_listed
     - materials_application.production_aids_listed
+    - materials_application.crop_production_aids_listed
     models:
     - certifications.services.common_osp_workbooks._agr_2196_left_off
     prints: workbooks/Input Material List - WSDA AGR 2196.xlsx (listed materials; left-off footer); modules/materials_application.pdf §A, §B; modules/G4_0.pdf §B

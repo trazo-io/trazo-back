@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -348,7 +349,7 @@ class MaterialRow:
     """
 
     name: str
-    kind: str  # "chemical" | "amendment" | "plan"
+    kind: str  # "chemical" | "amendment" | "sanitizer" | "seed_treatment" | "adjuvant" | "plan"
     event: object = None
     plan: object = None  # PlanMaterial, when this product is on the plan
     #: The operator's identity decision for a logged name that is not on the plan, as printed
@@ -361,6 +362,9 @@ class MaterialRow:
     also_logged: tuple = ()
     #: The plan this row was read against, so a column can state that plan's restriction statements.
     osp: object = None
+    #: The maker a tank-mix partner's own entry names. A partner is an item inside its application
+    #: record, so the record's `manufacturer` is the PRIMARY product's maker, never the partner's.
+    maker: str = ""
 
 
 def _current_osp(establishment):
@@ -415,6 +419,24 @@ def _richer_plan(current, candidate):
     return current
 
 
+#: How a free-text seed-treatment field says there is no treatment: "none", "None — raw, untreated organic
+#: seed" (the specimen's own records), "N/A", "untreated", "no coating". Not a product name, so not a row.
+_NO_TREATMENT = re.compile(
+    # "none", "N/A", "untreated" and "not treated" open a sentence saying there is no treatment.
+    r"^(none|n/?a|untreated|not treated)(?=$|[\s,;.:()\u2014])"
+    # "no treatment", "no seed coating": "no" followed by the kind of treatment it denies.
+    r"|^no\s+(seed\s+)?(treatment|coating|inoculant|pelleting)s?(?=$|[\s,;.:()\u2014])"
+    # A bare "no", alone or before punctuation. Never "no" before another word: "No Till Inoculant" is
+    # a product name (review of back #358).
+    r"|^no(?=$|[,;.:()\u2014])"
+)
+
+
+def names_a_treatment(text) -> bool:
+    """Whether a seed-treatment field names a product, rather than saying there is none."""
+    return bool(_blank(text)) and not _NO_TREATMENT.match(_norm_name(text))
+
+
 def _material_rows(establishment, osp=None):
     """Distinct inputs on this operation — applied, declared on the plan, or both.
 
@@ -456,6 +478,34 @@ def _material_rows(establishment, osp=None):
         if name and _norm_name(name) not in rows:
             rows[_norm_name(name)] = MaterialRow(name=name, kind="sanitizer", event=e)
 
+    # Crop production aids (CCOF Materials Application §C, 2026-11-09): the seed treatment a planting
+    # record names, and each tank-mix partner (adjuvant, spreader-sticker) an application record names.
+    # Both were on the records and on neither the list nor its reconciliation, so a plan could attest
+    # every production aid was listed while the records named one that was not.
+    for e in (
+        ProductionEvent.objects.filter(history__parcel__establishment=establishment)
+        .exclude(seed_treatment__isnull=True)
+        .exclude(seed_treatment="")
+        .exclude(seed_treatment_allowed_basis="untreated")
+        .order_by("date", "pk")
+    ):
+        name = _blank(e.seed_treatment)
+        if name and names_a_treatment(name) and _norm_name(name) not in rows:
+            rows[_norm_name(name)] = MaterialRow(name=name, kind="seed_treatment", event=e)
+    for e in (
+        ChemicalEvent.objects.filter(history__parcel__establishment=establishment)
+        .exclude(tank_mix_partners=[])
+        .order_by("date", "pk")
+    ):
+        for partner in e.tank_mix_partners or []:
+            if not isinstance(partner, dict):
+                continue
+            name = _blank(partner.get("commercial_name"))
+            if name and _norm_name(name) not in rows:
+                rows[_norm_name(name)] = MaterialRow(
+                    name=name, kind="adjuvant", event=e, maker=_blank(partner.get("manufacturer")) or ""
+                )
+
     if osp is None:
         osp = _current_osp(establishment)
     if osp is not None:
@@ -482,6 +532,9 @@ def _material_rows(establishment, osp=None):
                     kind=existing.kind,
                     event=existing.event,
                     plan=_richer_plan(existing.plan, material),
+                    # A tank-mix partner's maker is on its own entry, not the event: keep it when the
+                    # partner is also on the plan (review of back #358).
+                    maker=existing.maker,
                 )
     _join_by_record_listing(establishment, rows)
     _apply_identity_decisions(establishment, rows)
@@ -1260,7 +1313,9 @@ def _event_maker(row):
         return _blank(getattr(row.event, "manufacturer", None))
     if row.kind == "amendment":
         return _blank(getattr(row.event, "amendment_manufacturer", None))
-    # kind == "sanitizer": the post-harvest record carries no manufacturer column.
+    if row.kind == "adjuvant":
+        return _blank(getattr(row, "maker", None))
+    # "sanitizer" and "seed_treatment": the record carries no manufacturer column for the material.
     return None
 
 
@@ -1301,6 +1356,10 @@ def _material_reason(row):
         }.get(getattr(row.event, "type", None))
     if row.kind == "sanitizer":
         return "Post-harvest sanitizer (wash water)"
+    if row.kind == "seed_treatment":
+        return "Seed treatment"
+    if row.kind == "adjuvant":
+        return "Adjuvant (tank-mix partner)"
     return None
 
 
@@ -1320,8 +1379,12 @@ def _material_use_stated(row) -> bool:
 
 
 def _material_listing(row):
-    """The National List entry the operation's own records resolve this product to, or None."""
-    event = getattr(row, "event", None)
+    """The National List entry the operation's own records resolve this product to, or None.
+
+    Only a record that IS this product's application resolves it. A seed treatment's record is the
+    planting, and a tank-mix partner's is the primary product's application: their substance is the
+    seed's or the primary product's, never this material's."""
+    event = getattr(row, "event", None) if getattr(row, "kind", "") in ("chemical", "amendment", "sanitizer") else None
     from history.services.national_list_basis import confirmed_national_list_substance
 
     substance = confirmed_national_list_substance(event)

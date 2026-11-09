@@ -69,6 +69,7 @@ items:
     - materials_application.fertilizers_listed
     - materials_application.pest_disease_weed_listed
     - materials_application.production_aids_listed
+    - materials_application.crop_production_aids_listed
     - materials_application.post_harvest_contact_listed
     models:
     - certifications.services.plan_materials (all FOUR sources — National List, OMRI, WSDA, operator-entered)
@@ -81,16 +82,13 @@ items:
     list, and a reviewer can see which class was left unattested. Since 2026-08-28 an operator-entered row
     (`PlanMaterialEntry`) can hold any of OTCO's named classes — compost, manure, planting mixes, mulches,
     inoculants — with a planned/in-use `status`, so "in use or intended for use" is stated for those rows and
-    prints in the workbook's In use / Intended for use columns. Two gaps remain. (1) A material attached straight
+    prints in the workbook's In use / Intended for use columns. One gap remains. A material attached straight
     from a catalog (an OMRI, WSDA or National List FK with no operator row) carries no status, so the list
-    states use for only part of itself. (2) Seed treatments logged on planting events and sanitizers logged
-    on post-harvest events are never read into the rows (CCOF §C/§D carry this), so the operator has to retype
-    them; the [REVIEW] reconciliation that names logged products missing from the plan reads chemical-application
-    and soil-amendment events only. The siblings' gap text — "nothing records whether a row is planned, in
-    use, or discontinued" — is now true only of catalog-attached rows.
+    states use for only part of itself. Since 2026-11-09 seed treatments on planting records and tank-mix
+    partners on application records join the Materials List and its reconciliation, as post-harvest sanitizers
+    have since 2026-09-12.
   fix: Require `status` on a catalog attach (create the operator row alongside the FK, as the fold in `plan_materials`
-    already anticipates); read distinct `seed_treatment` and `sanitizer_name` values into `_material_rows`
-    so the reconciliation and the workbook cover every class OTCO names; keep the four attestations.
+    already anticipates); keep the per-category attestations.
 - ref: 11.1 (not applicable)
   asks: Not Applicable; no materials/inputs are used.
   status: covered
@@ -100,6 +98,7 @@ items:
     - materials_application.fertilizers_none_used
     - materials_application.pest_disease_weed_none_used
     - materials_application.production_aids_none_used
+    - materials_application.crop_production_aids_none_used
     - materials_application.post_harvest_contact_none_used
     - materials_application.materials_list_complete
     models:

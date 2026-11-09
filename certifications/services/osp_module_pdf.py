@@ -277,9 +277,10 @@ def _unlisted_category_lines(osp, question, value, bundles: dict) -> list[str]:
     your OSP Materials List may be used"). It says what is known and no more: a brand can be covered
     by a substance entry the operator has not tied to it yet.
     """
-    from certifications.services.osp_prefill import MATERIALS_CATEGORIES, unlisted_category_products
+    from certifications.services.osp_prefill import MATERIALS_CATEGORIES, materials_category, unlisted_category_products
 
-    if value is not True or question.key not in MATERIALS_CATEGORIES:
+    category = materials_category(question.key)
+    if value is not True or category is None:
         return []
     from certifications.services.common_osp_records import EvidenceBundle
 
@@ -294,7 +295,7 @@ def _unlisted_category_lines(osp, question, value, bundles: dict) -> list[str]:
         return []
     shown = unlisted[:12]
     listed = ", ".join(shown) + (f", and {len(unlisted) - len(shown)} more" if len(unlisted) > len(shown) else "")
-    label = MATERIALS_CATEGORIES[question.key][1]
+    label = MATERIALS_CATEGORIES[category][1]
     return [
         f"[REVIEW] The records name {len(unlisted)} {label} product(s) that this plan's materials "
         f"list does not hold by name, and that no current decision on the plan ties to a listed "
@@ -1221,6 +1222,21 @@ def _approved_inputs_flowables(osp, styles) -> list:
     # A logged wash-water sanitizer the plan lists only under § 205.601, or under nothing.
     for line in post_harvest_listing_review(osp):
         out.append(Paragraph(_escape(line), styles["meta"]))
+
+    # CCOF Materials Application §C, "Crop Management Tools and Production Aids": seed treatments, growing
+    # media and adjuvants, each with product, manufacturer and reason for use. Printed again under §C's own
+    # heading from the rows the operator filed under that category, as §D below. Only when rows exist.
+    production_aids = [r for r in rows if r.category == "production_aid"]
+    if production_aids:
+        out.append(Spacer(1, 4))
+        out.append(
+            Paragraph(
+                "<b>Crop production aids</b>: seed treatments, growing media, adjuvants",
+                styles["body"],
+            )
+        )
+        for row in production_aids:
+            out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
 
     # CCOF Materials Application §D is its own table — materials that contact the crop AFTER
     # harvest (wash-water additives, sanitizers, gases), under § 205.605 rather than § 205.601.

@@ -14,6 +14,9 @@ questions:
   materials_application.production_aids_none_used: >-
     Same as fertilizers_none_used: CCOF's per-section N/A; AGR 2196 is one flat table without
     sections.
+  materials_application.crop_production_aids_none_used: >-
+    Same as fertilizers_none_used: CCOF's per-section N/A; AGR 2196 is one flat table without
+    sections.
   materials_application.post_harvest_contact_none_used: >-
     Same as fertilizers_none_used: CCOF's per-section N/A; AGR 2196 is one flat table without
     sections.

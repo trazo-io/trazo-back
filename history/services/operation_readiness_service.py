@@ -478,6 +478,7 @@ class OperationReadinessService:
                 "fertilizers_listed",
                 "pest_disease_weed_listed",
                 "production_aids_listed",
+                "crop_production_aids_listed",
                 "post_harvest_contact_listed",
             )
         )

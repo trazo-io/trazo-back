@@ -68,23 +68,17 @@ items:
 - ref: A3
   asks: All fertility materials planned for use are listed on the Grower Materials Application (OSP Materials
     List).
-  status: partial
-  severity: P1
+  status: covered
   trazo:
     questions:
     - g4_0_rotation_soil.fertility_inputs_listed
-    prints: modules/G4_0.pdf §B; narrative § 205.201(a)(2)
-  gap: 'The list can now hold the fertility materials this attestation is about — compost, manure, a mined
-    amendment — so answering it truthfully is possible for the first time. What remains is the GATE: `fertility_inputs_listed`
-    is still a plain boolean that can be answered Yes while logged products remain unreconciled. Closed
-    2026-08-28: `PlanMaterialEntry` lets the operator put a material on the plan in their own words —
-    product name, manufacturer, category, reason for use — with the catalog FK as an optional shortcut
-    rather than the only door. Each row carries a `listing_basis` and prints exactly what it supports:
-    an unlisted material reads "no third-party listing on file", never as listed or approved, and a `certifier_letter`
-    basis is refused without the letter reference. Reached through `plan_materials()`, so the module PDF,
-    the (a)(2) narrative and the reconciliation all read one list. Guard: `certifications/tests/test_plan_material_entries.py`.'
-  fix: Gate this attestation on reconciliation with `attests_embed`, the mechanism G8.0 A1 already uses
-    — now unblocked, because an operator can satisfy it.
+    models:
+    - certifications.services.attestation_gates.unlisted_products
+    prints: 'modules/G4_0.pdf §B (the answer; a Yes the records contradict is printed as answered before the
+      records showed otherwise, with a [REVIEW] line naming the logged fertility products the list does not hold);
+      modules/materials_application.pdf §A (the list itself); narrative § 205.201(a)(2)'
+  # Closed 2026-11-09: a Yes is refused at the write while the records name a fertilizer or soil amendment the
+  # plan's list does not hold, the same reconciliation as the Materials Application's fertilizer statement.
 - ref: A4
   asks: List or describe the tillage and cultivation practices in the order performed through the crop
     season, and explain how they maintain or improve the physical, chemical and biological condition of

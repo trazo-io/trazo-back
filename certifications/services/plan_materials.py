@@ -582,10 +582,10 @@ def materials_list_rows(osp) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 #: Category "none used" statements on the Materials Application, and the logged ChemicalEvent
-#: types that would contradict each. Production aids have no event source that classifies them,
-#: so a statement there cannot be checked and is not listed. Post-harvest contact materials are
-#: checked separately below: their record is a ProductionEvent of type PH naming a
-#: `sanitizer_name`, not a ChemicalEvent.
+#: types that would contradict each. Post-harvest contact materials and crop production aids are
+#: checked separately below: a sanitizer's record is a ProductionEvent of type PH naming a
+#: `sanitizer_name`, and a production aid is a seed treatment on a planting record or a tank-mix
+#: partner on an application record, neither of which a ChemicalEvent type classifies.
 NONE_USED_CATEGORIES = {
     "fertilizers_none_used": (("FE",), "fertilizer or soil amendment"),
     "pest_disease_weed_none_used": (("PE", "HE", "FU"), "pest, disease or weed-control"),
@@ -683,6 +683,18 @@ def none_used_contradictions(osp, answers: dict) -> list[str]:
             + (f" ({shown})" if shown else "")
             + ". Both are shown; the records are not reconciled here."
         )
+
+    if answer_value(answers, "crop_production_aids_none_used") is True:
+        from certifications.services.osp_prefill import logged_category_names
+
+        aids = logged_category_names(osp.establishment, "crop_production_aids_listed")
+        if aids:
+            shown = ", ".join(aids[:6]) + (f", and {len(aids) - 6} more" if len(aids) > 6 else "")
+            out.append(
+                "[REVIEW] The plan states that no seed treatments, growing media or adjuvants are used, but the "
+                f"records name {len(aids)} ({shown}) as a seed treatment on a planting or a tank-mix partner on "
+                "an application. Both are shown; the records are not reconciled here."
+            )
 
     if answer_value(answers, "post_harvest_contact_none_used") is True:
         sanitizers = logged_post_harvest_sanitizers(osp.establishment)

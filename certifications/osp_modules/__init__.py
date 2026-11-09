@@ -302,7 +302,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   "all organic" (it contradicted the answer that opened the page) and adds "no search documented yet" with a
 #   [REVIEW]. G6.0 adds routine third-party residue testing to the drift safeguards and uploads for written
 #   agreements with neighbors and with the roadside manager (CCOF G6.0 A2). All new questions optional.
-CONTENT_VERSION = "2026.11.25"
+# 2026.11.26: CCOF Materials Application §C. The two production-aid statements asked about adjuvants and
+#   wetting agents only; retired (shown while they hold an answer) for two that ask CCOF's whole list: seed
+#   treatments, growing media and adjuvants. Seed treatments on planting records and tank-mix partners on
+#   application records join the Materials List and its reconciliation. G4.0's "all fertility materials are
+#   listed" is gated on the same reconciliation as the Materials Application's fertilizer statement.
+CONTENT_VERSION = "2026.11.26"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

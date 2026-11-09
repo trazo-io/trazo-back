@@ -271,9 +271,15 @@ MATERIALS_APPLICATION = Module(
                         ),
                     ),
                 ),
+                # CCOF Materials Application §C asks for seed treatments (coatings, pelleting materials,
+                # inoculants), growing media (substrate, planting mix, potting soil) and adjuvants. These two
+                # asked about adjuvants and wetting agents only, so a stored Yes said nothing about seed
+                # treatments or growing media. Retired 2026.11.26 (shown only while they hold an answer) for
+                # the two below, which ask CCOF's whole list; never relabelled in place.
                 Question(
                     key="production_aids_none_used",
                     kind="boolean",
+                    retired=True,
                     label=text(
                         "No production aids (adjuvants, wetting agents) are used or planned",
                         "No se usa ni se planea usar ningún auxiliar de producción (adyuvantes, agentes humectantes)",
@@ -292,6 +298,7 @@ MATERIALS_APPLICATION = Module(
                 Question(
                     key="production_aids_listed",
                     kind="boolean",
+                    retired=True,
                     visible_when=(Condition("production_aids_none_used", "falsy"),),
                     label=text(
                         "All production aids (adjuvants, wetting agents) I use or plan to "
@@ -317,6 +324,68 @@ MATERIALS_APPLICATION = Module(
                         template_false=(
                             "The operator does not attest that every production aid, including adjuvants "
                             "and wetting agents, in use is entered in the materials list on this plan."
+                        ),
+                    ),
+                ),
+                Question(
+                    key="crop_production_aids_none_used",
+                    kind="boolean",
+                    label=text(
+                        "No seed treatments, growing media or adjuvants are used or planned",
+                        "No se usa ni se planea usar ningún tratamiento de semilla, sustrato de cultivo ni adyuvante",
+                    ),
+                    coaching=text(
+                        "Seed treatments include coatings, pelleting materials and inoculants. Growing media "
+                        "include substrate, planting mix and potting soil.",
+                        "Los tratamientos de semilla incluyen recubrimientos, materiales de peletizado e "
+                        "inoculantes. Los sustratos de cultivo incluyen sustrato, mezcla para siembra y tierra "
+                        "para macetas.",
+                    ),
+                    nop_cite="§ 205.601",
+                    required=False,
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator states that no seed treatments, growing media or adjuvants are used or "
+                            "planned ({answer})."
+                        ),
+                        template_false=(
+                            "The operator has not declared that no seed treatments, growing media or adjuvants are "
+                            "used or planned."
+                        ),
+                    ),
+                ),
+                Question(
+                    key="crop_production_aids_listed",
+                    kind="boolean",
+                    # Optional, like every question added to a finished module: required, it would reopen
+                    # every completed Materials Application.
+                    required=False,
+                    visible_when=(Condition("crop_production_aids_none_used", "falsy"),),
+                    prefill=Prefill(source="materials_category_evidence"),
+                    label=text(
+                        "All seed treatments, growing media and adjuvants I use or plan to use are entered in "
+                        "the materials list above",
+                        "Todo tratamiento de semilla, sustrato de cultivo y adyuvante que uso o planeo usar está "
+                        "registrado en la lista de materiales de arriba",
+                    ),
+                    coaching=text(
+                        "File each one under Production aids, with its full product name, "
+                        "manufacturer and reason for use. Seed treatments named on your planting records and "
+                        "tank-mix partners named on your application records are compared with the list.",
+                        "Registra cada uno en Auxiliares de producción, con el nombre completo del producto, "
+                        "el fabricante y el motivo de uso. Los tratamientos de semilla anotados en tus registros "
+                        "de siembra y los productos de mezcla de tanque anotados en tus registros de aplicación se "
+                        "comparan con la lista.",
+                    ),
+                    nop_cite="§ 205.601",
+                    compiles_to=CompileRule(
+                        template=(
+                            "The operator attests that all seed treatments, growing media and adjuvants in use are "
+                            "entered in the materials list on this plan ({answer})."
+                        ),
+                        template_false=(
+                            "The operator does not attest that every seed treatment, growing medium and adjuvant in "
+                            "use is entered in the materials list on this plan."
                         ),
                     ),
                 ),

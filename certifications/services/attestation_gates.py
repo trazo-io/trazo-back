@@ -119,7 +119,23 @@ _RECONCILED_STATEMENTS = {
     "materials_list_complete": None,
     "fertilizers_listed": "fertilizers_listed",
     "pest_disease_weed_listed": "pest_disease_weed_listed",
+    "crop_production_aids_listed": "crop_production_aids_listed",
     "post_harvest_contact_listed": "post_harvest_contact_listed",
+    # CCOF G4.0 A3: "List all fertility materials planned for use on your Grower Materials Application".
+    # The fertilizer row's statement, asked on G4.0; read against the same products (2026.11.26).
+    "fertility_inputs_listed": "fertilizers_listed",
+}
+
+#: The module each reconciled statement is asked on.
+_RECONCILED_BY_MODULE = {
+    "materials_application": (
+        "materials_list_complete",
+        "fertilizers_listed",
+        "pest_disease_weed_listed",
+        "crop_production_aids_listed",
+        "post_harvest_contact_listed",
+    ),
+    "g4_0_rotation_soil": ("fertility_inputs_listed",),
 }
 
 RECONCILIATION_MESSAGE = (
@@ -188,16 +204,15 @@ def blocked_attestations(module, answers: dict, osp) -> dict[str, str]:
                     getattr(osp, "pk", None),
                 )
                 continue
-    if getattr(module, "key", "") == "materials_application":
-        for question_key in _RECONCILED_STATEMENTS:
-            if answer_value(answers, question_key) is not True:
-                continue
-            try:
-                unlisted = unlisted_products(question_key, osp)
-            except Exception:  # noqa: BLE001 (fail open, logged, as above)
-                logger.exception("Materials reconciliation could not run for OSP %s", getattr(osp, "pk", None))
-                continue
-            if unlisted:
-                shown = ", ".join(unlisted[:8]) + (f", and {len(unlisted) - 8} more" if len(unlisted) > 8 else "")
-                blocked[question_key] = RECONCILIATION_MESSAGE.format(count=len(unlisted), names=shown)
+    for question_key in _RECONCILED_BY_MODULE.get(getattr(module, "key", ""), ()):
+        if answer_value(answers, question_key) is not True:
+            continue
+        try:
+            unlisted = unlisted_products(question_key, osp)
+        except Exception:  # noqa: BLE001 (fail open, logged, as above)
+            logger.exception("Materials reconciliation could not run for OSP %s", getattr(osp, "pk", None))
+            continue
+        if unlisted:
+            shown = ", ".join(unlisted[:8]) + (f", and {len(unlisted) - 8} more" if len(unlisted) > 8 else "")
+            blocked[question_key] = RECONCILIATION_MESSAGE.format(count=len(unlisted), names=shown)
     return blocked
