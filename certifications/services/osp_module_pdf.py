@@ -39,6 +39,7 @@ _REGISTRY_BY_KEY = {module.key: module for module in MODULE_REGISTRY}
 from certifications.osp_modules.conditions import (
     answer_value,
     effective_value,
+    evaluate,
     is_answered,
     visible_pages,
     visible_questions,
@@ -2150,6 +2151,49 @@ _NA_REVIEW = {
 _GENERATED_FOR_UPLOAD = {"g8_0_record_keeping.audit_trail_exhibit": "05-audit-trail-exhibit.pdf"}
 
 
+def _unanswered_gate(module, key, answers, asked, seen=None):
+    """The label of the unanswered question that could still show the hidden question `key`, or None when
+    an answered condition rules it out. Follows hidden gates down to an asked one."""
+    seen = set() if seen is None else seen
+    if key in seen:
+        return None
+    seen.add(key)
+    page_of = {q.key: p for p in module.pages for q in p.questions}
+    questions = {q.key: q for p in module.pages for q in p.questions}
+    question, page = questions.get(key), page_of.get(key)
+    if question is None:
+        return None
+
+    def label(k):
+        return _en(questions[k].label).rstrip("?.: ")
+
+    pending = None
+    for cond in tuple(question.visible_when or ()) + tuple(getattr(page, "visible_when", ()) or ()):
+        if cond.question in asked:
+            if answer_value(answers, cond.question) in (None, "", []):
+                pending = pending or label(cond.question)
+            elif not evaluate(cond, answers):
+                return None
+        else:
+            below = _unanswered_gate(module, cond.question, answers, asked, seen)
+            if below is None:
+                return None
+            pending = pending or below
+    any_conds = tuple(getattr(page, "visible_when_any", ()) or ())
+    if any_conds and not any(c.question in asked and evaluate(c, answers) for c in any_conds):
+        either = None
+        for cond in any_conds:
+            if cond.question in asked:
+                if answer_value(answers, cond.question) in (None, "", []):
+                    either = either or label(cond.question)
+            else:
+                either = either or _unanswered_gate(module, cond.question, answers, asked, seen)
+        if either is None:
+            return None
+        pending = pending or either
+    return pending
+
+
 def _page_does_not_apply(module, page, answers) -> str:
     """Why a page of the module is not printed, worded from the conditions that hide it: every one of
     `visible_when`, and one of `visible_when_any` (the page's OR gate, 2026.11.25; review of back #352,
@@ -2192,8 +2236,19 @@ def _page_does_not_apply(module, page, answers) -> str:
         if found:
             phrases.append(found[1])
     if any_conds:
+        # A member whose deciding question is itself hidden is not asked. If its own gate is answered against
+        # it, it can never open the page and is skipped: without that, "never certified" left the Operation
+        # profile's page C reading "Not shown until 'suspended' is answered" for a question that operation is
+        # never asked (2026-11-09). If its gate is still unanswered it can, so the page waits on that gate
+        # (review of back #363).
+        asked = {q.key for _p, q in visible_questions(module, answers)}
         either = []
         for cond in any_conds:
+            if cond.question not in asked:
+                gate = _unanswered_gate(module, cond.question, answers, asked)
+                if gate:
+                    return f"Not shown until “{gate}” is answered."
+                continue
             found = phrase(cond)
             if found and found[0] == "open":
                 # One member unanswered decides nothing yet: it could still open the page.

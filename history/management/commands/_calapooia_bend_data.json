@@ -2688,6 +2688,38 @@
          "crops",
          "handling"
         ]
+       },
+       "history_ever_certified": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
+       },
+       "history_prior_agents": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "Oregon Tilth, 2006 to date."
+       },
+       "history_suspended": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_revoked": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_surrendered_outstanding": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_outstanding_noncompliances": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_denied": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_withdrew_outstanding": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:42:20.378188+00:00",
