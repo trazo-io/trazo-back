@@ -311,7 +311,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.11.27: G3.1 Container & Greenhouse/Shadehouse Production (CCOF ORGB46), a new module after G3.0b. Its
 #   not-applicable attestation is CCOF A1's "None of these"; sections B4 and D open only on the answers that make
 #   them apply. Every question is new, so no stored answer changes meaning.
-CONTENT_VERSION = "2026.11.27"
+# 2026.11.28: Operation profile gains B. Certification history and C. What happened (CCOF Certification Contract
+#   D5 to D6, OTCO O1 D-1E, D-2 to D-7): ever certified, suspended, revoked, surrendered or withdrawn with
+#   outstanding noncompliances, denied; then the explanation, the letters, the OTCO affirmations and the
+#   reinstatement request. Every question is new and optional, so no stored answer changes meaning.
+CONTENT_VERSION = "2026.11.28"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

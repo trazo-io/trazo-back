@@ -2192,8 +2192,14 @@ def _page_does_not_apply(module, page, answers) -> str:
         if found:
             phrases.append(found[1])
     if any_conds:
+        # A member whose deciding question is itself hidden is never asked, so it can neither open the page
+        # nor be waited on. Without this, "never certified" left the Operation profile's page C reading
+        # "Not shown until 'suspended' is answered" for a question that operation is never asked (2026-11-09).
+        asked = {q.key for _p, q in visible_questions(module, answers)}
         either = []
         for cond in any_conds:
+            if cond.question not in asked:
+                continue
             found = phrase(cond)
             if found and found[0] == "open":
                 # One member unanswered decides nothing yet: it could still open the page.

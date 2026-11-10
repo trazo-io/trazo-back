@@ -270,64 +270,75 @@ items:
   asks: Has this operation or any responsibly connected person with this operation ever applied for, or been
     granted, organic certification? No, skip to section E / Yes, complete this section and provide the name
     of the certifier.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No question captures this operation's or its responsibly connected persons' certification history.
-  fix: Add a certification-history page to the contract module (D5 to D6, and OTCO O1 D-1 to D-7 ask the same);
-    relevant mainly to initial applicants and already-certified farms with a lapse.
+    where: 'modules/operation_profile.pdf: B. Certification history'
+    questions:
+    - certification_contract.history_ever_certified
+    - certification_contract.history_prior_agents
+    - certification_contract.history_denied
+    - certification_contract.history_withdrew_outstanding
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). One answer covers the operation and everyone responsibly connected to it, as the form asks it.
+    "Applied for" is answered by the denied and withdrawn questions, which show whether or not the operation
+    was ever certified.
 - ref: D5a
   asks: Was the operation's or any responsibly connected person with this operation's certification or the
     certification of fields or products ever suspended or revoked? Yes / No
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No question captures this operation's or its responsibly connected persons' certification history.
-  fix: Part of the same certification-history page as D5.
+    where: 'modules/operation_profile.pdf: B. Certification history, suspended and revoked'
+    questions:
+    - certification_contract.history_suspended
+    - certification_contract.history_revoked
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). Suspension and revocation are asked separately because OTCO asks them separately (D-2, D-3).
 - ref: D5b
   asks: Did the operation surrender certification with outstanding non-compliances or conditions? Yes / No
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No question captures this operation's or its responsibly connected persons' certification history.
-  fix: Part of the same certification-history page as D5.
+    where: 'modules/operation_profile.pdf: B. Certification history, surrendered with noncompliances or conditions outstanding'
+    questions:
+    - certification_contract.history_surrendered_outstanding
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D5c
   asks: Was the operation's application for organic certification ever issued a denial? Yes / No
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No question captures this operation's or its responsibly connected persons' certification history.
-  fix: Part of the same certification-history page as D5.
+    where: 'modules/operation_profile.pdf: B. Certification history, application denied'
+    questions:
+    - certification_contract.history_denied
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D5d
   asks: Did the operation withdraw its application for certification with outstanding non-compliances? Yes
     / No
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No question captures this operation's or its responsibly connected persons' certification history.
-  fix: Part of the same certification-history page as D5.
+    where: 'modules/operation_profile.pdf: B. Certification history, application withdrawn with noncompliances outstanding'
+    questions:
+    - certification_contract.history_withdrew_outstanding
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D6
   asks: 'If you answered yes to a, b, c, or d above: list the years and organic certification agencies,
     attach a copy of all relevant letters, and describe all corrective actions taken.'
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: "02s-renewal-status-and-routing.pdf: Certifier inspections and notices (operation's record); the agent's letters and the files sent with each response are attached under inspections/"
+    where: "modules/operation_profile.pdf: C. What happened (years, agencies, corrective actions; the letters attached under attachments/certification_contract/); notices from the current agent also print on 02s-renewal-status-and-routing.pdf with their letters under inspections/"
+    questions:
+    - certification_contract.history_prior_agents
+    - certification_contract.history_adverse_explanation
+    - certification_contract.history_letters_upload
     models:
     - certifications.models.CertifierNotice.notice_document
     - certifications.models.CertifierNotice.response_text
     - certifications.models.CertifierNoticeResponseDocument.document
-    - certifications.models.CertifierInspection.certifying_agent
-    prints: 02s-renewal-status-and-routing.pdf, certifier inspections and notices; files under inspections/
-  gap: The operation's own record of each agent's letters, its corrective actions and the files it sent
-    exists (2026-11-08) and prints on 02s with the letters attached, but D5a to D5d, the events that make
-    D6 apply, are still not asked, so nothing says which letters D6 is about.
-  fix: Part of the same optional D5 page; list D6 from the inspection record once D5 is answered.
+    prints: modules/operation_profile.pdf §C; letters under attachments/certification_contract/; 02s-renewal-status-and-routing.pdf, certifier inspections and notices
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). Page C opens on any yes to D5a to D5d, so the letters D6 asks for are tied to the events
+    that make it apply. The operation's own record of its current agent's notices (2026-11-08) still prints on
+    02s with those letters.
 - ref: E1
   asks: 'CDFA California Organic Program Registration number (grower, post-harvest handling, produce broker),
     e.g. 12-123456 — required for operations producing organic product in California prior to first sale.

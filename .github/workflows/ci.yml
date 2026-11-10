@@ -488,6 +488,11 @@ jobs:
       # and OTCO C7 7.10-2's columns print under its handler, a multi-ingredient product's ingredient statement
       # ships under handlers/, and the route is tenancy-scoped. Builds its own farm; no sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_certification_history_page joins. The Operation profile's pages B
+      # (certification history) and C (what happened): who is asked what, page C opening on any one adverse yes,
+      # every question optional, and the PDF never printing an unanswered question as No. Builds its own farm;
+      # no sibling repo.
+      #
       # 2026-11-08: certifications.tests.test_inspection_packet joins. 02s lists the operation's last inspection,
       # every item with no resolution notice attached and the ones resolved in the last year, with each file
       # attached under inspections/; an empty record says "in Trazo". Builds its own farm; no sibling repo.
@@ -744,6 +749,7 @@ jobs:
             certifications.tests.test_brand_owners \
             certifications.tests.test_certifier_inspections \
             certifications.tests.test_inspection_packet \
+            certifications.tests.test_certification_history_page \
             certifications.tests.test_facility_products \
             certifications.tests.test_materials_production_aids \
             certifications.tests.test_materials_post_harvest_d \

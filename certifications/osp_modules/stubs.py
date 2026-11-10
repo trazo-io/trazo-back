@@ -1682,5 +1682,234 @@ CERTIFICATION_CONTRACT = Module(
                 ),
             ),
         ),
+        # 2026-11-09: CCOF Certification Contract D5 to D6 and OTCO O1 D-1E, D-2 to D-7. Both forms ask the
+        # same thing of "this operation or anyone responsibly connected to it", as one yes/no each, and a
+        # yes is what makes their "attach the letters, describe the corrective actions" row apply.
+        #
+        # Optional, every question: these matter mainly to applicants and to farms with a lapse, and
+        # making them required would turn every completed Operation profile back to incomplete on plans
+        # already in use. Unanswered prints "Not answered (optional).", never "No".
+        #
+        # No `compiles_to`: adverse history is read on the operation profile PDF, not woven into the
+        # § 205.201(a)(6) narrative.
+        ModulePage(
+            key="b_certification_history",
+            title=text("B. Certification history", "B. Historial de certificación"),
+            education=(
+                text(
+                    "Certifiers ask whether this operation, or anyone responsibly connected to it (owners, "
+                    "officers, managers, the person who signs), has held or applied for organic certification "
+                    "before, and whether any of it ended badly. One answer covers all of them.",
+                    "Los certificadores preguntan si esta operación, o alguien responsablemente vinculado a ella "
+                    "(dueños, directivos, gerentes, quien firma), tuvo o solicitó antes una certificación orgánica, "
+                    "y si alguna terminó mal. Una respuesta los cubre a todos.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="history_ever_certified",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Has this operation, or anyone responsibly connected to it, ever been certified organic?",
+                        "¿Esta operación, o alguien responsablemente vinculado a ella, estuvo alguna vez "
+                        "certificada como orgánica?",
+                    ),
+                    nop_cite="§ 205.401(c)",
+                ),
+                Question(
+                    key="history_prior_agents",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    label=text(
+                        "Which certifying agencies, and the dates (or years) each certification was held?",
+                        "¿Qué agencias certificadoras, y en qué fechas (o años) se tuvo cada certificación?",
+                    ),
+                    placeholder=text(
+                        "e.g. Oregon Tilth, March 2015 to June 2021; CCOF since 2022",
+                        "p. ej. Oregon Tilth, de marzo de 2015 a junio de 2021; CCOF desde 2022",
+                    ),
+                ),
+                Question(
+                    key="history_suspended",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    label=text(
+                        "Was that certification, or the certification of any field or product, ever suspended?",
+                        "¿Esa certificación, o la de algún campo o producto, fue suspendida alguna vez?",
+                    ),
+                    nop_cite="§ 205.662(e)",
+                ),
+                Question(
+                    key="history_revoked",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    label=text(
+                        "Was it ever revoked?",
+                        "¿Fue revocada alguna vez?",
+                    ),
+                    nop_cite="§ 205.662(e)",
+                ),
+                Question(
+                    key="history_surrendered_outstanding",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    label=text(
+                        "Was a certification ever surrendered while noncompliances or conditions were still "
+                        "outstanding?",
+                        "¿Se renunció alguna vez a una certificación con incumplimientos o condiciones todavía "
+                        "pendientes?",
+                    ),
+                ),
+                Question(
+                    key="history_outstanding_noncompliances",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    label=text(
+                        "Is any noncompliance issued by any of those agencies still outstanding?",
+                        "¿Hay algún incumplimiento emitido por alguna de esas agencias que siga pendiente?",
+                    ),
+                    coaching=text(
+                        "For your current agency, the Certifier inspections and notices card on the Organic "
+                        "System Plan page lists each notice and whether its resolution notice is on file. It "
+                        "only knows what you recorded there, so answer for every agency yourself.",
+                        "Para tu agencia actual, la tarjeta Inspecciones y avisos de la certificadora en la "
+                        "página del Plan del Sistema Orgánico muestra cada aviso y si tienes archivada su "
+                        "resolución. Solo sabe lo que registraste ahí, así que responde tú por cada agencia.",
+                    ),
+                    nop_cite="§ 205.662(a)",
+                ),
+                Question(
+                    key="history_denied",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Was an application for organic certification ever denied?",
+                        "¿Alguna vez se denegó una solicitud de certificación orgánica?",
+                    ),
+                    nop_cite="§ 205.405",
+                ),
+                Question(
+                    key="history_withdrew_outstanding",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Was an application for certification ever withdrawn while noncompliances were still "
+                        "outstanding?",
+                        "¿Se retiró alguna vez una solicitud de certificación con incumplimientos todavía "
+                        "pendientes?",
+                    ),
+                    nop_cite="§ 205.401(c)",
+                ),
+            ),
+        ),
+        ModulePage(
+            key="c_adverse_history",
+            title=text("C. What happened", "C. Qué pasó"),
+            education=(
+                text(
+                    "You answered yes above. Both CCOF and OTCO ask for the years and agencies, a copy of every "
+                    "letter, and what you did to correct it.",
+                    "Respondiste que sí arriba. CCOF y OTCO piden los años y las agencias, una copia de cada carta y "
+                    "lo que hiciste para corregirlo.",
+                ),
+            ),
+            visible_when_any=(
+                Condition("history_suspended", "eq", True),
+                Condition("history_revoked", "eq", True),
+                Condition("history_surrendered_outstanding", "eq", True),
+                Condition("history_outstanding_noncompliances", "eq", True),
+                Condition("history_denied", "eq", True),
+                Condition("history_withdrew_outstanding", "eq", True),
+            ),
+            questions=(
+                Question(
+                    key="history_adverse_explanation",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "For each yes: the year, the agency, what happened and the corrective actions taken.",
+                        "Por cada sí: el año, la agencia, qué pasó y las acciones correctivas que tomaste.",
+                    ),
+                ),
+                Question(
+                    key="history_letters_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach every letter about it: notices, the suspension, revocation or denial, and any "
+                        "resolution.",
+                        "Adjunta cada carta al respecto: avisos, la suspensión, revocación o denegación, y "
+                        "cualquier resolución.",
+                    ),
+                ),
+                Question(
+                    key="history_this_agent_records",
+                    kind="info",
+                    required=False,
+                    label=text(
+                        "Notices from your current agency that you recorded on the Certifier inspections and "
+                        "notices card print in the renewal packet with their letters. Attach here the letters "
+                        "from earlier agencies, and anything not on that card.",
+                        "Los avisos de tu agencia actual que registraste en la tarjeta Inspecciones y avisos de "
+                        "la certificadora se imprimen en el paquete de renovación con sus cartas. Adjunta aquí "
+                        "las cartas de agencias anteriores y todo lo que no esté en esa tarjeta.",
+                    ),
+                ),
+                Question(
+                    key="history_not_sold_since_suspension",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_suspended", "eq", True),),
+                    label=text(
+                        "I affirm that no product has been sold, labeled or represented as organic since the "
+                        "date of the suspension.",
+                        "Afirmo que ningún producto se vendió, etiquetó ni presentó como orgánico desde la fecha "
+                        "de la suspensión.",
+                    ),
+                ),
+                Question(
+                    key="history_currently_suspended",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_suspended", "eq", True),),
+                    label=text(
+                        "Is the operation suspended today?",
+                        "¿La operación está suspendida hoy?",
+                    ),
+                ),
+                Question(
+                    key="history_request_reinstatement",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(
+                        Condition("history_suspended", "eq", True),
+                        Condition("history_currently_suspended", "eq", True),
+                    ),
+                    label=text(
+                        "I request that the National Organic Program reinstate this operation's certification.",
+                        "Solicito que el Programa Orgánico Nacional restablezca la certificación de esta operación.",
+                    ),
+                    nop_cite="§ 205.662(f)(1)",
+                ),
+                Question(
+                    key="history_not_sold_since_revocation",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_revoked", "eq", True),),
+                    label=text(
+                        "I affirm that no product has been sold, labeled or represented as organic since the "
+                        "date of the revocation.",
+                        "Afirmo que ningún producto se vendió, etiquetó ni presentó como orgánico desde la fecha "
+                        "de la revocación.",
+                    ),
+                ),
+            ),
+        ),
     ),
 )

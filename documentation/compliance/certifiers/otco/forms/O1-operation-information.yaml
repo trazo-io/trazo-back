@@ -384,22 +384,19 @@ items:
     contact, the primary contact and anyone responsibly connected to the operation (rev. 2026/03/25). Have
     you, the responsibly connected, or this operation ever been certified organic? No, skip to question 5 /
     Yes, complete questions (A)-(E) below.'
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: '00-cover.pdf: Certificate'
+    where: 'modules/operation_profile.pdf: B. Certification history, ever certified; 00-cover.pdf: Certificate (the certificate of record)'
+    questions:
+    - certification_contract.history_ever_certified
     models:
     - certifications.Certification
     - certifications.OrganicSystemPlan.approval_certificate_number
     - certifications.OrganicSystemPlan.approval_certifier_name
-    prints: '00-cover.pdf ("Certificate: <number> — <certifying agent>", the certificate of record)'
-  gap: 'Reused from the CCOF Contract D4 (P3). The "currently certified" path is covered: the cover prints
-    the certificate of record — number and agent taken from ONE record, the OSP''s activation fields with the
-    profile''s `Certification` rows as fallback. "Ever certified" beyond the current certificate, and the Certification
-    Transfer scenario D-1a/b turn on, have no field. The responsibly connected persons'' own certification
-    history has no field at all.'
-  fix: Reuse D4 — a `certification_transfer` flag plus prior-certification history on the contract module;
-    low priority until a pilot farm switches agents.
+    prints: 'modules/operation_profile.pdf §B; 00-cover.pdf ("Certificate: <number> — <certifying agent>", the certificate of record)'
+  note: Closed 2026-11-09 by the Operation profile's certification history page. One answer covers "you, the
+    responsibly connected, or this operation", as the form asks it. The transfer case (A) and (B) stays open on
+    its own rows, D-1A and D-1B.
 - ref: D-1A
   asks: Are you currently certified organic by another certification agency? Yes / No.
   status: partial
@@ -453,137 +450,133 @@ items:
       never mixed across sources'
 - ref: D-1D
   asks: What were the dates that the organic certification was maintained?
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: '00-cover.pdf: Certificate (number and agent only)'
+    where: 'modules/operation_profile.pdf: B. Certification history, agencies and the dates each certification was held'
+    questions:
+    - certification_contract.history_prior_agents
     models:
     - certifications.Certification.effective_date
     - certifications.Certification.expiry_date
-    prints: — (the cover prints certificate number and agent only)
-  gap: Effective and expiry dates exist on the `Certification` row but no packet document prints them — `_packet_cover_pdf`
-    prints the number and agent line only. (The CCOF Contract D4 row states that effective/expiry dates print
-    on the cover; against the current cover code that claim is stale and is flagged in this pass.)
-  fix: Print effective and expiry dates of the certificate of record on the cover.
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). The operation states each agency's dates in its own words. The certificate of record's
+    effective and expiry dates on the `Certification` row still do not print on the cover; the answer here is
+    what a reviewer reads.
 - ref: D-1E
   asks: Are there any outstanding non-compliances that have been issued by any of the agencies identified above?
     Yes / No.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: "02s-renewal-status-and-routing.pdf: Certifier inspections and notices (operation's record), the count of notices of noncompliance with no resolution notice attached"
+    where: "modules/operation_profile.pdf: B. Certification history, noncompliances still outstanding; 02s-renewal-status-and-routing.pdf also counts the current agent's notices with no resolution notice attached"
+    questions:
+    - certification_contract.history_outstanding_noncompliances
     models:
     - certifications.models.CertifierNotice.kind
     - certifications.models.CertifierNotice.resolution_document
-    prints: 02s-renewal-status-and-routing.pdf, the count of notices of noncompliance with no resolution notice
-      attached, and each one
-  gap: The operation's own record of notices of noncompliance and their resolution notices exists
-    (2026-11-08) and 02s counts the ones with no resolution notice attached. It holds what the operation
-    recorded only; the other agencies D-1 lists and their notices are not asked.
-  fix: Reuse D5 — part of the optional certification-history page.
+    prints: modules/operation_profile.pdf §B; 02s-renewal-status-and-routing.pdf, the count of notices of noncompliance with no resolution
+      notice attached
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). The operation answers for every agency D-1 lists; the inspection record (2026-11-08) is named
+    in the coaching for the current agent but never fills the answer, since it holds only what the operation
+    recorded.
 - ref: D-2
   asks: Have you, the responsibly connected, or this operation ever had its certification suspended? No / Yes,
     explain.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: 'No question captures certification history for the operation or its responsibly connected persons:
-    suspension, revocation, surrender, denial or withdrawal. (Ledger follow-up T27-F1.)'
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: B. Certification history, suspended; C. What happened (the explanation)'
+    questions:
+    - certification_contract.history_suspended
+    - certification_contract.history_adverse_explanation
+    prints: modules/operation_profile.pdf §B; modules/operation_profile.pdf §C
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). One answer covers "you, the responsibly connected, or this operation", as the form asks it;
+    a per-person list waits on B-6.
 - ref: D-2A
   asks: If Yes, check here to affirm that products have not been sold or represented as organic since date
     of suspension.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: New in rev. 2026/03/25. An affirmation that no product was sold as organic since the adverse action;
-    no field exists.
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: C. What happened, the affirmation after a suspension'
+    questions:
+    - certification_contract.history_not_sold_since_suspension
+    prints: modules/operation_profile.pdf §C
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). Shown only when the suspension answer is yes.
 - ref: D-2B
   asks: If your operation is currently suspended and you request that NOP reinstate your operation's certification,
     check here.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: New in rev. 2026/03/25. A request to NOP to reinstate a currently suspended operation; no field exists,
-    and nothing in Trazo says whether the operation is suspended, so it cannot show this does not apply.
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: C. What happened, suspended today and the reinstatement request'
+    questions:
+    - certification_contract.history_currently_suspended
+    - certification_contract.history_request_reinstatement
+    prints: modules/operation_profile.pdf §C
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). The request shows only when the operation says it is suspended today (§ 205.662(f)(1)).
 - ref: D-3
   asks: Have you, the responsibly connected, or this operation ever had its certification revoked? No / Yes,
     explain.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: 'No question captures certification history for the operation or its responsibly connected persons:
-    suspension, revocation, surrender, denial or withdrawal. (Ledger follow-up T27-F1.)'
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: B. Certification history, revoked; C. What happened (the explanation)'
+    questions:
+    - certification_contract.history_revoked
+    - certification_contract.history_adverse_explanation
+    prints: modules/operation_profile.pdf §B; modules/operation_profile.pdf §C
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D-3A
   asks: If Yes, check here to affirm that products have not been sold or represented as organic since date
     of revocation.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: New in rev. 2026/03/25. An affirmation that no product was sold as organic since the adverse action;
-    no field exists.
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: C. What happened, the affirmation after a revocation'
+    questions:
+    - certification_contract.history_not_sold_since_revocation
+    prints: modules/operation_profile.pdf §C
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). Shown only when the revocation answer is yes.
 - ref: D-4
   asks: Have you, the responsibly connected, or this operation ever surrendered certification with outstanding
     points of non-compliance? Yes / No.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: 'No question captures certification history for the operation or its responsibly connected persons:
-    suspension, revocation, surrender, denial or withdrawal. (Ledger follow-up T27-F1.)'
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: B. Certification history, surrendered with noncompliances or conditions outstanding'
+    questions:
+    - certification_contract.history_surrendered_outstanding
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D-5
   asks: Have you, the responsibly connected, or this operation ever been denied certification? No / Yes, explain.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: 'No question captures certification history for the operation or its responsibly connected persons:
-    suspension, revocation, surrender, denial or withdrawal. (Ledger follow-up T27-F1.)'
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: B. Certification history, application denied; C. What happened (the explanation)'
+    questions:
+    - certification_contract.history_denied
+    - certification_contract.history_adverse_explanation
+    prints: modules/operation_profile.pdf §B; modules/operation_profile.pdf §C
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D-6
   asks: Have you, the responsibly connected, or this operation ever withdrawn an application with outstanding
     points of non-compliance? Yes / No.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: 'No question captures certification history for the operation or its responsibly connected persons:
-    suspension, revocation, surrender, denial or withdrawal. (Ledger follow-up T27-F1.)'
-  fix: A certification-history page on the contract module, shared with CCOF Contract D5 to D6, with one answer
-    per responsibly connected person (B-6).
+    where: 'modules/operation_profile.pdf: B. Certification history, application withdrawn with noncompliances outstanding'
+    questions:
+    - certification_contract.history_withdrew_outstanding
+    prints: modules/operation_profile.pdf §B
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes).
 - ref: D-7
   asks: If you responded yes to any one of questions 2–6 above, attach a copy of all relevant letter(s) and
     a description of any/all corrective actions — requested documentation is attached.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: "02s-renewal-status-and-routing.pdf: Certifier inspections and notices (operation's record); the agent's letters and the files sent with each response are attached under inspections/"
+    where: "modules/operation_profile.pdf: C. What happened (corrective actions; the letters attached under attachments/certification_contract/); notices from the current agent also print on 02s-renewal-status-and-routing.pdf with their letters under inspections/"
+    questions:
+    - certification_contract.history_adverse_explanation
+    - certification_contract.history_letters_upload
     models:
     - certifications.models.CertifierNotice.notice_document
     - certifications.models.CertifierNotice.response_text
     - certifications.models.CertifierNoticeResponseDocument.document
-    prints: 02s-renewal-status-and-routing.pdf, certifier inspections and notices; files under inspections/
-  gap: The letters and corrective-action descriptions have fields (the operation's inspection record,
-    2026-11-08) and print on 02s with the letters attached; D-2 to D-6, which make D-7 apply, are still not
-    asked.
-  fix: Reuse D6 — part of the same optional page.
+    prints: modules/operation_profile.pdf §C; letters under attachments/certification_contract/; 02s-renewal-status-and-routing.pdf, certifier inspections and notices
+  note: Closed 2026-11-09 by the Operation profile's certification history page (B) and its follow-up page (C, shown on any yes). Page C opens on any yes to D-2 to D-6 (and to D-1E).
 - ref: E-1
   asks: >-
     CALIFORNIA ORGANIC REGISTRATION — N/A, the operation is not based in California; or California
