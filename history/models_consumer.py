@@ -8,19 +8,17 @@ seasons (compare_products, toggle_favorite). UserLocalRecommendation carried `ca
 stored 0-100 grade.
 """
 
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 from backend.constants import calculate_miles_equivalent, calculate_trees_equivalent
 
-User = get_user_model()
-
 
 class UserImpactSummary(models.Model):
     """Aggregate user impact metrics for dashboard"""
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="impact_summary")
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="impact_summary")
 
     # Core Impact Metrics
     total_scans = models.IntegerField(default=0)

@@ -36,7 +36,7 @@ from history import serializers_consumer as sc
 #: Every serializer in the consumer module that reaches a shopper response.
 CONSUMER_SERIALIZERS = (
     sc.EnhancedHistoryScanSerializer,
-    sc.UserImpactSummarySerializer,
+    sc.ConsumerImpactSerializer,  # was UserImpactSummarySerializer until 2026-11-10
 )
 
 #: Substrings that may never name a declared field on those serializers. Shape-matched, because
@@ -82,7 +82,7 @@ class ConsumerPayloadCarriesNoScoreTests(SimpleTestCase):
         scan_fields = set(sc.EnhancedHistoryScanSerializer.Meta.fields)
         self.assertIn("events_viewed", scan_fields)
 
-        impact_fields = set(sc.UserImpactSummarySerializer.Meta.fields)
+        impact_fields = set(sc.ConsumerImpactSerializer._declared_fields)
         self.assertIn("farming_events_viewed", impact_fields)
         self.assertIn("verified_farms_scanned", impact_fields)
 
@@ -90,4 +90,4 @@ class ConsumerPayloadCarriesNoScoreTests(SimpleTestCase):
         # `_get_event_counts` was shared between the deleted average and `farming_events_viewed`.
         # Deleting the caller must not have taken the cache with it, or the surviving factual
         # count goes N+1.
-        self.assertTrue(hasattr(sc.UserImpactSummarySerializer, "_get_event_counts"))
+        self.assertTrue(hasattr(sc.ConsumerImpactSerializer, "_get_event_counts"))

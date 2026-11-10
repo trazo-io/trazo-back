@@ -680,7 +680,10 @@ class VerifiedReviewOf119Tests(_Oid):
         self.assertIn("possible_match", CONSUMER_LISTED_STATUSES)
         self.assertIn("listing_match", CONSUMER_LISTED_STATUSES)
         root = _P(__file__).resolve().parents[2]
-        for rel in ("history/views_consumer.py", "history/serializers_consumer.py", "history/transparency_views.py"):
+        for rel in ("history/serializers_consumer.py", "history/transparency_views.py"):
             src = (root / rel).read_text()
             self.assertNotIn('verification_status__in=["verified", "self_reported"]', src, rel)
             self.assertIn("CONSUMER_LISTED_STATUSES", src, rel)
+        # Since 2026-11-10 the consumer dashboard view counts through ConsumerImpactSerializer and
+        # queries no certification itself. If it starts again, it goes back on the list above.
+        self.assertNotIn("Certification", (root / "history/views_consumer.py").read_text())
