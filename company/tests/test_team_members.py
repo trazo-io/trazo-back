@@ -205,11 +205,12 @@ class SetupOperatorTests(TeamFixture):
 
 
 class LastAdminTests(TeamFixture):
-    """With the self rule the caller is always a remaining admin, so over HTTP the last-admin rule
-    only fires when two admins act on each other at once. The rule itself is checked here."""
+    """Over HTTP the self rule already leaves the caller as the remaining admin, so `LAST_ADMIN`
+    cannot come back from the endpoint (see users/team.py). The rule is checked directly here, so it
+    still holds if the self rule is ever relaxed; the HTTP race is the last test."""
 
     def test_removing_or_demoting_the_only_admin_is_refused(self):
-        caller = WorksIn(pk=999, company=self.company, role=WorksIn.COMPANY_ADMIN)  # e.g. a racing admin
+        caller = WorksIn(pk=999, company=self.company, role=WorksIn.COMPANY_ADMIN)  # not in `rows`
         rows = list(WorksIn.objects.filter(company=self.company))  # caller's own row already gone
         self.assertEqual(team.change_refusal(caller, self.admin, None, rows), team.LAST_ADMIN)
         self.assertEqual(team.change_refusal(caller, self.admin, WorksIn.VIEWER, rows), team.LAST_ADMIN)

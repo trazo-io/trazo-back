@@ -14,9 +14,15 @@ THE RULES, in the order they are checked:
     the account authored records in the company and keeps the company from being left with no
     member. The screen does not repeat those checks, so it does not touch the row.
   * Never the last Company Admin. Removing or demoting one must leave at least one Company Admin who
-    is not a setup operator. With the self rule above the caller is always that admin, so this only
-    bites when two admins act on each other at once; the view locks the team's rows to make that
-    race answer the same way every time.
+    is not a setup operator.
+
+NOTE: today the self rule already holds the last-admin rule. The caller is a non-setup Company Admin
+other than the target, read under the team lock, so the caller is always the admin who remains, and
+`LAST_ADMIN` cannot come back over HTTP. Two admins removing each other at once do not reach it
+either: the second request reads its own row as gone under the lock and gets `NOT_ADMIN` (403).
+The check stays because it states the invariant itself rather than leaning on another rule: if the
+self rule is ever relaxed (an admin leaving the team), the last admin is still refused. Its tests
+call `change_refusal` directly for that reason.
 """
 
 from users.models import WorksIn

@@ -174,8 +174,9 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         reads WorksIn on each request; the JWT carries the account, never its memberships.
         """
         with transaction.atomic():
-            # Lock the whole team, so two admins acting on each other at once cannot both pass the
-            # last-admin check, and an admin demoted meanwhile is read as demoted.
+            # Lock the whole team and read the caller's row under the lock: of two admins removing or
+            # demoting each other at once, the second finds its own row gone or demoted and is
+            # refused (NOT_ADMIN), so one Company Admin always remains.
             rows = list(WorksIn.objects.select_for_update().filter(company=self.company).order_by("pk"))
             target = next((row for row in rows if str(row.pk) == member_id), None)
             if target is None:
