@@ -297,7 +297,7 @@ items:
   asks: Did the operation surrender certification with outstanding non-compliances or conditions? Yes / No
   status: covered
   trazo:
-    where: 'modules/operation_profile.pdf: B. Certification history, surrendered with noncompliances or conditions outstanding'
+    where: 'modules/operation_profile.pdf: B. Certification history, surrendered with findings or conditions unresolved'
     questions:
     - certification_contract.history_surrendered_outstanding
     prints: modules/operation_profile.pdf §B
@@ -316,7 +316,7 @@ items:
     / No
   status: covered
   trazo:
-    where: 'modules/operation_profile.pdf: B. Certification history, application withdrawn with noncompliances outstanding'
+    where: 'modules/operation_profile.pdf: B. Certification history, application withdrawn with findings unresolved'
     questions:
     - certification_contract.history_withdrew_outstanding
     prints: modules/operation_profile.pdf §B

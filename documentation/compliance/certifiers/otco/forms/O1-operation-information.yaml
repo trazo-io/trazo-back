@@ -467,7 +467,7 @@ items:
     Yes / No.
   status: covered
   trazo:
-    where: "modules/operation_profile.pdf: B. Certification history, noncompliances still outstanding; 02s-renewal-status-and-routing.pdf also counts the current agent's notices with no resolution notice attached"
+    where: "modules/operation_profile.pdf: B. Certification history, a notice still unresolved; 02s-renewal-status-and-routing.pdf also counts the current agent's notices with no resolution notice attached"
     questions:
     - certification_contract.history_outstanding_noncompliances
     models:
@@ -537,7 +537,7 @@ items:
     points of non-compliance? Yes / No.
   status: covered
   trazo:
-    where: 'modules/operation_profile.pdf: B. Certification history, surrendered with noncompliances or conditions outstanding'
+    where: 'modules/operation_profile.pdf: B. Certification history, surrendered with findings or conditions unresolved'
     questions:
     - certification_contract.history_surrendered_outstanding
     prints: modules/operation_profile.pdf §B
@@ -557,7 +557,7 @@ items:
     points of non-compliance? Yes / No.
   status: covered
   trazo:
-    where: 'modules/operation_profile.pdf: B. Certification history, application withdrawn with noncompliances outstanding'
+    where: 'modules/operation_profile.pdf: B. Certification history, application withdrawn with findings unresolved'
     questions:
     - certification_contract.history_withdrew_outstanding
     prints: modules/operation_profile.pdf §B

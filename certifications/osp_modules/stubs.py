@@ -1692,6 +1692,11 @@ CERTIFICATION_CONTRACT = Module(
         #
         # No `compiles_to`: adverse history is read on the operation profile PDF, not woven into the
         # § 205.201(a)(6) narrative.
+        #
+        # The labels say "findings" and "notice ... unresolved", not the forms' "outstanding noncompliances":
+        # the packet never carries that word (`test_packet_wording_follows_records`, the no-verdict rule), and
+        # the module PDF prints every label, answered or not. `truthy`, not `eq True`: the PDF words a page
+        # gate from its condition, and a boolean has no options to name, so `eq True` printed "is True".
         ModulePage(
             key="b_certification_history",
             title=text("B. Certification history", "B. Historial de certificación"),
@@ -1721,7 +1726,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_prior_agents",
                     kind="textarea",
                     required=False,
-                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
                     label=text(
                         "Which certifying agencies, and the dates (or years) each certification was held?",
                         "¿Qué agencias certificadoras, y en qué fechas (o años) se tuvo cada certificación?",
@@ -1735,7 +1740,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_suspended",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
                     label=text(
                         "Was that certification, or the certification of any field or product, ever suspended?",
                         "¿Esa certificación, o la de algún campo o producto, fue suspendida alguna vez?",
@@ -1746,7 +1751,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_revoked",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
                     label=text(
                         "Was it ever revoked?",
                         "¿Fue revocada alguna vez?",
@@ -1757,22 +1762,22 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_surrendered_outstanding",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
                     label=text(
-                        "Was a certification ever surrendered while noncompliances or conditions were still "
-                        "outstanding?",
-                        "¿Se renunció alguna vez a una certificación con incumplimientos o condiciones todavía "
-                        "pendientes?",
+                        "Was a certification ever surrendered while the agency's findings or conditions were "
+                        "still unresolved?",
+                        "¿Se renunció alguna vez a una certificación con hallazgos o condiciones de la agencia "
+                        "todavía sin resolver?",
                     ),
                 ),
                 Question(
                     key="history_outstanding_noncompliances",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_ever_certified", "eq", True),),
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
                     label=text(
-                        "Is any noncompliance issued by any of those agencies still outstanding?",
-                        "¿Hay algún incumplimiento emitido por alguna de esas agencias que siga pendiente?",
+                        "Is any notice issued by any of those agencies still unresolved?",
+                        "¿Hay algún aviso emitido por alguna de esas agencias que siga sin resolver?",
                     ),
                     coaching=text(
                         "For your current agency, the Certifier inspections and notices card on the Organic "
@@ -1799,10 +1804,10 @@ CERTIFICATION_CONTRACT = Module(
                     kind="boolean",
                     required=False,
                     label=text(
-                        "Was an application for certification ever withdrawn while noncompliances were still "
-                        "outstanding?",
-                        "¿Se retiró alguna vez una solicitud de certificación con incumplimientos todavía "
-                        "pendientes?",
+                        "Was an application for certification ever withdrawn while the agency's findings were "
+                        "still unresolved?",
+                        "¿Se retiró alguna vez una solicitud de certificación con hallazgos de la agencia "
+                        "todavía sin resolver?",
                     ),
                     nop_cite="§ 205.401(c)",
                 ),
@@ -1820,12 +1825,12 @@ CERTIFICATION_CONTRACT = Module(
                 ),
             ),
             visible_when_any=(
-                Condition("history_suspended", "eq", True),
-                Condition("history_revoked", "eq", True),
-                Condition("history_surrendered_outstanding", "eq", True),
-                Condition("history_outstanding_noncompliances", "eq", True),
-                Condition("history_denied", "eq", True),
-                Condition("history_withdrew_outstanding", "eq", True),
+                Condition("history_suspended", "truthy"),
+                Condition("history_revoked", "truthy"),
+                Condition("history_surrendered_outstanding", "truthy"),
+                Condition("history_outstanding_noncompliances", "truthy"),
+                Condition("history_denied", "truthy"),
+                Condition("history_withdrew_outstanding", "truthy"),
             ),
             questions=(
                 Question(
@@ -1865,7 +1870,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_not_sold_since_suspension",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_suspended", "eq", True),),
+                    visible_when=(Condition("history_suspended", "truthy"),),
                     label=text(
                         "I affirm that no product has been sold, labeled or represented as organic since the "
                         "date of the suspension.",
@@ -1877,7 +1882,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_currently_suspended",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_suspended", "eq", True),),
+                    visible_when=(Condition("history_suspended", "truthy"),),
                     label=text(
                         "Is the operation suspended today?",
                         "¿La operación está suspendida hoy?",
@@ -1888,8 +1893,8 @@ CERTIFICATION_CONTRACT = Module(
                     kind="boolean",
                     required=False,
                     visible_when=(
-                        Condition("history_suspended", "eq", True),
-                        Condition("history_currently_suspended", "eq", True),
+                        Condition("history_suspended", "truthy"),
+                        Condition("history_currently_suspended", "truthy"),
                     ),
                     label=text(
                         "I request that the National Organic Program reinstate this operation's certification.",
@@ -1901,7 +1906,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_not_sold_since_revocation",
                     kind="boolean",
                     required=False,
-                    visible_when=(Condition("history_revoked", "eq", True),),
+                    visible_when=(Condition("history_revoked", "truthy"),),
                     label=text(
                         "I affirm that no product has been sold, labeled or represented as organic since the "
                         "date of the revocation.",

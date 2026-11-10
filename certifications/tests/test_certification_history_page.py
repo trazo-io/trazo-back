@@ -191,3 +191,34 @@ class OperationProfilePdfTests(TestCase):
         page_c = text[text.index("C. What happened") :]
         self.assertNotIn("suspended", page_c.split("Operation profile ·")[0])
         self.assertIn("C. What happened Does not apply", text)
+
+    def test_an_open_ever_certified_answer_keeps_page_c_waiting(self):
+        """The suspension questions are hidden only because "ever certified" is still open, and a yes there
+        could still open page C, so the page waits on that answer instead of reading as not applying (review
+        of back #363)."""
+        text = self._pdf({"history_denied": False, "history_withdrew_outstanding": False})
+        self.assertIn(
+            "C. What happened Not shown until “Has this operation, or anyone responsibly connected to it, ever "
+            "been certified organic” is answered.",
+            text,
+        )
+
+    def test_a_closed_page_c_names_its_gate_in_words(self):
+        """Every answer no: the reason says "is Yes", never the raw "True" of a boolean (review of #363)."""
+        text = self._pdf(
+            {"history_ever_certified": True, **{key: False for key in ADVERSE}, "history_prior_agents": "OTCO"}
+        )
+        page_c = text[text.index("C. What happened") :]
+        self.assertIn("Does not apply: asked only when", page_c)
+        self.assertIn("is Yes", page_c)
+        self.assertNotIn("True", page_c)
+
+    def test_the_profile_pdf_carries_no_compliance_verdict_word(self):
+        """Every label prints, answered or not, and the packet never says "noncompliance"
+        (`test_packet_wording_follows_records`)."""
+        import re
+
+        verdict = re.compile(r"non-?\s?complian|non-?\s?conformance|will be flagged", re.IGNORECASE)
+        for version, answers in enumerate(({}, {"history_ever_certified": True, "history_suspended": True}), 1):
+            with self.subTest(answers=answers):
+                self.assertEqual(verdict.findall(self._pdf(answers, version=version)), [])
