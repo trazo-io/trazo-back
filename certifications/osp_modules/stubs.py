@@ -332,11 +332,22 @@ G6_4_HANDLING = Module(
                             ),
                         ),
                         Option("cooling", text("Cooling / hydrocooling", "Enfriado / hidroenfriado")),
+                        # OTCO C7 7.3-1 (2026.11.30): the processing steps its list names that had no option. Cutting,
+                        # cooking, mixing and fermenting are the steps OTCO and CCOF route toward handling
+                        # certification, so they print by name rather than under "other".
+                        Option("freezing", text("Freezing", "Congelado")),
+                        Option("cutting", text("Cutting", "Cortado")),
+                        Option("cooking", text("Cooking", "Cocción")),
+                        Option("mixing", text("Mixing", "Mezclado")),
+                        Option("fermenting", text("Fermenting", "Fermentado")),
+                        Option("seed_cleaning", text("Seed cleaning", "Limpieza de semilla")),
                         Option(
                             "pest_treatment_nonfumigation",
                             text(
-                                "Fumigation-free pest treatment (e.g., freezing)",
-                                "Tratamiento de plagas sin fumigación (p. ej., congelado)",
+                                # Freezing is its own option since 2026.11.30; the example is dropped so it is not
+                                # named twice (review of back #366).
+                                "Fumigation-free pest treatment",
+                                "Tratamiento de plagas sin fumigación",
                             ),
                         ),
                         Option("other", text("Other (describe below)", "Otro (describe abajo)")),
@@ -356,6 +367,94 @@ G6_4_HANDLING = Module(
                     label=text("Describe the other handling step", "Describe el otro paso de manejo"),
                     visible_when=(Condition("handling_activities", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional on-farm handling step: {answer}."),
+                ),
+                # CCOF G6.4's applicability gate ("does not apply if you are handling both organic and nonorganic
+                # products, making multi-ingredient products, operating a multi-farm CSA, or performing complex
+                # handling"), OTCO C7 7.3-2 (ingredients from off the farm) and 7.3-3 (non-organic product processed
+                # at this facility), WSDA AGR 2121 L 3 (handling both certified and non-certified crops). Each one
+                # ticked prints a [REVIEW]: it is a certification-scope fact the agent acts on (2026.11.30).
+                Question(
+                    key="simple_handling_disqualifiers",
+                    kind="checkbox_group",
+                    label=text(
+                        "Does any of this apply to your on-farm handling? Check all that apply.",
+                        "¿Algo de esto aplica a tu manejo en la finca? Marca todo lo que corresponda.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.100(a)",
+                    visible_when=(
+                        Condition(
+                            "handling_activities",
+                            "includes_any",
+                            [
+                                "washing",
+                                "hulling_shelling",
+                                "drying",
+                                "sorting_grading",
+                                "packing",
+                                "cooling",
+                                "freezing",
+                                "cutting",
+                                "cooking",
+                                "mixing",
+                                "fermenting",
+                                "seed_cleaning",
+                                "pest_treatment_nonfumigation",
+                                "other",
+                            ],
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="On-farm handling scope: {answer}."),
+                    options=(
+                        Option(
+                            "nonorganic_handled_here",
+                            text(
+                                "Non-organic product is also handled or processed at this facility",
+                                "También se maneja o procesa producto no orgánico en esta instalación",
+                            ),
+                            review="Non-organic product is also handled at this facility; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
+                        ),
+                        Option(
+                            "off_farm_ingredients",
+                            text(
+                                "Products made here contain ingredients from off the farm (other than salt)",
+                                "Los productos hechos aquí contienen ingredientes de fuera de la finca (que no sean sal)",
+                            ),
+                            review="Products made here contain ingredients from off the farm; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
+                        ),
+                        Option(
+                            "multi_ingredient_products",
+                            text(
+                                "Multi-ingredient products are made here",
+                                "Aquí se hacen productos de varios ingredientes",
+                            ),
+                            review="Multi-ingredient products are made here; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
+                        ),
+                        Option(
+                            "multi_farm_csa",
+                            text(
+                                "A multi-farm CSA is operated (other farms' product is distributed)",
+                                "Se opera una CSA de varias fincas (se distribuye producto de otras fincas)",
+                            ),
+                            review="A multi-farm CSA is operated; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
+                        ),
+                        Option(
+                            "complex_handling",
+                            text(
+                                "Complex handling such as baking, brewing or extracting",
+                                "Manejo complejo como hornear, elaborar bebidas o extraer",
+                            ),
+                            review="Complex handling (baking, brewing, extracting) is done here; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
+                        ),
+                        Option(
+                            "none",
+                            text(
+                                "None of these: only my own organic crop, in simple steps",
+                                "Nada de esto: solo mi propio cultivo orgánico, en pasos simples",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -1216,6 +1315,24 @@ G6_4_HANDLING = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # OTCO C7 7.4-1 and WSDA AGR 2121 L 6: the yes/no the separation list below answered only by
+                # implication (2026.11.30).
+                Question(
+                    key="shares_handling_area_or_equipment",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Are the handling area, food contact surfaces or packing equipment used for both organic and "
+                        "non-organic crops?",
+                        "¿El área de manejo, las superficies en contacto con alimentos o el equipo de empaque se usan "
+                        "tanto para cultivos orgánicos como no orgánicos?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    compiles_to=CompileRule(
+                        template="Handling area or equipment shared by organic and non-organic crops: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 Question(
                     key="commingling_controls",
                     kind="checkbox_group",
@@ -1269,6 +1386,21 @@ G6_4_HANDLING = Module(
                                 "Contenedores etiquetados y dedicados durante todo el manejo",
                             ),
                         ),
+                        # OTCO C7 7.4-1's two controls that had no option (2026.11.30).
+                        Option(
+                            "organic_first",
+                            text(
+                                "Organic crops are processed before non-organic crops",
+                                "Los cultivos orgánicos se procesan antes que los no orgánicos",
+                            ),
+                        ),
+                        Option(
+                            "separate_storage_areas",
+                            text(
+                                "Organic and non-organic crops are stored in separate areas",
+                                "Los cultivos orgánicos y no orgánicos se almacenan en áreas separadas",
+                            ),
+                        ),
                         Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                 ),
@@ -1298,10 +1430,10 @@ G6_4_HANDLING = Module(
                         "empaque)?",
                     ),
                     coaching=text(
-                        "List each one on your materials list, under post-harvest materials, with its brand and "
-                        "manufacturer.",
-                        "Anota cada uno en tu lista de materiales, en materiales de poscosecha, con su marca y "
-                        "fabricante.",
+                        "Include processing aids, such as an anti-foaming agent in the wash line. List each one on your "
+                        "materials list, under post-harvest materials, with its brand and manufacturer.",
+                        "Incluye los auxiliares de proceso, como un antiespumante en la línea de lavado. Anota cada uno "
+                        "en tu lista de materiales, en materiales de poscosecha, con su marca y fabricante.",
                     ),
                     nop_cite="§ 205.270",
                     compiles_to=CompileRule(

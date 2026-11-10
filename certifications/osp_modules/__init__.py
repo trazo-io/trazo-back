@@ -321,7 +321,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   D5 to D6, OTCO O1 D-1E, D-2 to D-7): ever certified, suspended, revoked, surrendered or withdrawn with
 #   outstanding noncompliances, denied; then the explanation, the letters, the OTCO affirmations and the
 #   reinstatement request. Every question is new and optional, so no stored answer changes meaning.
-CONTENT_VERSION = "2026.11.29"
+# 2026.11.30: on-farm processing scope. G6.4 adds OTCO C7 7.3-1's missing processing steps (freezing, cutting, cooking,
+#   mixing, fermenting, seed cleaning), a scope question (non-organic product handled here, multi-ingredient or off-farm
+#   ingredients, a multi-farm CSA, complex handling; each prints a [REVIEW]) answering CCOF G6.4's applicability gate,
+#   OTCO 7.3-2/7.3-3 and WSDA L 3, and whether the handling area or equipment is shared (OTCO 7.4-1, WSDA L 6). New
+#   options and optional questions only.
+CONTENT_VERSION = "2026.11.30"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

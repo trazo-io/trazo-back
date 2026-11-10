@@ -472,6 +472,10 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-10: certifications.tests.test_on_farm_processing_scope joins. OTCO C7 7.3/7.4, WSDA L 3/6 and CCOF G6.4's
+      # applicability gate: the processing steps, the scope disqualifiers (each prints a [REVIEW]) and the shared
+      # handling area. Builds its own farm.
+      #
       # 2026-11-09: certifications.tests.test_post_harvest_water_packaging joins. Post-harvest water (potability, positive
       # tests, on-site treatment against the Safe Drinking Water Act, where crops are washed) and packaging (material,
       # safeguards, proof, reuse): OTCO C7 7.5 and 7.9, WSDA L 14 to 17, CCOF G6.1 B3. Builds its own farm.
@@ -764,6 +768,7 @@ jobs:
             certifications.tests.test_materials_post_harvest_d \
             certifications.tests.test_g3_1_container_greenhouse \
             certifications.tests.test_post_harvest_water_packaging \
+            certifications.tests.test_on_farm_processing_scope \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
