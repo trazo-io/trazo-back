@@ -627,11 +627,13 @@ G6_4_HANDLING = Module(
                         "List each step as it happens — for example: harvest → haul to hulling "
                         "shed → hull → dry → bulk storage → hand-sort → pack → cold storage → "
                         "ship. This step list is the flow chart your certifier expects to see for "
-                        "the handling operation.",
+                        "the handling operation. If you keep a drawn flow chart instead, attach it under Records "
+                        "and documents; either one answers the request.",
                         "Enumera cada paso en el orden en que ocurre — por ejemplo: cosecha → traslado al galpón de "
                         "descascarado → descascarado → secado → almacenamiento a granel → selección manual → "
                         "empacado → cámara fría → envío. Esta lista de pasos es el diagrama de flujo que tu "
-                        "certificador espera ver para la operación de manejo.",
+                        "certificador espera ver para la operación de manejo. Si tienes un diagrama de flujo "
+                        "dibujado, adjúntalo en Registros y documentos; cualquiera de los dos responde la solicitud.",
                     ),
                     nop_cite="§ 205.201(a)(1)",
                     compiles_to=CompileRule(
@@ -1620,10 +1622,13 @@ G6_4_HANDLING = Module(
                     ),
                     coaching=text(
                         "Not required to complete this module, but a site map or flow chart is "
-                        "exactly what a certifier asks for first at an on-site handling review.",
+                        "exactly what a certifier asks for first at an on-site handling review. A flow chart "
+                        "attached here and the written steps on the process page each answer the request for a "
+                        "flow chart or description.",
                         "No es obligatorio para completar este módulo, pero un mapa del sitio o "
                         "diagrama de flujo es justo lo primero que pide un certificador en una "
-                        "revisión de manejo en sitio.",
+                        "revisión de manejo en sitio. Un diagrama adjunto aquí y los pasos escritos en la página "
+                        "del proceso responden cada uno la solicitud de diagrama o descripción.",
                     ),
                     nop_cite="§ 205.103",
                 ),

@@ -22,13 +22,13 @@ items:
 - ref: A1
   asks: 'Do you own the crop while it is in storage? (Section A: crops stored at facilities the operation does
     not own or lease; not applicable, skip to section B.) No, skip to section B / Yes, complete this section.'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No question asks whether the operation owns the crop while it sits in someone else's storage; the off-farm
-    storage table is asked whenever an off-farm location is chosen, owned or not.
-  fix: A `owns_crop_in_offsite_storage` [radio] gating the facility table.
+    questions:
+    - g6_2_storage.storage_locations
+    - g6_2_storage.owns_crop_in_storage
+    prints: "modules/G6_2.pdf §A"
+  note: "Closed 2026-11-10 (content 2026.12.02)."
 - ref: A2
   asks: 'Describe the storage locations (crops stored at facilities the operation does not own or lease): Storage
     Facility Name & Address / Crops Stored / Documentation. Attach the Organic Certificate (OC) for each certified

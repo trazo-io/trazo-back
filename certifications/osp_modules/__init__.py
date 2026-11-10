@@ -331,7 +331,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   are sufficient and what else is used (OTCO 7.8-4/4a, CCOF G6.2 B5), whether National List materials are sufficient
 #   (CCOF B6), why a non-National List synthetic is needed with its letter (CCOF B7, WSDA M 7), and bait station use
 #   (WSDA M 5). G6.2's storage pest question now points to G9.0. New options and optional or gated questions only.
-CONTENT_VERSION = "2026.12.01"
+# 2026.12.02: storage detail. G6.2 asks whether the operation still owns the crop in off-farm storage (OTCO C7 7.7-1,
+#   CCOF G6.2 A1). G6.4's process-flow and facility-documents coaching say either a written flow or an attached flow
+#   chart answers OTCO 7.2-2 / CCOF G6.4 A3. One optional, gated question; coaching only otherwise.
+CONTENT_VERSION = "2026.12.02"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
