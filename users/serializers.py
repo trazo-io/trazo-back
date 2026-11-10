@@ -59,6 +59,43 @@ class WorksInSerializer(serializers.ModelSerializer):
         return obj.get_role_display()
 
 
+class CompanyMemberSerializer(WorksInSerializer):
+    """A row of Settings > Team: `WorksInSerializer` plus what the row's controls need.
+
+    `id` stays the COMPANY id it is in `WorksInSerializer`, because the user payload
+    (`UserSerializer.companies`) shares that class and the app reads `companies[n].id` as the
+    company. The membership is `membership_id`.
+
+    `can_manage` is `users.team.manage_refusal` for the caller, so the app renders Remove and the
+    role select only where the server accepts them. Context: `caller_membership`, the caller's
+    WorksIn row in this company (None for a superuser who is not a member).
+    """
+
+    membership_id = serializers.IntegerField(source="pk", read_only=True)
+    role_code = serializers.CharField(source="role", read_only=True)
+    is_you = serializers.SerializerMethodField()
+    can_manage = serializers.SerializerMethodField()
+
+    class Meta(WorksInSerializer.Meta):
+        fields = WorksInSerializer.Meta.fields + ("membership_id", "role_code", "is_you", "can_manage")
+
+    def get_is_you(self, obj):
+        caller = self.context.get("caller_membership")
+        return caller is not None and caller.pk == obj.pk
+
+    def get_can_manage(self, obj):
+        from users.team import manage_refusal
+
+        return manage_refusal(self.context.get("caller_membership"), obj) is None
+
+
+class MemberRoleSerializer(serializers.Serializer):
+    """The body of a role change. Only the role: the member is the one in the URL, looked up inside
+    the URL's company before this runs, so no id in the body can name another company's row."""
+
+    role = serializers.ChoiceField(choices=WorksIn.USER_ROLES)
+
+
 class BasicUserSerializer(serializers.ModelSerializer):
     """
     Serializer for User.
