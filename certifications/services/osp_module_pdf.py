@@ -2584,6 +2584,9 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
                 for line in answer_contradictions(question.key, value, answers):
                     story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
+                for line in _facility_pest_pointer(osp):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g9_0_facility_pest" and question.key == "material_tier":
                 from certifications.services.facility_pest import facility_entries, tier_review_lines
 
@@ -5612,3 +5615,38 @@ def generate_osp_packet(osp, scope=None) -> bytes:
         for _entry in manifest.attached():
             zf.writestr(_entry.zip_path, _entry.data)
     return out.getvalue()
+
+
+def _facility_pest_pointer(osp) -> list[str]:
+    """Where facility pest management is asked, and how far G9.0 is answered (CCOF G6.2 B3 to B9).
+
+    CCOF asks prevention, controls, materials, product protection and records on its storage form; Trazo asks them
+    once, in G9.0. The line says where, and states G9.0 as it stands: marked not applicable, not answered yet, or with
+    required questions still open. It never says "answered" for a section nobody has touched (review of back #368).
+    The file path is named only inside a packet build, and a changed-sections packet that leaves G9.0 out says so.
+    """
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.conditions import missing_required
+    from certifications.services.packet_attachments import current_manifest
+    from certifications.services.packet_scope import mark_omitted
+
+    entry = ((osp.module_responses or {}).get("modules") or {}).get("g9_0_facility_pest") or {}
+    where = "G9.0 Facility Pest Management" + (" (modules/G9_0.pdf)" if current_manifest() is not None else "")
+    lead = (
+        "Facility pest management (target pests, prevention, physical controls, materials, how product is protected "
+        f"and the records kept) is asked in {where}"
+    )
+    answers = entry.get("answers") or {}
+    if entry.get("not_applicable"):
+        state = ", which the operation marks not applicable."
+    elif not answers:
+        state = "; it is not answered yet."
+    else:
+        missing = missing_required(MODULES_BY_KEY["g9_0_facility_pest"], answers)
+        state = (
+            f"; {len(missing)} required question{'s' if len(missing) != 1 else ''} there "
+            f"{'are' if len(missing) != 1 else 'is'} not answered yet."
+            if missing
+            else "."
+        )
+    return [mark_omitted(lead + state)]

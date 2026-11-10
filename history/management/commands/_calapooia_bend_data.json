@@ -4086,6 +4086,16 @@
         "at": "2026-08-21T11:28:46.860061+00:00",
         "value": "none"
        },
+       "pest_controls_sufficient": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "yes"
+       },
+       "bait_station_use": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "none"
+        ]
+       },
        "mechanical_controls": {
         "at": "2026-08-21T11:28:46.860061+00:00",
         "value": [
@@ -4099,6 +4109,12 @@
          "sighting_logs",
          "structural_maintenance",
          "monitoring_device_records"
+        ]
+       },
+       "facility_pest_problems": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "mice"
         ]
        },
        "preventive_practices": {

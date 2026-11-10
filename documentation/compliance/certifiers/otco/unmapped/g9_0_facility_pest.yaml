@@ -42,3 +42,8 @@ questions:
     asks for no records, and OTCO collects monitoring and input application records under C12 §12.1,
     registered separately; these are the § 205.103 records an inspector reviews on site. The upload
     lets the packet carry them beside modules/G9_0.pdf.
+  g9_0_facility_pest.bait_station_use: "WSDA M 5's bait station placement and bait. OTCO C7 7.8 does not ask it."
+  g9_0_facility_pest.bait_station_use_other: "Free-text rider on bait_station_use."
+  g9_0_facility_pest.national_list_sufficient: "CCOF G6.2 B6. OTCO C7 asks whether the controls are sufficient (7.8-4), not separately whether National List materials are."
+  g9_0_facility_pest.synthetic_material_justification: "CCOF G6.2 B7 and WSDA M 7's justification for a synthetic not on the National List. OTCO C7 7.8-4b asks how such materials are kept from contaminating product, registered there, not the justification."
+  g9_0_facility_pest.synthetic_material_justification_upload: "Same as synthetic_material_justification."

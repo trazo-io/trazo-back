@@ -42,15 +42,13 @@ items:
 - ref: '2'
   asks: 'Check all potential pest problems in storage or post-harvest activity areas: Crawling insects
     / Birds / Flying insects / Rodents / Other.'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No question asks which pest categories are a problem — Trazo goes straight from 'do you use pest
-    control' to prevention/mechanical/material strategies without first naming the target pests, and CCOF's
-    grower forms do not ask this either.
-  fix: Add `facility_pest_problems` [checkbox_group] {crawling_insects, birds, flying_insects, rodents,
-    other} to page A, ahead of the strategy questions.
+    questions:
+    - g9_0_facility_pest.facility_pest_problems
+    - g9_0_facility_pest.facility_pest_problems_other
+    prints: "modules/G9_0.pdf §B (rats and mice answer rodents)"
+  note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: '3'
   asks: Describe the practices used to monitor and manage pest pressures. Include frequency of monitoring
     and how these practices are documented.
@@ -67,82 +65,49 @@ items:
     Pest Control Materials Natural or on the National List: Boric acid / Diatomaceous earth / Pheromone
     traps / Pyrethrum / Vitamin baits / Other. Pest Control Materials Not on the National List: Crack
     and crevice spray / Exterior Bait Stations / Fogging / Fumigation / Other.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g9_0_facility_pest.preventive_practices
     - g9_0_facility_pest.preventive_practices_other
     - g9_0_facility_pest.mechanical_controls
     - g9_0_facility_pest.material_tier
-    prints: modules/G9_0.pdf §B (preventive_practices, mechanical_controls); §C (material_tier)
-  gap: 'Substantively close but not exact: preventive_practices'' seven options do not distinguish ''incoming
-    product inspection'' or ''screened windows/sealed doors'' from the broader ''exclusion'' option WSDA
-    lists separately; mechanical_controls'' ''temperature'' option does not distinguish freezing from
-    heat treatment, and has no ''electrocutors'' equivalent. material_tier''s four-tier radio (none /
-    non-production-only / national-list / synthetic-approved) answers the natural-vs-not-on-National-List
-    split at a coarser grain than WSDA''s two separate materials checklists (which name specific products
-    like boric acid, diatomaceous earth, or fumigation). Unlike CCOF — where this same content sits on
-    G6.2 B3-B9 with no cross-reference from the form a reviewer actually opens — WSDA gives Facility Pest
-    Management its own section, so this content is directly discoverable here rather than buried in a
-    different form.'
-  fix: Add the missing distinct options to preventive_practices and mechanical_controls, and split material_tier's
-    national_list/synthetic_approved branches into WSDA's own named-material checklists.
+    prints: "modules/G9_0.pdf §B (WSDA's prevention and mechanical options), §C (material_tier; the materials themselves on the Materials List)"
+  note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: '5'
   asks: Describe how bait stations are used in storage or post-harvest activity areas. No bait stations
     are used. All bait stations are located on the exterior perimeter, outside areas used for organic
     handling. Stations are only baited with a nonsynthetic or organically allowed input material. Other
     — describe the type of bait used and where bait stations are located.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - g9_0_facility_pest.contamination_prevention
-    prints: modules/G9_0.pdf §C (contamination_prevention — bait_stations option)
-  gap: bait_stations is one flat checkbox inside the broader contamination_prevention list, with no location
-    detail (exterior-perimeter-only) or bait-material detail (nonsynthetic-only) — WSDA's four options
-    each carry a specific placement or material commitment that Trazo's single checkbox cannot distinguish.
-  fix: Add a dedicated `bait_station_usage` [radio] {none, exterior_perimeter_only, nonsynthetic_bait_only,
-    other} + detail text, replacing the flat bait_stations checkbox.
+    - g9_0_facility_pest.bait_station_use
+    - g9_0_facility_pest.bait_station_use_other
+    prints: "modules/G9_0.pdf §C"
+  note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: '6'
   asks: Describe how certified products and packaging are protected from contact with pest control materials.
     Not applicable, no pest control materials are used in organic handling or storage areas.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g9_0_facility_pest.material_tier
     - g9_0_facility_pest.contamination_prevention
     - g6_2_storage.storage_pest_control_materials_used
     - g6_2_storage.storage_pest_control_materials_description
-    prints: modules/G9_0.pdf §C (contamination_prevention); modules/G6_2.pdf §B (storage_pest_control_materials_used,
-      storage_pest_control_materials_description)
-  gap: 'Substantively covered — contamination_prevention offers seven options (bait stations, cracks/crevices,
-    product removed, covered, rinse before organic, residue testing, employee training) against WSDA''s
-    implicit describe-or-N/A framing, and G6.2 §B answers the same question again for storage areas
-    specifically, where `storage_pest_control_materials_used` supplies the explicit yes/no and
-    `storage_pest_control_materials_description` names the materials and how contact is prevented. Two
-    things remain. WSDA offers ''not applicable, no pest control materials are used'' as a stated option;
-    G9.0''s checkbox list has no such option distinct from leaving every box unchecked, so a certifier
-    cannot tell a deliberate N/A from an incomplete answer — though the G6.2 boolean does supply that
-    negative for storage areas. And the two modules can disagree, because nothing reconciles a ''no''
-    on `storage_pest_control_materials_used` against a G9.0 answer describing bait stations.'
-  fix: Add an exclusive `no_pest_control_materials_used` option to contamination_prevention.
+    prints: "modules/G9_0.pdf §C (material_tier none is the not-applicable answer; contamination_prevention when materials are used)"
+  note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: '7'
   asks: Prior to using a synthetic pest control material not on the National List, describe how you will
     first determine an allowed material is not effective to control the targeted pest. Not applicable,
     my business does not plan to use a synthetic input in organic handling or storage areas.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g9_0_facility_pest.synthetic_material_justification
+    - g9_0_facility_pest.synthetic_material_justification_upload
     - g9_0_facility_pest.material_tier
     - g9_0_facility_pest.preventive_measures_documentation
-    prints: modules/G9_0.pdf §C (material_tier, preventive_measures_documentation)
-  gap: 'material_tier=synthetic_approved implies certifier pre-approval exists, and preventive_measures_documentation
-    (visible for both national_list and synthetic_approved tiers) records how prevention was shown insufficient
-    before ANY material is applied — but neither asks the specific, narrower justification WSDA wants:
-    why National List materials specifically were determined ineffective before escalating to a non-listed
-    synthetic. No justification-letter upload or tracking exists to substantiate it, the same gap CCOF''s
-    own B7 register row describes.'
-  fix: Add an upload on G9.0 page C, visible when material_tier=synthetic_approved, cite § 205.271(d)
-    — same fix CCOF B7 proposes.
+    prints: "modules/G9_0.pdf §C (shown for a synthetic not on the National List; the letter under attachments/g9_0_facility_pest/ in the packet)"
+  note: "Closed 2026-11-10 (content 2026.12.01)."
