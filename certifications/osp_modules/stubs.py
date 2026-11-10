@@ -344,8 +344,10 @@ G6_4_HANDLING = Module(
                         Option(
                             "pest_treatment_nonfumigation",
                             text(
-                                "Fumigation-free pest treatment (e.g., freezing)",
-                                "Tratamiento de plagas sin fumigación (p. ej., congelado)",
+                                # Freezing is its own option since 2026.11.30; the example is dropped so it is not
+                                # named twice (review of back #366).
+                                "Fumigation-free pest treatment",
+                                "Tratamiento de plagas sin fumigación",
                             ),
                         ),
                         Option("other", text("Other (describe below)", "Otro (describe abajo)")),
@@ -410,7 +412,7 @@ G6_4_HANDLING = Module(
                                 "Non-organic product is also handled or processed at this facility",
                                 "También se maneja o procesa producto no orgánico en esta instalación",
                             ),
-                            review="Handling that may need a handling certification or the agent's handler forms; the certifying agent decides the scope.",
+                            review="Non-organic product is also handled at this facility; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
                         ),
                         Option(
                             "off_farm_ingredients",
@@ -418,7 +420,7 @@ G6_4_HANDLING = Module(
                                 "Products made here contain ingredients from off the farm (other than salt)",
                                 "Los productos hechos aquí contienen ingredientes de fuera de la finca (que no sean sal)",
                             ),
-                            review="Handling that may need a handling certification or the agent's handler forms; the certifying agent decides the scope.",
+                            review="Products made here contain ingredients from off the farm; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
                         ),
                         Option(
                             "multi_ingredient_products",
@@ -426,7 +428,7 @@ G6_4_HANDLING = Module(
                                 "Multi-ingredient products are made here",
                                 "Aquí se hacen productos de varios ingredientes",
                             ),
-                            review="Handling that may need a handling certification or the agent's handler forms; the certifying agent decides the scope.",
+                            review="Multi-ingredient products are made here; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
                         ),
                         Option(
                             "multi_farm_csa",
@@ -434,7 +436,7 @@ G6_4_HANDLING = Module(
                                 "A multi-farm CSA is operated (other farms' product is distributed)",
                                 "Se opera una CSA de varias fincas (se distribuye producto de otras fincas)",
                             ),
-                            review="Handling that may need a handling certification or the agent's handler forms; the certifying agent decides the scope.",
+                            review="A multi-farm CSA is operated; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
                         ),
                         Option(
                             "complex_handling",
@@ -442,7 +444,7 @@ G6_4_HANDLING = Module(
                                 "Complex handling such as baking, brewing or extracting",
                                 "Manejo complejo como hornear, elaborar bebidas o extraer",
                             ),
-                            review="Handling that may need a handling certification or the agent's handler forms; the certifying agent decides the scope.",
+                            review="Complex handling (baking, brewing, extracting) is done here; the certifying agent decides whether this needs a handling certification or the agent's handler forms.",
                         ),
                         Option(
                             "none",

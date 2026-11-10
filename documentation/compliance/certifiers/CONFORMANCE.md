@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 806 |
 | Rows that are not questions (instructions, Trazo interpretations) | 57 |
-| Covered | 473 |
-| Partial | 212 |
+| Covered | 474 |
+| Partial | 211 |
 | Not covered | 73 |
 | Out of scope (stated) | 48 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 0 |
-| Minor (P2 / P3) | 285 |
+| Minor (P2 / P3) | 284 |
 
 These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
 
@@ -1129,7 +1129,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When OTCO requires it:** C1 Crop Activities Checklist — "I/We conduct one or more of the following activities post-harvest: handle/process (e.g., wash/clean, cut, sort, mix, dry, blend, chill, freeze, package), transport, and/or store crops" → C7. The form's own header: fill out 7.1–7.9 for any on-farm facilities, 7.10 for any offsite facilities you contract with to process or store crops you still own.
 
-**42 questions** — Covered 29 · Partial 12 · Not covered 1
+**42 questions** — Covered 30 · Partial 11 · Not covered 1
 
 | Ref | What OTCO asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
@@ -1143,7 +1143,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 | 7.3-3 | Do you also process non-organic products at this facility? No / Yes — if yes, you may need an organic handling certification. | Covered | — | `g6_4_handling.simple_handling_disqualifiers` | — |
 | 7.3-4 | Do you use any substances to help process your products (processing aids)? No / Yes — list these products on the C11 Materials List form and submit a product label or a photo of the container. | Covered | — | `g6_4_handling.applies_post_harvest_inputs` · `g6_4_handling.post_harvest_input_types` · `g6_4_handling.post_harvest_input_types_other` · `g6_4_handling.wash_water_additives_added` · `materials_application.post_harvest_contact_listed` | — |
 | 7.4-1 | Is the handling area or equipment used for BOTH organic and non-organic crops? No (skip to section 7.5) / Yes. | Covered | — | `g6_4_handling.shares_handling_area_or_equipment` · `g6_4_handling.commingling_controls` · `g6_4_handling.commingling_controls_other` | — |
-| 7.4-1a | If yes, how do you make sure that organic crops are not commingled with or contaminated by nonorganic crops during processing? Separate equipment is used for organic crops / Cleaning equipment thoroughly between uses / Processing organic crops before non-organic crops / Storing organic and non-organic crops in separate areas / Other (explain). | Partial | P3 | `g6_4_handling.commingling_controls` · `g6_4_handling.commingling_controls_other` · `g6_2_storage.storage_shared_with_nonorganic` · `g6_2_storage.storage_shared_separation` | WSDA §L 3a marks the same field covered for a free "describe your procedures". OTCO offers a checklist, and two of its options have no Trazo option of their own: "processing organic crops before non-organic" (Trazo's `single_product_runs` is one lot at a time, not sequencing) and "storing organic and non-organic in separate areas", which is answered on G6.2 as the shared- storage boolean plus prose rather than here. Both can be written into `other`. **Fix:** Add an `organic_first_sequencing` option to commingling_controls and a coaching line pointing to G6.2 for storage separation. |
+| 7.4-1a | If yes, how do you make sure that organic crops are not commingled with or contaminated by nonorganic crops during processing? Separate equipment is used for organic crops / Cleaning equipment thoroughly between uses / Processing organic crops before non-organic crops / Storing organic and non-organic crops in separate areas / Other (explain). | Covered | — | `g6_4_handling.commingling_controls` · `g6_4_handling.commingling_controls_other` · `g6_2_storage.storage_shared_with_nonorganic` · `g6_2_storage.storage_shared_separation` | — |
 | 7.5 (not applicable) | N/A - no water used in contact with crops (skip to section 7.6) | Covered | — | `g6_4_handling.uses_water` | — |
 | 7.5-1 | Do you use water that comes in direct contact with your organic product (such as wash water)? No / Yes. | Covered | — | `g6_4_handling.uses_water` · `g6_4_handling.post_harvest_water_uses` | — |
 | 7.5-1a | If yes, what is the water source? Municipal Source / Well / Other (describe). | Covered | — | `g6_4_handling.water_source_sanitizer` · `g6_4_handling.post_harvest_water_source` | — |

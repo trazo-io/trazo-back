@@ -45,12 +45,24 @@ class OptionsTests(SimpleTestCase):
             "multi_farm_csa",
             "complex_handling",
         ):
-            self.assertIn("the certifying agent decides the scope", options[value].review)
+            self.assertIn("the certifying agent decides whether this needs", options[value].review)
         self.assertTrue(options["none"].exclusive)
 
     def test_otcos_two_commingling_controls_are_options(self):
         values = {o.value for o in _question("commingling_controls").options}
         self.assertTrue({"organic_first", "separate_storage_areas"} <= values)
+
+
+class ReviewFindingsTests(SimpleTestCase):
+    """Review of back #366."""
+
+    def test_each_disqualifier_review_names_its_own_case(self):
+        reviews = [o.review for o in _question("simple_handling_disqualifiers").options if o.review]
+        self.assertEqual(len(reviews), len(set(reviews)), "two disqualifiers print the same line")
+
+    def test_freezing_is_named_once(self):
+        labels = [o.label["en"].lower() for o in _question("handling_activities").options]
+        self.assertEqual(sum("freezing" in label for label in labels), 1, labels)
 
 
 class GateTests(SimpleTestCase):
@@ -80,7 +92,9 @@ class OnThePageTests(TestCase):
         page = " ".join(extract_text(io.BytesIO(generate_module_pdf(osp, "g6_4_handling"))).split())
         self.assertIn("Cooking", page)
         self.assertIn("Products made here contain ingredients from off the farm (other than salt)", page)
-        self.assertIn("[REVIEW] Handling that may need a handling certification", page)
+        self.assertIn(
+            "[REVIEW] Products made here contain ingredients from off the farm; the certifying agent decides", page
+        )
         self.assertIn("used for both organic and non-organic crops? Yes", page)
 
 

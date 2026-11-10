@@ -144,7 +144,7 @@ items:
     - g6_4_handling.handling_activities_other
     - g6_1_harvest_transport.handled_by_another_operation
     prints: "modules/G6_4.pdf §A (every OTCO processing step is an option, named as ticked); modules/G6_1.pdf §D (handled_by_another_operation answers the contract-processor skip)"
-  note: "Closed 2026-11-10 (content 2026.11.29)."
+  note: "Closed 2026-11-10 (content 2026.11.30)."
 - ref: 7.3-2
   asks: Do any processed products contain ingredients that come from off the farm (except salt)? No / Yes —
     if yes, you may need an organic handling certification; OTCO will contact you to discuss this.
@@ -153,7 +153,7 @@ items:
     questions:
     - g6_4_handling.simple_handling_disqualifiers
     prints: "modules/G6_4.pdf §A (off-farm ingredients ticked prints a [REVIEW] that the agent decides the certification scope; \"none of these\" is the No)"
-  note: "Closed 2026-11-10 (content 2026.11.29)."
+  note: "Closed 2026-11-10 (content 2026.11.30)."
 - ref: 7.3-3
   asks: Do you also process non-organic products at this facility? No / Yes — if yes, you may need an organic
     handling certification.
@@ -162,7 +162,7 @@ items:
     questions:
     - g6_4_handling.simple_handling_disqualifiers
     prints: "modules/G6_4.pdf §A (non-organic product handled here ticked prints a [REVIEW]; \"none of these\" is the No)"
-  note: "Closed 2026-11-10 (content 2026.11.29)."
+  note: "Closed 2026-11-10 (content 2026.11.30)."
 - ref: 7.3-4
   asks: Do you use any substances to help process your products (processing aids)? No / Yes — list these products
     on the C11 Materials List form and submit a product label or a photo of the container.
@@ -175,7 +175,7 @@ items:
     - g6_4_handling.wash_water_additives_added
     - materials_application.post_harvest_contact_listed
     prints: "modules/G6_4.pdf §C (applies_post_harvest_inputs, whose coaching names processing aids, and the input types, anti-foaming agents among them); modules/materials_application.pdf §A (each product, with its label or container photo on an OTCO plan)"
-  note: "Closed 2026-11-10 (content 2026.11.29)."
+  note: "Closed 2026-11-10 (content 2026.11.30)."
 - ref: 7.4-1
   asks: Is the handling area or equipment used for BOTH organic and non-organic crops? No (skip to section
     7.5) / Yes.
@@ -186,29 +186,23 @@ items:
     - g6_4_handling.commingling_controls
     - g6_4_handling.commingling_controls_other
     prints: "modules/G6_4.pdf §C (the yes/no, then the controls, OTCO's five among them)"
-  note: "Closed 2026-11-10 (content 2026.11.29)."
+  note: "Closed 2026-11-10 (content 2026.11.30)."
 - ref: 7.4-1a
   asks: If yes, how do you make sure that organic crops are not commingled with or contaminated by nonorganic
     crops during processing? Separate equipment is used for organic crops / Cleaning equipment thoroughly between
     uses / Processing organic crops before non-organic crops / Storing organic and non-organic crops in separate
     areas / Other (explain).
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     questions:
     - g6_4_handling.commingling_controls
     - g6_4_handling.commingling_controls_other
     - g6_2_storage.storage_shared_with_nonorganic
     - g6_2_storage.storage_shared_separation
-    prints: modules/G6_4.pdf §C (commingling_controls, other); modules/G6_2.pdf §A (storage_shared_with_nonorganic,
-      storage_shared_separation) for the separate-storage-areas option
-  gap: 'WSDA §L 3a marks the same field covered for a free "describe your procedures". OTCO offers a checklist,
-    and two of its options have no Trazo option of their own: "processing organic crops before non-organic"
-    (Trazo''s `single_product_runs` is one lot at a time, not sequencing) and "storing organic and non-organic
-    in separate areas", which is answered on G6.2 as the shared- storage boolean plus prose rather than here.
-    Both can be written into `other`.'
-  fix: Add an `organic_first_sequencing` option to commingling_controls and a coaching line pointing to G6.2
-    for storage separation.
+    prints: "modules/G6_4.pdf §C (commingling_controls, with organic_first and separate_storage_areas among OTCO's five; other);
+      modules/G6_2.pdf §A (storage_shared_with_nonorganic, storage_shared_separation)"
+  note: "Closed 2026-11-10 (content 2026.11.30): OTCO's two options with no Trazo option, processing organic first and
+    separate storage areas, are commingling_controls options (review of back #366)."
 - ref: 7.5 (not applicable)
   asks: N/A - no water used in contact with crops (skip to section 7.6)
   status: covered
