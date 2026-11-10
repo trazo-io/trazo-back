@@ -20,23 +20,16 @@ items:
     are handling both organic and nonorganic products, making multi-ingredient products, operating a multi-farm
     CSA, or performing complex handling such as baking, brewing, extracting, etc. — instead complete the Handler
     OSP forms indicated in the Guide to Handler OSP Forms.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.handling_activities
     - g6_4_handling.handling_activities_other
     - g6_4_handling.own_products_only
     - g6_4_handling.custom_handling_separation
-    prints: modules/G6_4.pdf §A (handling_activities); §B (own_products_only, custom_handling_separation)
-  gap: 'The gate''s job is to route an operation AWAY from this form, and its four disqualifiers are handling
-    nonorganic product alongside organic, multi-ingredient products, a multi-farm CSA, and complex handling
-    (baking, brewing, extracting). Trazo captures the positive activity list and own-vs-other-growers only:
-    nothing captures multi-ingredient production, and complex handling can land only in `handling_activities:
-    other`. A packet cannot show a certifier that this form legitimately applies — or legitimately does not.
-    (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered row.)'
-  fix: Add a `simple_handling_disqualifiers` checkbox_group carrying CCOF's four disqualifiers, so the answer
-    prints as the routing decision it is.
+    - g6_4_handling.simple_handling_disqualifiers
+    prints: "modules/G6_4.pdf §A (handling_activities; simple_handling_disqualifiers carries CCOF's four disqualifiers, each printing a [REVIEW] when ticked, and \"none of these\" when the form applies); §B (own_products_only, custom_handling_separation)"
+  note: "Closed 2026-11-10 (content 2026.11.29)."
 - ref: A1
   asks: Site Name & Location (full address).
   status: covered

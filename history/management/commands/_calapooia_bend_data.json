@@ -3774,6 +3774,10 @@
         "at": "2026-10-28T16:00:00+00:00",
         "value": true
        },
+       "shares_handling_area_or_equipment": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
+       },
        "commingling_controls": {
         "at": "2026-08-21T11:28:46.506704+00:00",
         "value": [
@@ -3790,6 +3794,12 @@
          "sorting_grading",
          "packing",
          "cooling"
+        ]
+       },
+       "simple_handling_disqualifiers": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "none"
         ]
        },
        "handling_records": {

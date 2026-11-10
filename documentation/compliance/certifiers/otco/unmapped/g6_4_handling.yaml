@@ -10,12 +10,6 @@
 # scope boundary (the same one wsda/unmapped/g6_4_handling.yaml records for AGR 2180), not an
 # omission. Records are collected on C12 Crop Recordkeeping, registered separately.
 questions:
-  g6_4_handling.applies_post_harvest_inputs: >-
-    Whether any input is applied directly to crops after harvest (WSDA AGR 2121 L 8). OTCO asks post-harvest materials on its materials list (C11) and sanitizers on C7 section 7.6, not whether inputs are applied as a separate question.
-  g6_4_handling.post_harvest_input_types: >-
-    The types of those inputs (WSDA L 9); same reason.
-  g6_4_handling.post_harvest_input_types_other: >-
-    The operator's own words for Other on the question above; same reason.
   g6_4_handling.post_harvest_input_recording: >-
     How each application is recorded (WSDA L 11); same reason.
   g6_4_handling.own_products_only: >-

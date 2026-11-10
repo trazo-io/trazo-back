@@ -137,87 +137,56 @@ items:
   asks: What processing activities are performed? Not applicable or use contract processor (skip to section
     7.4) / Washing / Sorting / Freezing / Cutting / Cooking / Mixing / Packaging / Fermenting / Drying/dehydrating
     / Seed Cleaning / Other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.handling_activities
     - g6_4_handling.handling_activities_other
     - g6_1_harvest_transport.handled_by_another_operation
-    prints: modules/G6_4.pdf §A (handling_activities, other); modules/G6_1.pdf §D (handled_by_another_operation
-      answers the 'use contract processor' option)
-  gap: Washing, sorting, packaging and drying map to Trazo options and the module's own N/A plus `handled_by_another_operation`
-    cover OTCO's skip option. Five of OTCO's activities — cutting, cooking, mixing, fermenting, seed cleaning
-    — and freezing have no option and land only in `other`. Those are exactly the activities C1 routes toward
-    handling certification ("Contact OTCO to determine whether Handling Certification scope is required"),
-    so the packet cannot show the routing decision the checklist exists to make — the same shape CCOF G6.4's
-    applicability row records.
-  fix: Add the missing activities as options (or a `complex_processing` group carrying them) so a complex-handling
-    answer prints as the scope signal it is, alongside the `simple_handling_disqualifiers` group CCOF's applicability
-    row proposes.
+    prints: "modules/G6_4.pdf §A (every OTCO processing step is an option, named as ticked); modules/G6_1.pdf §D (handled_by_another_operation answers the contract-processor skip)"
+  note: "Closed 2026-11-10 (content 2026.11.29)."
 - ref: 7.3-2
   asks: Do any processed products contain ingredients that come from off the farm (except salt)? No / Yes —
     if yes, you may need an organic handling certification; OTCO will contact you to discuss this.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g6_4_handling.handling_activities
-    prints: —
-  gap: No question anywhere asks whether a product made on the farm contains off-farm ingredients. CCOF's G6.4
-    applicability gate names multi-ingredient products as a disqualifier and its register row records the same
-    absence. For a raw-crop grower the answer is "No", but the packet cannot state it, and a "Yes" is a certification-scope
-    fact OTCO acts on.
-  fix: A `simple_handling_disqualifiers` checkbox_group on G6.4 page A {off_farm_ingredients, nonorganic_processing,
-    complex_handling, none} — one field answers CCOF's gate and OTCO's 7.3-2 / 7.3-3.
+    questions:
+    - g6_4_handling.simple_handling_disqualifiers
+    prints: "modules/G6_4.pdf §A (off-farm ingredients ticked prints a [REVIEW] that the agent decides the certification scope; \"none of these\" is the No)"
+  note: "Closed 2026-11-10 (content 2026.11.29)."
 - ref: 7.3-3
   asks: Do you also process non-organic products at this facility? No / Yes — if yes, you may need an organic
     handling certification.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - g6_0_production.split_operation
-    prints: modules/G6_0.pdf §A (split_operation) — operation-wide, not printed on G6.4
-  gap: Reuses WSDA §L 3. `split_operation` states whether the operation produces or handles any conventional
-    crop at all, asked once on G6.0 — not whether non-organic product goes through THIS facility. `own_products_only`
-    on G6.4 asks a different thing (another grower's organic crop, not conventional product).
-  fix: A handling-step `handles_noncertified_crops_here` [boolean] on G6.4 page B, defaulting from split_operation
-    (the WSDA L3 fix), printed in the G6.4 §B block.
+    - g6_4_handling.simple_handling_disqualifiers
+    prints: "modules/G6_4.pdf §A (non-organic product handled here ticked prints a [REVIEW]; \"none of these\" is the No)"
+  note: "Closed 2026-11-10 (content 2026.11.29)."
 - ref: 7.3-4
   asks: Do you use any substances to help process your products (processing aids)? No / Yes — list these products
     on the C11 Materials List form and submit a product label or a photo of the container.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - materials_application.post_harvest_contact_listed
-    - materials_application.post_harvest_contact_none_used
+    - g6_4_handling.applies_post_harvest_inputs
+    - g6_4_handling.post_harvest_input_types
+    - g6_4_handling.post_harvest_input_types_other
     - g6_4_handling.wash_water_additives_added
-    prints: modules/materials_application.pdf §A post-harvest contact block and §B (post_harvest_contact_listed);
-      workbooks/Materials List.xlsx (the materials themselves); modules/G6_4.pdf §C (wash_water_additives_added)
-  gap: Reuses WSDA §L 9. Since 2026-09-12 `wash_water_additives_added` is the yes/no for the commonest processing
-    aid — anything added to contact water — with coaching that sends each to the materials list, and the operator's
-    post-harvest rows print under their own heading. A processing aid that is not a water additive (an anti-foam,
-    a release agent) still has no yes/no of its own, and the product label or container photo OTCO asks for
-    has no slot.
-  fix: A `processing_aids_used` [boolean] on G6.4 page C covering non-water aids; carry the label/photo through
-    the attachment loop.
+    - materials_application.post_harvest_contact_listed
+    prints: "modules/G6_4.pdf §C (applies_post_harvest_inputs, whose coaching names processing aids, and the input types, anti-foaming agents among them); modules/materials_application.pdf §A (each product, with its label or container photo on an OTCO plan)"
+  note: "Closed 2026-11-10 (content 2026.11.29)."
 - ref: 7.4-1
   asks: Is the handling area or equipment used for BOTH organic and non-organic crops? No (skip to section
     7.5) / Yes.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_4_handling.shares_handling_area_or_equipment
     - g6_4_handling.commingling_controls
-    prints: modules/G6_4.pdf §C (commingling_controls — dedicated_equipment / organic_only_facility options)
-  gap: Reuses WSDA §L 6. `commingling_controls` is a list of separation approaches; selecting `dedicated_equipment`
-    or `organic_only_facility` implicitly answers "no, not shared", but there is no standalone yes/no gate
-    matching OTCO's question and no distinct downstream branch for the case where the area or equipment IS
-    shared.
-  fix: A `shares_handling_area_or_equipment` [boolean] gate on G6.4 page C, pre-filled from whether commingling_controls
-    excludes dedicated_equipment and organic_only_facility.
+    - g6_4_handling.commingling_controls_other
+    prints: "modules/G6_4.pdf §C (the yes/no, then the controls, OTCO's five among them)"
+  note: "Closed 2026-11-10 (content 2026.11.29)."
 - ref: 7.4-1a
   asks: If yes, how do you make sure that organic crops are not commingled with or contaminated by nonorganic
     crops during processing? Separate equipment is used for organic crops / Cleaning equipment thoroughly between
