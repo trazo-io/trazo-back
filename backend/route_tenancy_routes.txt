@@ -256,6 +256,8 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)\.(?P<format
 api/^^companies/(?P<company_pk>[^/.]+)/establishments\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<pk>[^/.]+)/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^^companies/(?P<pk>[^/.]+)/members/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=members
+api/^^companies/(?P<pk>[^/.]+)/members/(?P<member_id>[0-9]+)/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=member,patch=member
+api/^^companies/(?P<pk>[^/.]+)/members/(?P<member_id>[0-9]+)\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=member,patch=member
 api/^^companies/(?P<pk>[^/.]+)/members\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=members
 api/^^companies/(?P<pk>[^/.]+)/rotate-invitation-code/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=rotate_invitation_code
 api/^^companies/(?P<pk>[^/.]+)/rotate-invitation-code\.(?P<format>[a-z0-9]+)/?$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=rotate_invitation_code
