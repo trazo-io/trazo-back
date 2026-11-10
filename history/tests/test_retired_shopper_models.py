@@ -1,4 +1,4 @@
-"""Five shopper models retired in two steps: history 0254, then a drop of the tables.
+"""Five shopper models retired in two steps: history 0254 and 0255.
 
 UserFavorite, UserProductComparison, UserShoppingGoal, UserShoppingInsight and
 UserLocalRecommendation: no screen read or wrote them, and production held 0 rows in all seven
@@ -8,11 +8,12 @@ and `toggle_favorite` turned integer production ids into public UUIDs.
 UserLocalRecommendation carried `carbon_score`, a stored 0-100 grade, the last exemption in
 `carbon/tests/test_no_score_in_any_carbon_payload.py`.
 
-0254 takes the models out of the state, drops the foreign keys from their tables to live ones and
-leaves the tables, because containers on the previous code still read them when they delete a user,
-a production or an establishment. These tests hold that state, the refusal to run over a row, the
-5 s lock budget, the step reversing, the routes staying gone and the census accepting a retired
-table leaving only when it was empty.
+0254 (#360) took the models out of the state, dropped the foreign keys from their tables to live
+ones and left the tables, because containers on the previous code still read them when they deleted
+a user, a production or an establishment. 0255 drops the seven tables. These tests hold the end
+state, each step's refusal to run over a row and its 5 s lock budget, the chain reversing step by
+step, the routes staying gone and the census accepting a retired table leaving only when it was
+empty.
 """
 
 import importlib
@@ -36,6 +37,7 @@ MODELS = (
 )
 BEFORE = "0253_backfill_activity_link"
 STEP_1 = "0254_retire_shopper_models"
+STEP_2 = "0255_drop_shopper_tables"
 
 #: path -> what it served. Each one must stay unrouted.
 RETIRED_ROUTES = {
@@ -85,7 +87,7 @@ class TheRoutesStayRetiredTests(SimpleTestCase):
                 resolve(path)
 
 
-class TheModelsAreGoneTablesStayTests(TestCase):
+class TheModelsAndTablesAreGoneTests(TestCase):
     def test_no_model_is_left_in_the_registry(self):
         for name in MODELS:
             with self.assertRaises(LookupError, msg=name):
@@ -95,12 +97,12 @@ class TheModelsAreGoneTablesStayTests(TestCase):
         """The signed-in consumer dashboard reads it; it is not part of this retirement."""
         self.assertEqual(apps.get_model("history", "UserImpactSummary")._meta.db_table, "history_userimpactsummary")
 
-    def test_the_tables_are_still_there_with_no_foreign_key_to_a_live_table(self):
-        step_1 = _migration(STEP_1)
-        self.assertTrue(set(step_1.TABLES) <= _tables(), set(step_1.TABLES) - _tables())
-        with connection.cursor() as cursor:
-            self.assertEqual(step_1.outward_foreign_keys(cursor), [])
-            self.assertEqual(step_1.rows_held(cursor), {})
+    def test_no_table_is_left(self):
+        self.assertIn("history_userimpactsummary", _tables())  # the check read the real catalogue
+        self.assertEqual(set(_migration(STEP_2).TABLES) & _tables(), set())
+
+    def test_both_steps_freeze_the_same_tables(self):
+        self.assertEqual(set(_migration(STEP_1).TABLES), set(_migration(STEP_2).TABLES))
 
     def test_the_census_declares_every_retired_table(self):
         retired = {f"history.{name}" for name in MODELS} | {
@@ -111,15 +113,15 @@ class TheModelsAreGoneTablesStayTests(TestCase):
         self.assertNotIn("history.UserImpactSummary", census.RETIRED_TABLES)
 
 
-class TheStepTests(TransactionTestCase):
-    """Migrates the test database back before 0254 and forward again.
+class TheChainTests(TransactionTestCase):
+    """Migrates the test database back step by step and forward again.
 
     `TransactionTestCase`: migrating cannot happen inside a test transaction.
     """
 
     def tearDown(self):
         with connection.cursor() as cursor:
-            for table in _migration(STEP_1).TABLES:
+            for table in _migration(STEP_2).TABLES:
                 if table in _tables():
                     cursor.execute(f'DELETE FROM "{table}"')  # a row would stop the way forward
         _migrate_history_to(None)
@@ -135,19 +137,58 @@ class TheStepTests(TransactionTestCase):
                 [user.pk],
             )
 
-    def test_the_step_refuses_to_run_over_a_row(self):
-        step_1 = _migration(STEP_1)
-        editor = SimpleNamespace(connection=connection)
-        step_1.refuse_if_a_row_exists(None, editor)  # empty: runs
-        self._insert_a_goal()
-        with self.assertRaisesMessage(RuntimeError, "{'history_usershoppinggoal': 1}"):
-            step_1.refuse_if_a_row_exists(None, editor)
+    def test_back_to_step_1_the_tables_return_as_step_1_left_them(self):
+        _migrate_history_to(STEP_1)
+        step_1, step_2 = _migration(STEP_1), _migration(STEP_2)
+        self.assertTrue(set(step_2.TABLES) <= _tables(), set(step_2.TABLES) - _tables())
+        with connection.cursor() as cursor:
+            self.assertEqual(step_2.rows_held(cursor), {})
+            self.assertEqual(step_1.outward_foreign_keys(cursor), [])
+            cursor.execute(
+                "SELECT c.conrelid::regclass::text, c.confrelid::regclass::text FROM pg_constraint c "
+                "WHERE c.contype = 'f' AND c.conrelid::regclass::text = ANY(%s) ORDER BY 1",
+                [list(step_2.TABLES)],
+            )
+            internal = cursor.fetchall()
+        self.assertEqual(  # the two foreign keys 0254 kept, between the retired tables themselves
+            internal,
+            [
+                (
+                    "history_userlocalrecommendation_recommended_products",
+                    "history_userlocalrecommendation",
+                ),
+                (
+                    "history_userproductcomparison_products",
+                    "history_userproductcomparison",
+                ),
+            ],
+        )
+        for index, table, columns in step_2.RAW_INDEXES:  # history 0017's, outside the model state
+            with connection.cursor() as cursor:
+                constraints = connection.introspection.get_constraints(cursor, table)
+            self.assertIn(index, constraints, table)
+            self.assertEqual(constraints[index]["columns"], list(columns), index)
 
-    def test_the_foreign_key_steps_wait_at_most_5_seconds_for_a_lock(self):
+    def test_both_guards_refuse_a_row(self):
+        _migrate_history_to(STEP_1)
+        editor = SimpleNamespace(connection=connection)
+        steps = (_migration(STEP_1), _migration(STEP_2))
+        for step in steps:
+            step.refuse_if_a_row_exists(None, editor)  # empty: runs
+        self._insert_a_goal()
+        for step in steps:
+            with self.assertRaisesMessage(RuntimeError, "{'history_usershoppinggoal': 1}", msg=step.__name__):
+                step.refuse_if_a_row_exists(None, editor)
+
+    def test_step_1s_foreign_key_steps_wait_at_most_5_seconds_for_a_lock(self):
         """They lock users_user and history_history too: never queue every login behind them."""
+        _migrate_history_to(STEP_1)
         step_1 = _migration(STEP_1)
         editor = SimpleNamespace(connection=connection)
-        for step in (step_1.restore_outward_foreign_keys, step_1.drop_outward_foreign_keys):
+        for step in (
+            step_1.restore_outward_foreign_keys,
+            step_1.drop_outward_foreign_keys,
+        ):
             try:
                 with transaction.atomic():
                     with connection.cursor() as cursor:
@@ -155,11 +196,27 @@ class TheStepTests(TransactionTestCase):
                         step(None, editor)
                         cursor.execute("SHOW lock_timeout")
                         self.assertEqual(cursor.fetchone()[0], "5s", step.__name__)
-                    raise _Rollback  # leave the database as 0254 left it
+                    raise _Rollback  # leave the database as step 1 left it
             except _Rollback:
                 pass
 
-    def test_back_before_the_step_the_models_and_foreign_keys_return(self):
+    def test_step_2s_reverse_waits_at_most_5_seconds_for_a_lock(self):
+        """It adds and drops foreign keys to users_user, history_history and company_establishment."""
+        step_2 = _migration(STEP_2)
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL lock_timeout = 0")
+                with connection.schema_editor(atomic=False) as editor:
+                    step_2.recreate_as_0254_left_them(None, editor)
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW lock_timeout")
+                    self.assertEqual(cursor.fetchone()[0], "5s")
+                raise _Rollback  # leave the tables dropped
+        except _Rollback:
+            pass
+
+    def test_back_before_step_1_the_models_and_foreign_keys_return(self):
         _migrate_history_to(BEFORE)
         state = MigrationExecutor(connection).loader.project_state(("history", BEFORE))
         for name in MODELS:
@@ -167,7 +224,10 @@ class TheStepTests(TransactionTestCase):
         step_1 = _migration(STEP_1)
         with connection.cursor() as cursor:
             restored = step_1.outward_foreign_keys(cursor)
-        self.assertEqual(sorted(restored), sorted((table, name) for table, _, _, name in step_1.OUTWARD_FOREIGN_KEYS))
+        self.assertEqual(
+            sorted(restored),
+            sorted((table, name) for table, _, _, name in step_1.OUTWARD_FOREIGN_KEYS),
+        )
 
 
 class CensusAcrossTheRetirementTests(TransactionTestCase):

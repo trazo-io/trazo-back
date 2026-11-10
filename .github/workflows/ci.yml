@@ -496,6 +496,11 @@ jobs:
       # and OTCO C7 7.10-2's columns print under its handler, a multi-ingredient product's ingredient statement
       # ships under handlers/, and the route is tenancy-scoped. Builds its own farm; no sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_certification_history_page joins. The Operation profile's pages B
+      # (certification history) and C (what happened): who is asked what, page C opening on any one adverse yes,
+      # every question optional, and the PDF never printing an unanswered question as No. Builds its own farm;
+      # no sibling repo.
+      #
       # 2026-11-08: certifications.tests.test_inspection_packet joins. 02s lists the operation's last inspection,
       # every item with no resolution notice attached and the ones resolved in the last year, with each file
       # attached under inspections/; an empty record says "in Trazo". Builds its own farm; no sibling repo.
@@ -632,6 +637,11 @@ jobs:
       # 2026-11-09: history.tests.test_retired_shopper_models joins. Five shopper models leave the
       # state in history 0254 with their tables kept; the step refuses a row, waits at most 5 s for
       # a lock and reverses, and their routes stay unrouted. It does not read the sibling repo.
+      #
+      # 2026-11-10: company.tests.test_team_members joins. A Company Admin removes a member or
+      # changes their role; never themself, never the setup operator's row, never the last admin.
+      # Another company's membership id answers exactly like a missing one, and a removed member's
+      # existing cookie is refused on the next request. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -752,6 +762,7 @@ jobs:
             certifications.tests.test_brand_owners \
             certifications.tests.test_certifier_inspections \
             certifications.tests.test_inspection_packet \
+            certifications.tests.test_certification_history_page \
             certifications.tests.test_facility_products \
             certifications.tests.test_materials_production_aids \
             certifications.tests.test_materials_post_harvest_d \
@@ -895,6 +906,7 @@ jobs:
             backend.tests.test_flat_routes_fail_closed \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \
+            company.tests.test_team_members \
             company.tests.test_fk_writes_scoped \
             company.tests.test_establishment_actions_scoped \
             company.tests.test_dashboard_transparency_aggregation \

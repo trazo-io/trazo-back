@@ -1,4 +1,4 @@
-"""On-farm processing scope (content 2026.11.29).
+"""On-farm processing scope (content 2026.11.30).
 
 OTCO C7 7.3-1 lists processing steps G6.4 had no option for (freezing, cutting, cooking, mixing, fermenting, seed
 cleaning); 7.3-2 and 7.3-3 ask whether products carry off-farm ingredients and whether non-organic product is processed

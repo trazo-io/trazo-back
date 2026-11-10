@@ -268,6 +268,8 @@ ROUTE_TENANCY = {
         outsider_tests=(
             f"{_CO}.CompanyTenantIsolationTests.test_outsider_cannot_retrieve_another_company",
             f"{_CO}.CompanyTenantIsolationTests.test_outsider_cannot_edit_another_company",
+            "company.tests.test_team_members.MemberTenancyTests.test_another_companys_membership_under_own_url_is_a_plain_404",
+            "company.tests.test_team_members.MemberTenancyTests.test_outsider_admin_cannot_change_another_companys_team",
         ),
     ),
     "company.views.EstablishmentViewSet": Route(

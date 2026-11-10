@@ -4,3 +4,17 @@ questions:
     Forms' / 'Guide to Retail Establishment OSP Forms') rather than to any of the Contract's own
     lettered/numbered questions (A-H); Trazo captures the choice as a structured field instead of
     a forms checklist."
+  certification_contract.history_outstanding_noncompliances: "OTCO O1 D-1E. CCOF's Contract asks only whether
+    a certification was surrendered or an application withdrawn with noncompliances outstanding (D5b, D5d),
+    not whether any is outstanding today; asked on the same page for OTCO."
+  certification_contract.history_not_sold_since_suspension: "OTCO O1 D-2A (new in OTCO's rev. 2026/03/25).
+    CCOF's Contract asks for no affirmation after a suspension."
+  certification_contract.history_currently_suspended: "OTCO O1 D-2B's precondition (a request to reinstate
+    an operation suspended today). CCOF's Contract has no reinstatement question."
+  certification_contract.history_request_reinstatement: "OTCO O1 D-2B, the request that NOP reinstate a
+    suspended operation (§ 205.662(f)(1)). CCOF's Contract has no such request."
+  certification_contract.history_not_sold_since_revocation: "OTCO O1 D-3A (new in OTCO's rev. 2026/03/25).
+    CCOF's Contract asks for no affirmation after a revocation."
+  certification_contract.history_this_agent_records: "An info line on page C, not a question: it says the
+    current agent's notices already print on 02s with their letters, so the upload is for earlier agencies'
+    letters. CCOF D6 is answered by the explanation and the upload."

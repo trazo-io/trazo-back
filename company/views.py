@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Avg, Count, Q
 from django.db.models.functions import ExtractDay, ExtractMonth, ExtractWeekDay
 from django.shortcuts import get_object_or_404
@@ -10,6 +11,7 @@ from django.utils.decorators import method_decorator
 
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -23,8 +25,9 @@ from reviews.models import Review
 from reviews.serializers import ListReviewSerializer
 from subscriptions.gating import require_compliance_exports
 from subscriptions.permissions import HasEstablishmentCreationPermission
+from users import team
 from users.models import WorksIn
-from users.serializers import WorksInSerializer
+from users.serializers import CompanyMemberSerializer, MemberRoleSerializer
 from users.signup_alerts import alert_new_company
 
 logger = logging.getLogger(__name__)
@@ -87,7 +90,7 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         return queryset.filter(company_workers__user=self.request.user).distinct()
 
     def get_permissions(self):
-        if self.action in ["update", "partial_update", "destroy", "rotate_invitation_code"]:
+        if self.action in ["update", "partial_update", "destroy", "rotate_invitation_code", "member"]:
             return [IsCompanyAdmin()]
         return super().get_permissions()
 
@@ -150,10 +153,79 @@ class CompanyViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def members(self, request, pk=None, company_pk=None):
-        members = WorksIn.objects.filter(company=self.get_object())
+        company = self.get_object()
+        members = WorksIn.objects.filter(company=company).select_related("user", "company").order_by("pk")
+        caller = next((row for row in members if row.user_id == request.user.pk), None)
         return Response(
-            WorksInSerializer(members, many=True).data,
+            CompanyMemberSerializer(members, many=True, context={"caller_membership": caller}).data,
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["patch", "delete"], url_path=r"members/(?P<member_id>[0-9]+)", url_name="member")
+    def member(self, request, pk=None, company_pk=None, member_id=None):
+        """Change one member's role (PATCH {"role": "CA"|"FM"|"VW"}) or remove them (DELETE).
+
+        Company Admins of the URL's company only (`get_permissions`); the rules are `users.team`.
+        The member is looked up INSIDE the URL's company, so another company's membership id gets
+        the same 404 as an id that does not exist, before the body is read.
+
+        Removal deletes the WorksIn row and nothing else: the records the person wrote stay, under
+        their name. Their next request is refused, because every company permission and queryset
+        reads WorksIn on each request; the JWT carries the account, never its memberships.
+        """
+        with transaction.atomic():
+            # Lock the whole team and read the caller's row under the lock: of two admins removing or
+            # demoting each other at once, the second finds its own row gone or demoted and is
+            # refused (NOT_ADMIN), so one Company Admin always remains.
+            rows = list(WorksIn.objects.select_for_update().filter(company=self.company).order_by("pk"))
+            target = next((row for row in rows if str(row.pk) == member_id), None)
+            if target is None:
+                raise NotFound()
+            caller = next((row for row in rows if row.user_id == request.user.pk), None)
+
+            new_role = None
+            if request.method == "PATCH":
+                body = MemberRoleSerializer(data=request.data)
+                body.is_valid(raise_exception=True)
+                new_role = body.validated_data["role"]
+
+            refusal = team.change_refusal(caller, target, new_role, rows)
+            if refusal in (team.NOT_ADMIN, team.SETUP_OPERATOR_CALLER):
+                raise PermissionDenied({"detail": team.REFUSALS[refusal], "code": refusal})
+            if refusal:
+                return Response({"detail": team.REFUSALS[refusal], "code": refusal}, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.method == "DELETE":
+                logger.info(
+                    "team: user %s removed membership %s (user %s, role %s) from company %s",
+                    request.user.pk,
+                    target.pk,
+                    target.user_id,
+                    target.role,
+                    self.company.pk,
+                )
+                target.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+
+            if new_role != target.role:
+                if target.role == WorksIn.COMPANY_ADMIN:
+                    # A Company Admin reaches every farm without a farm list. Keep exactly that
+                    # reach after the demotion, rather than whatever list the row happened to hold.
+                    target.establishments_in_charge.set(self.company.establishment_set.all())
+                logger.info(
+                    "team: user %s changed membership %s (user %s) in company %s from %s to %s",
+                    request.user.pk,
+                    target.pk,
+                    target.user_id,
+                    self.company.pk,
+                    target.role,
+                    new_role,
+                )
+                target.role = new_role
+                target.save(update_fields=["role"])
+
+        return Response(
+            CompanyMemberSerializer(target, context={"caller_membership": caller}).data, status=status.HTTP_200_OK
         )
 
     @action(detail=True, methods=["post"], url_path="rotate-invitation-code")
