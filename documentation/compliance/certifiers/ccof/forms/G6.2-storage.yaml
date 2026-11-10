@@ -101,7 +101,7 @@ items:
     - g9_0_facility_pest.preventive_practices
     - g9_0_facility_pest.preventive_practices_other
     - g6_2_storage.storage_pest_control_materials_used
-    prints: "modules/G9_0.pdf §B; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §B; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: B4
   asks: Which of the following practices do you use to control pests in organic storage areas? N/A, prevention
@@ -113,7 +113,7 @@ items:
     questions:
     - g9_0_facility_pest.mechanical_controls
     - g9_0_facility_pest.material_tier
-    prints: "modules/G9_0.pdf §B, §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §B, §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: B5
   asks: Are the measures listed above sufficient to prevent or control pests? N/A, none used. Yes. No
@@ -124,7 +124,7 @@ items:
     questions:
     - g9_0_facility_pest.pest_controls_sufficient
     - g9_0_facility_pest.additional_pest_measures
-    prints: "modules/G9_0.pdf §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: B6
   asks: Are National List materials sufficient to prevent or control pests in organic storage areas? N/A,
@@ -133,7 +133,7 @@ items:
   trazo:
     questions:
     - g9_0_facility_pest.national_list_sufficient
-    prints: "modules/G9_0.pdf §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: B7
   asks: If you plan to use pest control materials not on the National List in organic storage locations,
@@ -145,7 +145,7 @@ items:
     questions:
     - g9_0_facility_pest.synthetic_material_justification
     - g9_0_facility_pest.synthetic_material_justification_upload
-    prints: "modules/G9_0.pdf §C (the letter under attachments/g9_0_facility_pest/ in the packet); modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §C (the letter under attachments/g9_0_facility_pest/ in the packet); modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: B8
   asks: How do you prevent pest control materials (e.g. applied via fumigation and/or fogging) from contaminating
@@ -157,7 +157,7 @@ items:
     questions:
     - g9_0_facility_pest.contamination_prevention
     - g6_2_storage.storage_pest_control_materials_description
-    prints: "modules/G9_0.pdf §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §C; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: B9
   asks: How do you record pest control material use and measures taken to protect organic crops or packaging?
@@ -166,5 +166,5 @@ items:
   trazo:
     questions:
     - g9_0_facility_pest.pest_control_records
-    prints: "modules/G9_0.pdf §A; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §A; modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."

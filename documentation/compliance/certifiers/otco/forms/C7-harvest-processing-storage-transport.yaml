@@ -418,7 +418,7 @@ items:
     - g9_0_facility_pest.mechanical_controls
     - g9_0_facility_pest.material_tier
     - g6_2_storage.storage_pest_control_materials_used
-    prints: "modules/G9_0.pdf §B (mechanical_controls), §C (material_tier); modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is answered)"
+    prints: "modules/G9_0.pdf §B (mechanical_controls), §C (material_tier); modules/G6_2.pdf §B (storage_pest_control_materials_used, with a line naming G9.0 as where facility pest management is asked, and how far it is answered)"
   note: "Closed 2026-11-10 (content 2026.12.01)."
 - ref: 7.8-4
   asks: Do pest control methods adequately prevent or control pests? Yes / No.

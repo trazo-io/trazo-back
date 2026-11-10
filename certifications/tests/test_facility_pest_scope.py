@@ -75,19 +75,60 @@ class _Plan(TestCase):
 
 
 class StoragePointerTests(_Plan):
-    def test_g6_2_names_g9_0_as_where_pest_management_is_answered(self):
-        osp = self.plan({"g6_2_storage": self.answered({"storage_pest_control_materials_used": False})})
-        page = _text(generate_module_pdf(osp, "g6_2_storage"))
-        self.assertIn("is answered in G9.0 Facility Pest Management (modules/G9_0.pdf).", page)
+    """G6.2 names G9.0 and states it as it stands (review of back #368)."""
+
+    COMPLETE = {
+        "uses_pest_control_company": False,
+        "pest_control_records": ["sighting_logs"],
+        "preventive_practices": ["sanitation"],
+        "mechanical_controls": ["traps"],
+        "material_tier": "none",
+    }
+
+    def page(self, g9=None):
+        modules = {"g6_2_storage": self.answered({"storage_pest_control_materials_used": False})}
+        if g9 is not None:
+            modules["g9_0_facility_pest"] = g9
+        return _text(generate_module_pdf(self.plan(modules), "g6_2_storage"))
+
+    def test_an_untouched_g9_0_is_said_to_be_not_answered(self):
+        page = self.page()
+        self.assertIn("is asked in G9.0 Facility Pest Management; it is not answered yet.", page)
+        self.assertNotIn("is answered in", page)
+
+    def test_a_complete_g9_0_is_named_without_a_caveat(self):
+        from certifications.osp_modules.conditions import missing_required
+
+        self.assertEqual(missing_required(G9, self.COMPLETE), [], "the fixture must complete G9.0")
+        self.assertIn("is asked in G9.0 Facility Pest Management.", self.page(self.answered(self.COMPLETE)))
+
+    def test_open_required_questions_are_counted(self):
+        partial = {k: v for k, v in self.COMPLETE.items() if k != "material_tier"}
+        self.assertIn("1 required question there is not answered yet.", self.page(self.answered(partial)))
 
     def test_it_says_so_when_g9_0_is_not_applicable(self):
+        page = self.page({"answers": {}, "not_applicable": True})
+        self.assertIn("which the operation marks not applicable.", page)
+
+    def test_a_standalone_page_names_no_packet_path(self):
+        self.assertNotIn("modules/G9_0.pdf", self.page())
+
+    def test_inside_a_packet_the_path_is_named(self):
+        import zipfile
+
+        from certifications.services.osp_module_pdf import generate_osp_packet
+
         osp = self.plan(
             {
                 "g6_2_storage": self.answered({"storage_pest_control_materials_used": False}),
-                "g9_0_facility_pest": {"answers": {}, "not_applicable": True},
+                "g9_0_facility_pest": self.answered(self.COMPLETE),
             }
         )
-        self.assertIn("which the operation marks not applicable.", _text(generate_module_pdf(osp, "g6_2_storage")))
+        packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+        self.assertIn("modules/G9_0.pdf", packet.namelist())
+        self.assertIn(
+            "is asked in G9.0 Facility Pest Management (modules/G9_0.pdf).", _text(packet.read("modules/G6_2.pdf"))
+        )
 
 
 class RegisterRowsTests(SimpleTestCase):
