@@ -326,7 +326,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   ingredients, a multi-farm CSA, complex handling; each prints a [REVIEW]) answering CCOF G6.4's applicability gate,
 #   OTCO 7.3-2/7.3-3 and WSDA L 3, and whether the handling area or equipment is shared (OTCO 7.4-1, WSDA L 6). New
 #   options and optional questions only.
-CONTENT_VERSION = "2026.11.30"
+# 2026.12.01: facility pests. G9.0 asks which pests the plan covers (OTCO 7.8-1, WSDA M 2), adds OTCO's and WSDA's
+#   missing prevention and mechanical options and two of OTCO's contamination safeguards (7.8-4b), whether the controls
+#   are sufficient and what else is used (OTCO 7.8-4/4a, CCOF G6.2 B5), whether National List materials are sufficient
+#   (CCOF B6), why a non-National List synthetic is needed with its letter (CCOF B7, WSDA M 7), and bait station use
+#   (WSDA M 5). G6.2's storage pest question now points to G9.0. New options and optional or gated questions only.
+CONTENT_VERSION = "2026.12.01"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

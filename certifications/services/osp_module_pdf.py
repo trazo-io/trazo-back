@@ -2584,6 +2584,17 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
                 for line in answer_contradictions(question.key, value, answers):
                     story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
+                # CCOF G6.2 B3 to B9 ask facility pest management on the storage form; Trazo asks it once, in G9.0.
+                # Say where, so a reviewer of this page finds it (2026.12.01).
+                g9 = ((osp.module_responses or {}).get("modules") or {}).get("g9_0_facility_pest") or {}
+                pointer = (
+                    "Facility pest management (target pests, prevention, physical controls, materials, how product "
+                    "is protected and the records kept) is answered in G9.0 Facility Pest Management "
+                    "(modules/G9_0.pdf)"
+                    + (", which the operation marks not applicable." if g9.get("not_applicable") else ".")
+                )
+                story.append(Paragraph(_escape(pointer), styles["meta"]))
             if module.key == "g9_0_facility_pest" and question.key == "material_tier":
                 from certifications.services.facility_pest import facility_entries, tier_review_lines
 

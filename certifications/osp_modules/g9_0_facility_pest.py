@@ -257,6 +257,41 @@ G9_0_FACILITY_PEST = Module(
                 ),
             ),
             questions=(
+                # OTCO C7 7.8-1 and WSDA AGR 2121 M 2: which pests the plan is for (2026.12.01). OTCO names rats and
+                # mice apart; WSDA's "rodents" is either.
+                Question(
+                    key="facility_pest_problems",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which pests do you have, or does your pest control plan cover, in storage and handling areas?",
+                        "¿Qué plagas tienes, o cubre tu plan de control de plagas, en las áreas de almacenamiento y "
+                        "manejo?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.271",
+                    compiles_to=CompileRule(template="Facility pests in the pest control plan: {answer}."),
+                    options=(
+                        Option("flying_insects", text("Flying insects", "Insectos voladores")),
+                        Option("crawling_insects", text("Crawling insects", "Insectos rastreros")),
+                        Option("rats", text("Rats", "Ratas")),
+                        Option("mice", text("Mice", "Ratones")),
+                        Option("spiders", text("Spiders", "Arañas")),
+                        Option("birds", text("Birds", "Aves")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "none",
+                            text("No pests in the facilities", "No hay plagas en las instalaciones"),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="facility_pest_problems_other",
+                    kind="text",
+                    label=text("Name the other pest", "Indica la otra plaga"),
+                    visible_when=(Condition("facility_pest_problems", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other facility pest: {answer}"),
+                ),
                 Question(
                     key="preventive_practices",
                     kind="checkbox_group",
@@ -310,6 +345,44 @@ G9_0_FACILITY_PEST = Module(
                                 "suficiente como para atraer plagas",
                             ),
                         ),
+                        # OTCO C7 7.8-2 and WSDA AGR 2121 M 4 prevention options with no option of their own
+                        # (2026.12.01).
+                        Option(
+                            "incoming_inspection",
+                            text(
+                                "Inspecting incoming product and ingredients for pests",
+                                "Inspección de producto e ingredientes que llegan, en busca de plagas",
+                            ),
+                        ),
+                        Option(
+                            "sealed_screened_openings",
+                            text(
+                                "Vents, doors and windows sealed or screened",
+                                "Ventilas, puertas y ventanas selladas o con malla",
+                            ),
+                        ),
+                        Option("positive_air_pressure", text("Positive air pressure", "Presión de aire positiva")),
+                        Option(
+                            "exterior_sheet_metal",
+                            text(
+                                "Sheet metal on the exterior sides of the building",
+                                "Lámina metálica en los costados exteriores del edificio",
+                            ),
+                        ),
+                        Option(
+                            "interior_inspection_zones",
+                            text(
+                                "Inspection zones kept along the interior perimeter",
+                                "Zonas de inspección a lo largo del perímetro interior",
+                            ),
+                        ),
+                        Option(
+                            "lighting_away_from_openings",
+                            text(
+                                "Light fixtures placed away from vents, windows and doors",
+                                "Lámparas colocadas lejos de ventilas, ventanas y puertas",
+                            ),
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -336,6 +409,9 @@ G9_0_FACILITY_PEST = Module(
                         Option("sound", text("Sound or ultrasonic devices", "Dispositivos sonoros o ultrasónicos")),
                         Option("repellents", text("Nonsynthetic repellents", "Repelentes no sintéticos")),
                         Option("temperature", text("Freezing or heat treatment", "Tratamiento por frío o calor")),
+                        # WSDA AGR 2121 M 4's mechanical options with no option of their own (2026.12.01).
+                        Option("electrocutors", text("Electrocutors (bug zappers)", "Electrocutores (matainsectos)")),
+                        Option("sticky_traps", text("Sticky traps", "Trampas adhesivas")),
                         Option(
                             "none",
                             text(
@@ -501,10 +577,153 @@ G9_0_FACILITY_PEST = Module(
                             ),
                         ),
                         Option("residue_testing", text("Residue testing", "Pruebas de residuos")),
+                        # OTCO C7 7.8-4b (2026.12.01).
+                        Option(
+                            "stored_away_from_organic",
+                            text(
+                                "Non-approved materials are stored away from organic product and packaging",
+                                "Los materiales no aprobados se guardan lejos del producto orgánico y el empaque",
+                            ),
+                        ),
+                        Option(
+                            "separate_equipment",
+                            text(
+                                "Separate equipment and tools are used for prohibited materials",
+                                "Se usan equipo y herramientas separados para los materiales prohibidos",
+                            ),
+                        ),
                         Option(
                             "employee_training",
                             text("Documented employee training", "Capacitación documentada del personal"),
                         ),
+                    ),
+                ),
+                # OTCO C7 7.8-4 / 7.8-4a and CCOF G6.2 B5: whether the controls are enough, and if not, what else is
+                # used. Asked as stated rather than read off material_tier (2026.12.01).
+                Question(
+                    key="pest_controls_sufficient",
+                    kind="radio",
+                    label=text(
+                        "Do your prevention and physical controls adequately prevent or control pests?",
+                        "¿Tus medidas de prevención y controles físicos previenen o controlan bien las plagas?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.271(c)",
+                    compiles_to=CompileRule(template="Prevention and physical controls are sufficient: {answer}."),
+                    options=(
+                        Option("yes", text("Yes", "Sí")),
+                        Option("no", text("No", "No")),
+                        Option(
+                            "none_used",
+                            text("Not applicable, none are used", "No aplica, no se usa ninguno"),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="additional_pest_measures",
+                    kind="textarea",
+                    label=text(
+                        "What other pest control measures do you use?",
+                        "¿Qué otras medidas de control de plagas usas?",
+                    ),
+                    nop_cite="§ 205.271(c)",
+                    visible_when=(Condition("pest_controls_sufficient", "eq", "no"),),
+                    compiles_to=CompileRule(template="Other facility pest control measures: {answer}"),
+                ),
+                # CCOF G6.2 B6.
+                Question(
+                    key="national_list_sufficient",
+                    kind="radio",
+                    label=text(
+                        "Are National List materials sufficient to prevent or control pests in organic storage areas?",
+                        "¿Los materiales de la Lista Nacional bastan para prevenir o controlar plagas en las áreas de "
+                        "almacenamiento orgánico?",
+                    ),
+                    nop_cite="§ 205.271(d)",
+                    visible_when=(Condition("material_tier", "one_of", ["national_list", "synthetic_approved"]),),
+                    compiles_to=CompileRule(template="National List materials are sufficient: {answer}."),
+                    options=(
+                        Option("yes", text("Yes", "Sí")),
+                        Option("no", text("No, other materials are needed", "No, se necesitan otros materiales")),
+                    ),
+                ),
+                # CCOF G6.2 B7 and WSDA AGR 2121 M 7: why prevention, physical controls and National List materials
+                # are not effective, before a synthetic not on the National List is used (§ 205.271(d)).
+                Question(
+                    key="synthetic_material_justification",
+                    kind="textarea",
+                    label=text(
+                        "Why are prevention, physical controls and National List materials not effective against the "
+                        "target pest?",
+                        "¿Por qué la prevención, los controles físicos y los materiales de la Lista Nacional no son "
+                        "eficaces contra la plaga?",
+                    ),
+                    coaching=text(
+                        "Your certifier may ask for a letter of justification; attach it below if you have one.",
+                        "Tu certificadora puede pedir una carta de justificación; adjúntala abajo si la tienes.",
+                    ),
+                    nop_cite="§ 205.271(d)",
+                    visible_when=(Condition("material_tier", "eq", "synthetic_approved"),),
+                    compiles_to=CompileRule(template="Why non-National List materials are needed: {answer}"),
+                ),
+                Question(
+                    key="synthetic_material_justification_upload",
+                    kind="upload",
+                    label=text("Letter of justification", "Carta de justificación"),
+                    required=False,
+                    nop_cite="§ 205.271(d)",
+                    visible_when=(Condition("material_tier", "eq", "synthetic_approved"),),
+                ),
+                # WSDA AGR 2121 M 5.
+                Question(
+                    key="bait_station_use",
+                    kind="checkbox_group",
+                    label=text(
+                        "How are bait stations used in storage and handling areas?",
+                        "¿Cómo se usan las estaciones de cebo en las áreas de almacenamiento y manejo?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.271",
+                    compiles_to=CompileRule(
+                        template="Bait stations: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "exterior_perimeter_only",
+                            text(
+                                "All bait stations are on the exterior perimeter, outside areas used for organic "
+                                "handling",
+                                "Todas las estaciones de cebo están en el perímetro exterior, fuera de las áreas de "
+                                "manejo orgánico",
+                            ),
+                        ),
+                        Option(
+                            "allowed_bait_only",
+                            text(
+                                "Stations are baited only with a nonsynthetic or organically allowed material",
+                                "Las estaciones solo llevan un cebo no sintético o permitido en orgánico",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                        Option(
+                            "none",
+                            text("No bait stations are used", "No se usan estaciones de cebo"),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="bait_station_use_other",
+                    kind="textarea",
+                    label=text(
+                        "Describe the bait used and where the stations are.",
+                        "Describe el cebo que se usa y dónde están las estaciones.",
+                    ),
+                    visible_when=(Condition("bait_station_use", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Bait stations, other: {answer}",
+                        section_key="commingling_barriers",
                     ),
                 ),
             ),

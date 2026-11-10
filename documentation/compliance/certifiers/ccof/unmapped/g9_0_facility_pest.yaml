@@ -21,3 +21,7 @@ questions:
     B9 asks how pest control material use is recorded, not for the records themselves; these are the
     § 205.103 records an inspector reviews on site. The upload lets the packet carry them beside
     modules/G9_0.pdf.
+  g9_0_facility_pest.facility_pest_problems: "OTCO C7 7.8-1 and WSDA M 2 ask which pests the plan covers. CCOF's G6.2 B3 to B9 ask prevention, controls, materials and records, not the pests themselves."
+  g9_0_facility_pest.facility_pest_problems_other: "Free-text rider on facility_pest_problems."
+  g9_0_facility_pest.bait_station_use: "WSDA M 5's bait station placement and bait. CCOF G6.2 asks how materials are kept from contaminating crops (B8), answered by contamination_prevention, not bait station placement."
+  g9_0_facility_pest.bait_station_use_other: "Free-text rider on bait_station_use."

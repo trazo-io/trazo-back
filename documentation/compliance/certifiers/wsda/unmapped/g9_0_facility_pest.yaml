@@ -11,3 +11,6 @@ questions:
     the monitoring questions) but never asks for records to be attached; these are the § 205.103
     records an inspector reviews on site. The upload lets the packet carry them beside
     modules/G9_0.pdf.
+  g9_0_facility_pest.pest_controls_sufficient: "OTCO C7 7.8-4 and CCOF G6.2 B5 ask whether the controls are sufficient. WSDA M asks the strategies used (4) and, before a synthetic, how an allowed material was found ineffective (7), not this yes/no."
+  g9_0_facility_pest.additional_pest_measures: "Follow-up to pest_controls_sufficient; same reasoning."
+  g9_0_facility_pest.national_list_sufficient: "CCOF G6.2 B6. WSDA M 7 asks how an allowed material is first shown ineffective, which synthetic_material_justification and preventive_measures_documentation answer."

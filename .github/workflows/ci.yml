@@ -472,6 +472,9 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-10: certifications.tests.test_facility_pest_scope joins. Facility pests across OTCO C7 7.8, WSDA M and
+      # CCOF G6.2 B3 to B9: the new G9.0 questions and options, their gates, and the line on G6.2 naming G9.0.
+      #
       # 2026-11-10: certifications.tests.test_on_farm_processing_scope joins. OTCO C7 7.3/7.4, WSDA L 3/6 and CCOF G6.4's
       # applicability gate: the processing steps, the scope disqualifiers (each prints a [REVIEW]) and the shared
       # handling area. Builds its own farm.
@@ -769,6 +772,7 @@ jobs:
             certifications.tests.test_g3_1_container_greenhouse \
             certifications.tests.test_post_harvest_water_packaging \
             certifications.tests.test_on_farm_processing_scope \
+            certifications.tests.test_facility_pest_scope \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
