@@ -117,6 +117,11 @@ class ConsumerImpactSerializer(serializers.Serializer):
     achievements system. No screen rendered any of them; they left the payload on 2026-11-10
     and the model goes in history 0256.
 
+    `total_reviews`, `first_scan_date` and `last_scan_date` left with them. They were true
+    (a review count and the first and last scan dates), but no screen read them either, so they
+    are not recomputed per request for nobody. Serve them again from the scans when a screen
+    needs them.
+
     Every number here is a count of the shopper's own scans, never a verdict on a farm.
     """
 
