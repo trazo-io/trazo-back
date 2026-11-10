@@ -992,9 +992,9 @@ G6_4_HANDLING = Module(
                             "not_shown",
                             text("Not shown potable yet", "Todavía no se demuestra que sea potable"),
                             exclusive=True,
-                            review=(
-                                "Water from a non-municipal source contacts the crop and is not shown to be potable."
-                            ),
+                            # Review of back #362: the gate is any handling water from a non-municipal source, which
+                            # can be equipment rinse water only, so the line says no more than that.
+                            review="Handling water from a non-municipal source is not shown to be potable.",
                         ),
                     ),
                 ),
@@ -1041,7 +1041,7 @@ G6_4_HANDLING = Module(
                         Option(
                             "yes",
                             text("Yes", "Sí"),
-                            review="A test of water that contacts the crop came back positive for contaminants.",
+                            review="A test of the handling water came back positive for contaminants.",
                         ),
                     ),
                 ),

@@ -146,8 +146,24 @@ class OnThePageTests(TestCase):
             },
         )
         page = _text(generate_module_pdf(osp, "g6_4_handling"))
-        self.assertIn("[REVIEW] A test of water that contacts the crop came back positive for contaminants.", page)
+        self.assertIn("[REVIEW] A test of the handling water came back positive for contaminants.", page)
         self.assertIn("[REVIEW] Water treated on site is not yet confirmed to meet the Safe Drinking Water Act.", page)
+
+    def test_the_potability_review_claims_no_crop_contact(self):
+        # Review of back #362: well water used only to rinse equipment reaches the question.
+        osp = self.plan(
+            "g6_4_handling",
+            {
+                "handling_activities": ["washing"],
+                "uses_water": True,
+                "post_harvest_water_uses": ["equipment_cleaning"],
+                "post_harvest_water_source": ["on_site_well"],
+                "post_harvest_water_potability": ["not_shown"],
+            },
+        )
+        page = _text(generate_module_pdf(osp, "g6_4_handling"))
+        self.assertIn("[REVIEW] Handling water from a non-municipal source is not shown to be potable.", page)
+        self.assertNotIn("contacts the crop", page)
 
     def test_an_attached_proof_with_no_file_and_no_documentation_both_print_a_review(self):
         osp = self.plan(
