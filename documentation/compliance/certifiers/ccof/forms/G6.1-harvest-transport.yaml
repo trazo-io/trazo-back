@@ -96,23 +96,23 @@ items:
   # Closed 2026-11-11 by the equipment register slice.
 - ref: B3
   asks: Do you wash crops in the field? No, skip to question B4 / Yes, complete this section.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No G6.1 question says whether crops are washed in the field. `uses_water` (G6.4) says whether water
-    touches the product at any step, not where, so an operation that washes only in the field answers on the
-    wrong module heading for a CCOF reviewer reading G6.1.
-  fix: A `washes_in_field` [boolean] on G6.1 page B that reuses the G6.4 water block.
+    questions:
+    - g6_4_handling.post_harvest_water_uses
+    - g6_4_handling.crop_wash_location
+    prints: "modules/G6_4.pdf §C (where crops are washed, shown when crop washing is a water use)"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: B3a
   asks: If you treat wash water on-site (e.g. RO, UV, carbon filtration, water softeners, pH adjustment), does
     treated water meet Safe Drinking Water Act standards? Not applicable / Yes.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field records whether on-site treated wash water meets the Safe Drinking Water Act standard.
-  fix: '`wash_water_sdwa_compliant` [radio] {not_applicable, confirmed}, cite § 205.272(a).'
+    questions:
+    - g6_4_handling.water_treated_onsite
+    - g6_4_handling.treated_water_meets_sdwa
+    prints: "modules/G6_4.pdf §C (not confirmed or No prints a [REVIEW] line)"
+  note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: B3b
   asks: Do you add any substances to the wash water, e.g. peracetic acid, hydrogen peroxide, chlorine? No /
     Yes, list materials on your Grower Materials Application.

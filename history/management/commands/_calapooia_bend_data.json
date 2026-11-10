@@ -3610,6 +3610,35 @@
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": "confirmed"
        },
+       "packaging_materials": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "hard_plastic",
+         "cardboard"
+        ]
+       },
+       "packaging_contamination_safeguards": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "only_new"
+        ]
+       },
+       "packaging_untreated_proof": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "letter_of_guarantee"
+        ]
+       },
+       "single_use_packaging_food_grade_proof": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "certificate_or_letter"
+        ]
+       },
+       "packaging_reused": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "no"
+       },
        "transport_units_inspected_clean": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": true
@@ -3794,6 +3823,26 @@
        "water_source_sanitizer": {
         "at": "2026-08-21T11:28:46.506704+00:00",
         "value": "Potable water from Well #1, tested annually (Edge Analytical, 2026 report 26-W-0412). Tsunami 100 (peroxyacetic acid and hydrogen peroxide) is dosed in the wash flume at 80 ppm and checked with test strips; peracetic acid is on the National List for wash water and food-contact surfaces (§ 205.605(b)) and for equipment (§ 205.601(a)). No chlorine is used, and residual is not an issue because there is no chlorine rinse step."
+       },
+       "crop_wash_location": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "at_facility"
+        ]
+       },
+       "post_harvest_water_potability": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": [
+         "tested_regularly"
+        ]
+       },
+       "post_harvest_water_positive_test": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": "no"
+       },
+       "water_treated_onsite": {
+        "at": "2026-10-28T16:00:00+00:00",
+        "value": false
        },
        "sanitizer_residual_testing_protocol": {
         "at": "2026-10-28T16:00:00+00:00",
@@ -24660,6 +24709,20 @@
    "folder": "organic_system_plan",
    "linked_section": "parcel_application_map",
    "title": "Field map, Upper Terrace (specimen)"
+  },
+  {
+   "_id": 22,
+   "filename": "calapooia-packaging-guarantee-2026-specimen.pdf",
+   "folder": "organic_system_plan",
+   "lines": [
+    "Supplier: Willamette Pack Supply (a fictional supplier for this specimen).",
+    "Products: 1 pint PET clamshells; corrugated cardboard flats.",
+    "Letter of guarantee: the cardboard flats are not treated with fungicides, preservatives or fumigants after manufacture.",
+    "Certificate of compliance: the clamshells are food-contact grade."
+   ],
+   "linked_section": "g6_1_harvest_transport",
+   "requirement": "g6_1_harvest_transport.packaging_documents_upload",
+   "title": "Packaging letter of guarantee and food-grade certificate, 2026 (specimen)"
   }
  ],
  "plan_material_entries": [
