@@ -472,6 +472,10 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-09: certifications.tests.test_post_harvest_water_packaging joins. Post-harvest water (potability, positive
+      # tests, on-site treatment against the Safe Drinking Water Act, where crops are washed) and packaging (material,
+      # safeguards, proof, reuse): OTCO C7 7.5 and 7.9, WSDA L 14 to 17, CCOF G6.1 B3. Builds its own farm.
+      #
       # 2026-11-09: certifications.tests.test_g3_1_container_greenhouse joins. G3.1 Container & Greenhouse/Shadehouse
       # Production: the not-applicable box is CCOF A1's "None of these", sections open on the answers that make them
       # apply, and a G3.1 marked not applicable prints a [REVIEW] per fact that says otherwise. Builds its own farm.
@@ -754,6 +758,7 @@ jobs:
             certifications.tests.test_materials_production_aids \
             certifications.tests.test_materials_post_harvest_d \
             certifications.tests.test_g3_1_container_greenhouse \
+            certifications.tests.test_post_harvest_water_packaging \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

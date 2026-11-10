@@ -152,7 +152,7 @@ class OperationProfilePdfTests(TestCase):
                 "modules": {
                     "certification_contract": {
                         "answers": {key: {"value": value} for key, value in answers.items()},
-                        "definition_version": "2026.11.28",
+                        "definition_version": "2026.11.29",
                     }
                 },
             },

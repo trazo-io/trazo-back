@@ -602,6 +602,430 @@ G6_1_HARVEST_TRANSPORT = Module(
                     visible_when=(Condition("packaging_free_of_prohibited", "one_of", ["unconfirmed", "no"]),),
                     compiles_to=CompileRule(template="Packaging awaiting confirmation or replacement: {answer}"),
                 ),
+                # Packaging that touches the product (2026.11.28): OTCO C7 7.9-1 to 7.9-6, WSDA AGR 2121 L 16 and 17.
+                # The harvest containers have their own questions below; these ask about the packages and shipping
+                # containers the product is packed into.
+                Question(
+                    key="packaging_materials",
+                    kind="checkbox_group",
+                    label=text(
+                        "What packaging touches the organic product? Check all that apply.",
+                        "¿Qué empaques tocan el producto orgánico? Marca todo lo que corresponda.",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.272",
+                    compiles_to=CompileRule(template="Packaging that touches the product: {answer}."),
+                    options=(
+                        Option(
+                            "flexible_plastic",
+                            text("Flexible plastic (bags or wraps)", "Plástico flexible (bolsas o envolturas)"),
+                        ),
+                        Option(
+                            "hard_plastic",
+                            text(
+                                "Hard plastic (containers, clamshells or jars)",
+                                "Plástico rígido (envases, clamshells o frascos)",
+                            ),
+                        ),
+                        Option("glass", text("Glass containers", "Envases de vidrio")),
+                        Option("metal", text("Metal cans or tins", "Latas de metal")),
+                        Option("paper", text("Paper", "Papel")),
+                        Option("cardboard", text("Cardboard", "Cartón")),
+                        Option("twine", text("Twine (jute, hemp, sisal)", "Cordel (yute, cáñamo, sisal)")),
+                        Option(
+                            "compostable",
+                            text("Compostable or biodegradable packaging", "Empaque compostable o biodegradable"),
+                        ),
+                        Option("cloth", text("Cloth", "Tela")),
+                        Option("wood", text("Wood", "Madera")),
+                        Option("other", text("Other", "Otro")),
+                        Option(
+                            "none",
+                            text(
+                                "No packaging: the product leaves in harvest containers or in bulk",
+                                "Sin empaque: el producto sale en contenedores de cosecha o a granel",
+                            ),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="packaging_materials_other",
+                    kind="textarea",
+                    label=text("Name the other packaging.", "Indica el otro empaque."),
+                    visible_when=(Condition("packaging_materials", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other packaging: {answer}"),
+                ),
+                # WSDA AGR 2121 L 17, for packaging, storage and shipping containers.
+                Question(
+                    key="packaging_contamination_safeguards",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you make sure packaging, storage and shipping containers do not contaminate the crop "
+                        "with prohibited substances? Check all that apply.",
+                        "¿Cómo te aseguras de que los empaques y los contenedores de almacenamiento y envío no "
+                        "contaminen el cultivo con sustancias prohibidas? Marca todo lo que corresponda.",
+                    ),
+                    nop_cite="§ 205.272(b)",
+                    visible_when=(
+                        Condition(
+                            "packaging_materials",
+                            "includes_any",
+                            [
+                                "flexible_plastic",
+                                "hard_plastic",
+                                "glass",
+                                "metal",
+                                "paper",
+                                "cardboard",
+                                "twine",
+                                "compostable",
+                                "cloth",
+                                "wood",
+                                "other",
+                            ],
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Packaging and shipping containers are kept from contaminating the crop by: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("only_new", text("Only new containers are used", "Solo se usan contenedores nuevos")),
+                        Option(
+                            "reused_stamped_organic",
+                            text(
+                                "Reused containers are permanently and clearly stamped organic",
+                                "Los contenedores reutilizados tienen el sello orgánico permanente y claro",
+                            ),
+                        ),
+                        Option(
+                            "reused_plastic_metal_cloth_cleaned",
+                            text(
+                                "Reused plastic, metal or cloth containers are cleaned after use with nonorganic "
+                                "products",
+                                "Los contenedores reutilizados de plástico, metal o tela se limpian después de usarse "
+                                "con productos no orgánicos",
+                            ),
+                        ),
+                        Option(
+                            "cardboard_not_exposed",
+                            text(
+                                "Cardboard containers have not been exposed to prohibited materials",
+                                "Los contenedores de cartón no han estado expuestos a materiales prohibidos",
+                            ),
+                        ),
+                        Option(
+                            "wood_lined",
+                            text(
+                                "Wood containers are completely lined with plastic",
+                                "Los contenedores de madera están forrados por completo con plástico",
+                            ),
+                        ),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
+                    key="packaging_contamination_safeguards_other",
+                    kind="textarea",
+                    label=text("Describe the other safeguard.", "Describe la otra medida."),
+                    visible_when=(Condition("packaging_contamination_safeguards", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Packaging safeguard, other: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # OTCO C7 7.9-2: proof that paper, cardboard and twine were not treated with prohibited materials after
+                # production.
+                Question(
+                    key="packaging_untreated_proof",
+                    kind="checkbox_group",
+                    label=text(
+                        "What shows that the paper, cardboard or twine was not treated with prohibited materials "
+                        "(synthetic fungicides, preservatives, fumigants) after it was made?",
+                        "¿Qué demuestra que el papel, el cartón o el cordel no se trató con materiales prohibidos "
+                        "(fungicidas sintéticos, conservadores, fumigantes) después de fabricarse?",
+                    ),
+                    coaching=text(
+                        "Active or smart packaging that could contaminate organic products is not allowed.",
+                        "No se permite empaque activo o inteligente que pueda contaminar productos orgánicos.",
+                    ),
+                    nop_cite="§ 205.272(b)(1)",
+                    visible_when=(Condition("packaging_materials", "includes_any", ["paper", "cardboard", "twine"]),),
+                    compiles_to=CompileRule(template="Proof paper, cardboard or twine is untreated: {answer}."),
+                    options=(
+                        Option(
+                            "spec_sheet",
+                            text(
+                                "A composition or specification sheet (attached below)",
+                                "Una ficha de composición o especificaciones (adjunta abajo)",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "letter_of_guarantee",
+                            text(
+                                "A letter of guarantee from the manufacturer or supplier (attached below)",
+                                "Una carta de garantía del fabricante o proveedor (adjunta abajo)",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "other_documentation",
+                            text("Other documentation (attached below)", "Otra documentación (adjunta abajo)"),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "no_documentation",
+                            text(
+                                "No documentation from the supplier yet", "Todavía no hay documentación del proveedor"
+                            ),
+                            exclusive=True,
+                            review=(
+                                "Paper, cardboard or twine touches the crop with no supplier documentation that it was "
+                                "not treated with prohibited materials."
+                            ),
+                        ),
+                    ),
+                ),
+                # OTCO C7 7.9-3.
+                Question(
+                    key="compostable_packaging_non_gmo_proof",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you make sure the compostable or biodegradable packaging is not made with genetically "
+                        "modified materials?",
+                        "¿Cómo te aseguras de que el empaque compostable o biodegradable no esté hecho con materiales "
+                        "genéticamente modificados?",
+                    ),
+                    nop_cite="§ 205.105(e)",
+                    visible_when=(Condition("packaging_materials", "includes", "compostable"),),
+                    compiles_to=CompileRule(template="Compostable packaging shown non-GMO by: {answer}."),
+                    options=(
+                        Option(
+                            "supplier_documentation",
+                            text(
+                                "Documentation from the manufacturer or supplier (attached below)",
+                                "Documentación del fabricante o proveedor (adjunta abajo)",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "label_states_non_gmo",
+                            text(
+                                "The label (attached below) states it is non-GMO",
+                                "La etiqueta (adjunta abajo) dice que no es transgénico",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "other_documentation",
+                            text("Other documentation (attached below)", "Otra documentación (adjunta abajo)"),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "no_documentation",
+                            text("No documentation yet", "Todavía no hay documentación"),
+                            exclusive=True,
+                            review="Compostable or biodegradable packaging with no documentation that it is non-GMO.",
+                        ),
+                    ),
+                ),
+                # OTCO C7 7.9-4.
+                Question(
+                    key="single_use_packaging_food_grade_proof",
+                    kind="checkbox_group",
+                    label=text(
+                        "For single-use packaging, how do you make sure it is food grade?",
+                        "Para el empaque de un solo uso, ¿cómo te aseguras de que sea apto para alimentos?",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(
+                        Condition(
+                            "packaging_materials",
+                            "includes_any",
+                            [
+                                "flexible_plastic",
+                                "hard_plastic",
+                                "glass",
+                                "metal",
+                                "paper",
+                                "cardboard",
+                                "twine",
+                                "compostable",
+                                "cloth",
+                                "wood",
+                                "other",
+                            ],
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Single-use packaging shown food grade by: {answer}."),
+                    options=(
+                        Option(
+                            "certificate_or_letter",
+                            text(
+                                "A certificate of compliance or guarantee letter from the manufacturer or supplier "
+                                "(attached below)",
+                                "Un certificado de cumplimiento o carta de garantía del fabricante o proveedor (adjunto "
+                                "abajo)",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "spec_sheet",
+                            text(
+                                "A product specification sheet (attached below)",
+                                "Una ficha de especificaciones del producto (adjunta abajo)",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "label_states_food_grade",
+                            text(
+                                "The label (attached below) states it is food grade",
+                                "La etiqueta (adjunta abajo) dice que es apto para alimentos",
+                            ),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "other_documentation",
+                            text("Other documentation (attached below)", "Otra documentación (adjunta abajo)"),
+                            requires_upload="packaging_documents_upload",
+                        ),
+                        Option(
+                            "no_documentation",
+                            text("No documentation yet", "Todavía no hay documentación"),
+                            exclusive=True,
+                            review="Single-use packaging with no documentation that it is food grade.",
+                        ),
+                        Option(
+                            "no_single_use",
+                            text("No single-use packaging is used", "No se usa empaque de un solo uso"),
+                            exclusive=True,
+                        ),
+                    ),
+                ),
+                Question(
+                    key="packaging_documents_upload",
+                    kind="upload",
+                    label=text(
+                        "Packaging documents (specification sheets, letters of guarantee, labels)",
+                        "Documentos de empaque (fichas de especificaciones, cartas de garantía, etiquetas)",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.272",
+                    visible_when=(
+                        Condition(
+                            "packaging_materials",
+                            "includes_any",
+                            [
+                                "flexible_plastic",
+                                "hard_plastic",
+                                "glass",
+                                "metal",
+                                "paper",
+                                "cardboard",
+                                "twine",
+                                "compostable",
+                                "cloth",
+                                "wood",
+                                "other",
+                            ],
+                        ),
+                    ),
+                ),
+                # OTCO C7 7.9-5 and 7.9-6.
+                Question(
+                    key="packaging_reused",
+                    kind="radio",
+                    label=text("Do you reuse packaging?", "¿Reutilizas empaques?"),
+                    nop_cite="§ 205.272(b)(2)",
+                    visible_when=(
+                        Condition(
+                            "packaging_materials",
+                            "includes_any",
+                            [
+                                "flexible_plastic",
+                                "hard_plastic",
+                                "glass",
+                                "metal",
+                                "paper",
+                                "cardboard",
+                                "twine",
+                                "compostable",
+                                "cloth",
+                                "wood",
+                                "other",
+                            ],
+                        ),
+                    ),
+                    compiles_to=CompileRule(template="Packaging is reused: {answer}."),
+                    options=(
+                        Option("no", text("No", "No")),
+                        Option("yes", text("Yes", "Sí")),
+                    ),
+                ),
+                Question(
+                    key="packaging_reuse_description",
+                    kind="textarea",
+                    label=text("Describe the packaging you reuse and how.", "Describe qué empaques reutilizas y cómo."),
+                    nop_cite="§ 205.272(b)(2)",
+                    visible_when=(Condition("packaging_reused", "eq", "yes"),),
+                    compiles_to=CompileRule(template="Reused packaging: {answer}"),
+                ),
+                Question(
+                    key="reused_packaging_held_nonorganic",
+                    kind="radio",
+                    label=text(
+                        "Has any reused packaging ever held non-organic product?",
+                        "¿Algún empaque reutilizado ha contenido producto no orgánico?",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("packaging_reused", "eq", "yes"),),
+                    compiles_to=CompileRule(
+                        template="Reused packaging that held non-organic product: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "organic_only",
+                            text("No, it has only held organic product", "No, solo ha contenido producto orgánico"),
+                        ),
+                        Option(
+                            "yes_protected",
+                            text(
+                                "Yes, and the product is protected from contact with possible residue (described "
+                                "below)",
+                                "Sí, y el producto está protegido del contacto con posibles residuos (descrito abajo)",
+                            ),
+                        ),
+                        Option(
+                            "yes_not_protected",
+                            text(
+                                "Yes, and nothing is in place yet to protect the product",
+                                "Sí, y todavía no hay nada para proteger el producto",
+                            ),
+                            review=(
+                                "Reused packaging that held non-organic product, with no protection from residue in "
+                                "place."
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="reused_packaging_protection",
+                    kind="textarea",
+                    label=text(
+                        "How is the product protected from contact with possible residue?",
+                        "¿Cómo se protege el producto del contacto con posibles residuos?",
+                    ),
+                    nop_cite="§ 205.272",
+                    visible_when=(Condition("reused_packaging_held_nonorganic", "eq", "yes_protected"),),
+                    compiles_to=CompileRule(
+                        template="Protection from residue on reused packaging: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 # WSDA AGR 2121 §J6 (and §L16 for packaging).
                 Question(
                     key="harvest_container_material",
