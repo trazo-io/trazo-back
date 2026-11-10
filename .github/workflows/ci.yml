@@ -642,6 +642,12 @@ jobs:
       # changes their role; never themself, never the setup operator's row, never the last admin.
       # Another company's membership id answers exactly like a missing one, and a removed member's
       # existing cookie is refused on the next request. It does not read the sibling repo.
+      #
+      # 2026-11-10: history.tests.test_consumer_impact_payload joins. The signed-in consumer
+      # dashboard counts the shopper's scans live and stores nothing; no offset, trees, points or
+      # achievements reach the wire, "Documented Products" counts productions with a served event,
+      # and clear_impact_summaries deletes the stored rows with an exact restore. It does not read
+      # the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -864,6 +870,7 @@ jobs:
             carbon.tests.test_retired_satellite_models \
             carbon.tests.test_retiring_offset_benchmark_report \
             history.tests.test_retired_shopper_models \
+            history.tests.test_consumer_impact_payload \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \

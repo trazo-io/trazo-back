@@ -10,7 +10,6 @@ Creates for each finished production:
     5-8 reviews with realistic ratings and text
     10 consumer users with @demo.trazo.io emails
     Updated production metrics (public_views, unique_visitors, reputation)
-    UserImpactSummary per consumer
 """
 
 import hashlib
@@ -22,7 +21,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from history.models import History, HistoryScan
-from history.models_consumer import UserImpactSummary
 from notifications.models import Notification
 from notifications.services import notification_service
 from reviews.models import Review
@@ -321,10 +319,7 @@ class Command(BaseCommand):
         # 6. Create notifications for recent scans (last ~5 per production)
         total_notifications = self._create_notifications(user, finished_productions, consumers)
 
-        # 7. Create UserImpactSummary per consumer
-        self._create_impact_summaries(consumers, finished_productions)
-
-        # 8. Summary
+        # 7. Summary
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Engagement data created!"))
         self.stdout.write("")
@@ -361,11 +356,9 @@ class Command(BaseCommand):
         ).delete()[0]
         self.stdout.write(f"  Deleted {notif_count} notifications")
 
-        # Delete demo consumer users and their impact summaries
-        demo_users = User.objects.filter(email__endswith=DEMO_CONSUMER_DOMAIN)
-        impact_count = UserImpactSummary.objects.filter(user__in=demo_users).delete()[0]
-        user_count = demo_users.delete()[0]
-        self.stdout.write(f"  Deleted {user_count} consumer users, " f"{impact_count} impact summaries")
+        # Delete demo consumer users
+        user_count = User.objects.filter(email__endswith=DEMO_CONSUMER_DOMAIN).delete()[0]
+        self.stdout.write(f"  Deleted {user_count} consumer users")
 
         # Reset production metrics
         for prod in productions:
@@ -641,66 +634,6 @@ class Command(BaseCommand):
 
         # update_reputation() recalculates from reviews
         production.update_reputation()
-
-    def _create_impact_summaries(self, consumers, productions):
-        """Create UserImpactSummary for each consumer who has scans."""
-        for consumer in consumers:
-            scan_count = HistoryScan.objects.filter(
-                user=consumer,
-                history__in=productions,
-            ).count()
-
-            if scan_count == 0:
-                continue
-
-            review_count = Review.objects.filter(
-                user=consumer,
-                production__in=productions,
-            ).count()
-
-            first_scan = (
-                HistoryScan.objects.filter(
-                    user=consumer,
-                    history__in=productions,
-                )
-                .order_by("date")
-                .values_list("date", flat=True)
-                .first()
-            )
-
-            last_scan = (
-                HistoryScan.objects.filter(
-                    user=consumer,
-                    history__in=productions,
-                )
-                .order_by("-date")
-                .values_list("date", flat=True)
-                .first()
-            )
-
-            achievements = []
-            if scan_count >= 1:
-                achievements.append("first_scan")
-            if scan_count >= 5:
-                achievements.append("frequent_scanner")
-            if review_count >= 1:
-                achievements.append("first_review")
-
-            summary, _ = UserImpactSummary.objects.update_or_create(
-                user=consumer,
-                defaults={
-                    "total_scans": scan_count,
-                    "total_reviews": review_count,
-                    "first_scan_date": first_scan,
-                    "last_scan_date": last_scan,
-                    "achievements_earned": achievements,
-                    "sustainable_farms_found": 1,
-                    "local_farms_found": 1,
-                    "better_choices_made": scan_count,
-                    "points_earned": scan_count * 10 + review_count * 50,
-                    "current_level": 1 + (scan_count // 5),
-                },
-            )
 
     def _create_notifications(self, owner, productions, consumers):
         """Create scan notifications for the most recent scans per production."""

@@ -45,18 +45,6 @@ class USDAConversions:
 # verdict attached, it belongs on the producer dashboard, where the farmer can act on it.
 
 
-# User engagement milestones for achievements
-class EngagementMilestones:
-    """User achievement milestones for sustainable engagement"""
-
-    SCAN_MILESTONES = {
-        "EXPLORER": 10,  # First engagement milestone
-        "COMMITTED": 25,  # Regular user milestone
-        "ADVOCATE": 50,  # Power user milestone
-        "CHAMPION": 100,  # Expert user milestone
-    }
-
-
 def format_carbon_amount(co2e_value):
     """Format a recorded CO₂e amount for display. A measurement, not a verdict.
 

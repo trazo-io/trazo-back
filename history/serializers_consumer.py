@@ -21,7 +21,6 @@ from .models import (
     SoilManagementEvent,
     WeatherEvent,
 )
-from .models_consumer import UserImpactSummary
 from .services.claim_authority import _CONSUMER_WITHHELD_PRODUCTION_SUBTYPES, may_publish_production_subtype
 
 User = get_user_model()
@@ -108,99 +107,82 @@ def season_recorded_emissions(history_id):
     return CarbonCalculatorService().recorded_emissions_kg(history_id)
 
 
-class UserImpactSummarySerializer(serializers.ModelSerializer):
-    """Serialize user impact summary for dashboard - transparency-first approach"""
+class ConsumerImpactSerializer(serializers.Serializer):
+    """What a signed-in shopper did, counted live from their scans. Serializes a User.
 
-    # Transparency-first fields
-    # ⛔ NO SCORE. `transparency_score` and `transparency_score_avg` were served here to
-    # signed-in consumers until 2026-09-08 — a self-graded 0-100 number, computed by a
-    # FOURTH independent formula (10 events = 100, 7 = 85, 5 = 70, 3 = 50), on a payload a
-    # shopper receives. `authenticated-consumer-score-leak-2026-08-06` is the same incident:
-    # LOGGING IN DOES NOT MAKE A CLAIM SAFE. The factual counts below (`events_viewed`,
-    # `farming_events_viewed`, `verified_farms_scanned`) are the whole replacement.
+    Replaces `UserImpactSummarySerializer`, which served a stored `UserImpactSummary` row
+    refreshed at most hourly. Besides these counts that row carried `total_carbon_offset_kg`
+    (the scanned seasons' EMISSIONS labelled as an offset), `miles_driving_offset`,
+    `trees_equivalent`, `sustainable_farms_found`, `better_choices_made` and a points, level and
+    achievements system. No screen rendered any of them; they left the payload on 2026-11-10
+    and the model goes in history 0256.
+
+    Every number here is a count of the shopper's own scans, never a verdict on a farm.
+    """
+
+    # ⛔ NO SCORE. `transparency_score` and `transparency_score_avg` were served to signed-in
+    # consumers until 2026-09-08: a self-graded 0-100 number, computed by a FOURTH independent
+    # formula (10 events = 100, 7 = 85, 5 = 70, 3 = 50), on a payload a shopper receives.
+    # `authenticated-consumer-score-leak-2026-08-06` is the same incident: LOGGING IN DOES NOT
+    # MAKE A CLAIM SAFE. These factual counts are the whole replacement.
+    total_scans = serializers.SerializerMethodField()
     verified_farms_scanned = serializers.SerializerMethodField()
     farming_events_viewed = serializers.SerializerMethodField()
+    documented_products = serializers.SerializerMethodField()
 
-    # Cache for bulk event counts to avoid N+1 queries
-    _event_counts_cache = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._event_counts_cache = None
 
-    class Meta:
-        model = UserImpactSummary
-        fields = [
-            "total_scans",
-            "total_reviews",
-            # Transparency-first metrics (primary)
-            "verified_farms_scanned",
-            "farming_events_viewed",
-            # Legacy fields (secondary)
-            "total_carbon_offset_kg",
-            "miles_driving_offset",
-            "trees_equivalent",
-            "sustainable_farms_found",
-            "local_farms_found",
-            "better_choices_made",
-            "achievements_earned",
-            "current_level",
-            "points_earned",
-            "first_scan_date",
-            "last_scan_date",
-        ]
+    def _scans(self, user):
+        return HistoryScan.objects.counted().filter(user=user)
 
-    def _get_event_counts(self, obj):
+    def _get_event_counts(self, user):
+        """Served event count per scanned production, computed once and shared.
+
+        `farming_events_viewed` and `documented_products` both read it: 8 aggregated queries
+        instead of 8 per scanned production.
         """
-        OPTIMIZED: Get all event counts in bulk using a single set of queries.
-        Caches result to avoid re-querying for farming_events_viewed.
-        """
-        if self._event_counts_cache is not None:
-            return self._event_counts_cache
-
-        user = obj.user
-        scans = HistoryScan.objects.counted().filter(user=user).select_related("history")
-
-        # Get all history IDs in one query
-        history_ids = [scan.history_id for scan in scans if scan.history_id]
-
-        # Bulk fetch event counts - 8 queries instead of 8 * N queries
-        self._event_counts_cache = get_bulk_event_counts(history_ids)
+        if self._event_counts_cache is None:
+            history_ids = set(self._scans(user).exclude(history_id=None).values_list("history_id", flat=True))
+            self._event_counts_cache = get_bulk_event_counts(sorted(history_ids))
         return self._event_counts_cache
 
-    def get_verified_farms_scanned(self, obj):
-        """Count farms with verified certifications"""
-        from .models import HistoryScan
+    def get_total_scans(self, user):
+        return self._scans(user).count()
 
-        user = obj.user if obj.user else None
-        if not user:
-            return 0
-        try:
-            from certifications.models import Certification
+    def get_verified_farms_scanned(self, user):
+        """Distinct scanned farms holding a certification in a consumer-listed status.
 
-            certified_est_ids = set(
-                Certification.objects.filter(
-                    verification_status__in=CONSUMER_LISTED_STATUSES,
-                ).values_list("establishment_id", flat=True)
-            )
-            return (
-                HistoryScan.objects.counted()
-                .filter(user=user)
-                .filter(history__parcel__establishment__in=certified_est_ids)
-                .values("history__parcel__establishment")
-                .distinct()
-                .count()
-            )
-        except Exception:
-            return 0
-
-    def get_farming_events_viewed(self, obj):
+        The name is the wire contract; both tiles that render it say "Farms Discovered" and their
+        tooltips state it is not a statement that anyone verified the farm.
         """
-        Count total farming events user has explored.
+        from certifications.models import Certification
 
-        OPTIMIZED: Uses bulk event counts instead of N+1 queries.
+        certified_est_ids = Certification.objects.filter(
+            verification_status__in=CONSUMER_LISTED_STATUSES,
+        ).values_list("establishment_id", flat=True)
+        return (
+            self._scans(user)
+            .filter(history__parcel__establishment__in=certified_est_ids)
+            .values("history__parcel__establishment")
+            .distinct()
+            .count()
+        )
+
+    def get_farming_events_viewed(self, user):
+        """Served events across the distinct productions the shopper scanned."""
+        return sum(self._get_event_counts(user).values())
+
+    def get_documented_products(self, user):
+        """Distinct scanned productions with at least one served event.
+
+        The "Documented Products" tile rendered `quick_stats.better_choices` until 2026-11-10, and
+        that number was something else: scans of farms holding a listed certification or, when
+        there were none, scans of seasons with USDA-factor carbon entries. The tile's tooltip
+        promises products whose producer recorded their farming activities; this is that count.
         """
-        # Get bulk event counts (cached)
-        event_counts = self._get_event_counts(obj)
-
-        # Sum all event counts
-        return sum(event_counts.values())
+        return sum(1 for count in self._get_event_counts(user).values() if count)
 
 
 class EnhancedHistoryScanSerializer(serializers.ModelSerializer):
