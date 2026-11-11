@@ -208,6 +208,9 @@ def check_open_prs(repo, base, run_url):
         number, sha = pr["number"], pr["headRefOid"]
         try:
             _run("git", "fetch", "--no-tags", "--quiet", "origin", f"pull/{number}/head:refs/pr/{number}")
+            # The head that was fetched and is checked below, not the listing's: a push between the
+            # two would otherwise put this verdict on a commit that is no longer the PR's head.
+            sha = _run("git", "rev-parse", f"refs/pr/{number}").strip()
             added = _added_files(base, f"refs/pr/{number}")
             main = _main_files(base, {migration_of(p)[0] for p in added})
             results[number] = (sha, problems(main, added))

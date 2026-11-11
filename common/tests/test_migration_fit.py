@@ -149,11 +149,12 @@ class OnePrCannotBlockTheOthersTests(SimpleTestCase):
         def run(*args, **kwargs):
             if args[:2] == ("git", "fetch") and args[-1].startswith("pull/1/"):
                 raise subprocess.CalledProcessError(128, args, stderr="couldn't find remote ref pull/1/head")
-            if args[:2] == ("git", "rev-parse"):
-                return "abc1234\n"
+            if args[:2] == ("git", "rev-parse"):  # PR 2 was pushed to after the listing
+                return "ccc\n" if args[-1] == "refs/pr/2" else "abc1234\n"
             return ""  # no files: PR 2 adds no migration
 
         with mock.patch.object(fit, "_gh", side_effect=gh), mock.patch.object(fit, "_run", side_effect=run):
             errors = fit.check_open_prs("trazo-io/trazo-back", "origin/main", "https://run")
         self.assertEqual(errors, 1)
-        self.assertEqual(posted, [("aaa", "error"), ("bbb", "success")])
+        # PR 2's verdict lands on the head that was fetched and checked, not the listing's "bbb".
+        self.assertEqual(posted, [("aaa", "error"), ("ccc", "success")])
