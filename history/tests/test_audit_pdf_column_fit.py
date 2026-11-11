@@ -72,6 +72,23 @@ WIDTH_LISTS = {
     "PRODUCTION_EVENT_WIDTHS_PLAIN": svc.PRODUCTION_EVENT_WIDTHS_PLAIN,
     "HARVEST_ANALYTICS_WIDTHS": svc.HARVEST_ANALYTICS_WIDTHS,
     "PEST_EVENT_WIDTHS": svc.PEST_EVENT_WIDTHS,
+    # 2026-11-11: lifted out of `_build_chemical_log` (see WORST_CASE_WORDS below).
+    "APPLICATION_LOG_WIDTHS_CERTIFIED": svc.APPLICATION_LOG_WIDTHS_CERTIFIED,
+    "APPLICATION_LOG_WIDTHS_PLAIN": svc.APPLICATION_LOG_WIDTHS_PLAIN,
+}
+
+#: The widest single WORD each prose column of the application log prints, from real values:
+#: the showcase farm's records, CHEMICAL_TYPE_LABELS and `_organic_basis_cell`. A prose column
+#: wraps between words, but ReportLab SPLITS a word wider than the column, and on 2026-11-11 the
+#: landing page's preview of this table read "hydroxi / de", "s / pinosad", "(Xanthomona / s"
+#: and "grower-s / elected". Keyed by header so both variants are checked by the same list.
+WORST_CASE_WORDS = {
+    "Product": ["Naturalyte", "Fertilizer", "Seaweed"],
+    "Type": ["Pesticide", "Fungicide", "Fertilizer", "Herbicide"],
+    "NPK / Conc.": ["hydroxide", "spinosad"],
+    "Method": ["Fertigation", "fertigation", "Air-blast"],
+    "Target / Purpose": ["(Xanthomonas", "orangeworm", "transitella)", "arboricola", "protectant"],
+    "Organic Status": ["Organic-approved", "grower-selected,", "grower-reported", "Self-reported"],
 }
 
 
@@ -133,6 +150,21 @@ class ColumnFitTests(SimpleTestCase):
                         f"{name}[{index}] ({header}) is {width / inch:.3f}in but its widest "
                         f"header word needs {(widest_word + CELL_PADDING) / inch:.3f}in in bold.",
                     )
+
+    def test_prose_columns_hold_their_widest_word(self):
+        """Prose wraps between words, never inside one."""
+        for name in ("APPLICATION_LOG_WIDTHS_CERTIFIED", "APPLICATION_LOG_WIDTHS_PLAIN"):
+            widths = WIDTH_LISTS[name]
+            for index, header in enumerate(svc.TABLE_HEADERS[name]):
+                for word in WORST_CASE_WORDS.get(header, []):
+                    needed = stringWidth(word, CELL_FONT, CELL_FONT_SIZE) + CELL_PADDING
+                    with self.subTest(table=name, column=header, word=word):
+                        self.assertGreaterEqual(
+                            widths[index],
+                            needed,
+                            f"{name}[{index}] ({header}) is {widths[index] / inch:.3f}in but "
+                            f'"{word}" needs {needed / inch:.3f}in, so ReportLab splits it.',
+                        )
 
     def test_the_identifier_index_map_matches_the_lists(self):
         """Guards the guard: an index that points past the end tests nothing.
