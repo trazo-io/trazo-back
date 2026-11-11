@@ -161,23 +161,24 @@ class ProductionDefaultCacheStaysInertTests(SimpleTestCase):
     """NEVER: production's `default` cache gets a real backend while the dormant middlewares
     are installed. Read from prod.py's source, because importing prod settings reaches AWS."""
 
-    def _prod_caches_assignments(self):
+    def _sole_top_level_assignment(self, name):
+        """The one statement in prod.py that touches `name`, which must be a plain top-level
+        `name = ...`. Every other reference fails: a nested key write
+        (`CACHES["default"]["BACKEND"] = ...`), a method call (`CACHES["default"].update(...)`),
+        a reassignment inside an `if`, an augmented assignment, a `del`. Settings code has no
+        reason to read these names back, so any second mention is a way to change them."""
         tree = ast.parse((BACKEND_ROOT / "backend" / "settings" / "prod.py").read_text(encoding="utf-8"))
-        assigns = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "CACHES":
-                        assigns.append(node)
-                    if (
-                        isinstance(target, ast.Subscript)
-                        and isinstance(target.value, ast.Name)
-                        and target.value.id == "CACHES"
-                    ):
-                        key = target.slice
-                        if isinstance(key, ast.Constant) and key.value == "default":
-                            assigns.append(node)
-        return tree, assigns
+        mentions = [n for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == name]
+        self.assertEqual(
+            len(mentions),
+            1,
+            f"prod.py mentions {name} {len(mentions)} times (lines {[n.lineno for n in mentions]}); "
+            f"it may only be assigned once, at the top level",
+        )
+        (only,) = mentions
+        top = [stmt for stmt in tree.body if isinstance(stmt, ast.Assign) and any(t is only for t in stmt.targets)]
+        self.assertEqual(len(top), 1, f"{name} is assigned inside a block: an environment variable can change it")
+        return top[0]
 
     def test_the_middlewares_this_guards_against_are_still_installed(self):
         """When they are removed, this guard can go; until then it must apply."""
@@ -188,10 +189,7 @@ class ProductionDefaultCacheStaysInertTests(SimpleTestCase):
         self.assertTrue(installed, "remove ProductionDefaultCacheStaysInertTests with the middlewares")
 
     def test_prod_assigns_default_once_unconditionally_and_to_dummy(self):
-        tree, assigns = self._prod_caches_assignments()
-        self.assertEqual(len(assigns), 1, "prod.py must set CACHES['default'] in exactly one place")
-        (node,) = assigns
-        self.assertIn(node, tree.body, "the CACHES assignment sits inside an if: an env var can arm the middlewares")
+        node = self._sole_top_level_assignment("CACHES")
         default = next(
             v
             for k, v in zip(node.value.keys, node.value.values)
@@ -206,13 +204,5 @@ class ProductionDefaultCacheStaysInertTests(SimpleTestCase):
 
     def test_prod_keeps_django_ratelimit_off(self):
         """Its decorators on the carbon views count in `default`."""
-        source = (BACKEND_ROOT / "backend" / "settings" / "prod.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        top = [
-            n
-            for n in tree.body
-            if isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "RATELIMIT_ENABLE" for t in n.targets)
-        ]
-        self.assertEqual(len(top), 1)
-        self.assertIs(top[0].value.value, False)
+        node = self._sole_top_level_assignment("RATELIMIT_ENABLE")
+        self.assertIs(node.value.value, False)
