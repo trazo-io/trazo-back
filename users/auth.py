@@ -40,4 +40,11 @@ class CustomAuthentication(JWTAuthentication):
         validated_token = self.get_validated_token(raw_token)
         user = self.get_user(validated_token)
 
+        # A token issued before the password or email last changed is refused, so a reset ends
+        # every other session within one request, not 15 minutes later (OV-SEC-C03).
+        from .sessions import SESSION_ENDED, token_predates_credentials
+
+        if token_predates_credentials(user, validated_token):
+            raise exceptions.AuthenticationFailed(SESSION_ENDED, code="session_ended")
+
         return user, validated_token
