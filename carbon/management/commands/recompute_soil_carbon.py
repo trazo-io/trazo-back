@@ -8,6 +8,10 @@ soil changes therefore still carry the old figures and labels:
   * "from recorded inputs" on figures built only from a per-hectare default (`area_estimate`);
   * 0.41 kg on a lab analysis, which counts no emission at all;
   * the operation default added on top of recorded fuel, and lime with no named carbonate.
+  * 2026-11-11: a per-hectare soil-carbon CREDIT (cover crop -0.8, composting -1.0, organic
+    matter -0.6, no-till -0.5 kg CO2e/ha) netted into figures that also carried recorded fuel or
+    amendment nitrogen. The soil table no longer has one; a re-run recomputes those rows. The
+    apply now keeps its restore text on the DataOperationLog row: `--restore log:<id>`.
 
 For every soil event this command asks the calculator what a re-save would store now and compares
 it with what is stored. Four outcomes are kept apart, and none of them is a stored zero:
@@ -822,6 +826,10 @@ def restore_records(restore: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
 # --------------------------------------------------------------------------------------
 
 
+#: `--restore log:<id>` reads the restore text stored on that apply's DataOperationLog row.
+LOG_PREFIX = "log:"
+
+
 class Command(BaseCommand):
     help = (
         "Recompute stored soil-event carbon under the 2026-10-28 methodology. Dry run by default: "
@@ -832,7 +840,9 @@ class Command(BaseCommand):
         parser.add_argument("--report", default="", help="Dry run: where to write the plan (JSON).")
         parser.add_argument("--apply", default="", metavar="PLAN", help="Apply a reviewed plan file.")
         parser.add_argument("--restore-file", default="", help="With --apply: where to write the restore file.")
-        parser.add_argument("--restore", default="", metavar="RESTORE_FILE", help="Revert an apply.")
+        parser.add_argument(
+            "--restore", default="", metavar="RESTORE_FILE", help="Revert an apply: a restore file, or log:<id>."
+        )
         parser.add_argument("--company", type=int, action="append", help="Company id (repeatable).")
         parser.add_argument("--establishment", type=int, action="append", help="Establishment id (repeatable).")
         parser.add_argument("--history", type=int, action="append", help="Season (History) id (repeatable).")
@@ -882,12 +892,17 @@ class Command(BaseCommand):
             counts: Dict[str, int] = {"records": len(applied)}
             for a in applied:
                 counts[a["classification"]] = counts.get(a["classification"], 0) + 1
-            DataOperationLog.objects.create(
+            # The restore text goes on the log row too, byte for byte the text `report_sha256`
+            # hashes. Until 2026-11-11 it lived only in --restore-file, and in production that is
+            # a path on an App Platform container whose disk is gone after the next deploy: the
+            # only copy of the removed entries did not outlive the console session.
+            log = DataOperationLog.objects.create(
                 operation=OPERATION,
                 action=DataOperationLog.ACTION_APPLY,
                 report_sha256=outcome["restore_sha256"] or plan["_sha256"],
                 counts=counts,
                 run_by=options["run_by"],
+                report=restore_path.read_text() if outcome["restore_sha256"] else "",
             )
         self.stdout.write(f"Applied plan {plan_path} (sha256 {plan['_sha256']}).")
         self.stdout.write(f"  applied                      {len(applied)}")
@@ -910,14 +925,27 @@ class Command(BaseCommand):
                     f"{after['buyer_total']:.3f} [{plan_after.get('buyer_total', 0):.3f}]"
                 )
         if applied:
-            self.stdout.write(f"Restore file: {restore_path}. Keep it: it holds the only copy of the removed entries.")
+            self.stdout.write(
+                f"Restore file: {restore_path}. Also kept on DataOperationLog #{log.pk}: "
+                f"`--restore {LOG_PREFIX}{log.pk}` works after this container is gone."
+            )
 
     # -- restore ---------------------------------------------------------------------
     def _restore(self, options):
         from common.models import DataOperationLog
 
-        path = Path(options["restore"])
-        text = path.read_text()
+        path = options["restore"]
+        if path.startswith(LOG_PREFIX):
+            log = DataOperationLog.objects.filter(
+                pk=path[len(LOG_PREFIX) :] if path[len(LOG_PREFIX) :].isdigit() else None,
+                operation=OPERATION,
+                action=DataOperationLog.ACTION_APPLY,
+            ).first()
+            if log is None or not log.report:
+                raise CommandError(f"{path}: no apply of {OPERATION} with a stored restore. Nothing was restored.")
+            text = log.report
+        else:
+            text = Path(path).read_text()
         restore = json.loads(text)
         if restore.get("kind") != RESTORE_KIND or restore.get("operation") != OPERATION:
             raise CommandError(f"{path} is not a restore file written by this command's apply.")

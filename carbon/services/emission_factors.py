@@ -430,45 +430,28 @@ class EmissionFactorsRegistry:
         # post-tillage pulse on one Texas vertisol; West & Post 2002 and IPCC 2019 Vol 4 Ch 5 are
         # multi-year soil stock change (20-year default); Lal 2004 is farm-operation energy, which
         # recorded fuel already counts. None of them is a per-pass emission factor.
-        "no_till": {
-            "value": -0.5,  # kg CO2e per hectare (carbon sequestration)
-            "unit": "kg CO2e per hectare",
-            "source": "USDA-ARS No-Till Research 2025",
-            "reference": "Conservation tillage carbon sequestration benefits",
-            "confidence": "high",
-            "last_verified": "2025-01-24",
-            "notes": "Reduced soil disturbance promotes carbon accumulation and soil health",
-            "impact_type": "carbon_sequestration",
-        },
-        "cover_crops": {
-            "value": -0.8,  # kg CO2e per hectare (carbon sequestration)
-            "unit": "kg CO2e per hectare",
-            "source": "USDA-ARS Cover Crop Research 2025",
-            "reference": "Cover crop carbon sequestration and soil building benefits",
-            "confidence": "high",
-            "last_verified": "2025-01-24",
-            "notes": "Cover crops add organic matter and protect soil carbon",
-            "impact_type": "carbon_sequestration",
-        },
-        "composting": {
-            "value": -1.0,  # kg CO2e per hectare (carbon sequestration)
-            "unit": "kg CO2e per hectare",
-            "source": "USDA-ARS Composting Research 2025",
-            "reference": "Organic matter addition and carbon sequestration",
-            "confidence": "high",
-            "last_verified": "2025-01-24",
-            "notes": "Compost application increases soil organic carbon and improves soil health",
-            "impact_type": "carbon_sequestration",
-        },
-        "organic_matter": {
-            "value": -0.6,  # kg CO2e per hectare (carbon sequestration)
-            "unit": "kg CO2e per hectare",
-            "source": "USDA-ARS Organic Matter Research 2025",
-            "reference": "Soil organic matter amendments and carbon benefits",
-            "confidence": "high",
-            "last_verified": "2025-01-24",
-            "notes": "Organic amendments build soil carbon and improve soil structure",
-            "impact_type": "carbon_sequestration",
+        # NEVER: a per-hectare soil-carbon CREDIT. no_till (-0.5), cover_crops (-0.8), composting
+        # (-1.0) and organic_matter (-0.6 kg CO2e/ha, impact_type "carbon_sequestration") stood
+        # here until 2026-11-11, each sourced to a "USDA-ARS ... Research 2025" study that no one
+        # could find. They were netted into stored figures labelled "from recorded inputs"
+        # whenever fuel or amendment nitrogen was also recorded (24 production rows on
+        # 2026-11-11). Soil-carbon stock change is EXCLUDED until a stock-accounting method
+        # exists (.claude/rules/carbon-methodology.md, 2026-10-28), which the tillage flux removal
+        # above already applied to the positive side. These practices count what was burned or
+        # applied (fuel, amendment nitrogen) and nothing per hectare.
+        # Guard: carbon/tests/test_soil_carbon_boundary.py.
+        **{
+            key: {
+                "value": 0.0,
+                "unit": "kg CO2e per hectare",
+                "source": "Trazo methodology: soil-carbon stock change excluded",
+                "reference": ".claude/rules/carbon-methodology.md (no soil-carbon term, 2026-10-28)",
+                "confidence": "methodology",
+                "last_verified": "2026-11-11",
+                "notes": "No per-hectare term: recorded fuel and amendment nitrogen are counted elsewhere.",
+                "impact_type": "zero_direct_emissions",
+            }
+            for key in ("no_till", "cover_crops", "composting", "organic_matter")
         },
         "soil_test": {
             "value": 0.0,  # kg CO2e per hectare — no direct operational emissions
