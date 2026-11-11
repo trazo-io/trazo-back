@@ -100,6 +100,8 @@ class IndexForm:
     document_id: str
     locations: list = field(default_factory=list)
     rows: list = field(default_factory=list)
+    #: For a form the agent asked Trazo not to reproduce (`Form.reproduced`): why it has no rows.
+    note: str = ""
 
 
 @dataclass
@@ -420,6 +422,14 @@ def build_index(osp, recorder) -> QuestionIndex:
     for form in forms:
         entry = IndexForm(label=form.label, document_id=form.document_id)
         entry.locations = _form_document_locations(form, recorder, texts_cache)
+        if not form.reproduced:
+            # Named, with no rows: its items would reproduce the form the agent asked Trazo not to
+            # (WSDA AGR 2521; overall review 2026-11, OV-PK-W01), the same rule 02s keeps.
+            from certifications.services.packet_coverage import not_reproduced_sentence
+
+            entry.note = not_reproduced_sentence(packet_agent(osp).name or certifier.upper())
+            index.forms.append(entry)
+            continue
         items = {item.ref: item for item in form.items}
         for state in states.get(id(form), []):
             entry.rows.append(index_row(state, items.get(state.ref), recorder, manifest, texts_cache))
@@ -486,6 +496,8 @@ def index_pdf(osp, recorder) -> bytes:
             # register relates the form to (run 6, R6-04).
             lead = "Form named in" if loc.page else "Related packet document"
             story.append(Paragraph(_escape(f"{lead}: {loc.text()}"), styles["body"]))
+        if form.note:
+            story.append(Paragraph(_escape(form.note), styles["body"]))
         for row in form.rows:
             head = f"{row.ref}: {row.asks}" + (" (optional)" if row.optional else "")
             story.append(Paragraph(f"<b>{_escape(head)}</b>", styles["body"]))

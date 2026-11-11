@@ -13,6 +13,7 @@ the records disagree the line says so with `[REVIEW]`, and the determination sta
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
@@ -180,3 +181,117 @@ def _join(words: list[str], conjunction: str) -> str:
     if len(words) <= 1:
         return "".join(words)
     return ", ".join(words[:-1]) + f" {conjunction} " + words[-1]
+
+
+#: The planned-crop table's columns (CCOF ORGB49 A8 crop and acres; WSDA AGR 2264 ref 8 adds variety and the
+#: estimated harvest date; OTCO C2 2.1 10) crop and acres).
+PLANNED_CROP_COLUMNS = ("Crop", "Variety", "Expected harvest", "Acres")
+
+
+def _acres_number(raw):
+    """The operator's acreage as a number, or None when it is blank or not a plain number.
+
+    A comma is refused, not read: "18,5" is a decimal in Spanish and "1,250" a thousands separator in English,
+    and reading either as the other prints a figure ten or a thousand times off (review of back PR 381)."""
+    text = str(raw if raw is not None else "").strip()
+    if not text or "," in text:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _crop_words(name: str) -> frozenset:
+    """The words of a crop name, lower case and singular, so "Bartlett pears" holds "pear" and "Pineapple" does
+    not hold "apple". Whole words only: a substring test let "Pea" stand for "Peach" (review of back PR 381)."""
+    words = set()
+    for word in re.findall(r"[a-zà-ÿ]+", (name or "").lower()):
+        if word.endswith("ies") and len(word) > 4:
+            word = word[:-3] + "y"
+        elif word.endswith("es") and word[:-2].endswith(("ch", "sh", "x", "ss", "o")):
+            word = word[:-2]
+        elif word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+            word = word[:-1]
+        words.add(word)
+    return frozenset(words)
+
+
+def crop_is_listed(name: str, listed: list[str]) -> bool:
+    """Whether a season's crop is named in the list: every word of one name appears in the other."""
+    words = _crop_words(name)
+    if not words:
+        return True
+    return any(words <= other or (other and other <= words) for other in (_crop_words(item) for item in listed))
+
+
+def open_season_crops(parcel) -> list[str]:
+    """Crops of the seasons still open on the parcel (started, not finished), as the season names them."""
+    from history.models import History
+
+    names: list[str] = []
+    seasons = History.objects.filter(parcel=parcel, start_date__isnull=False, finish_date__isnull=True).select_related(
+        "product", "crop_type"
+    )
+    for season in seasons.order_by("start_date", "pk"):
+        name = (getattr(season.product, "name", None) or getattr(season.crop_type, "name", None) or "").strip()
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def planned_crop_rows(parcel) -> list[tuple[list[str], list[str]]]:
+    """(cells, notes) per planned crop, in the shape `_register_table` prints."""
+    rows = []
+    for crop in parcel.planned_crops.all().order_by("pk"):
+        rows.append(
+            (
+                [
+                    [crop.crop],
+                    [crop.variety or "Not stated"],
+                    [crop.expected_harvest.isoformat() if crop.expected_harvest else "Not stated"],
+                    [f"{float(crop.acres):g}" if crop.acres is not None else "Not stated"],
+                ],
+                [],
+            )
+        )
+    return rows
+
+
+def planned_crop_lines(parcel, answers: dict) -> list[str]:
+    """What the page says under the planned-crop table: the area on file, the acres listed, and where the
+    figures or the open seasons disagree with the list. Every number is the operator's; none is computed into
+    the table."""
+    crops = list(parcel.planned_crops.all().order_by("pk"))
+    lines: list[str] = []
+    area_acres = float(parcel.area_acres) if getattr(parcel, "area", None) else None
+    lines.append(f"Parcel area on file: {parcel.area_display()}." if area_acres else "No parcel area is on file.")
+    if not crops:
+        lines.append("No crop is listed for this parcel.")
+    stated = [float(c.acres) for c in crops if c.acres is not None]
+    listed = round(sum(stated), 2)
+    if stated:
+        lines.append(f"Acres listed: {listed:g} across {len(stated)} crop{'s' if len(stated) != 1 else ''}.")
+    missing = [c.crop for c in crops if c.acres is None]
+    if missing:
+        lines.append(f"[REVIEW] No acres are given for: {', '.join(missing)}.")
+    to_certify = _acres_number(answer_value(answers, "acres_to_certify"))
+    if to_certify is not None and stated and listed > to_certify + 0.005:
+        # Stated, not flagged: a double crop lists the same ground twice, which is how the forms ask it.
+        lines.append(
+            f"The crops listed add up to {listed:g} acres against {to_certify:g} acres to be certified; ground "
+            "cropped more than once in the year is listed once per crop."
+        )
+    if to_certify is not None and area_acres is not None and to_certify > area_acres + 0.05:
+        lines.append(
+            f"[REVIEW] The acres to be certified ({to_certify:g}) are more than the parcel area on file "
+            f"({area_acres:.1f} acres)."
+        )
+    listed_names = [c.crop for c in crops]
+    unlisted = [name for name in open_season_crops(parcel) if not crop_is_listed(name, listed_names)]
+    if unlisted:
+        lines.append(
+            "[REVIEW] Seasons open on this parcel grow a crop the list does not name: " + ", ".join(unlisted) + "."
+        )
+    return lines

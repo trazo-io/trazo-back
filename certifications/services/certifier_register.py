@@ -268,6 +268,14 @@ class Form:
     #: not the one on its website: the agent's own words, with who said it and when. The routing page
     #: then names no edition, since the edition transcribed here is not the one the operation fills.
     sent_with_renewal: str = ""
+    #: Set when the agent has asked Trazo not to reproduce the form (`not_reproduced: {basis,
+    #: decided}`): the agent's own words, with who said it and when. The items stay in the register
+    #: as the record of the edition that was read, but nothing the operation or the agent reads
+    #: prints them or links the file: 02s names the form with the reason and no rows, and the copy
+    #: sheet gives one row sending the operation to the copy the agent sent (WSDA AGR 2521,
+    #: overall review 2026-11, OV-PK-W01).
+    not_reproduced_basis: str = ""
+    not_reproduced_decided: datetime.date | str = ""
     #: Set when the form exists only for a kind of operation Trazo has decided not to serve
     #: (mushrooms, wild harvest). A business decision, so it lives on the FORM with its reason and
     #: date, never on the questions: their statuses stay what they are, and the day the decision
@@ -285,6 +293,10 @@ class Form:
     @property
     def served(self) -> bool:
         return not self.not_served_basis
+
+    @property
+    def reproduced(self) -> bool:
+        return not self.not_reproduced_basis
 
     @property
     def label(self) -> str:
@@ -310,6 +322,23 @@ def _not_served_meta(meta: dict, where: str) -> dict:
     if meta.get("required_of_every_grower"):
         raise ValueError(f"{where}: a form every grower files cannot be marked not_served")
     return {"not_served_basis": " ".join(str(raw["basis"]).split()), "not_served_decided": raw.get("decided")}
+
+
+def _not_reproduced_meta(meta: dict, where: str) -> dict:
+    """`not_reproduced: {basis, decided}`, validated: both or nothing, and only on a form the
+    operation files with the agent. A form the packet answers is answered by printing its items, so
+    it cannot also be one whose items are never printed."""
+    raw = meta.get("not_reproduced")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or not str(raw.get("basis") or "").strip() or not raw.get("decided"):
+        raise ValueError(f"{where}: not_reproduced needs a basis and the date it was decided")
+    if not meta.get("filed_with_agent"):
+        raise ValueError(f"{where}: not_reproduced describes a form filed with the agent")
+    return {
+        "not_reproduced_basis": " ".join(str(raw["basis"]).split()),
+        "not_reproduced_decided": raw.get("decided"),
+    }
 
 
 def _filing_meta(meta: dict, where: str) -> dict:
@@ -501,6 +530,7 @@ def load_forms(certifier: str | None = None) -> list[Form]:
                 trazo_modules=_as_tuple(meta.get("trazo_module")),
                 packet_documents=_packet_documents(meta, where, certifier),
                 **_filing_meta(meta, where),
+                **_not_reproduced_meta(meta, where),
                 **_not_served_meta(meta, where),
                 register_status=register_status,
                 source_sha256=str(meta.get("source_sha256") or ""),

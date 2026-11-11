@@ -289,6 +289,15 @@ ROUTE_TENANCY = {
         "queryset scoped to the caller's companies; the parcel FK accepts only the caller's parcels",
         outsider_tests=(f"{_FK}.test_crop_history_cannot_be_written_on_another_companys_parcel",),
     ),
+    "product.views.ParcelPlannedCropViewSet": Route(
+        COMPANY,
+        "nested under the parcel; the parcel is the URL's and must be the URL's farm, never the body's",
+        outsider_tests=(
+            "product.tests.test_parcel_planned_crops.PlannedCropTenancyTests.test_another_company_reaches_nothing",
+            "product.tests.test_parcel_planned_crops.PlannedCropTenancyTests"
+            ".test_another_farms_parcel_reads_like_a_missing_one",
+        ),
+    ),
     "product.views.ParcelViewSet": Route(
         COMPANY,
         "queryset scoped to the caller's companies; CreateParcelSerializer.establishment accepts only "
@@ -416,9 +425,20 @@ ROUTE_TENANCY = {
     # ---------------------------------------------------------------------------------------------
     "users.views.UserViewSet": Route(
         USER,
-        "non-superusers get filter(id=request.user.id); verify/reset actions are AllowAny",
-        finding="email changes without re-verification (the is_superuser self-escalation is fixed in "
-        "#188, guard users.tests.test_user_privilege_fields_read_only)",
+        "non-superusers get filter(id=request.user.id); verify/reset actions are AllowAny. The email "
+        "changes only through request_email_change (acts on request.user, needs the password) and "
+        "confirm_email_change (AllowAny, proven by a hashed single-use token sent to the new address); "
+        "the is_superuser self-escalation is fixed in #188, guard "
+        "users.tests.test_user_privilege_fields_read_only",
+        # Closed 2026-11-11 (overall review OV-SEC-C03): was "email changes without re-verification".
+        outsider_tests=(
+            "users.tests.test_account_takeover_chain.AccountTakeoverChainTests."
+            "test_another_account_cannot_touch_this_one",
+            "users.tests.test_account_takeover_chain.AccountTakeoverChainTests."
+            "test_a_profile_patch_cannot_change_the_login_email",
+            "users.tests.test_account_takeover_chain.AccountTakeoverChainTests."
+            "test_requesting_a_change_needs_the_password",
+        ),
     ),
     "users.views.LoginViewSet": Route(ANONYMOUS, "sign-in"),
     "users.views.RegistrationViewSet": Route(ANONYMOUS, "sign-up"),
@@ -519,7 +539,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 49
+UNPROVEN_CEILING = 48
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 19
+OPEN_FINDINGS_CEILING = 18

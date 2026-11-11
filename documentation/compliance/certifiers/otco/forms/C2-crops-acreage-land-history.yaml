@@ -201,45 +201,36 @@ items:
     every parcel question is optional by design.
 - ref: 2.1-9
   asks: Total acres to be certified organic at this location.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: 'each parcel''s application under parcels/: Section E, the map caption; workbooks/Field and Crop Information Form.xlsx: Acreage or square feet'
+    questions:
+    - parcel_application.acres_to_certify
     models:
     - product.Parcel.area
-    prints: parcels/parcel-application-<parcel>.pdf §E (map caption); workbooks/Field and Crop Information
-      Form.xlsx ("Acreage or square feet")
-  gap: Same as CCOF A7. `Parcel.area` (stored in hectares, converted at the boundary by `area_display()` /
-    `_acres`) is the figure OTCO wants and it prints — but on the parcel page it appears only in the §E map
-    caption, not in the location-and-description block where OTCO asks for it. The workbook row carries it
-    in acres.
-  fix: Duplicate the acreage line into §A as "Total acres to be certified organic".
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked per parcel since 2026-11-11, as its own figure: the parcel area on file can hold homes,
+    parking or packing areas the form leaves out. §A prints it with the parcel area on file beside it,
+    and a [REVIEW] line when it exceeds that area or when the crops listed add up to more.
 - ref: 2.1-10
   asks: 'Use the following table to list crops you currently grow (and/or plan to grow) on this parcel: Crop
     / Acres or SQ FT. Attach an additional list if necessary.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - parcel_application.crop_history
+    - parcel_application.crop_table
     models:
-    - product.Parcel.product
-    - product.ParcelCropHistory.crop_grown
-    - history.models.History
-    prints: workbooks/Field and Crop Information Form.xlsx ("Crop(s)/Cover Crops"); parcels/parcel-application-<parcel>.pdf
-      §F (per year)
-  gap: 'OTCO-specific split of the crop table CCOF A8 / WSDA 8 judge as one row. Crop NAMES do reach two artifacts,
-    but the workbook cell prints ONE crop per parcel — the newest season in the ground, else the newest `ParcelCropHistory.crop_grown`
-    (`_current_season_crop`) — and §F lists crops by year, not as the current/planned set. A parcel carrying
-    three crops this season (OTCO''s own example lists five) shows one; "plan to grow" has no field at all.
-    (2.1-11) Same as CCOF A8 / WSDA 2264 ref 8: no per-crop acreage field exists anywhere — `History` carries
-    no area and `Parcel.product` is a single FK. A single-crop parcel can imply the whole parcel''s acreage;
-    a multi-crop parcel cannot be split. OTCO also accepts square feet (greenhouse and container ground); `Parcel.area`
-    prints in acres only.'
-  fix: Add a `crops_planned` rows answer (crop, acres) on page A prefilled with the crop names from open seasons
-    for the operator to confirm; print it as a table in §A and feed the workbook's crop cell from it (the CCOF
-    A8 fix). The `crops_planned` rows answer from 2.1-10 with an `acres` (or `sq_ft`) cell per crop; validate
-    the sum against parcel acreage and note when cropped acreage exceeds it.
+    - product.ParcelPlannedCrop
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    A table of rows the operator types (`ParcelPlannedCrop`: crop, variety, expected harvest, acres)
+    since 2026-11-11, printed in §A with 'Not stated' for a blank column and a [REVIEW] line for a crop
+    with no acres. Crops of seasons still open on the parcel are offered in the app as a starting point
+    and named in a [REVIEW] line when the list leaves them out; nothing is added to the table unasked.
+    Acres only; a greenhouse operation states its square feet as acres.
 - ref: '2.2'
   asks: BOUNDARIES AND BUFFERS — provide the information below for all areas adjacent to this parcel (one table
     row per border). Attach an additional list if necessary.

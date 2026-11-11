@@ -66,3 +66,6 @@ questions:
   parcel_application.location_country: >-
     Asked by CCOF ORGB49 A3 and OTCO C2 2.1 4). AGR 2264 ref 2 asks street, city, state, ZIP, county,
     Township/Range/Section and GPS, with no country.
+  parcel_application.expected_first_organic_harvest: >-
+    Asked by CCOF ORGB49 A6 and OTCO C2 2.1 8) as one date per parcel. AGR 2264 ref 8 asks an estimated
+    harvest date per crop, which the crop table carries.

@@ -1,0 +1,64 @@
+# Does every open PR's new migrations still build on main's latest migration?
+#
+# 2026-11-11: two PRs that each add the next migration of an app both pass CI (makemigrations
+# --check runs against main as it was then), and whichever merges second leaves the app with two
+# leaf migrations: `migrate` refuses to run and the production deploy fails. It happened with
+# history 0247 (2026-10-21) and history 0256 (2026-11-11). Nothing re-checked a PR when main moved.
+#
+# This re-checks ALL open PRs into main on every push to main and every PR event, and posts the
+# commit status "Migrations fit current main" on each PR head (a required check on main). A PR
+# whose migrations build on an older migration than main's latest fails it, with a comment naming
+# what to renumber. PRs building on the same migration as another open PR get a heads-up comment:
+# that is the only warning for two merges closer together than this run (about a minute).
+#
+# The statuses carry each PR's verdict; the job goes red only when a PR could not be checked or
+# posted. Standard library Python plus git and gh: no install step.
+#
+# The SCRIPT always comes from main, never from the PR: a pull_request run has `statuses: write`,
+# and running a PR's own copy would let a PR that breaks the script post a wrong verdict on
+# itself and on every other open PR. A change to the script takes effect once merged. This does
+# not stop a same-repo PR from editing this workflow file itself (GitHub runs a PR's own workflow
+# files); only trusted members push branches here, so the pin guards against a buggy script, not
+# a hostile one.
+name: Migrations fit current main
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+# Every run checks every open PR against the main of that moment, so only the newest matters.
+# Not cancel-in-progress: a cancelled run shows as a red X on the PR that started it.
+concurrency:
+  group: migration-fit
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  fit:
+    name: Check open PRs' migrations against main
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Check every open PR and post its status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only on the PR that adds this workflow, before it is on main.
+          if [ ! -f scripts/migration_fit.py ]; then
+            echo "scripts/migration_fit.py is not on main yet: nothing to run."
+            exit 0
+          fi
+          python3 scripts/migration_fit.py check-open-prs --base origin/main

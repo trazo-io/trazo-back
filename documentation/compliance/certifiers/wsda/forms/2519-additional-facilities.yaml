@@ -10,6 +10,13 @@
 # facility on file run by another operation, every value Trazo holds for the operator to copy, and names
 # the field to fill where it holds none. The responsibility statement and its attachments are the
 # operator's to give.
+#
+# 2026-11-11 (overall review 2026-11, OV-PK-W04): only a facility the plan's answers say stores or
+# handles the crop while the operation still owns it is listed (G6.2 contracted storage or ownership in
+# off-farm storage for §K 1; G6.1 off-farm handling "Yes, by a certified / an uncertified operation" for
+# §L 1). A buyer that takes title (G6.1 "Yes, but ownership transfers", or "straight to the buyer") is
+# named on the sheet as not on this form, and a facility the plan does not yet place is named with the
+# questions to answer. The sheet listed every facility another operation runs until then, buyers included.
 form:
   code: ''
   title: Additional Facilities and Third-Parties
@@ -49,9 +56,11 @@ items:
   asks: Use this form to describe any organic facilities or activities your business or a contracted third-party
     perform at a different address from your primary certified location. This form should not be used for sites
     (fields) used to produce organic crops.
-  note: 'Information only. The copy sheet gives one AGR 2519 per facility on file that another operation runs.
-    An own facility at a different address from the primary certified location is also filed on this form;
-    Trazo does not know which own facilities are elsewhere, and the sheet says so.'
+  note: 'Information only. The copy sheet gives one AGR 2519 per facility on file that another operation runs
+    and that, by the plan''s answers, stores or handles the crop while the operation still owns it; a buyer that
+    takes title is named as not on this form. An own facility at a different address from the primary certified
+    location is also filed on this form; Trazo does not know which own facilities are elsewhere, and the sheet
+    says so.'
 - ref: Location Information
   asks: Facility or Third-party Name; Physical Address; City; State; Zip code.
   status: covered

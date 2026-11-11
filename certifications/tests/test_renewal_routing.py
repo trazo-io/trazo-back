@@ -105,7 +105,7 @@ class EachAgentGetsItsOwnFormsTests(_Farm):
 
 
 class AgentSentFormTests(_Farm):
-    """WSDA, 2026-10-26: the fee form it sends with the renewal application is not the edition on its
+    """WSDA, reply received by 2026-11-09: the fee form it sends with the renewal application is not the edition on its
     website ("R 05/26 2521 is not the renewal fee form version we sent to our operations"). The page
     must not send a grower to the website copy."""
 
@@ -119,6 +119,42 @@ class AgentSentFormTests(_Farm):
             text,
         )
         self.assertIn("Site update: Site Update Information (AGR 2516), R 01/20", text, "a published form keeps it")
+
+    def test_the_fee_form_is_named_with_its_reason_and_no_rows(self):
+        """Overall review 2026-11, OV-PK-W01. WSDA, reply received by 2026-11-09: "Our fee forms are updated regularly.
+        Inputting it in your system would potentially cause an operation to use an outdated form."
+        02s itemised lines 1 to 4a of the R 05/26 file; it now names the form with that reason and
+        reproduces none of it."""
+        osp = self._plan("Washington State Department of Agriculture")
+        fee = next(f for f in renewal_routing(osp)[1] if f.document_id == "AGR 2521")
+        self.assertEqual((fee.rows, fee.revision, fee.url), ((), "", ""))
+        self.assertIn("does not reproduce its items", fee.reason)
+        packet = zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp)))
+        for name in ("02s-renewal-status-and-routing.pdf", "06-question-index.pdf"):
+            text = " ".join(_pdf_text(packet.read(name)).split())
+            with self.subTest(document=name):
+                self.assertIn(
+                    "Washington State Department of Agriculture does not publish it, so this packet does not "
+                    "reproduce its items.",
+                    text,
+                )
+                for line in (
+                    "Gross annual income received in the last calendar year",
+                    "Late fee ($100 for each month after March 1)",
+                    "How will you be submitting your application packet",
+                    "If submitted separately, when was the application sent",
+                    "the rows below were read from an earlier copy",
+                ):
+                    self.assertNotIn(line, text)
+
+    def test_not_reproduced_needs_a_basis_a_date_and_a_form_filed_with_the_agent(self):
+        from certifications.services.certifier_register import _not_reproduced_meta
+
+        self.assertEqual(_not_reproduced_meta({}, "x.yaml"), {})
+        with self.assertRaisesMessage(ValueError, "not_reproduced needs a basis and the date it was decided"):
+            _not_reproduced_meta({"filed_with_agent": True, "not_reproduced": {"basis": "WSDA said so."}}, "x.yaml")
+        with self.assertRaisesMessage(ValueError, "not_reproduced describes a form filed with the agent"):
+            _not_reproduced_meta({"not_reproduced": {"basis": "WSDA said so.", "decided": "2026-11-11"}}, "x.yaml")
 
     def test_a_published_form_is_not_marked_as_sent(self):
         forms = renewal_routing(self._plan("Washington State Department of Agriculture"))[1]
@@ -252,8 +288,9 @@ class CertifierFacingWordsTests(_Farm):
         wsda = self._plan("Washington State Department of Agriculture")
         text = self._supplement(wsda)
         wsda.delete()
-        self.assertIn("How will you be submitting your application packet and fee form/payment?", text)
-        self.assertIn("Gross annual income received in the last calendar year.", text)
+        self.assertIn("Indicate what changes need to be made for each site", text)
+        # The fee form is not reproduced (OV-PK-W01): its items are not printed at all.
+        self.assertNotIn("Gross annual income received in the last calendar year.", text)
         # A row named after the form's own label prints the label once.
         ccof = self._supplement(self._plan("CCOF"))
         self.assertIn("Operation Name (required).", ccof)
@@ -271,8 +308,12 @@ class CertifierFacingWordsTests(_Farm):
         from certifications.services.packet_coverage import _OUT_OF_SCOPE_WORDS
 
         expected = {
-            ("Washington State Department of Agriculture", "2"): "an amount the agent sets; entered on the form",
-            ("Washington State Department of Agriculture", "4"): "the operation's to answer on the form",
+            # WSDA's fee form rows "2" and "4" stood here until its items stopped being reproduced
+            # (overall review 2026-11, OV-PK-W01); OTCO's payment row carries the payment wording now.
+            (
+                "Oregon Tilth Certified Organic",
+                "Step 6 (payment included)",
+            ): "an amount the agent sets; entered on the form",
             ("CCOF", "Please enter any comments or questions"): "the operation's to answer on the form",
             ("CCOF", "Step 1: Request Renewal"): "the operation's own election on the form",
             ("Oregon Tilth Certified Organic", "Step 6 (billing contact)"): "the operation's to answer on the form",

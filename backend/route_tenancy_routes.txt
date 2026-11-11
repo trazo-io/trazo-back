@@ -170,6 +170,10 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/validate_qr/$	history.views.HistoryViewSet	AllowAny	post=validate_qr
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/validate_qr\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	post=validate_qr
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops/$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops/(?P<pk>[^/.]+)/$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/application/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/application\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
@@ -402,8 +406,10 @@ api/^scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUs
 api/^users/$	users.views.UserViewSet	IsAuthenticated	get=list,post=create
 api/^users/(?P<pk>[^/.]+)/$	users.views.UserViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^users/change_password/$	users.views.UserViewSet	IsAuthenticated	post=change_password
+api/^users/confirm_email_change/$	users.views.UserViewSet	AllowAny	post=confirm_email_change
 api/^users/confirm_password_reset/$	users.views.UserViewSet	AllowAny	post=confirm_password_reset
 api/^users/me/$	users.views.UserViewSet	IsAuthenticated	get=me
+api/^users/request_email_change/$	users.views.UserViewSet	IsAuthenticated	post=request_email_change
 api/^users/request_password_reset/$	users.views.UserViewSet	AllowAny	post=request_password_reset
 api/^users/resend_verification_email/$	users.views.UserViewSet	AllowAny	post=resend_verification_email
 api/^users/roles/$	users.views.UserViewSet	IsAuthenticated	get=roles

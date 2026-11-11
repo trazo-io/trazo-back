@@ -476,6 +476,10 @@ jobs:
       # pasture and OTCO C2 2.4's seed / planting stock columns (CCOF ORGB49 F7, WSDA AGR 2264 ref 10): the API,
       # the section F line, and the months a year built from seasons prints. Builds its own farms; no sibling repo.
       #
+      # 2026-11-11: product.tests.test_parcel_planned_crops joins. The crops a parcel grows now or is planned to grow,
+      # with acres (CCOF ORGB49 A7, A8; WSDA AGR 2264 ref 8; OTCO C2 2.1 9-10): the nested route's tenancy, the
+      # section A table and its review lines, and the register rows. Builds its own farms; no sibling repo.
+      #
       # 2026-11-10: certifications.tests.test_parcel_location_status joins. Parcel location (CCOF ORGB49 A2, A3, A5, A9;
       # WSDA AGR 2264 ref 2; OTCO C2 2.1), the status applied for (ref 4, 4a), export per site (ref 9) and treated
       # seed planted on the parcel (ref 11, 11a). Builds its own farms; no sibling repo.
@@ -618,6 +622,11 @@ jobs:
       # detail payload carries no `benchmark` and no `carbon_credit_potential`. It does not read
       # the sibling repo.
       #
+      # 2026-11-11: users.tests.test_account_takeover_chain joins (overall review 2026-11, OV-SEC-C03).
+      # The login email changes only with the password, a link to the new address and a notice to
+      # the old one; a password change, reset or email change ends every session (access tokens by
+      # issue time, refresh tokens blacklisted). It does not read the sibling repo.
+      #
       # 2026-11-07: users.tests.test_superuser_from_environment joins. A superuser comes from
       # createsuperuser --noinput and the environment; the command that kept its credentials in the
       # source stays deleted. It does not read the sibling repo.
@@ -670,6 +679,11 @@ jobs:
       # sibling repo.
       # 2026-11-11: the same module now also holds history 0258, which drops the table: refuses a
       # row, waits at most 5 s for a lock, and reverses to the table as 0256 left it.
+      #
+      # 2026-11-11: common.tests.test_migration_fit joins. scripts/migration_fit.py (run by
+      # migration-fit.yml on every push to main) fails an open PR whose new migrations build on an
+      # older migration than main's latest: the 0256 pair replayed, the 0248 merge, and the shapes
+      # it must not flag. It reads only this repo (scripts/, history/migrations/).
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -802,6 +816,7 @@ jobs:
             certifications.tests.test_facility_pest_scope \
             certifications.tests.test_storage_detail \
             certifications.tests.test_parcel_location_status \
+            product.tests.test_parcel_planned_crops \
             product.tests.test_land_history_periods \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
@@ -847,6 +862,7 @@ jobs:
             certifications.tests.test_parcel_land_history \
             history.tests.test_packet_transition_status \
             certifications.tests.test_annual_update_revisions \
+            certifications.tests.test_attested_unchanged_checked_at_signing \
             certifications.tests.test_annual_update_signer_is_the_responsible_person \
             certifications.tests.test_annual_update_lock \
             certifications.tests.test_annual_update_company_details \
@@ -901,6 +917,7 @@ jobs:
             history.tests.test_retired_shopper_models \
             history.tests.test_consumer_impact_payload \
             history.tests.test_retired_impact_summary \
+            common.tests.test_migration_fit \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \
@@ -955,6 +972,7 @@ jobs:
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \
             users.tests.test_superuser_from_environment \
+            users.tests.test_account_takeover_chain \
             history.tests.test_multi_parcel_activity \
             history.tests.test_multi_parcel_specs \
             history.tests.test_ambiguous_season_refused \

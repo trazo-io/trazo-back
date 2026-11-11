@@ -340,7 +340,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   (CCOF A5, OTCO 2.1); the status applied for and whether a transitional certificate is needed (WSDA AGR 2264
 #   ref 4, 4a); and treated seed planted on the parcel (ref 11, 11a). The expected first organic harvest is asked as the forms word it, without "(if in
 #   transition)". All optional; the export answer and the G3.1 pointer print from answers held elsewhere.
-CONTENT_VERSION = "2026.12.03"
+# 2026.12.04: parcel crops and acreage. The parcel application asks the total acres to be certified (CCOF A7, OTCO
+#   C2 2.1 9), WSDA AGR 2264 ref 8 total site acreage) and lists the crops grown now or planned, each with variety,
+#   expected harvest and acres (CCOF A8, WSDA ref 8, OTCO 2.1 10), as rows on `ParcelPlannedCrop`. Optional.
+CONTENT_VERSION = "2026.12.04"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

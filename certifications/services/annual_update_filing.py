@@ -12,7 +12,10 @@ can never erase an earlier filing.
 The rules, in the order they bite:
 
 * **Sign** hashes every signed field (`OSPAnnualUpdate.SIGNED_FIELDS`). From then on the content
-  changes only by correction; the viewset refuses edits with 409.
+  changes only by correction; the viewset refuses edits with 409. Signing is refused while the
+  update attests a § 205.201(a) section unchanged that differs between the two plan versions
+  (`attested_sections_that_differ`); saving a draft never is, and neither is filing, which
+  records what was already sent.
 * **File** needs a signature, sets the filing date and method once, and freezes the document as
   rendered at that moment (`filed_pdf`, `filed_sha256`). Document 02 is those bytes from then on.
   The same bytes are filed to the farm's Documents (`organic_system_plan`, source
@@ -47,12 +50,111 @@ from django.utils import timezone
 
 class FilingStateError(Exception):
     """An action that the filing's current state does not allow. Carries the HTTP status the
-    viewset answers with and a sentence the operator can act on."""
+    viewset answers with, a sentence the operator can act on and, where the app shows more than
+    the sentence, the structured fields it reads (`extra`, merged into the response body)."""
 
-    def __init__(self, detail: str, status_code: int = 409):
+    def __init__(self, detail: str, status_code: int = 409, extra: dict | None = None):
         super().__init__(detail)
         self.detail = detail
         self.status_code = status_code
+        self.extra = extra or {}
+
+
+#: The refusal code on a signing refused by `attested_sections_that_differ`. The app reads it
+#: and the `sections` beside it to name each section in the reader's language.
+ATTESTED_UNCHANGED_BUT_DIFFERS = "attested_unchanged_but_differs"
+
+#: How the English sentence names each kind of difference (`plan_version_changes.DIFFERS_*`).
+_DIFFERS_WORDS = {
+    "answers": "answers",
+    "materials": "the materials list",
+    "narrative": "your own narrative",
+    "record_types": "the record types confirmed",
+}
+
+
+def attested_sections_that_differ(filing) -> list[dict]:
+    """The § 205.201(a) sections `filing` attests unchanged whose content differs between the plan
+    it continues (`prior_osp`) and the version it produced (`new_osp`), in regulation order.
+
+    Overall review 2026-11, OV-PK-O01: "Mark all unchanged" set every section in one click and
+    nothing compared the two versions at signing, so a filed update could attest a section
+    unchanged while the same packet's 02s printed that its answers differ. "Differs" is
+    `plan_version_changes.section_differences`, the comparison 02s prints: a module answer or a
+    not-applicable election compiled into the section, the materials list for (a)(2), the
+    operator's own narrative, and which record types were confirmed. Write times, status and
+    carried-forward stamps are not compared, so a section only re-saved is not a change.
+
+    Empty when there is no second version to compare: an update that produced no new version (a
+    first year in Trazo, or a plan continued as it is) is the operator's statement alone. The
+    application information (§ 205.406(a)(3)) is not a plan section and is not checked here.
+    """
+    from certifications.models import OSP_SECTION_KEYS
+    from certifications.services.osp_pdf_snapshot import SECTION_LABELS
+    from certifications.services.plan_version_changes import section_differences
+
+    attestation = filing.sections_unchanged_attestation
+    if not isinstance(attestation, dict):
+        return []
+    attested = [key for key in OSP_SECTION_KEYS if attestation.get(key) is True]
+    prior, new = filing.prior_osp, filing.new_osp
+    if not attested or prior is None or new is None or new.pk == prior.pk:
+        return []
+    differences = section_differences(prior, new)
+    rows = []
+    for key in attested:
+        if key not in differences:
+            continue
+        clause, label = SECTION_LABELS.get(key, ("", key))
+        rows.append(
+            {
+                "section": key,
+                "clause": clause,
+                "label": label,
+                "differs": list(differences[key]["differs"]),
+                "modules": [
+                    {"key": module.key, "code": module.code, "title": dict(module.title)}
+                    for module in differences[key]["modules"]
+                ],
+            }
+        )
+    return rows
+
+
+def _what_differs(row: dict) -> str:
+    words = []
+    for kind in row["differs"]:
+        word = _DIFFERS_WORDS.get(kind, kind)
+        if kind == "answers" and row["modules"]:
+            word += " in " + ", ".join(f"{m['code']} {m['title'].get('en', '')}".strip() for m in row["modules"])
+        words.append(word)
+    return ", ".join(words)
+
+
+def _refuse_attestation_that_differs(filing):
+    """Raise when `filing` attests a section unchanged that differs between its plan versions."""
+    rows = attested_sections_that_differ(filing)
+    if not rows:
+        return
+    prior, new = filing.prior_osp.version_number, filing.new_osp.version_number
+    listed = "; ".join(f"§ 205.201{row['clause']} {row['label']} ({_what_differs(row)})" for row in rows)
+    them = "that section" if len(rows) == 1 else "those sections"
+    said = (
+        f"says {'this section is' if len(rows) == 1 else 'these sections are'} unchanged since plan v{prior}, "
+        f"but plan v{new} differs there: {listed}."
+    )
+    detail = f"Not signed. This update {said} Untick {them} and describe the change in the summary, then sign."
+    raise FilingStateError(
+        detail,
+        status_code=400,
+        extra={
+            "code": ATTESTED_UNCHANGED_BUT_DIFFERS,
+            "action": "sign",
+            "prior_osp_version": prior,
+            "new_osp_version": new,
+            "sections": rows,
+        },
+    )
 
 
 def _signer_name(user) -> str:
@@ -86,7 +188,14 @@ def default_signer_name(filing, user) -> str:
 
 
 @transaction.atomic
-def sign_filing(filing, user, signer_title: str = ""):
+def sign_filing(filing, user, signer_title: str = "", *, compare_plan_versions: bool = True):
+    """Sign `filing` as `user`.
+
+    `compare_plan_versions=False` is for one caller only: `seed_calapooia_bend`, which replays
+    revisions filed on 2026-10-01 and 2026-10-02, before signing compared the plan versions, and
+    restores their committed frozen bytes. Those bytes are records and print the attestation as it
+    was signed. The viewset never passes it, and no request field reaches it.
+    """
     from certifications.models import OSPAnnualUpdate
     from subscriptions.pilot_operator import refuse_setup_operator
 
@@ -109,6 +218,8 @@ def sign_filing(filing, user, signer_title: str = ""):
         )
     if filing.withdrawn_at is not None:
         raise FilingStateError("A withdrawn revision cannot be signed.")
+    if compare_plan_versions:
+        _refuse_attestation_that_differs(filing)
     filing.signed_by = user
     filing.signer_name = default_signer_name(filing, user)[:255]
     filing.signer_title = (signer_title or "").strip()[:255]
@@ -165,7 +276,12 @@ def _file_to_documents(filing, data: bytes, user):
 @transaction.atomic
 def file_filing(filing, filing_method: str = "", submitted_at=None, user=None):
     """Record that the signed revision reached the agent, freeze what it said, and file that
-    frozen copy to the farm's Documents. All of it or none of it."""
+    frozen copy to the farm's Documents. All of it or none of it.
+
+    Never refused over the unchanged-section attestation: signing is where that is checked, and
+    filing records what was sent. Refusing it would leave Trazo saying "not filed" about a revision
+    the agent already holds. If the plan version moves after signing, 02s sets the attestation
+    beside the comparison ("Sections attested unchanged that changed")."""
     from certifications.models import OSPAnnualUpdate
     from certifications.services.osp_module_pdf import render_filing_pdf
 

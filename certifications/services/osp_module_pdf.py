@@ -1577,6 +1577,23 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             )
         )
 
+    elif embed == "crop_table":
+        # CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10): the crops the operator listed, with acres,
+        # then the area on file and where the figures or the open seasons disagree with the list.
+        from certifications.services.parcel_application_lines import (
+            PLANNED_CROP_COLUMNS,
+            planned_crop_lines,
+            planned_crop_rows,
+        )
+        from product.services.parcel_application_status import parcel_application_values
+
+        rows = planned_crop_rows(parcel)
+        if rows:
+            out.append(_register_table(PLANNED_CROP_COLUMNS, (2.0, 2.0, 1.4, 0.9), rows, styles))
+            out.append(Spacer(1, 4))
+        for line in planned_crop_lines(parcel, parcel_application_values(parcel)):
+            out.append(Paragraph(_escape(line), styles["meta" if line.startswith("[REVIEW]") else "body"]))
+
     elif embed == "operation_export_answer":
         from certifications.services.parcel_application_lines import operation_export_lines
 
@@ -2162,7 +2179,7 @@ def _question_label(module, page, question, styles):
 
 #: Embeds printed under their question's label, so the question index can point at them. The older parcel
 #: embeds print their own headings and keep them.
-_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer"}
+_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer", "crop_table"}
 
 
 #: Optional "kept elsewhere, say where" questions that stand in for a file. The certified-parcel card
@@ -4174,10 +4191,11 @@ def _land_table_flowables(osp, styles) -> list:
 #: Each agent's own fee basis, in its own words. Printed only for that agent's packet: a document
 #: never names another agency's form (review of back #91).
 _FEE_BASIS = {
+    # Not the basis an earlier published copy gave: WSDA updates the form, sends it with the renewal
+    # application and asked Trazo not to reproduce it (reply received by 2026-11-09; overall review 2026-11, OV-PK-W01).
     "wsda": (
-        "WSDA's Renewal Fee Form (AGR 2521), sent with its renewal application, sets the basis; the copy "
-        "WSDA last published asked for income received in the previous calendar year, organic services "
-        "included."
+        "WSDA's Renewal Fee Form (AGR 2521), sent with its renewal application, sets the basis; WSDA updates "
+        "the form regularly and does not publish it."
     ),
     "otco": (
         "Oregon Tilth's OSP Update Step 6 asks for gross sales of everything on the certificate, including "
@@ -4196,12 +4214,14 @@ def _fee_basis_sentence(osp) -> str:
 
 
 def _unchanged_but_changed_flowables(filing, osp, styles) -> list:
-    """Sections the year's filing attests unchanged whose answers changed between the plan versions.
+    """Sections the year's filing attests unchanged that differ between the plan versions.
 
     The filing (02) is the operator's statement as filed and is not rewritten. The supplement, which
     reports what is true today, sets the two side by side (CCOF, WSDA and OTCO reviewer reads,
     2026-11-04: commingling attested unchanged while split and parallel production went from No to
-    Yes). Compared from the plan the filing continues to the plan this packet is built from.
+    Yes). Compared from the plan the filing continues to the plan this packet is built from, with
+    `plan_version_changes.section_differences`, the comparison signing is refused on
+    (OV-PK-O01), so a revision signed since then prints here only when the plan moved after it.
     """
     if filing is None:
         return []
@@ -4211,34 +4231,47 @@ def _unchanged_but_changed_flowables(filing, osp, styles) -> list:
     attested = {key for key, val in attestation.items() if val is True and key != APPLICATION_INFO_KEY}
     if not attested:
         return []
-    from certifications.services.plan_version_changes import sections_whose_answers_changed
+    from certifications.services.plan_version_changes import section_differences
 
     new = filing.new_osp or osp
     if new is None or new.pk == filing.prior_osp_id:
         return []
     try:
-        changed = [key for key in sections_whose_answers_changed(filing.prior_osp, new) if key in attested]
+        differences = section_differences(filing.prior_osp, new)
     except Exception:  # noqa: BLE001 (a supplement must build without this comparison)
         logger.exception("Could not compare plan versions for the unchanged attestation on OSP %s", osp.pk)
         return []
+    changed = [key for key in differences if key in attested]
     if not changed:
         return []
     story = [
         Spacer(1, 10),
-        Paragraph("Sections attested unchanged whose answers changed", styles["header"]),
+        Paragraph("Sections attested unchanged that changed", styles["header"]),
         Paragraph(
             _escape(
-                f"The filing attests these sections unchanged since the prior plan, but answers in them differ "
-                f"between plan v{filing.prior_osp.version_number} and v{new.version_number}. The filing is "
-                "the operator's statement and is not changed here."
+                f"The filing attests these sections unchanged since the prior plan, but they differ between plan "
+                f"v{filing.prior_osp.version_number} and v{new.version_number}. The filing is the operator's "
+                "statement and is not changed here."
             ),
             styles["body"],
         ),
     ]
     for key in changed:
         clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
-        story.append(Paragraph(_escape(f"• § 205.201{clause} — {label}" if clause else f"• {label}"), styles["body"]))
+        what = ", ".join(_DIFFERS_IN_SUPPLEMENT.get(kind, kind) for kind in differences[key]["differs"])
+        line = f"§ 205.201{clause}: {label} ({what})" if clause else f"{label} ({what})"
+        story.append(Paragraph(_escape(f"• {line}"), styles["body"]))
     return story
+
+
+#: How 02s names each kind of difference (`plan_version_changes.DIFFERS_*`), in the third person:
+#: the certifier reads it.
+_DIFFERS_IN_SUPPLEMENT = {
+    "answers": "answers",
+    "materials": "materials list",
+    "narrative": "the operator's own narrative",
+    "record_types": "record types confirmed",
+}
 
 
 def _inspection_file_line(label: str, doc) -> str:

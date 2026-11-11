@@ -193,6 +193,37 @@ PARCEL_APPLICATION = Module(
                     visible_when=(Condition(question="address", op="falsy"),),
                 ),
                 Question(
+                    # CCOF ORGB49 A7, OTCO C2 2.1 9), WSDA AGR 2264 ref 8 ("Total site acreage"). Not the parcel
+                    # area: CCOF excludes homes, parking and post-harvest areas, which a drawn boundary can hold.
+                    key="acres_to_certify",
+                    kind="text",
+                    label=text(
+                        "Total acres on this parcel to be certified organic",
+                        "Total de acres de esta parcela que se certificarán como orgánicos",
+                    ),
+                    coaching=text(
+                        "Count all the ground you plan to use for organic crops. Leave out homes, parking, and "
+                        "storage or packing areas.",
+                        "Cuenta todo el terreno que planeas usar para cultivos orgánicos. Deja fuera viviendas, "
+                        "estacionamientos y zonas de almacenamiento o empaque.",
+                    ),
+                    placeholder=text("e.g., 18.5", "p. ej., 18.5"),
+                    required=False,
+                ),
+                Question(
+                    # CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10): a table of rows the operator types
+                    # (`ParcelPlannedCrop`), never derived from seasons or the parcel area. Not `planned_crops`,
+                    # the next-12-months answer page F asks of a certified parcel (CCOF ORGB88).
+                    key="crop_table",
+                    kind="info",
+                    label=text(
+                        "Crops grown now or planned on this parcel, with acres",
+                        "Cultivos actuales o planeados en esta parcela, con acres",
+                    ),
+                    embed="crop_table",
+                    required=False,
+                ),
+                Question(
                     key="container_production",
                     kind="boolean",
                     label=text(

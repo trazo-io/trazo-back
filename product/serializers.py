@@ -11,7 +11,7 @@ from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
 from users.models import User
 from users.serializers import BasicUserSerializer
 
-from .models import Parcel, ParcelCropHistory, Product
+from .models import Parcel, ParcelCropHistory, ParcelPlannedCrop, Product
 
 
 def parcel_members_map(parcels):
@@ -744,6 +744,41 @@ class ProductListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ["id", "name", "description", "image"]
+
+
+class ParcelPlannedCropSerializer(serializers.ModelSerializer):
+    """One crop grown now or planned on a parcel (CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10).
+
+    The parcel comes from the URL, never the body, so no id in a payload can move a row to another
+    parcel or company."""
+
+    class Meta:
+        model = ParcelPlannedCrop
+        fields = ["id", "crop", "variety", "expected_harvest", "acres", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        # The form posts every field it renders; a blank date or acreage is "not stated", not a format error.
+        if hasattr(data, "copy"):
+            data = data.copy()
+            for key in ("expected_harvest", "acres"):
+                if data.get(key) == "":
+                    data[key] = None
+        return super().to_internal_value(data)
+
+    def validate_crop(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Name the crop, e.g. Apples.")
+        return value
+
+    def validate_variety(self, value):
+        return " ".join((value or "").split())
+
+    def validate_acres(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("Acres must be more than zero, or left blank.")
+        return value
 
 
 class ParcelCropHistorySerializer(CallerScopedRelatedFields, serializers.ModelSerializer):

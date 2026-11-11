@@ -128,6 +128,22 @@ class BasicUserSerializer(serializers.ModelSerializer):
     def get_full_name(self, user):
         return user.get_full_name()
 
+    def update(self, instance, validated_data):
+        # The login email does not change through a profile PATCH (overall review 2026-11,
+        # OV-SEC-C03): that took no password and told no one, so a borrowed session could move
+        # the account to another mailbox. It changes through `request_email_change` (password,
+        # link to the new address, notice to the old) and `confirm_email_change`.
+        new_email = validated_data.get("email")
+        if new_email is not None and new_email.strip().lower() != (instance.email or "").lower():
+            raise serializers.ValidationError(
+                {
+                    "email": "Change your email with Change email on your profile: it needs your password "
+                    "and a link sent to the new address."
+                }
+            )
+        validated_data.pop("email", None)
+        return super().update(instance, validated_data)
+
 
 class MeSerializer(BasicUserSerializer):
     """

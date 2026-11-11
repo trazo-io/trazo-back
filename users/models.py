@@ -50,6 +50,9 @@ class User(AbstractUser):
     # whose client did not send `accept_terms`.
     terms_accepted_at = models.DateTimeField(null=True, blank=True)
     terms_version = models.CharField(max_length=20, blank=True, default="")
+    # When the password or the login email last changed. A session token issued before it is
+    # refused (users/sessions.py, overall review 2026-11 OV-SEC-C03).
+    credentials_changed_at = models.DateTimeField(null=True, blank=True)
 
     REQUIRED_FIELDS = []
     USERNAME_FIELD = "email"
@@ -192,6 +195,35 @@ class VerificationCode(models.Model):
         if self.created_at is None:
             return False
         return timezone.now() > self.expires_at
+
+
+class EmailChangeRequest(models.Model):
+    """
+    A pending change of the login email (overall review 2026-11, OV-SEC-C03).
+
+    The email used to change with a single PATCH: no password, no re-verification, no notice to
+    either address. Now the signed-in person confirms the password, the NEW address receives a
+    single-use link (only its SHA-256 is stored), the OLD address is told, and the change applies
+    only when the link is opened, ending every session (users/sessions.py).
+    """
+
+    LIFETIME_HOURS = 24
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="email_change_requests")
+    new_email = models.EmailField()
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Email change for user {self.user_id} to {self.new_email}"
+
+    def is_valid(self):
+        return self.used_at is None and timezone.now() <= self.expires_at
 
 
 class PasswordResetToken(models.Model):
