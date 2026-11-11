@@ -1,3 +1,4 @@
+import math
 import re
 
 from django.utils import timezone
@@ -1847,7 +1848,9 @@ class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelS
 
     def to_internal_value(self, data):
         # The form posts every field it renders: a blank date or acreage is "not stated", not a format error.
-        if hasattr(data, "copy"):
+        # `.get`, not `.copy`: a list body has .copy() too, and its .get() call raised a 500 where DRF
+        # answers a non-object body with a 400 (review of back PR 394).
+        if hasattr(data, "get") and hasattr(data, "copy"):
             data = data.copy()
             for key in ("last_inspection_date", "acres_remaining"):
                 if data.get(key) == "":
@@ -1881,7 +1884,8 @@ class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelS
                     number = float(str(acres))
                 except ValueError:
                     raise serializers.ValidationError(f"Row {index}: acres must be a number.")
-                if number <= 0 or "," in str(acres):
+                # float() takes "NaN" and "Infinity", and both pass `<= 0` (review of back PR 394).
+                if not math.isfinite(number) or number <= 0 or "," in str(acres):
                     raise serializers.ValidationError(f"Row {index}: acres must be a plain number above zero.")
         return rows
 

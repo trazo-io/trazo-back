@@ -189,3 +189,21 @@ class TheParcelPagePrintsIt(_Parcel):
     def test_an_affidavit_with_nothing_stated_prints_no_stated_block(self):
         self.affidavit()
         self.assertNotIn("Stated by Dale Ruiz", self.page())
+
+
+class ReviewFindingsOn394(_Parcel):
+    def test_a_json_array_body_is_a_400_on_each_route_that_coerces_blanks(self):
+        # A list has .copy() too; its .get() raised a 500 where DRF answers a non-object body with a 400.
+
+        self.assertEqual(self.client.post(self.url(), [{"x": 1}], format="json").status_code, 400)
+        self.assertEqual(self.client.post("/api/parcel-crop-history/", [{"x": 1}], format="json").status_code, 400)
+        planned = (
+            f"/api/companies/{self.company.id}/establishments/{self.est.id}/parcels/{self.parcel.id}/planned-crops/"
+        )
+        self.assertEqual(self.client.post(planned, [{"x": 1}], format="json").status_code, 400)
+
+    def test_non_finite_acres_are_refused(self):
+        for value in ("NaN", "Infinity", "-Infinity", "inf"):
+            r = self.post(yearly_history=[{"year": 2024, "acres": value}])
+            self.assertEqual(r.status_code, 400, value)
+        self.assertFalse(LandownerAffidavit.objects.exists())
