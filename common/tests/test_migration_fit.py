@@ -8,7 +8,10 @@ merge migration) and the ones it must not flag.
 """
 
 import importlib.util
+import json
+import subprocess
 from pathlib import Path
+from unittest import mock
 
 from django.test import SimpleTestCase
 
@@ -128,3 +131,29 @@ class SharedAnchorsTests(SimpleTestCase):
                 371: [("history", "0255_drop_shopper_tables", [370])],
             },
         )
+
+
+class OnePrCannotBlockTheOthersTests(SimpleTestCase):
+    """A PR deleted or force-pushed since the listing gets `error`; the others still get a verdict."""
+
+    def test_an_unreadable_pr_gets_an_error_and_the_next_pr_its_status(self):
+        posted = []
+
+        def gh(*args, payload=None):
+            if args[:2] == ("pr", "list"):
+                return json.dumps([{"number": 1, "headRefOid": "aaa"}, {"number": 2, "headRefOid": "bbb"}])
+            if len(args) > 1 and "/statuses/" in args[1]:
+                posted.append((args[1].rsplit("/", 1)[1], payload["state"]))
+            return "[]"
+
+        def run(*args, **kwargs):
+            if args[:2] == ("git", "fetch") and args[-1].startswith("pull/1/"):
+                raise subprocess.CalledProcessError(128, args, stderr="couldn't find remote ref pull/1/head")
+            if args[:2] == ("git", "rev-parse"):
+                return "abc1234\n"
+            return ""  # no files: PR 2 adds no migration
+
+        with mock.patch.object(fit, "_gh", side_effect=gh), mock.patch.object(fit, "_run", side_effect=run):
+            errors = fit.check_open_prs("trazo-io/trazo-back", "origin/main", "https://run")
+        self.assertEqual(errors, 1)
+        self.assertEqual(posted, [("aaa", "error"), ("bbb", "success")])

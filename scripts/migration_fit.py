@@ -189,34 +189,63 @@ def _comment_body(found, shared, head_of_main):
     return "\n".join([MARKER, *lines, "", f"Checked against main {head_of_main}."]) if lines else ""
 
 
+def _post(repo, sha, state, description, run_url):
+    status = {"state": state, "context": STATUS_CONTEXT, "description": description[:140], "target_url": run_url}
+    _gh("api", f"repos/{repo}/statuses/{sha}", "--input", "-", payload=status)
+
+
 def check_open_prs(repo, base, run_url):
+    """Check and post per PR. One PR that cannot be read (branch deleted or force-pushed since the
+    listing, a migration that is not valid Python) gets an `error` status; the others still get
+    theirs. Returns the number of PRs that could not be checked or posted."""
     listing = _gh(
         "pr", "list", "--repo", repo, "--base", "main", "--state", "open", "--limit", "200",
         "--json", "number,headRefOid",
     )  # fmt: skip
-    results, per_pr_anchors = {}, {}
+    head_of_main = _run("git", "rev-parse", "--short", base).strip()
+    results, per_pr_anchors, errors = {}, {}, 0
     for pr in json.loads(listing):
         number, sha = pr["number"], pr["headRefOid"]
-        _run("git", "fetch", "--no-tags", "--quiet", "origin", f"pull/{number}/head:refs/pr/{number}")
-        added = _added_files(base, f"refs/pr/{number}")
-        main = _main_files(base, {migration_of(p)[0] for p in added})
-        results[number] = (sha, problems(main, added))
-        per_pr_anchors[number] = anchors(main, added)
+        try:
+            _run("git", "fetch", "--no-tags", "--quiet", "origin", f"pull/{number}/head:refs/pr/{number}")
+            added = _added_files(base, f"refs/pr/{number}")
+            main = _main_files(base, {migration_of(p)[0] for p in added})
+            results[number] = (sha, problems(main, added))
+            per_pr_anchors[number] = anchors(main, added)
+        except (subprocess.CalledProcessError, SyntaxError, ValueError) as exc:
+            errors += 1
+            detail = exc.stderr.strip() if isinstance(exc, subprocess.CalledProcessError) else repr(exc)
+            print(f"#{number} error: could not be checked: {detail}")
+            try:
+                _post(
+                    repo,
+                    sha,
+                    "error",
+                    f"could not be checked against main {head_of_main}: {type(exc).__name__}",
+                    run_url,
+                )
+            except subprocess.CalledProcessError as post_exc:
+                print(f"#{number} error: status not posted: {post_exc.stderr.strip()}")
     shared = shared_anchors(per_pr_anchors)
-    head_of_main = _run("git", "rev-parse", "--short", base).strip()
     for number, (sha, found) in sorted(results.items()):
         state = "failure" if found else "success"
         description = f"needs renumbering against main {head_of_main}" if found else f"fits main {head_of_main}"
-        status = {"state": state, "context": STATUS_CONTEXT, "description": description, "target_url": run_url}
-        _gh("api", f"repos/{repo}/statuses/{sha}", "--input", "-", payload=status)
-        body = _comment_body(found, shared.get(number, []), head_of_main)
-        if body:
-            _say(repo, number, body)
-        else:  # nothing to say now: close out an earlier warning, never open a new comment
-            _say(repo, number, f"{MARKER}\nResolved: the migrations fit main {head_of_main}.", only_if_one_exists=True)
+        try:
+            _post(repo, sha, state, description, run_url)
+            body = _comment_body(found, shared.get(number, []), head_of_main)
+            if body:
+                _say(repo, number, body)
+            else:  # nothing to say now: close out an earlier warning, never open a new comment
+                resolved = f"{MARKER}\nResolved: the migrations fit main {head_of_main}."
+                _say(repo, number, resolved, only_if_one_exists=True)
+        except subprocess.CalledProcessError as exc:
+            errors += 1
+            print(f"#{number} error: status or comment not posted: {exc.stderr.strip()}")
+            continue
         print(f"#{number} {state}: {description}")
         for p in found:
             print(f"  {p}")
+    return errors
 
 
 def main(argv=None):
@@ -235,8 +264,9 @@ def main(argv=None):
         return 1 if found else 0
     env = os.environ
     run_url = f"{env['GITHUB_SERVER_URL']}/{env['GITHUB_REPOSITORY']}/actions/runs/{env['GITHUB_RUN_ID']}"
-    check_open_prs(env["GITHUB_REPOSITORY"], args.base, run_url)
-    return 0  # the statuses carry the verdict; this job itself stays green
+    # The statuses carry each PR's verdict; the job itself goes red only when a PR could not be
+    # checked or posted, which is a problem with this job rather than with the PR.
+    return 1 if check_open_prs(env["GITHUB_REPOSITORY"], args.base, run_url) else 0
 
 
 if __name__ == "__main__":
