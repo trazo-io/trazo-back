@@ -1,13 +1,13 @@
 """
 Unit Tests for Emission Factors Consistency
 
-These tests ensure that all carbon calculation modules use consistent EPA/USDA-verified
-emission factors and prevent future data inconsistencies.
+These tests ensure that all carbon calculation modules use the same emission factors and
+prevent future data inconsistencies. Provenance is per factor, never blanket.
 
 Current Factor Values (as of v3.2.0):
 - Nitrogen: 10.5 kg CO2e per kg N (EPA + IPCC AR6)
-- Phosphorus: 1.19 kg CO2e per kg P2O5 (source under review — see emission-factors.md)
-- Potassium: 0.65 kg CO2e per kg K2O (source under review — see emission-factors.md)
+- Phosphorus: 1.19 kg CO2e per kg P2O5 (Trazo estimate, see verified_emission_factors.py)
+- Potassium: 0.65 kg CO2e per kg K2O (Trazo estimate, see verified_emission_factors.py)
 - Diesel: 2.70 kg CO2e per liter / 10.21 kg CO2e per gallon (EPA 40 CFR Part 98)
 - Gasoline: 2.32 kg CO2e per liter / 8.78 kg CO2e per gallon (EPA 40 CFR Part 98)
 """
