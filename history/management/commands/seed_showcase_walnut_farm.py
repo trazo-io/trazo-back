@@ -1799,7 +1799,9 @@ class Command(BaseCommand):
             concentration="22.5% spinosad",
             volume=str(_q(acres * 6)),
             volume_numeric=_q(acres * 6),
-            volume_unit="oz",
+            # Fluid ounces: Entrust SC is a suspension concentrate. The legacy "oz" printed
+            # "75.00 oz (fluid or weight not stated)" in the audit export.
+            volume_unit="fl_oz",
             area=area_str,
             area_numeric=acres,
             area_unit="acres",
@@ -1817,7 +1819,7 @@ class Command(BaseCommand):
             purchase_date=date(year, 7, 27),
             purchase_invoice=f"SAS-{year}-5288",
             quantity_purchased=_q(acres * 6 + 32),
-            quantity_purchased_unit="oz",
+            quantity_purchased_unit="fl_oz",
             chemical_lot_number=f"EN{year}-0774",
             national_list_substance=NationalListSubstance.objects.filter(substance_name="Spinosad").first(),
             extra_data={"rate_floz_acre": 6, "water_gal_acre": 100},
