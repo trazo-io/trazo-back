@@ -2805,9 +2805,15 @@ def _renewal_context(osp) -> dict:
         getattr(est, "state", None),
         getattr(est, "zip_code", None) or getattr(est, "postal_code", None),
     ]
+    from certifications.services.operation_certificate import never_certified
+
     return {
         "filing": filing,
         "other_filing": other_filing,
+        # A first-time applicant (§ 205.401): no certificate, approved plan or filed update on
+        # record. The cover, 02 and 02s then stop demanding a § 205.406(a) update and stop
+        # calling the packet a renewal. A filing on record always means False.
+        "never_certified": filing is None and other_filing is None and never_certified(est.id),
         "certificate_number": certificate_number,
         "certifier_name": certifier_name,
         "legal_name": getattr(company, "name", "") or "",
@@ -3084,10 +3090,19 @@ def _packet_cover_pdf(osp) -> bytes:
     from certifications.services.packet_scope import current_scope
 
     scope = current_scope()
-    year_line = f"Continuation for {filing.reporting_year}" if filing else "Continuation year not filed"
+    applicant = ctx.get("never_certified", False)
+    if filing:
+        year_line = f"Continuation for {filing.reporting_year}"
+    elif applicant:
+        year_line = "No certificate on file"
+    else:
+        year_line = "Continuation year not filed"
     scope_line = " · Changed sections only" if scope.changed_only else ""
     story = [
-        Paragraph("Organic System Plan — Renewal Packet", styles["title"]),
+        Paragraph(
+            "Organic System Plan packet" if applicant else "Organic System Plan — Renewal Packet",
+            styles["title"],
+        ),
         Paragraph(
             _escape(f"{osp.establishment.name} · {_plan_version_label(osp)} · {year_line}{scope_line}"),
             styles["subtitle"],
@@ -3180,9 +3195,22 @@ def _packet_cover_pdf(osp) -> bytes:
         kv("Plan submitted", osp.submitted_at.date().isoformat() if osp.submitted_at else "not yet submitted"),
         kv("Packet generated", date.today().isoformat()),
         Spacer(1, 8),
-        Paragraph("Continuation of certification (7 CFR 205.406)", styles["header"]),
+        Paragraph(
+            "Certification status" if applicant else "Continuation of certification (7 CFR 205.406)",
+            styles["header"],
+        ),
     ]
-    if filing:
+    if applicant:
+        story.append(
+            Paragraph(
+                "No organic certificate is on file in Trazo for this operation, so no § 205.406(a) annual "
+                "update applies: that update continues a certification that already exists. A first "
+                "application is made under § 205.401 on the certifying agent's own application forms. "
+                "This packet supports that application and does not replace it.",
+                styles["body"],
+            )
+        )
+    elif filing:
         story += [
             # "Continues certification for", never "Reporting year": the filing continues THIS year's
             # certification and reports on the season before it, and a grower reads "reporting year
@@ -3288,7 +3316,14 @@ def _packet_cover_pdf(osp) -> bytes:
         Paragraph("Contents", styles["header"]),
         Paragraph("00. This cover", styles["body"]),
         Paragraph("01. Six-section narrative snapshot (7 CFR 205.201(a))", styles["body"]),
-        Paragraph("02. Annual update — the § 205.406(a) filing", styles["body"]),
+        Paragraph(
+            (
+                "02. Annual update: none applies, no certificate is on file"
+                if applicant
+                else "02. Annual update — the § 205.406(a) filing"
+            ),
+            styles["body"],
+        ),
         Paragraph(_escape(_contents_02s(own_register)), styles["body"]),
         Paragraph(
             "03. § 205.400(f) change notifications filed against this plan or its earlier versions", styles["body"]
@@ -3359,17 +3394,23 @@ def _annual_update_pdf(osp) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, title="Annual Update")
     story = [Paragraph("Annual Update — Continuation of Certification", styles["title"])]
+    if ctx.get("never_certified", False):
+        # A first-time applicant has nothing to continue (§ 205.401, not § 205.406).
+        absent = (
+            "No annual update applies to this operation: no organic certificate is on file in Trazo, "
+            "and § 205.406(a) continues a certification that already exists. Nothing on this page is a "
+            "filing."
+        )
+    else:
+        absent = (
+            f"No § 205.406(a) annual update is on file for OSP v{osp.version_number}. The packet "
+            "cannot stand in for the filing: record the year's changes, planned additions and "
+            "deletions, and file it before the packet is sent."
+        )
     story += [
         Paragraph(_escape(f"{osp.establishment.name} · {_plan_version_label(osp)}"), styles["subtitle"]),
         Spacer(1, 10),
-        Paragraph(
-            _escape(
-                f"No § 205.406(a) annual update is on file for OSP v{osp.version_number}. The packet "
-                "cannot stand in for the filing: record the year's changes, planned additions and "
-                "deletions, and file it before the packet is sent."
-            ),
-            styles["body"],
-        ),
+        Paragraph(_escape(absent), styles["body"]),
     ]
     # Which is a different sentence from "this operation has never filed one", and the
     # operator cannot act on the first without knowing the second.
@@ -4321,6 +4362,15 @@ def _renewal_status_pdf(osp) -> bytes:
             Spacer(1, 8),
             Paragraph("No § 205.406(a) annual update is recorded for this operation.", styles["body"]),
         ]
+        if ctx.get("never_certified", False):
+            story.append(
+                Paragraph(
+                    "No organic certificate is on file in Trazo for this operation either. Any forms "
+                    "listed below are the certifying agent's renewal forms; a first application under "
+                    "§ 205.401 uses the agent's application forms instead.",
+                    styles["body"],
+                )
+            )
     else:
         year = revisions[0].reporting_year
         story += [Spacer(1, 10), Paragraph(f"{year} annual update: revisions", styles["header"])]

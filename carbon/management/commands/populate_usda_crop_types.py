@@ -138,8 +138,18 @@ class Command(BaseCommand):
 
             # Strip fields that don't exist on the CropType model
             clean_data = {k: v for k, v in data.items() if k not in self.IGNORED_FIELDS}
+            # The raw-manure floor reads `has_soil_contact` (history/services/manure_interval.py).
+            # Its field default is True, so a crop this seeder created got the 120-day
+            # soil-contact floor even for apples and walnuts. Set it from the category when the
+            # row is CREATED only: a re-run must not overwrite a value someone set on purpose
+            # (a demo puts ground-collected avocados on the 120-day floor). A crop entry that
+            # states the flag still writes it on update, through the loop below.
+            create_values = dict(clean_data)
+            create_values.setdefault(
+                "has_soil_contact", clean_data.get("category") not in CropType.NO_SOIL_CONTACT_CATEGORIES
+            )
 
-            crop_type, created = CropType.objects.get_or_create(slug=clean_data["slug"], defaults=clean_data)
+            crop_type, created = CropType.objects.get_or_create(slug=clean_data["slug"], defaults=create_values)
 
             if created:
                 stats["crops_created"] += 1

@@ -3942,21 +3942,16 @@ class AuditExportService:
         )
         manure_events = [ev for ev in all_manure_events if ev.manure_treatment not in ("processed_5006", "composted")]
         manure_with_interval = sum(1 for ev in manure_events if ev.manure_harvest_interval)
-        # Classification-mismatch count: farmer selected an interval that
-        # doesn't match the crop's soil-contact rule. The timing may still
-        # be compliant (e.g. farmer chose 120-day on a tree crop and
-        # harvested at 99 days — compliant under the correct 90-day floor
-        # but IN-violation under the farmer's own 120-day selection).
-        # Either reading makes page-1 an executive-summary signal, not a
-        # clean PASS. Count it here so the snapshot row below can demote
-        # the status without re-deriving the rule.
-        _rule_for_count = self._manure_interval_rule_for_crop()
-        _expected_days = _rule_for_count["days"]
-        manure_classification_mismatches = 0
-        for ev in manure_events:
-            raw = (ev.manure_harvest_interval or "").split("_")[0]
-            if raw.isdigit() and int(raw) != _expected_days:
-                manure_classification_mismatches += 1
+        # Below-floor count: the farm recorded an interval SHORTER than the crop's
+        # § 205.203(c)(1) floor (90 days on a crop whose edible part touches the soil).
+        # A longer wait than the floor is compliant and is not counted. The variable keeps
+        # its old name because the readiness code it feeds is a translation key.
+        from history.services.manure_interval import below_minimum
+
+        _crop_for_count = getattr(self.production, "crop_type", None)
+        manure_classification_mismatches = sum(
+            1 for ev in manure_events if below_minimum(ev.manure_harvest_interval, _crop_for_count)
+        )
 
         # Pest threshold rationale per § 205.206(e). Strip whitespace so a
         # placeholder " " doesn't pass for a documented rationale.
@@ -4466,27 +4461,19 @@ class AuditExportService:
                 )
             )
         elif manure_classification_mismatches > 0:
-            # Every event has an interval AND the timing may satisfy the
-            # regulatory floor, BUT the farmer-selected classification
-            # (90/120-day category) doesn't match the crop rule. REVIEW
-            # rather than PASS: an inspector reading the record will ask
-            # why the selection conflicts with the crop's soil-contact
-            # classification, and if the farmer's selected interval is
-            # stricter than the regulatory floor, the actual harvest may
-            # sit INSIDE the farmer's own self-imposed window — a record-
-            # integrity issue under § 205.103(b)(2) even when the
-            # regulatory timing passes.
+            # Every event has an interval, but some state fewer days than the crop's floor
+            # (90 days on a crop whose edible part touches the soil). REVIEW, not PASS. A
+            # longer wait than the floor is compliant and never lands here. The readiness
+            # code keeps its name ("classification_mismatch") because it is a translation key.
             snapshot_rows.append(
                 (
                     manure_row_label,
                     "REVIEW",
                     (
-                        f"{manure_with_interval}/{len(manure_events)} events meet the "
-                        f"{manure_interval_rule['label']} regulatory floor, but "
-                        f"{manure_classification_mismatches} event(s) have a farmer-"
-                        f"selected interval that does not match the crop-rule "
-                        f"classification — see Pre-Export Consistency Check + "
-                        f"Manure Handling Records for the per-event mismatch list."
+                        f"{manure_with_interval}/{len(manure_events)} events have an interval "
+                        f"recorded, but {manure_classification_mismatches} state fewer days than "
+                        f"the {manure_interval_rule['label']} floor this crop requires. See the "
+                        f"Pre-Export Consistency Check and the Manure Handling Records for each one."
                     ),
                     said(
                         "raw_manure_interval.classification_mismatch",
@@ -5834,13 +5821,15 @@ class AuditExportService:
                 crop_description = "tree / canopy crop (edible portion does NOT contact soil)"
             else:
                 crop_description = "soil-contact crop (edible portion has direct contact with soil)"
+            # Only a SHORTER interval than the floor is a finding; § 205.203(c)(1) reads
+            # "not less than", so 120 days on a tree crop is the stricter, compliant wait.
             mismatched = []
             for mev in manure_events_strict:
                 try:
                     farmer_days = int(mev.manure_harvest_interval)
                 except (TypeError, ValueError):
                     continue
-                if farmer_days != expected_days:
+                if farmer_days < expected_days:
                     mismatched.append((mev, farmer_days))
             if mismatched:
                 # One row per mismatched event so the farmer sees each
@@ -5856,13 +5845,10 @@ class AuditExportService:
                         (
                             f"Manure interval vs crop rule ({expected_cite})",
                             (
-                                f"Soil event {event_date_str}: farmer selected "
-                                f"{farmer_days}-day interval. Crop rule derived "
-                                f"from {expected_cite} requires {expected_days}-day "
-                                f"interval for this production — "
-                                f"{crop_description}. Inspector will ask why the "
-                                "selected interval does not match the crop's "
-                                "soil-contact classification."
+                                f"Soil event {event_date_str}: the farm recorded a "
+                                f"{farmer_days}-day interval. {expected_cite} requires at "
+                                f"least {expected_days} days for this production "
+                                f"({crop_description})."
                             ),
                         )
                     )
@@ -9284,12 +9270,16 @@ class AuditExportService:
                     if interval_str.isdigit():
                         try:
                             farmer_days = int(interval_str)
-                            if farmer_days == expected_rule["days"]:
-                                rule_check_text = f"OK — matches {expected_rule['cite']}"
+                            # A floor, not a match: a longer wait than the crop's minimum
+                            # is compliant (§ 205.203(c)(1) "not less than").
+                            if farmer_days >= expected_rule["days"]:
+                                rule_check_text = (
+                                    f"OK: at least {expected_rule['days']} days per {expected_rule['cite']}"
+                                )
                             else:
                                 rule_check_text = (
-                                    f"MISMATCH — crop requires "
-                                    f"{expected_rule['days']}-day per "
+                                    f"SHORT: crop requires at least "
+                                    f"{expected_rule['days']} days per "
                                     f"{expected_rule['cite']}"
                                 )
                                 rule_check_is_warning = True
@@ -14597,73 +14587,19 @@ class AuditExportService:
         # the fact, and the floor it clears is stated on the brief rows.
         return f"Written — {length:,} characters"
 
-    # Crops where the edible portion does NOT contact the soil. § 205.203(c)(1)(iii)
-    # applies (90-day pre-harvest interval). Everything else falls back to (c)(1)(ii)
-    # with 120 days (root crops, leafy greens, cucurbits, strawberries, melons).
-    # Note: (c)(1)(i) covers land used for a crop not intended for human
-    # consumption — out of scope for any Trazo production record.
-    _NON_SOIL_CONTACT_CROP_KEYWORDS = (
-        "avocado",
-        "citrus",
-        "orange",
-        "lemon",
-        "lime",
-        "grapefruit",
-        "mandarin",
-        "tangerine",
-        "apple",
-        "pear",
-        "cherry",
-        "peach",
-        "nectarine",
-        "plum",
-        "apricot",
-        "mango",
-        "papaya",
-        "almond",
-        "walnut",
-        "pistachio",
-        "pecan",
-        "hazelnut",
-        "grape",
-        "wine",
-        "olive",
-        "fig",
-        "pomegranate",
-        "date",
-        "persimmon",
-    )
-
     def _manure_interval_rule_for_crop(self) -> dict:
-        """
-        Return the § 205.203(c)(1) sub-rule that applies to this production.
+        """The § 205.203(c)(1) floor for this production: at least 120 days when the edible
+        part touches the soil, at least 90 when it does not. Unknown crop: 120.
 
-        Per eCFR 7 CFR 205.203(c)(1):
-        (i)   land used for a crop not intended for human consumption.
-        (ii)  120 days when the edible portion has direct contact with soil
-              surface or soil particles (root crops, leafy greens, fruits
-              growing on the ground).
-        (iii) 90 days when the edible portion does NOT have direct contact
-              with soil (tree fruits, tree nuts, elevated vine fruits).
-
-        Defaults to (c)(1)(ii) / 120 days when crop type is unknown — the
-        stricter human-consumption rule is always regulation-safe.
+        Read from the crop's `has_soil_contact` flag through history/services/manure_interval.py,
+        the same function the save path uses. A crop-name keyword list used to override the flag
+        here, so the form and the dossier could classify the same crop two ways.
         """
-        non_soil_contact = False
-        try:
-            crop = self.production.crop_type
-            has_soil_contact_flag = getattr(crop, "has_soil_contact", None) if crop else None
-            if has_soil_contact_flag is False:
-                non_soil_contact = True
-            else:
-                crop_name = (crop.name if crop else "").lower()
-                if any(k in crop_name for k in self._NON_SOIL_CONTACT_CROP_KEYWORDS):
-                    non_soil_contact = True
-        except Exception:
-            non_soil_contact = False
-        if non_soil_contact:
-            return {"cite": "§ 205.203(c)(1)(iii)", "label": "90-day", "days": 90}
-        return {"cite": "§ 205.203(c)(1)(ii)", "label": "120-day", "days": 120}
+        from history.services.manure_interval import minimum_interval_cite, minimum_interval_days
+
+        crop = getattr(self.production, "crop_type", None)
+        days = minimum_interval_days(crop)
+        return {"cite": minimum_interval_cite(crop), "label": f"{days}-day", "days": days}
 
     # Regex patterns for narrative lint hints. Module-level-ish constants kept
     # inline so `_osp_narrative_lint_hints()` stays self-contained and fast to

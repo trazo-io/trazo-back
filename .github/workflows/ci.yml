@@ -713,6 +713,7 @@ jobs:
             history.tests.test_receipt_filed_on_record \
             history.tests.test_rehearsal_quantities \
             history.tests.test_pheromone_dispensers \
+            history.tests.test_manure_interval_is_a_floor \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
             history.tests.test_business_event_validation \
@@ -840,6 +841,7 @@ jobs:
             certifications.tests.test_annual_update_documents \
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
+            certifications.tests.test_first_applicant_packet \
             history.tests.test_pdf_field_coverage \
             certifications.tests.test_packet_second_wsda_read \
             history.tests.test_wsda_listing_attachment \
