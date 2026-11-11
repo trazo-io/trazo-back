@@ -27,7 +27,7 @@ items:
     questions:
     - g6_2_storage.storage_locations
     - g6_2_storage.owns_crop_in_storage
-    prints: "modules/G6_2.pdf §A"
+    prints: "modules/G6_2.pdf §A (owns_crop_in_storage; an explicit No closes the off-farm facility table and the uncertified-facility records, as the form's \"skip to section B\")"
   note: "Closed 2026-11-10 (content 2026.12.02)."
 - ref: A2
   asks: 'Describe the storage locations (crops stored at facilities the operation does not own or lease): Storage

@@ -314,7 +314,13 @@ G6_2_STORAGE = Module(
                         "limpieza del espacio o contenedor utilizado.",
                     ),
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
+                    # CCOF G6.2 A1 "No, skip to section B" / OTCO C7 7.7-1: a crop no longer owned in storage closes
+                    # this section. Only an explicit No closes it: an unanswered ownership question leaves it open, so
+                    # no stored plan loses what it shows (review of back #369).
+                    visible_when=(
+                        Condition("storage_locations", "includes", "uncertified_facility"),
+                        Condition("owns_crop_in_storage", "ne", "no"),
+                    ),
                     compiles_to=CompileRule(template="Records provided by the uncertified storage facility: {answer}"),
                 ),
                 # CCOF G6.2 A2 asks for an affidavit the uncertified facility's manager signs, and OTCO
@@ -336,7 +342,13 @@ G6_2_STORAGE = Module(
                     ),
                     required=False,
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
+                    # CCOF G6.2 A1 "No, skip to section B" / OTCO C7 7.7-1: a crop no longer owned in storage closes
+                    # this section. Only an explicit No closes it: an unanswered ownership question leaves it open, so
+                    # no stored plan loses what it shows (review of back #369).
+                    visible_when=(
+                        Condition("storage_locations", "includes", "uncertified_facility"),
+                        Condition("owns_crop_in_storage", "ne", "no"),
+                    ),
                 ),
                 # WSDA K1 asks whether a THIRD PARTY is contracted to store the crop, which
                 # none of the location options above can answer: "commercial cold storage
@@ -412,6 +424,7 @@ G6_2_STORAGE = Module(
                             "includes_any",
                             ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
                         ),
+                        Condition("owns_crop_in_storage", "ne", "no"),
                     ),
                 ),
             ),

@@ -35,6 +35,28 @@ class OwnershipTests(SimpleTestCase):
             self.assertIn("owns_crop_in_storage", shown({"storage_locations": [off_farm]}))
 
 
+class SectionAClosesOnNoTests(SimpleTestCase):
+    """CCOF G6.2 A1 "No, skip to section B" and OTCO 7.7-1 (review of back #369)."""
+
+    GATED = {"off_farm_storage_table", "uncertified_facility_records", "uncertified_facility_statement_upload"}
+
+    def shown(self, answers):
+        return {q.key for _p, q in visible_questions(G62, answers)}
+
+    def test_an_explicit_no_closes_the_off_farm_section(self):
+        answers = {"storage_locations": ["uncertified_facility"], "owns_crop_in_storage": "no"}
+        self.assertFalse(self.GATED & self.shown(answers))
+
+    def test_an_unanswered_ownership_question_keeps_what_a_stored_plan_shows(self):
+        self.assertTrue(self.GATED <= self.shown({"storage_locations": ["uncertified_facility"]}))
+        owned = {"storage_locations": ["uncertified_facility"], "owns_crop_in_storage": "yes"}
+        self.assertTrue(self.GATED <= self.shown(owned))
+
+    def test_the_contracted_storage_question_stays_asked(self):
+        answers = {"storage_locations": ["commercial_cold_off_farm"], "owns_crop_in_storage": "no"}
+        self.assertIn("third_party_storage_contracted", self.shown(answers))
+
+
 class FlowChartTests(SimpleTestCase):
     def test_both_questions_say_either_one_answers(self):
         self.assertIn("either one answers the request", _question(G64, "process_flow").coaching["en"])
