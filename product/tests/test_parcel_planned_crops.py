@@ -185,6 +185,33 @@ class TheTablePrintsInSectionA(_Parcel):
         self.assertNotIn("Seasons open on this parcel grow a crop", self.page())
 
 
+class ReviewFindingsOn381(_Parcel):
+    def test_a_comma_in_acres_to_certify_is_not_read_as_thousands(self):
+        # "18,5" is a Spanish decimal; read as 185 it would print a false "more than the parcel area" line.
+        self.answer(acres_to_certify="18,5")
+        page = self.page()
+        self.assertNotIn("[REVIEW] The acres to be certified", page)
+        self.assertNotIn("185", page)
+
+    def test_a_crop_name_inside_another_word_does_not_count_as_listed(self):
+        History.objects.create(
+            name="Pineapple 2026",
+            parcel=self.parcel,
+            product=Product.objects.create(name="Pineapple"),
+            start_date=timezone.now(),
+        )
+        self.crop(crop="Apple", acres=2)
+        self.assertIn("grow a crop the list does not name: Pineapple.", self.page())
+
+    def test_singular_and_plural_names_match(self):
+        from certifications.services.parcel_application_lines import crop_is_listed
+
+        self.assertTrue(crop_is_listed("Peaches", ["Peach"]))
+        self.assertTrue(crop_is_listed("Pears", ["Bartlett pears"]))
+        self.assertTrue(crop_is_listed("Blueberries", ["Blueberry (Duke)"]))
+        self.assertFalse(crop_is_listed("Peach", ["Pea"]))
+
+
 class TheRegisterReadsTheTable(_Parcel):
     def test_the_crop_rows_are_open_until_a_crop_is_listed(self):
         self.assertTrue(self.row("wsda", "AGR 2264", "8").is_open)

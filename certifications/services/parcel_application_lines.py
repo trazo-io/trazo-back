@@ -13,6 +13,7 @@ the records disagree the line says so with `[REVIEW]`, and the determination sta
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
@@ -188,12 +189,41 @@ PLANNED_CROP_COLUMNS = ("Crop", "Variety", "Expected harvest", "Acres")
 
 
 def _acres_number(raw):
-    """The operator's acreage as a number, or None when it is blank or not a plain number."""
+    """The operator's acreage as a number, or None when it is blank or not a plain number.
+
+    A comma is refused, not read: "18,5" is a decimal in Spanish and "1,250" a thousands separator in English,
+    and reading either as the other prints a figure ten or a thousand times off (review of back PR 381)."""
+    text = str(raw if raw is not None else "").strip()
+    if not text or "," in text:
+        return None
     try:
-        value = float(str(raw).replace(",", "").strip())
-    except (TypeError, ValueError):
+        value = float(text)
+    except ValueError:
         return None
     return value if value > 0 else None
+
+
+def _crop_words(name: str) -> frozenset:
+    """The words of a crop name, lower case and singular, so "Bartlett pears" holds "pear" and "Pineapple" does
+    not hold "apple". Whole words only: a substring test let "Pea" stand for "Peach" (review of back PR 381)."""
+    words = set()
+    for word in re.findall(r"[a-zà-ÿ]+", (name or "").lower()):
+        if word.endswith("ies") and len(word) > 4:
+            word = word[:-3] + "y"
+        elif word.endswith("es") and word[:-2].endswith(("ch", "sh", "x", "ss", "o")):
+            word = word[:-2]
+        elif word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+            word = word[:-1]
+        words.add(word)
+    return frozenset(words)
+
+
+def crop_is_listed(name: str, listed: list[str]) -> bool:
+    """Whether a season's crop is named in the list: every word of one name appears in the other."""
+    words = _crop_words(name)
+    if not words:
+        return True
+    return any(words <= other or (other and other <= words) for other in (_crop_words(item) for item in listed))
 
 
 def open_season_crops(parcel) -> list[str]:
@@ -258,12 +288,8 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
             f"[REVIEW] The acres to be certified ({to_certify:g}) are more than the parcel area on file "
             f"({area_acres:.1f} acres)."
         )
-    listed_names = [c.crop.lower() for c in crops]
-    unlisted = [
-        name
-        for name in open_season_crops(parcel)
-        if not any(name.lower() in listed or listed in name.lower() for listed in listed_names)
-    ]
+    listed_names = [c.crop for c in crops]
+    unlisted = [name for name in open_season_crops(parcel) if not crop_is_listed(name, listed_names)]
     if unlisted:
         lines.append(
             "[REVIEW] Seasons open on this parcel grow a crop the list does not name: " + ", ".join(unlisted) + "."
