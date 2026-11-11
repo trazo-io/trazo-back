@@ -21,6 +21,9 @@ What counts as a change:
   * the § 205.201(a) sections: the operator's own narrative and which record types the
     operator confirmed (`changed_section_keys`). Both are edited without touching a module.
 
+`section_differences` is all of the above per § 205.201(a) section, kept apart by kind. It is what
+an "unchanged" attestation on the year's filing is checked against when it is signed or filed.
+
 What it does not see: land. Parcels belong to the establishment, not to a plan version, so a
 parcel added this year, or an existing parcel's crop history, buffers or map edited, is the same
 in both versions' packets. `parcels_begun_since` is the separate, operator-stated reading of new
@@ -100,34 +103,75 @@ def changed_module_keys(prior, new) -> list[str]:
     return changed
 
 
-def sections_whose_answers_changed(prior, new) -> list[str]:
-    """§ 205.201(a) section keys a changed module answer compiles into, in regulation order.
+def _answer_changes_by_section(prior, new) -> dict[str, list]:
+    """{§ 205.201(a) section key: [modules whose changed answers compile into it]}.
 
     Question by question, not module by module: G6.0 writes most of its answers into (a)(1) and its
     split-operation answers into (a)(5), and a changed tillage answer must not mark commingling as
-    changed. The plan's own materials list is (a)(2). Used to set an "unchanged" attestation on the
-    year's filing beside what the plan versions show (CCOF, WSDA and OTCO reviewer reads,
-    2026-11-04: 02 attested commingling unchanged while split and parallel production went from
-    No to Yes).
+    changed. A changed not-applicable election counts against the module's default section. (Until
+    2026-11-11 this was `sections_whose_answers_changed`, which 02s alone read, with the materials
+    list added as (a)(2); `section_differences` now holds both, with the other two kinds.)
     """
-    from certifications.models import OSP_SECTION_KEYS
     from certifications.osp_modules import MODULE_REGISTRY
 
-    changed: set[str] = set()
+    changed: dict[str, list] = {}
     for module in MODULE_REGISTRY:
         before, after = _module_content(prior, module.key), _module_content(new, module.key)
         if before == after:
             continue
+        sections: set[str] = set()
         for page in module.pages:
             for question in page.questions:
                 if before[1].get(question.key) != after[1].get(question.key):
                     rule = question.compiles_to
-                    changed.add((rule.section_key if rule and rule.section_key else None) or module.default_section_key)
+                    sections.add(
+                        (rule.section_key if rule and rule.section_key else None) or module.default_section_key
+                    )
         if before[0] != after[0]:
-            changed.add(module.default_section_key)
-    if _materials_content(prior) != _materials_content(new):
-        changed.add("inputs_list")
-    return [key for key in OSP_SECTION_KEYS if key in changed]
+            sections.add(module.default_section_key)
+        for key in sections:
+            changed.setdefault(key, []).append(module)
+    return changed
+
+
+#: What can differ in one § 205.201(a) section between two plan versions. Each is one of the
+#: comparisons above; nothing here compares anything they do not.
+DIFFERS_ANSWERS = "answers"  # a module answer, or a not-applicable election, compiled into it
+DIFFERS_MATERIALS = "materials"  # the plan's materials list ((a)(2) only)
+DIFFERS_NARRATIVE = "narrative"  # the operator's own narrative for the section
+DIFFERS_RECORD_TYPES = "record_types"  # which record types the operator confirmed, and their labels
+
+
+def section_differences(prior, new) -> dict[str, dict]:
+    """{section key: {"differs": [...], "modules": [Module, ...]}} for every § 205.201(a) section
+    whose content differs between `prior` and `new`, in regulation order.
+
+    The module answers compiled into each section (`_answer_changes_by_section`), the materials list
+    for (a)(2), and `changed_section_keys`, kept apart by kind so a reader can be told what moved. Used where an "unchanged" attestation is checked against the
+    plan versions before it is signed (overall review 2026-11, OV-PK-O01); the 02s supplement
+    reads the same function, so the packet never names a difference the signing step let through
+    or the other way round.
+    """
+    from certifications.models import OSP_SECTION_KEYS
+
+    by_section = _answer_changes_by_section(prior, new)
+    materials_changed = _materials_content(prior) != _materials_content(new)
+    differences: dict[str, dict] = {}
+    for key in OSP_SECTION_KEYS:
+        differs = []
+        if key in by_section:
+            differs.append(DIFFERS_ANSWERS)
+        if key == "inputs_list" and materials_changed:
+            differs.append(DIFFERS_MATERIALS)
+        narrative_before, records_before = _section_content(prior, key)
+        narrative_after, records_after = _section_content(new, key)
+        if narrative_before != narrative_after:
+            differs.append(DIFFERS_NARRATIVE)
+        if records_before != records_after:
+            differs.append(DIFFERS_RECORD_TYPES)
+        if differs:
+            differences[key] = {"differs": differs, "modules": by_section.get(key, [])}
+    return differences
 
 
 def _section_content(osp, key: str) -> tuple:

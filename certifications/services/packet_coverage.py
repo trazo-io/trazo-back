@@ -427,7 +427,9 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
     states = form_answer_states(osp, [form for form, _locations in generated])
     out: list[FormCoverage] = []
     for form, locations in generated:
-        rows = states[id(form)]
+        # A form the agent asked Trazo not to reproduce has no rows here either (OV-PK-W01): the
+        # question index, which lists every open row, prints none of its items.
+        rows = states[id(form)] if form.reproduced else []
         required = [row for row in rows if not row.optional]
         if form.filed_with_agent:
             standing = "filed_with_agent"
@@ -629,8 +631,24 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
     forms, _loaded = _load_forms(agent)
     renewal_forms = [form for form in forms if form.renewal_role]
     states = form_answer_states(osp, renewal_forms)
+    agent_name = packet_agent(osp).name or agent.upper()
     out: list[RenewalForm] = []
     for form in renewal_forms:
+        if not form.reproduced:
+            # The agent asked Trazo not to reproduce it (WSDA AGR 2521, reply received by 2026-11-09; overall review
+            # 2026-11, OV-PK-W01): named with the reason and no rows, no edition and no link, the
+            # same shape as a renewal form the agent does not publish.
+            out.append(
+                RenewalForm(
+                    title=form.title,
+                    document_id=form.document_id,
+                    revision="",
+                    role=form.renewal_role,
+                    reason=not_reproduced_sentence(agent_name),
+                    sent_with_renewal=bool(form.sent_with_renewal),
+                )
+            )
+            continue
         plan_state = {row.ref: row for row in states[id(form)]}
         rows = []
         for item in form.items:
@@ -662,7 +680,7 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
             RenewalForm(
                 title=form.title,
                 document_id=form.document_id,
-                # WSDA, 2026-10-26: the fee form it sends is not the edition on its website, so
+                # WSDA, reply received by 2026-11-09: the fee form it sends is not the edition on its website, so
                 # naming the transcribed edition would point the operation at the wrong copy.
                 revision="" if form.sent_with_renewal else form.revision,
                 role=form.renewal_role,
@@ -690,7 +708,21 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
     except Exception:  # noqa: BLE001 — a packet must build without the docs tree
         logger.exception("%s scope could not be loaded for renewal routing", agent)
     out.sort(key=lambda f: (_RENEWAL_ROLE_ORDER.index(f.role), f.title))
-    return packet_agent(osp).name or agent.upper(), out
+    return agent_name, out
+
+
+def not_reproduced_sentence(agent_name: str) -> str:
+    """What 02s says under a renewal form the agent asked Trazo not to reproduce.
+
+    WSDA's words (reply received by 2026-11-09): its fee forms "are updated regularly", are sent with the renewal
+    application and are not published, and reproducing one "would potentially cause an operation to
+    use an outdated form". The sales subtotal 02 prints is introduced by the routing page's own
+    "Sales figure" line, which already says it is not this agent's fee figure.
+    """
+    return (
+        f"{agent_name} sends this form with its renewal application and updates it regularly. Fill in the copy "
+        f"{agent_name} sent. {agent_name} does not publish it, so this packet does not reproduce its items."
+    )
 
 
 #: Agents whose renewal form asks the operation to LIST its updated OSP sections. Oregon Tilth's

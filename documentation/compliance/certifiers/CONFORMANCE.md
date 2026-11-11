@@ -960,6 +960,8 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **6 questions** — Covered 1 · Partial 1 · Out of scope 4
 
+> Not reproduced since 2026-11-11: the packet and the copy sheet name this form and send the operation to the agent's own copy; they print none of the rows below and do not link the file. The rows record the edition read on 2026-10-01. Basis: WSDA Organic Program, email to Trazo, received by 2026-11-09: "Our fee forms are updated regularly. Inputting it in your system would potentially cause an operation to use an outdated form." The fee form is sent with the renewal application and is not published on WSDA's website.
+
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
 | Header (business, contact, certificate) | Business Name; Name; Email; Cert No; Phone. | Covered | — | `company.Company.name` · `company.Establishment.contact_person` · `company.Establishment.contact_email` · `certifications.OrganicSystemPlan.approval_certificate_number` | — |

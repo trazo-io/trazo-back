@@ -765,16 +765,22 @@ class CcofAndWsdaSheetTests(_Farm):
         self.assertEqual(row["value"][0]["name"], "Home Block")
         self.assertEqual(row["value"][0]["planned"], "Honeycrisp 6.2 ac, Gala 3.8 ac")
 
-    def test_wsda_income_is_the_operators_with_the_sales_subtotal_only_as_a_cross_check(self):
+    def test_wsda_fee_form_is_one_row_with_the_sales_subtotal_only_as_a_cross_check(self):
+        """Overall review 2026-11, OV-PK-W01. WSDA, reply received by 2026-11-09: "Our fee forms are updated regularly.
+        Inputting it in your system would potentially cause an operation to use an outdated form."
+        The sheet itemised lines 1 to 4a of the R 05/26 file; one row now sends the operator to the
+        copy WSDA sent, with the figure Trazo holds beside it as a cross-check, never a fee figure."""
         last = timezone.localdate().year - 1
         osp = self._plan(self.WSDA)
-        # A stated 12-month period on the filing does not move WSDA's: "the last calendar year".
+        # A stated 12-month period on the filing does not move the cross-check: the calendar year.
         self._filing(
             osp, reporting_year=last + 1, sales_period_start=date(last - 1, 10, 1), sales_period_end=date(last, 9, 30)
         )
         self._sale(date(last, 11, 15), "640.00")
         self._sale(date(last - 1, 11, 15), "9.00")
-        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "wsda_gross_income")
+        rows = [r for r in self._sheet(osp)["rows"] if r["step"] == "2521"]
+        self.assertEqual([r["item"] for r in rows], ["wsda_fee_form"])
+        row = rows[0]
         self.assertEqual(row["kind"], "yours")
         self.assertIsNone(row["value"])
         self.assertEqual((row["extra"]["year"], row["extra"]["subtotal"]), (last, "640.00"))
@@ -784,21 +790,46 @@ class CcofAndWsdaSheetTests(_Farm):
         osp = self._plan(self.WSDA)
         self._filing(osp, reporting_year=this + 1)
         self._sale(date(this, 2, 1), "900.00")
-        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "wsda_gross_income")
+        row = next(r for r in self._sheet(osp)["rows"] if r["item"] == "wsda_fee_form")
         self.assertIsNone(row["extra"]["subtotal"])
         self.assertEqual(row["extra"]["reason"], "period_not_over")
 
-    def test_wsda_cert_no_only_from_a_wsda_certificate_and_the_fee_goes_by_mail(self):
+    def test_wsda_fee_form_is_neither_itemised_nor_linked_and_no_unsourced_mail_line_is_kept(self):
+        """OV-PK-W01 and OV-PK-W17: the late fee, payee, mailing box, courier address and "the fee form
+        and check go by mail" came only from the R 05/26 file, and the sheet linked that file."""
         osp = self._plan(self.WSDA)
         sheet = self._sheet(osp)
-        rows = {r["item"]: r for r in sheet["rows"]}
-        self.assertEqual(rows["cert_no"]["kind"], "not_recorded")
-        send = rows["wsda_send"]["extra"]
-        self.assertEqual(send["check_payable_to"], "WSDA Organic Program")
-        self.assertEqual(send["mail"], "PO Box 42591, Olympia, WA 98504-2560")
-        # The fee form WSDA sends is not always the published edition: no edition is named.
+        items = {r["item"] for r in sheet["rows"]}
+        for gone in (
+            "wsda_send",
+            "wsda_gross_income",
+            "wsda_renewal_fee",
+            "wsda_late_fee",
+            "wsda_how_sent",
+            "wsda_sent_date",
+            "business_name",
+            "contact_name",
+            "contact_email",
+            "cert_no",
+            "contact_phone",
+        ):
+            self.assertNotIn(gone, items)
+        due = next(r for r in sheet["rows"] if r["item"] == "wsda_due")["extra"]
+        self.assertEqual((due["due"], due["email"]), ("03-01", "organic@agr.wa.gov"))
+        for unsourced in ("late_fee_per_month", "check_payable_to", "mail", "courier"):
+            self.assertNotIn(unsourced, due)
+        self.assertNotIn("42591", str(sheet))
         fee_form = next(f for f in sheet["forms"] if f["stem"] == "2521-renewal-fee")
-        self.assertEqual(fee_form["revision"], "")
-        self.assertTrue(fee_form.get("sent_with_renewal"))
+        self.assertEqual((fee_form["revision"], fee_form["url"]), ("", ""))
+        self.assertTrue(fee_form["sent_with_renewal"])
+        self.assertTrue(fee_form["not_reproduced"])
         site_form = next(f for f in sheet["forms"] if f["stem"] == "2516-site-update")
         self.assertIs(site_form.get("sent_with_renewal"), False)
+        self.assertIs(site_form["not_reproduced"], False)
+        self.assertTrue(site_form["url"], "a published form keeps its link")
+
+    def test_wsda_cert_no_is_on_the_facility_form_only_from_a_wsda_certificate(self):
+        osp = self._plan(self.WSDA)
+        sheet = self._sheet(osp)
+        header = next(r for r in sheet["rows"] if r["item"] == "facilities_2519")["extra"]
+        self.assertEqual(header["cert_no"], "")

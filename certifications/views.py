@@ -2583,7 +2583,7 @@ class OSPAnnualUpdateViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             result = fn(*args)
         except FilingStateError as exc:
-            return Response({"error": exc.detail, "detail": exc.detail}, status=exc.status_code)
+            return Response({"error": exc.detail, "detail": exc.detail, **exc.extra}, status=exc.status_code)
         result.refresh_from_db()
         return Response(self.get_serializer(result).data, status=success_status)
 

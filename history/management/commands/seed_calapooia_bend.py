@@ -821,7 +821,14 @@ class Command(BaseCommand):
             revision.save(update_fields=[*fields, "updated_at"])
 
             sign = row.get("_sign") or {}
-            revision = sign_filing(revision, owner, signer_title=sign.get("signer_title", ""))
+            # These revisions were signed and filed on 2026-10-01 and 2026-10-02, before signing
+            # compared the plan versions (overall review 2026-11, OV-PK-O01). They attest sections
+            # unchanged that differ between v1 and v3, and their committed frozen bytes print that
+            # attestation, so the replay records them as they were signed. The 02s supplement
+            # still sets the attestation beside the comparison for the reader.
+            revision = sign_filing(
+                revision, owner, signer_title=sign.get("signer_title", ""), compare_plan_versions=False
+            )
             # The account that pressed Sign is whoever ran the seed; the person who signs on the
             # farm's behalf is the fixture's member-manager. Name and date sit outside the signed
             # hash, so restating them before filing changes no signed content.

@@ -14,6 +14,14 @@
 # It is part of WSDA's renewal, filed with WSDA: "your fee form and check must be sent hardcopy".
 # The packet supports one line of it, the prior year's gross organic sales, which 02 prints from
 # the operation's sales records.
+#
+# 2026-11-11: NOT REPRODUCED (overall review 2026-11, OV-PK-W01). The same email says reproducing the
+# form "would potentially cause an operation to use an outdated form". 02s now names the form with
+# that reason and no item rows, the copy sheet gives one row sending the operation to the copy WSDA
+# sent (with Trazo's sales subtotal as a cross-check, never a fee figure), and neither links the file
+# below. The items stay as the record of what the R 05/26 file asked, read on 2026-10-01; they are
+# not the edition an operation fills in. The sheet's mailing box, payee and "go by mail" lines came
+# only from this file and were dropped with it (OV-PK-W17).
 form:
   code: ''
   title: Renewal Fee Form
@@ -35,9 +43,15 @@ form:
     form and check must be sent hardcopy". No signature line is printed, so none is claimed.
   renewal_role: fee
   sent_with_renewal: >-
-    WSDA Organic Program, email to Trazo, 2026-10-26: "Our fee forms are updated regularly." "Renewal
+    WSDA Organic Program, email to Trazo, received by 2026-11-09: "Our fee forms are updated regularly." "Renewal
     fee forms are notished [not published] on our website, but instead are sent when we send operations renewal
     applications. R 05/26 2521 is not the renewal fee form version we sent to our operations."
+  not_reproduced:
+    basis: >-
+      WSDA Organic Program, email to Trazo, received by 2026-11-09: "Our fee forms are updated regularly.
+      Inputting it in your system would potentially cause an operation to use an outdated form." The
+      fee form is sent with the renewal application and is not published on WSDA's website.
+    decided: 2026-11-11
   register_status: complete
   source_sha256: 3afe3d3f572d7619754936881b2a41b0815e0e5ded5a2c010f145f892e318df6
   packet_documents:

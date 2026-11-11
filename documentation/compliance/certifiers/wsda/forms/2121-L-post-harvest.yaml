@@ -31,7 +31,7 @@ items:
     prints: modules/G6_1.pdf §D; narrative § 205.201(a)(5); copy sheet (Additional Facilities and Third-Parties, AGR 2519)
   note: 'Closed 2026-11-08. `handled_by_another_operation` asks the question and the handler table names who.
     AGR 2519 is WSDA''s own form, filed with WSDA, one per facility; it is registered
-    (`wsda/forms/2519-additional-facilities.yaml`) and the copy sheet gives, per facility another operation runs,
+    (`wsda/forms/2519-additional-facilities.yaml`) and the copy sheet gives, per facility another operation runs that the plan''s answers say stores or handles the crop while the operation still owns it,
     its name and address, the form''s activities as the operator picked them (`PostHarvestFacility.activities`),
     the products and the crops on the records linked to it, which responsibility statement the record points to
     (a certificate number on file or not) and, without one, the exemption the operator stated
