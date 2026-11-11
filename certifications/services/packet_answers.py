@@ -56,14 +56,14 @@ from dataclasses import dataclass
 #: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
 #: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
 EVIDENCED_EMBEDS = frozenset(
-    {"seedling_suppliers", "brand_owners", "sourced_products", "equipment_inventory", "planned_crops"}
+    {"seedling_suppliers", "brand_owners", "sourced_products", "equipment_inventory", "crop_table"}
 )
 
 #: Parcel panels answered by rows the operator typed, judged per parcel from the count `_Answers.parcels`
 #: puts under the panel's key. A table with no row is unanswered: the forms ask for at least one crop.
 PARCEL_EMBED_STATES = {
-    "planned_crops": lambda values: (
-        ("answered", "") if values.get("planned_crops") else ("unanswered", "no crop is listed for this parcel")
+    "crop_table": lambda values: (
+        ("answered", "") if values.get("crop_table") else ("unanswered", "no crop is listed for this parcel")
     ),
 }
 
@@ -327,7 +327,7 @@ class _Answers:
                 values = parcel_application_values(parcel)
                 # The planned-crop table is rows on a model, not an answer: its count rides in the values
                 # under the embed's key so the per-parcel loop can judge it (`PARCEL_EMBED_STATES`).
-                values["planned_crops"] = parcel.planned_crops.count()
+                values["crop_table"] = parcel.planned_crops.count()
                 out.append((parcel.name, values, maps, attached, not_shipped, route))
             self._parcels = out
         return self._parcels

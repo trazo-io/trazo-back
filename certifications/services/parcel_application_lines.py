@@ -248,9 +248,10 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
         lines.append(f"[REVIEW] No acres are given for: {', '.join(missing)}.")
     to_certify = _acres_number(answer_value(answers, "acres_to_certify"))
     if to_certify is not None and stated and listed > to_certify + 0.005:
+        # Stated, not flagged: a double crop lists the same ground twice, which is how the forms ask it.
         lines.append(
-            f"[REVIEW] The crops listed add up to {listed:g} acres, more than the {to_certify:g} acres to be "
-            "certified. Ground cropped twice in the year counts twice; otherwise one of the figures is off."
+            f"The crops listed add up to {listed:g} acres against {to_certify:g} acres to be certified; ground "
+            "cropped more than once in the year is listed once per crop."
         )
     if to_certify is not None and area_acres is not None and to_certify > area_acres + 0.05:
         lines.append(

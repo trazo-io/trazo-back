@@ -208,7 +208,7 @@ items:
   status: covered
   trazo:
     questions:
-    - parcel_application.planned_crops
+    - parcel_application.crop_table
     - parcel_application.acres_to_certify
     models:
     - product.ParcelPlannedCrop

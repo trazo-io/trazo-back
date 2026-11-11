@@ -651,6 +651,14 @@ class Command(BaseCommand):
             if parcel is not None:
                 self._stamp(PCH.objects.create(parcel=parcel, **self._scalar_fields(row)), row)
 
+        # The crops each parcel grows now or is planned to grow, with acres (CCOF ORGB49 A8, WSDA AGR 2264 ref 8,
+        # OTCO C2 2.1 10). Bottom Ground A lists spinach then carrots on the same ground: a double crop.
+        PPC = apps.get_model("product", "ParcelPlannedCrop")
+        for row in data.get("parcel_planned_crops", []):
+            parcel = parcels.get(row.get("#parcel"))
+            if parcel is not None:
+                PPC.objects.create(parcel=parcel, **self._scalar_fields(row))
+
         for row in data.get("sales_records", []):
             season = seasons.get(row.get("#production"))
             if season is None:

@@ -220,7 +220,7 @@ items:
   status: covered
   trazo:
     questions:
-    - parcel_application.planned_crops
+    - parcel_application.crop_table
     models:
     - product.ParcelPlannedCrop
     prints: >-

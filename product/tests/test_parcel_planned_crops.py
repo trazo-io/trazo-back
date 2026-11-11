@@ -164,7 +164,9 @@ class TheTablePrintsInSectionA(_Parcel):
         self.crop(acres=12.5)
         page = self.page()
         self.assertIn("Total acres on this parcel to be certified organic 10", page)
-        self.assertIn("[REVIEW] The crops listed add up to 12.5 acres, more than the 10 acres to be certified.", page)
+        # A double crop lists the same ground twice: stated, never a review line.
+        self.assertIn("The crops listed add up to 12.5 acres against 10 acres to be certified", page)
+        self.assertNotIn("[REVIEW] The crops listed", page)
         self.answer(acres_to_certify="25")
         self.assertIn(
             "[REVIEW] The acres to be certified (25) are more than the parcel area on file (19.8 acres).", self.page()

@@ -212,14 +212,15 @@ PARCEL_APPLICATION = Module(
                 ),
                 Question(
                     # CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10): a table of rows the operator types
-                    # (`ParcelPlannedCrop`), never derived from seasons or the parcel area.
-                    key="planned_crops",
+                    # (`ParcelPlannedCrop`), never derived from seasons or the parcel area. Not `planned_crops`,
+                    # the next-12-months answer page F asks of a certified parcel (CCOF ORGB88).
+                    key="crop_table",
                     kind="info",
                     label=text(
                         "Crops grown now or planned on this parcel, with acres",
                         "Cultivos actuales o planeados en esta parcela, con acres",
                     ),
-                    embed="planned_crops",
+                    embed="crop_table",
                     required=False,
                 ),
                 Question(
