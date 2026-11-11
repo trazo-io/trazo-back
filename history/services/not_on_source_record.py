@@ -18,12 +18,19 @@ Two flags on `ChemicalEvent`, and ONE rule for both: the flag or the value, neve
   are clock times too, so they stay empty as well. Every reader that would print a time prints
   NOT_ON_SOURCE_RECORD instead, never the noon placeholder.
 
+"A day with no time" is decided by the SHAPE of what the operator sent, never by the clock value
+it parses to: a bare `YYYY-MM-DD` is a day; anything with a time part is a stated time, including
+`T12:00` and `T00:00`. A clock-value test cannot tell a real 12:00 UTC application (07:00 in the
+east) from the placeholder, so a record sprayed at that hour could never be corrected to it.
+
 The serializer, the model's `clean()` and the correction path all read the rule from here.
 """
 
 from __future__ import annotations
 
-from datetime import time, timezone
+import re
+from datetime import date as date_type
+from datetime import datetime, timezone
 from typing import Optional
 
 #: What every printed surface says in place of the value. Distinct from a plain blank, which keeps
@@ -31,9 +38,8 @@ from typing import Optional
 #: looked and the source record does not show it.
 NOT_ON_SOURCE_RECORD = "Not on the source record"
 
-#: The clock times a day-only value arrives with: midnight (a bare `YYYY-MM-DD` parses to it) and
-#: noon (the stored placeholder). Anything else is a clock time somebody stated.
-_PLACEHOLDER_CLOCKS = (time(0, 0), time(12, 0))
+#: A day and nothing else, as the operator sent it.
+_DAY_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 CONCENTRATION_CONFLICT = (
     "The concentration is marked as not on the source record. Leave it blank, or untick that box "
@@ -46,6 +52,12 @@ WINDOW_CONFLICT = (
 CLOCK_CONFLICT = (
     "The time is marked as not on the source record, so the date cannot carry a clock time. Send "
     "the day alone, or untick that box."
+)
+#: Clearing the time mark: the stored clock is the noon placeholder, so the request that clears it
+#: must state the time from the source record. Shared by an edit and a correction.
+UNMARK_NEEDS_A_TIME = (
+    "This record holds no clock time; its day is stored without one. Correct the date to the date "
+    "and time on the source record, and that removes this mark."
 )
 
 
@@ -63,11 +75,17 @@ def _utc(when):
     return when.astimezone(timezone.utc)
 
 
-def has_clock_time(when) -> bool:
-    """Whether a datetime carries a clock time someone stated (anything but midnight or noon UTC)."""
-    if when is None:
+def is_day_only(raw) -> bool:
+    """Whether the operator sent a day and no time, judged by the INPUT's shape, never its value.
+
+    A bare `YYYY-MM-DD` string (or a date object) is a day. Anything carrying a time part,
+    `T12:00` and `T00:00` included, or a datetime object, is a stated clock time.
+    """
+    if isinstance(raw, datetime):
         return False
-    return _utc(when).time() not in _PLACEHOLDER_CLOCKS
+    if isinstance(raw, date_type):
+        return True
+    return isinstance(raw, str) and bool(_DAY_ONLY.match(raw.strip()))
 
 
 def day_without_time(when):
@@ -84,12 +102,13 @@ def conflicts(
     time_not_recorded,
     application_start,
     application_end,
-    date=None,
+    date_input=None,
 ) -> dict:
     """{field: message} for every place a flag and a value were given together.
 
-    `date` is checked only when the caller passes it, i.e. when the request carried one: a stored
-    date is normalised to the placeholder by the caller, never refused.
+    `date_input` is the date AS SENT (the raw request value), checked only when the request carried
+    one: under the time mark it must be a bare day. A stored date is normalised to the placeholder
+    by the caller, never refused.
     """
     errors = {}
     if concentration_not_recorded and _present(concentration):
@@ -98,7 +117,7 @@ def conflicts(
         for key, value in (("application_start", application_start), ("application_end", application_end)):
             if value is not None and value != "":
                 errors[key] = WINDOW_CONFLICT
-        if has_clock_time(date):
+        if date_input is not None and not is_day_only(date_input):
             errors["date"] = CLOCK_CONFLICT
     return errors
 

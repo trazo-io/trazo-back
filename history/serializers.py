@@ -728,10 +728,13 @@ def _validate_not_on_source_record(serializer, data):
     """The flag or the value, never both (`history/services/not_on_source_record.py`).
 
     Reads each fact from the request when it carries it and from the stored record otherwise, so a
-    partial update cannot pair a new flag with an old value. A date the request sends with a clock
-    time is refused under the time flag; otherwise the date is stored at the noon placeholder.
+    partial update cannot pair a new flag with an old value. "A day with no time" is judged by the
+    SHAPE of the date as sent (`initial_data`), never by the clock it parses to: under the time
+    mark a bare `YYYY-MM-DD` is stored at the noon placeholder and anything with a time part is
+    refused. Clearing a stored mark needs a stated time in the same request, exactly as a
+    correction does, or the placeholder would read as the time sprayed.
     """
-    from history.services import not_on_source_record
+    from history.services import not_on_source_record as rule
 
     instance = getattr(serializer, "instance", None)
 
@@ -740,20 +743,28 @@ def _validate_not_on_source_record(serializer, data):
             return data[key]
         return getattr(instance, key, None) if instance is not None else None
 
+    date_sent = "date" in data
+    raw = getattr(serializer, "initial_data", None)
+    date_input = raw.get("date") if date_sent and hasattr(raw, "get") else None
+    if date_sent and date_input is None:
+        date_input = data["date"]
     time_flag = bool(effective("time_not_recorded"))
-    errors = not_on_source_record.conflicts(
+    errors = rule.conflicts(
         concentration_not_recorded=bool(effective("concentration_not_recorded")),
         concentration=effective("concentration"),
         time_not_recorded=time_flag,
         application_start=effective("application_start"),
         application_end=effective("application_end"),
-        date=data.get("date"),
+        date_input=date_input if date_sent else None,
     )
+    if instance is not None and getattr(instance, "time_not_recorded", False) and not time_flag:
+        if not date_sent or rule.is_day_only(date_input):
+            errors["time_not_recorded"] = rule.UNMARK_NEEDS_A_TIME
     if errors:
         raise serializers.ValidationError(errors)
     when = effective("date")
     if time_flag and when is not None:
-        data["date"] = not_on_source_record.day_without_time(when)
+        data["date"] = rule.day_without_time(when)
     return data
 
 

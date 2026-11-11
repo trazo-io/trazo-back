@@ -165,10 +165,34 @@ class TimeFlagTests(_PaperLog):
         self.assertTrue(event.time_not_recorded)
         self.assertEqual(event.date, NOON)
 
-    def test_the_noon_placeholder_is_accepted_back_on_an_edit(self):
-        serializer = self._serializer({"date": "2026-04-20T12:00", "time_not_recorded": True})
+    def test_a_stated_noon_or_midnight_with_the_flag_is_refused(self):
+        # Review of back #395: "a day with no time" is the SHAPE of the input, never its clock. A
+        # time part is a stated time even when it reads 12:00 or 00:00 (07:00 / 19:00 in the east).
+        for sent in ("2026-04-20T12:00", "2026-04-20T00:00", "2026-04-20T12:00:00Z"):
+            serializer = self._serializer({"date": sent, "time_not_recorded": True})
+            self.assertFalse(serializer.is_valid(), sent)
+            self.assertIn("date", serializer.errors, sent)
+
+    def test_an_edit_cannot_clear_the_mark_without_a_stated_time(self):
+        # Review of back #395: clearing the mark alone left the noon placeholder reading as the
+        # time sprayed. The correction path refused it; a plain edit must too.
+        event = self._spray(date=NOON, time_not_recorded=True)
+        for payload in ({"time_not_recorded": False}, {"time_not_recorded": False, "date": "2026-04-20"}):
+            serializer = self._serializer(payload, instance=event, partial=True)
+            self.assertFalse(serializer.is_valid(), payload)
+            self.assertIn("time_not_recorded", serializer.errors, payload)
+        event.refresh_from_db()
+        self.assertTrue(event.time_not_recorded)
+
+        serializer = self._serializer(
+            {"time_not_recorded": False, "date": "2026-04-20T12:00"}, instance=event, partial=True
+        )
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.save().date, NOON)
+        serializer.save()
+        event.refresh_from_db()
+        self.assertFalse(event.time_not_recorded)
+        # A stated 12:00 is a time like any other once the mark is gone.
+        self.assertEqual(event.date, NOON)
 
     def test_a_clock_time_with_the_flag_is_refused(self):
         serializer = self._serializer({"date": "2026-04-20T09:30", "time_not_recorded": True})
@@ -335,6 +359,20 @@ class CorrectionTests(_PaperLog):
         original, corrected, _ = self._trail(event)["date"]
         self.assertEqual(original, "2026-04-20 (time not on the source record)")
         self.assertIn("07:15", corrected)
+
+    def test_a_stated_noon_or_midnight_is_a_time_and_clears_the_mark(self):
+        # Review of back #395: a real 12:00 or 00:00 UTC application could never be corrected to
+        # its time, because the clock value was taken for the placeholder.
+        for sent, expected in (
+            ("2026-04-20T12:00:00+00:00", NOON),
+            ("2026-04-20T00:00:00+00:00", datetime(2026, 4, 20, 0, 0, tzinfo=dt_tz.utc)),
+        ):
+            event = self._spray(date=NOON, time_not_recorded=True)
+            self._correct(event, "date", sent, reason="Applicator's sheet found.")
+            event.refresh_from_db()
+            self.assertFalse(event.time_not_recorded, sent)
+            self.assertEqual(event.date, expected, sent)
+            self.assertEqual(self._trail(event)["time_not_recorded"][:2], ("true", "false"), sent)
 
     def test_a_new_day_without_a_time_keeps_the_mark_at_the_placeholder(self):
         event = self._spray(date=NOON, time_not_recorded=True)

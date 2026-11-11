@@ -140,7 +140,7 @@ def _boolean_word(field, value):
     return value
 
 
-def _paired_changes(event, field_name, coerced):
+def _paired_changes(event, field_name, coerced, raw=None):
     """Fields that must change WITH this correction so a spray never holds a flag and its value.
 
     `concentration_not_recorded` / `time_not_recorded` are the operator's statement that the
@@ -148,9 +148,13 @@ def _paired_changes(event, field_name, coerced):
     so correcting one is not a guess about the other (unlike amount / area / rate, where which
     number is wrong is the operator's to say). Each paired change gets its own trail row with the
     same reason, so nothing changes quietly. Raises AmendmentError where no pairing is honest.
+
+    `raw` is the value as typed. A date's "day with no time" is judged by its SHAPE (a bare
+    `YYYY-MM-DD`), never by the clock it parses to, so a real 12:00 or 00:00 UTC application can
+    still be corrected to its time.
     """
     from history.models import ChemicalEvent
-    from history.services.not_on_source_record import day_without_time, has_clock_time
+    from history.services.not_on_source_record import UNMARK_NEEDS_A_TIME, day_without_time, is_day_only
 
     if not isinstance(event, ChemicalEvent):
         return {}
@@ -168,20 +172,12 @@ def _paired_changes(event, field_name, coerced):
             paired["date"] = day_without_time(event.date)
     elif field_name == "time_not_recorded" and not coerced and event.time_not_recorded:
         # Clearing the mark alone would leave the noon placeholder reading as the time sprayed.
-        raise AmendmentError(
-            {
-                field_name: (
-                    "This record holds no clock time; its day is stored without one. Correct the date to "
-                    "the date and time on the source record, and that removes this mark."
-                )
-            }
-        )
+        raise AmendmentError({field_name: UNMARK_NEEDS_A_TIME})
     elif field_name == "date" and event.time_not_recorded and coerced is not None:
-        if has_clock_time(coerced):
-            paired["time_not_recorded"] = False
-        else:
+        if is_day_only(raw):
             # Still a day with no time: kept at the placeholder, never at a midnight it was not.
             return {"__primary__": day_without_time(coerced)}
+        paired["time_not_recorded"] = False
     elif field_name in ("application_start", "application_end") and coerced is not None and event.time_not_recorded:
         raise AmendmentError(
             {
@@ -254,14 +250,16 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
         raise AmendmentError({field_name: " ".join(exc.messages)})
 
     # A spray's "not on the source record" mark and the value it stands in for change together.
-    paired = _paired_changes(event, field_name, coerced)
+    paired = _paired_changes(event, field_name, coerced, raw=new_value)
     coerced = paired.pop("__primary__", coerced)
 
     # Compare the typed values first, then their rendered forms. Decimal("200.00") and
     # Decimal("200") are equal as numbers but render as different strings, so a rendered
     # comparison alone would accept "200" over a stored 200.00 and write a correction
     # line reading "200.00 -> 200" — noise in a document an inspector reads closely.
-    if coerced == original or _render(coerced) == _render(original):
+    # A paired change is a correction even when this field's stored value does not move: a stated
+    # 12:00 on a record kept at the noon placeholder still turns "no time" into a time.
+    if not paired and (coerced == original or _render(coerced) == _render(original)):
         raise AmendmentError({field_name: "That is the value already on the record — nothing to correct."})
 
     flagged_before = bool(getattr(event, "time_not_recorded", False))
