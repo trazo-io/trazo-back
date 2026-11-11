@@ -149,11 +149,17 @@ items:
     - parcel_application.crop_history
     models:
     - product.ParcelCropHistory
-    prints: parcels/parcel-application-<name>.pdf §F
-  gap: 'Same as AGR 2264 ref ''10'' and CCOF''s F7/A8: no ''pasture'' option, year-level (not month-level)
-    date ranges, and no per-crop-category acreage field on `ParcelCropHistory`.'
-  fix: Same as AGR 2264 ref '10' — add `pasture` to the production-method choices and an optional acreage
-    field on the row.
+    - certifications.LandownerAffidavit.yearly_history
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  gap: >-
+    Since 2026-11-11 a land-history row the operator types carries a month range, acres and pasture (AGR
+    2264 ref 10 is covered by it). AGR 2262 is the PREVIOUS manager's own table, signed by them: its
+    rows ride on the affidavit (`LandownerAffidavit.yearly_history`: year, land use, product,
+    manufacturer, application date), which has no month range and no acres.
+  fix: >-
+    Add `period_from`, `period_to` and `acres` to the affidavit's yearly_history rows and print them in
+    the affidavit table (the affidavit slice).
 - ref: '8'
   asks: 'List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
     your management, for the transition period the applicant seeks certification for: material name and

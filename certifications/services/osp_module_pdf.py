@@ -1721,7 +1721,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
         # Typed years AND years derived from the seasons logged on this parcel — see
         # product/services/land_history.py for why reading only the typed table left the two
         # most recent (and best documented) years off a renewal's § 205.202(b) page.
-        from product.services.land_history import land_history_rows
+        from product.services.land_history import land_history_planting, land_history_rows, land_history_span
 
         # Unbounded on purpose. The Parcel Application is a LIVE document — its buffer rows,
         # map and identity render from current parcel state ("Live completion"), so capping
@@ -1745,11 +1745,21 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             crop = row.crop_grown or "—"
             if row.block_id:
                 crop = f"{crop} ({row.block_id})"
-            bits = [str(row.year), crop]
+            bits = [str(row.year)]
+            # CCOF ORGB49 F7 asks each use with a from-to month range; OTCO C2 2.4 lets a history start mid-year.
+            span = land_history_span(row)
+            if span:
+                bits.append(span)
+            bits.append(crop)
             if row.production_method_display:
                 bits.append(row.production_method_display.lower())
+            if row.acres is not None:
+                bits.append(f"{float(row.acres):g} acres")
             if row.cover_crop:
                 bits.append(f"cover crop: {row.cover_crop}")
+            planting = land_history_planting(row)
+            if planting:
+                bits.append(planting)
             # 2026-09-09 — was gated on `row.is_derived`, so an operator-typed year (which is what
             # a 36-month history on newly acquired ground IS) printed no materials at all. WSDA AGR
             # 2264 ref 13 and OTCO C2 2.4-8/2.4-9 ask for every material by name and date.

@@ -243,20 +243,21 @@ items:
 - ref: '10'
   asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
     Stone fruit, Vegetable, Other): dates produced and acreage, for production under your management.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.crop_history
     models:
     - product.ParcelCropHistory
-    prints: parcels/parcel-application-<name>.pdf §F
-  gap: 'Same as CCOF F7 for the dates/method half: `ParcelCropHistory` rows carry year, crop grown, cover
-    crop and production method, with no ''pasture'' option and only year-level (not month-level) date
-    ranges. WSDA additionally asks acreage per crop-category-year, which — same as CCOF A8 — `ParcelCropHistory`
-    has no field for at all; `Parcel.area` is the whole site, not a per-crop-year split.'
-  fix: Add `pasture` to the production-method choices and an optional acreage field on the `ParcelCropHistory`
-    row, per the CCOF F7 and A8 fixes.
+    - product.services.land_history
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Each land-history row names the crop, the months it was produced (`period_start`, `period_end`) and
+    its acres (`acres`, stated by the operator) since 2026-11-11, with pasture as a use. The crop is
+    named as the operator names it rather than by WSDA's category list; WSDA takes alternative records
+    'provided they include all applicable information'. A year built from season records prints its
+    months and no acres, since a season carries none.
 - ref: '11'
   asks: Have any treated seeds been planted on the site while under your management (include seeds treated
     with allowed materials)? Yes / No.
