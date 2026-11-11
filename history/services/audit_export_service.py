@@ -1286,6 +1286,42 @@ PEST_EVENT_WIDTHS = [
     0.72 * inch,  # Beneficial / Qty — prose, wraps
 ]
 
+#: Input Material Application Records. Lifted out of `_build_chemical_log` on 2026-11-11 so
+#: test_audit_pdf_column_fit.py can reach it. It had sized prose columns for "area, not width",
+#: but a WORD wider than its column is not wrapped, it is split, and the landing page's preview
+#: of this very table printed "hydroxi / de", "s / pinosad", "(Xanthomona / s" and
+#: "grower-s / elected". Every column now holds its widest word as well as its header: the sum
+#: of those minimums is 6.99in, so the 7.00in frame has room for all of them.
+APPLICATION_LOG_WIDTHS_CERTIFIED = [
+    0.59 * inch,  # Date: "2025-07-08"
+    0.53 * inch,  # Product: prose; longest word "Naturalyte"
+    0.51 * inch,  # Type: widest CHEMICAL_TYPE_LABELS word, "Fungicide"
+    0.51 * inch,  # NPK / Conc.: "hydroxide" (46.1% copper hydroxide)
+    0.47 * inch,  # Amount / Rate: header "Amount"
+    0.34 * inch,  # Area: "12.50"
+    0.65 * inch,  # Method: widest APPLICATION_METHOD_LABELS word, "incorporation"
+    0.72 * inch,  # Target / Purpose: "(Xanthomonas"
+    0.87 * inch,  # Organic Status: "Organic-approved", "grower-selected,"
+    0.28 * inch,  # REI hrs
+    0.31 * inch,  # PHI days: header "days"
+    0.38 * inch,  # Buffer
+    0.55 * inch,  # EPA Reg #: "62719-621"
+    0.29 * inch,  # RUP
+]  # = 7.00 in; every column at (or within 0.01in of) its own minimum
+
+#: The same table for a certification without the EPA/WPS columns.
+APPLICATION_LOG_WIDTHS_PLAIN = [
+    0.59 * inch,  # Date
+    0.95 * inch,  # Product
+    0.51 * inch,  # Type
+    0.51 * inch,  # NPK / Conc.
+    0.47 * inch,  # Amount / Rate
+    0.50 * inch,  # Area
+    0.65 * inch,  # Method
+    0.85 * inch,  # Target / Purpose
+    0.87 * inch,  # Organic Status
+]  # = 5.90 in
+
 TABLE_HEADERS = {
     "MASS_BALANCE_PURCHASE_WIDTHS": [
         "Purchase Date",
@@ -1367,6 +1403,34 @@ TABLE_HEADERS = {
         "Storage",
         "Operator",
     ],
+    # Must match `app_headers` in `_build_chemical_log`, in order (the test pairs them by index).
+    "APPLICATION_LOG_WIDTHS_CERTIFIED": [
+        "Date",
+        "Product",
+        "Type",
+        "NPK / Conc.",
+        "Amount / Rate",
+        "Area",
+        "Method",
+        "Target / Purpose",
+        "Organic Status",
+        "REI hrs",
+        "PHI days",
+        "Buffer",
+        "EPA Reg #",
+        "RUP",
+    ],
+    "APPLICATION_LOG_WIDTHS_PLAIN": [
+        "Date",
+        "Product",
+        "Type",
+        "NPK / Conc.",
+        "Amount / Rate",
+        "Area",
+        "Method",
+        "Target / Purpose",
+        "Organic Status",
+    ],
 }
 
 #: Index of every column in the lists above that carries an ATOMIC identifier, i.e. one that
@@ -1379,6 +1443,8 @@ IDENTIFIER_COLUMNS = {
     "PRODUCTION_EVENT_WIDTHS_PLAIN": {0: "Date"},
     "HARVEST_ANALYTICS_WIDTHS": {0: "Date", 1: "Lot"},
     "PEST_EVENT_WIDTHS": {0: "Date"},
+    "APPLICATION_LOG_WIDTHS_CERTIFIED": {0: "Date"},
+    "APPLICATION_LOG_WIDTHS_PLAIN": {0: "Date"},
 }
 
 
@@ -6497,37 +6563,14 @@ class AuditExportService:
         # Every width below is measured, not guessed: it is at least
         # `stringWidth(longest_atomic_token) + 6pt padding` for that column, where the atomic
         # tokens are the header words, the type/method labels, a date, and an EPA number.
-        # Multi-word values (product names, target pests) are meant to wrap, so the leftover
-        # budget goes to them. test_audit_pdf_column_fit.py holds this true.
+        # Multi-word values (product names, target pests) wrap between words, but a single
+        # word wider than its column is SPLIT, so since 2026-11-11 every column also holds its
+        # widest word (see APPLICATION_LOG_WIDTHS_CERTIFIED). test_audit_pdf_column_fit.py
+        # holds both rules true.
         if self.certification_type in ("organic", "globalgap", "roc", "all"):
-            base_widths = [
-                0.64 * inch,  # Date        — "2025-07-08"
-                0.65 * inch,  # Product     — wraps; longest word "Naturalyte"
-                0.53 * inch,  # Type        — "Pesticide"
-                0.45 * inch,  # NPK / Conc. — header "Conc."
-                0.51 * inch,  # Amount      — header "Amount"
-                0.40 * inch,  # Area        — wraps; "acres", block designator
-                0.60 * inch,  # Method      — "Fertigation"
-                0.68 * inch,  # Target      — wraps; "transitella)"
-                0.51 * inch,  # Organic     — "certified"
-                0.30 * inch,  # REI hrs
-                0.36 * inch,  # PHI days
-                0.43 * inch,  # Buffer m
-                0.60 * inch,  # EPA Reg #   — "62719-621"
-                0.34 * inch,  # RUP
-            ]  # = 7.00 in
+            base_widths = APPLICATION_LOG_WIDTHS_CERTIFIED
         else:
-            base_widths = [
-                0.64 * inch,  # Date
-                0.95 * inch,  # Product
-                0.53 * inch,  # Type
-                0.45 * inch,  # NPK / Conc.
-                0.51 * inch,  # Amount
-                0.50 * inch,  # Area
-                0.60 * inch,  # Method
-                0.85 * inch,  # Target
-                0.51 * inch,  # Organic
-            ]  # = 5.54 in
+            base_widths = APPLICATION_LOG_WIDTHS_PLAIN
 
         t = Table(app_data, colWidths=base_widths, repeatRows=1)
         t.setStyle(self._base_table_style())
