@@ -1,0 +1,369 @@
+{
+  "_about": "Blue Oak Orchards' answers to every Organic System Plan module, loaded by seed_showcase_walnut_farm and checked against the live questionnaire on every run. Fictional farm: no real certifier, handler, nursery, supplier or public body is named. A module marked not_applicable describes work this farm does not do (the handler hulls, dries and stores the crop). common_osp_records lists the Common OSP section 11 record types the farm confirms it keeps: the ones Trazo already finds evidence for, plus weigh tickets, contracts, settlement statements and input labels, which a grower keeps outside Trazo. Storage and post-harvest records are left out because the handler keeps them.",
+  "common_osp_records": [
+    "bill_of_lading",
+    "buffer_separation_records",
+    "clean_out_records",
+    "clean_transport_records",
+    "contracts",
+    "disease_management",
+    "drift_prevention_records",
+    "harvest_records",
+    "input_material_application",
+    "input_material_information",
+    "input_material_usage",
+    "invoices",
+    "monitoring_records",
+    "mulching",
+    "natural_resources_condition",
+    "non_gmo_seed_verification",
+    "organic_certificates",
+    "pest_management",
+    "planting_records",
+    "purchase_receipts",
+    "purchase_receipts_invoices",
+    "purchase_records",
+    "restricted_input_use_records",
+    "seed_search_commercial_availability",
+    "settlement_statements",
+    "shared_equipment_cleaning",
+    "untreated_seed_verification",
+    "weeding",
+    "weigh_tickets"
+  ],
+  "certification_contract": {
+    "not_applicable": false,
+    "answers": {
+      "contract_notes": "Blue Oak Walnut Co. farms as Blue Oak Orchards. The organic certificate and the sales documents both read Blue Oak Orchards; there is no other trade name.",
+      "contract_scopes": [
+        "crops"
+      ]
+    }
+  },
+  "g2_0_fraud_prevention": {
+    "not_applicable": false,
+    "answers": {
+      "fraud_mitigation_practices": [
+        "verify_certificates",
+        "organic_integrity_database",
+        "known_suppliers",
+        "employee_training",
+        "review_paperwork"
+      ],
+      "fraud_review_process": "The owner reviews the handler's certificate and our input suppliers each January before the annual update goes to our certifier, and again if we take on a new custom operator or a new buyer mid-season.",
+      "fraud_risk_areas": [
+        "custom_operators",
+        "seasonal_labor"
+      ],
+      "osp_accuracy_process": "The crew logs every spray, mow and harvest in Trazo as it happens. The owner reviews the inputs list and parcel records against this plan before renewal.",
+      "osp_implementation_monitoring": [
+        "record_review",
+        "internal_review",
+        "staff_training"
+      ],
+      "osp_review_frequency": [
+        "annually",
+        "on_change"
+      ]
+    }
+  },
+  "g3_0_seeds": {
+    "not_applicable": false,
+    "answers": {
+      "ca_search_before_use": "documented_search",
+      "grafts_stock": "no",
+      "planting_stock_used": [
+        "non_organic"
+      ],
+      "seedlings_used": [
+        "none"
+      ],
+      "seeds_used": [
+        "organic_untreated"
+      ]
+    }
+  },
+  "g3_1_container_greenhouse": {
+    "not_applicable": true,
+    "answers": {}
+  },
+  "g3_1_seedlings": {
+    "not_applicable": true,
+    "answers": {}
+  },
+  "g3_2_planting_stock": {
+    "not_applicable": false,
+    "answers": {
+      "nonorganic_stock_justification": [
+        "variety_unavailable",
+        "rootstock_unavailable"
+      ],
+      "planting_stock_description": "Replant Chandler trees on Paradox rootstock from Sample Nursery Co., set in the rows where trees were lost to blight. Each replant is logged against its block with the nursery invoice.",
+      "stock_organic_status": "all_nonorganic",
+      "stock_records_kept": [
+        "invoices",
+        "variety_tags",
+        "planting_map",
+        "treatment_statements"
+      ],
+      "stock_search_records": [
+        "nursery_quotes",
+        "emails",
+        "phone_log"
+      ],
+      "stock_sold_as_organic": "not_sold",
+      "stock_treatments": "none_confirmed",
+      "stock_types_established": [
+        "bare_root",
+        "rootstock"
+      ],
+      "suppliers_on_supplier_list": true
+    }
+  },
+  "g4_0_rotation_soil": {
+    "not_applicable": false,
+    "answers": {
+      "applies_calcium_chloride": false,
+      "applies_deficiency_materials": false,
+      "applies_potassium_chloride": false,
+      "erosion_practices": [
+        "permanent_cover",
+        "cover_cropping",
+        "micro_irrigation",
+        "windbreaks"
+      ],
+      "fertility_components": [
+        "compost",
+        "cover_crops",
+        "crop_residue",
+        "mined_minerals"
+      ],
+      "fertility_inputs_listed": true,
+      "fertility_monitoring": [
+        "soil_tests",
+        "tissue_tests",
+        "crop_observation"
+      ],
+      "in_lieu_practices": [
+        "ground_cover",
+        "cover_crops",
+        "hedgerows"
+      ],
+      "monitoring_frequency": "annually",
+      "system_type": [
+        "perennial"
+      ],
+      "tillage_practices": "Permanent resident vegetation on the orchard floor, mowed 4-5 times between March and August. No tillage in the tree rows. Compost surface-applied and left uncultivated; shredded prunings returned to the middles each winter."
+    }
+  },
+  "g4_1_compost_manure": {
+    "not_applicable": false,
+    "answers": {
+      "materials_applied": [
+        "purchased_compost"
+      ],
+      "purchased_compost_documentation": true
+    }
+  },
+  "g4_2_natural_resources": {
+    "not_applicable": false,
+    "answers": {
+      "conservation_plan_agency": [
+        "federal_agency"
+      ],
+      "conservation_plan_detail": "Hedgerow and pollinator plantings on the east and south borders, established in 2024 under the farm's own conservation plan.",
+      "habitat_biodiversity_practices": [
+        "hedgerows",
+        "pollinator_habitat",
+        "owl_raptor_boxes",
+        "native_plantings"
+      ],
+      "invasive_species_practices": [
+        "identification",
+        "early_removal",
+        "weed_free_inputs"
+      ],
+      "irrigation_district_additives": "yes",
+      "irrigation_district_mitigation": "No district water reaches the orchard, so no canal treatment can either.",
+      "irrigation_water_sources": "Two on-site wells. No surface water is delivered to the orchard.",
+      "monitoring_method": [
+        "photo_points"
+      ],
+      "soil_water_practices": [
+        "cover_cropping",
+        "reduced_tillage",
+        "irrigation_efficiency",
+        "windbreaks"
+      ],
+      "water_from_irrigation_district": true,
+      "water_quality_test_frequency": "Annually, before the irrigation season starts.",
+      "water_quality_tested": true,
+      "wildlife_habitat_mitigation": [
+        "habitat_elsewhere",
+        "buffers_between",
+        "fencing_corridors"
+      ],
+      "wildlife_habitat_pressure": [
+        "wildlife_restricted"
+      ]
+    }
+  },
+  "g5_0_pest": {
+    "not_applicable": false,
+    "answers": {
+      "applies_copper_materials": true,
+      "applies_pest_weed_disease_inputs": true,
+      "burns_crop_residue": false,
+      "copper_accumulation_practices": [
+        "soil_copper_tests",
+        "limited_applications"
+      ],
+      "input_use_conditions": "Only after trap counts for navel orangeworm exceed threshold, and only with materials on our inputs list. Codling moth mating disruption goes out every season as a preventive, not a rescue treatment.",
+      "monitoring_frequency": "weekly",
+      "monitoring_records": "Weekly trap counts logged in Trazo against the block, with the count, the date, and who walked the traps. Husk fly cards checked on the same round.",
+      "monitoring_scope": [
+        "pest_populations",
+        "disease_pressure",
+        "beneficial_activity"
+      ],
+      "plastic_mulch_used": false,
+      "prevention_practices": [
+        "sanitation",
+        "beneficial_habitat",
+        "pruning_canopy",
+        "irrigation_management",
+        "vertebrate_trapping",
+        "raptor_habitat"
+      ],
+      "weed_management_practices": [
+        "mowing",
+        "mechanical_cultivation",
+        "cover_crop_suppression"
+      ]
+    }
+  },
+  "g6_0_production": {
+    "not_applicable": false,
+    "answers": {
+      "buffer_strategies": [
+        "buffer_strips",
+        "hedgerows_windbreaks",
+        "roads_waterways"
+      ],
+      "drift_response_procedure": "Stop work on the affected rows, photograph and note the date, time and wind direction, notify our certifier within 24 hours, and hold the nuts from those rows out of the organic lot until the certifier advises.",
+      "drift_safeguards": [
+        "written_notification",
+        "boundary_signage",
+        "monitor_adjoining_activity",
+        "complaint_procedure"
+      ],
+      "parallel_production": false,
+      "prohibited_materials_on_site": false,
+      "runoff_risk_present": false,
+      "split_operation": false
+    }
+  },
+  "g6_1_harvest_transport": {
+    "not_applicable": false,
+    "answers": {
+      "container_safeguards": [
+        "cleaned_prior"
+      ],
+      "container_types": [
+        "field_bins",
+        "bulk_trailers"
+      ],
+      "containers_cleaning_method": "Bins are blown out and visually inspected before the first organic load each season and between blocks; the check is logged as a cleanout event.",
+      "containers_reused_from_prohibited": false,
+      "handled_by_another_operation": "yes_certified",
+      "lot_identification_on_every_load": true,
+      "packaging_free_of_prohibited": "confirmed",
+      "transport_units_inspected_clean": true,
+      "who_harvests": [
+        "own_crew"
+      ],
+      "who_transports": [
+        "own_vehicles"
+      ]
+    }
+  },
+  "g6_2_storage": {
+    "not_applicable": true,
+    "answers": {}
+  },
+  "g6_4_handling": {
+    "not_applicable": true,
+    "answers": {}
+  },
+  "g6_5_sales_soe": {
+    "not_applicable": false,
+    "answers": {
+      "sales_soe_channels": "Wholesale only: in-shell walnuts delivered under a season contract to one certified handler. No direct, retail or farmers market sales.",
+      "sales_soe_lot_linkage": "Each block's harvest gets its own lot ID (for example BO-2026-NB-01). The bill of lading, the handler's weigh ticket and the invoice all carry that lot ID.",
+      "sales_soe_supplier_verification": "no"
+    }
+  },
+  "g7_0_labeling": {
+    "not_applicable": false,
+    "answers": {
+      "container_markings_tie_to_lot": true,
+      "invoices_identify_lot": true,
+      "label_claim_review_process": "We do not print consumer labels. Bin tags and the bill of lading are generated from Trazo and reviewed by the owner before the load leaves.",
+      "organic_label_categories": [
+        "organic"
+      ],
+      "product_leaves_as": [
+        "bulk_bins_marked",
+        "unlabeled_bulk_documents"
+      ]
+    }
+  },
+  "g8_0_record_keeping": {
+    "not_applicable": false,
+    "answers": {
+      "export_certificate_process": "The handler requests the export certificate from our certifier before the container ships and sends us a copy, which we file with the sales record for that lot.",
+      "export_certificate_types": [
+        "coi_eu"
+      ],
+      "export_destination_requirements": "The handler confirms EU labelling and that no material outside the EU-permitted list was used on the lot; our inputs list is shared with them each season.",
+      "export_destinations": "Germany and the Netherlands, through our handler.",
+      "import_export_activity": [
+        "export"
+      ],
+      "import_export_records": [
+        "certificates",
+        "operation_certificate",
+        "contracts",
+        "labeling"
+      ],
+      "lot_numbering": "own_system",
+      "lot_numbering_description": "BO-YYYY-BLOCK-NN: BO for Blue Oak Orchards, the crop year, the block (NB North Block, EB East Block) and the load number. Written on every bin tag and carried on the bill of lading, the handler's weigh ticket and the invoice.",
+      "port_integrity_measures": "Containers are sealed at the handler's facility and the seal number is recorded on the bill of lading. We do not break seals after loading.",
+      "primary_contact_records_access": "yes",
+      "records_location": "primary_only",
+      "records_maintained_as": [
+        "electronic",
+        "hardcopy"
+      ],
+      "records_retention_attestation": true
+    }
+  },
+  "g9_0_facility_pest": {
+    "not_applicable": true,
+    "answers": {}
+  },
+  "materials_application": {
+    "not_applicable": false,
+    "answers": {
+      "fertilizers_listed": true,
+      "fumigant_prohibited_material_used": false,
+      "materials_list_complete": true,
+      "pest_disease_weed_listed": true,
+      "post_harvest_contact_listed": true
+    }
+  },
+  "w2_0_wild_crop": {
+    "not_applicable": true,
+    "answers": {}
+  }
+}

@@ -709,6 +709,7 @@ jobs:
             history.tests.test_no_transparency_score_served \
             history.tests.test_transparency_calculator \
             history.tests.test_calapooia_fixture_integrity \
+            history.tests.test_blue_oak_osp_answers \
             history.tests.test_calapooia_renewal_specimen \
             certifications.tests.test_certified_parcel_branch \
             certifications.tests.test_verification_note_is_for_the_grower \
