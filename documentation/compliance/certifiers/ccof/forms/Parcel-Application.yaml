@@ -33,37 +33,41 @@ items:
     prints: parcels/parcel-application-<name>.pdf §A
 - ref: A2
   asks: Block/lot numbers or greenhouse/shadehouse numbering, if applicable.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
+    questions:
+    - parcel_application.block_identifiers
     models:
-    - product.ParcelCropHistory.block_id
-    - history.models.CommonEvent.block_id
-    prints: —
-  gap: No parcel-level field exists. `ParcelCropHistory.block_id` and `CommonEvent.block_id` are per-row/per-event
-    free text and are never printed in section A.
-  fix: Add a `block_identifiers` text field on page A, print it in §A, and reuse it as the map's 'permanent
-    identifiers' element.
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked on page A since 2026-11-10. Whether the map shows permanent identifiers is judged on the map
+    row.
 - ref: A3
   asks: Street address; City; County; State/Province; Country.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.address
+    - parcel_application.location_same_as_operation
+    - parcel_application.location_city
+    - parcel_application.location_state
+    - parcel_application.location_country
     - parcel_application.county
     models:
     - product.Parcel.address
-    - product.Parcel.application_answers (county)
+    - product.Parcel.application_answers
     - company.models.Establishment.city
     - company.models.Establishment.state
     - company.models.Establishment.country
-    prints: parcels/parcel-application-<name>.pdf §A (address, county only)
-  gap: Street address and county print. City, state and country exist only on `Establishment`, are never
-    asked per parcel, and are not printed on the parcel page — a multi-parcel operation spanning counties
-    has no way to say so.
-  fix: Add `location_same_as_operation` (boolean, default unanswered) with `city`/`state`/`country` fields
-    visible when false — a suggest→confirm default, never a silent copy from the establishment.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked per parcel since 2026-11-10. When the operator answers that the parcel shares the operation's
+    city, state, ZIP code and country, the page prints the operation's address on file beside that
+    answer, with a [REVIEW] line naming any part of it that is blank. The operation's address is never
+    copied in without that answer.
 - ref: A4
   asks: County Assessor's parcel number (APN), Section/Township/Range, or other legal description.
   status: covered
@@ -78,32 +82,36 @@ items:
 - ref: A5
   asks: Geographical coordinates or latitude/longitude (decimal form), and/or additional location information
     such as a cross street or road.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: 'each parcel''s application under parcels/: Section E, the map caption (name, area and the boundary''s centre point, when a boundary is drawn)'
+    questions:
+    - parcel_application.address
+    - parcel_application.location_coordinates
+    - parcel_application.location_notes
     models:
     - product.Parcel.polygon
-    - company.models.Establishment.latitude
-    - company.models.Establishment.longitude
-    prints: "parcels/parcel-application-<name>.pdf §E (map caption: name, area and the drawn boundary's centre point — only when a polygon is on file)"
-  gap: >-
-    The boundary centre prints under the map (§E caption, `parcel_map_caption`) when `Parcel.polygon` is valid, so a coordinate does reach the page — but only there, only as a computed centre, and not at all for a parcel with no drawn boundary. 'Additional location information' has no field beyond the free-text address.
-  fix: >-
-    Print the centre in §A beside the address as well; add an optional `location_notes` text field for cross-street/road information; state 'no boundary drawn' when the polygon is absent.
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Since 2026-11-10 §A prints the drawn boundary's centre (the same computation as the §E map caption)
+    or states that no boundary is drawn, and asks for other location information (coordinates, cross
+    street or road, directions from a landmark) in its own field.
 - ref: A6
   asks: At this parcel, when do you expect to begin harvesting crops you wish to market as organic (MM/DD/YY)?
     Crops harvested prior to inspection cannot be certified.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.expected_first_organic_harvest
-    models: []
-    prints: parcels/parcel-application-<name>.pdf §B (when answered)
-  gap: '`expected_first_organic_harvest` is asked on Trazo''s page B rather than §A, is labeled ''(if
-    in transition)'' even though CCOF asks it of every applicant, and is not part of completion.'
-  fix: Relabel to CCOF's wording; require it in completion when `currently_certified != yes`.
+    models:
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §B
+  note: >-
+    Asked in the form's terms since 2026-11-10, without the old '(if in transition)'. Hidden for a
+    parcel stated currently certified, which already harvests organic crops. Not one of the completion
+    checks: those read live records, and every parcel question is optional by design.
 - ref: A7
   asks: Parcel acreage — total acres to be certified organic at this location, excluding non-production
     areas (homes, parking, post-harvest handling/storage).
@@ -136,18 +144,19 @@ items:
 - ref: A9
   asks: Is production at this parcel in containers (not in the ground)? Yes → complete or update G3.1
     Container & Greenhouse/Shadehouse Production.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.container_production
     models:
     - product.Parcel.container_production
-    prints: parcels/parcel-application-<name>.pdf §A
-  gap: '`container_production` captures the yes/no, but G3.1 does not exist as a Trazo module — the form
-    the operator is sent to never gets generated.'
-  fix: 'Until G3.1 ships, print ''G3.1 Container & Greenhouse/Shadehouse Production: not generated by
-    Trazo — attach CCOF ORGB46'' whenever true.'
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    When Yes, §A names G3.1 Container & Greenhouse/Shadehouse Production (a Trazo module since back PR
+    366) and states how far it is answered on the plan: not applicable, not answered yet, or with
+    required questions open. The production-system split (containers on land or on sealed flooring) is
+    F3.
 - ref: A10
   asks: Are there existing installations of lumber treated with arsenate or other prohibited materials
     within the boundaries of this parcel? No → skip to §B. Yes → identify all treated lumber on the parcel

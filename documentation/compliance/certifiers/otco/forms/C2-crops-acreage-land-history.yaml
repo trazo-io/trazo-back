@@ -51,25 +51,21 @@ items:
 - ref: 2.1 (alternative location)
   asks: If the parcel does not have a street address, provide alternative location information (e.g., direction
     and distance from nearest crossroads/landmark, GPS coordinates, etc.).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.address
+    - parcel_application.location_coordinates
+    - parcel_application.location_notes
     models:
     - product.Parcel.polygon
-    - product.Parcel.address
-    - company.models.Establishment.latitude
-    - company.models.Establishment.longitude
-    prints: parcels/parcel-application-<parcel>.pdf §E (boundary centre, only when `polygon` is valid) — not
-      §A
-  gap: Same obligation as CCOF A5. Since 2026-08-28 the §E map caption prints a bounding-box centre ("center
-    44.545000, -123.105000") computed from the drawn boundary, so coordinates DO reach the page — but only
-    in §E, only when a polygon exists, and never in the location block where OTCO asks for them as the substitute
-    for a street address. "Direction and distance from the nearest crossroads/landmark" has no field beyond
-    the free-text `address`, whose label reads "Physical address / location".
-  fix: Print the boundary centre in §A beside the address when `polygon` is valid (the CCOF A5 fix), and add
-    an optional `location_notes` text field for crossroads/landmark directions.
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Since 2026-11-10 §A prints the drawn boundary's centre (the same computation as the §E map caption)
+    or states that no boundary is drawn, and asks for other location information (coordinates, cross
+    street or road, directions from a landmark) in its own field.
 - ref: 2.1-1
   asks: Parcel name and/or ID code.
   status: covered
@@ -89,39 +85,43 @@ items:
     prints: parcels/parcel-application-<parcel>.pdf §A
 - ref: 2.1-3
   asks: 'City: County:'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - parcel_application.location_same_as_operation
+    - parcel_application.location_city
     - parcel_application.county
     models:
+    - product.Parcel.application_answers
     - company.models.Establishment.city
-    prints: parcels/parcel-application-<parcel>.pdf §A (county only)
-  gap: County is asked per parcel and prints; city exists only on the Establishment and is never asked per
-    parcel. Same gap as CCOF A3 / WSDA 2264 ref 2. Street address and county print. City, state/province, zip
-    and country exist only on the Establishment record, are never asked per parcel, and are not printed on
-    the parcel page — an operation whose parcels span towns or counties (OTCO's Oregon growers commonly lease
-    across county lines) has no way to say so.
-  fix: Add `location_same_as_operation` (boolean, default unanswered) with `city`/`state`/`zip`/`country` fields
-    visible when false — a suggest→confirm default, never a silent copy from the establishment (the CCOF A3
-    fix).
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked per parcel since 2026-11-10. When the operator answers that the parcel shares the operation's
+    city, state, ZIP code and country, the page prints the operation's address on file beside that
+    answer, with a [REVIEW] line naming any part of it that is blank. The operation's address is never
+    copied in without that answer.
 - ref: 2.1-4
   asks: 'State/Province: Zip: Country:'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    questions:
+    - parcel_application.location_same_as_operation
+    - parcel_application.location_state
+    - parcel_application.location_zip
+    - parcel_application.location_country
     models:
+    - product.Parcel.application_answers
     - company.models.Establishment.state
     - company.models.Establishment.zip_code
     - company.models.Establishment.country
-    prints: —
-  gap: Same gap as CCOF A3 / WSDA 2264 ref 2. Street address and county print. City, state/province, zip and
-    country exist only on the Establishment record, are never asked per parcel, and are not printed on the
-    parcel page — an operation whose parcels span towns or counties (OTCO's Oregon growers commonly lease across
-    county lines) has no way to say so.
-  fix: Add `location_same_as_operation` (boolean, default unanswered) with `city`/`state`/`zip`/`country` fields
-    visible when false — a suggest→confirm default, never a silent copy from the establishment (the CCOF A3
-    fix).
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked per parcel since 2026-11-10. When the operator answers that the parcel shares the operation's
+    city, state, ZIP code and country, the page prints the operation's address on file beside that
+    answer, with a [REVIEW] line naming any part of it that is blank. The operation's address is never
+    copied in without that answer.
 - ref: 2.1-5
   asks: County Assessor's parcel number, Section/Township/Range, Tax Map Key, or other legal description.
   status: covered
@@ -186,15 +186,18 @@ items:
 - ref: 2.1-8
   asks: 'When do you plan on harvesting a certified organic crop from this parcel? M/D/Y. Note: for new applicants,
     crops harvested before inspection cannot be certified.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.expected_first_organic_harvest
-    prints: parcels/parcel-application-<parcel>.pdf §B (when answered)
-  gap: 'Same as CCOF A6 / WSDA 2264 ref 8: `expected_first_organic_harvest` sits on page B labeled "(if in
-    transition)" although OTCO, like CCOF, asks it of every applicant, and it is not part of completion.'
-  fix: Relabel to OTCO's wording; require it in completion when `currently_certified != yes`.
+    models:
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §B
+  note: >-
+    Asked in the form's terms since 2026-11-10, without the old '(if in transition)'. Hidden for a
+    parcel stated currently certified. Not one of the completion checks: those read live records, and
+    every parcel question is optional by design.
 - ref: 2.1-9
   asks: Total acres to be certified organic at this location.
   status: partial

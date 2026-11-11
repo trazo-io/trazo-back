@@ -76,3 +76,19 @@ questions:
   parcel_application.livestock_pastured: >-
     Whether livestock pasture or graze on the parcel, shown when `livestock_present` is yes. Same reason
     as `livestock_present`: OTCO's crop OSP set has no livestock form.
+  parcel_application.block_identifiers: >-
+    Asked by CCOF ORGB49 A2. OTCO C2 asks for a parcel name and/or ID code (2.1 1)), not the numbering
+    inside it.
+  parcel_application.certification_status_requested: >-
+    Asked by WSDA AGR 2264 ref 4. OTCO C2 asks no status choice: its land history runs to the first planned
+    organic harvest (2.1 question 8 and 2.4).
+  parcel_application.transitional_certificate_before_harvest: >-
+    Asked by WSDA AGR 2264 ref 4a, which only a transitional application reaches.
+  parcel_application.treated_seed_planted: >-
+    Asked by WSDA AGR 2264 ref 11 for the site under the applicant's management. OTCO asks about seed
+    farm-wide (C3), not per parcel.
+  parcel_application.treated_seed_detail: >-
+    Asked by WSDA AGR 2264 ref 11a (brand of treatment and planting date).
+  parcel_application.operation_export_answer: >-
+    Prints the operation's G8.0 export answer on the parcel page for WSDA AGR 2264 ref 9, which asks it
+    per site.

@@ -35,25 +35,35 @@ items:
 - ref: '2'
   asks: 'Site location: Street address; City; State; Zip. County; Township, Range, Section. GPS Coordinates.
     (Township/range/section or GPS coordinates can be used in lieu of a street address if applicable.)'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.address
+    - parcel_application.location_same_as_operation
+    - parcel_application.location_city
+    - parcel_application.location_state
+    - parcel_application.location_zip
     - parcel_application.county
     - parcel_application.section_township_range
+    - parcel_application.location_coordinates
+    - parcel_application.location_notes
     models:
     - product.Parcel.address
     - product.Parcel.section_township_range
+    - product.Parcel.polygon
+    - product.Parcel.application_answers
     - company.models.Establishment.city
     - company.models.Establishment.state
     - company.models.Establishment.zip_code
-    prints: parcels/parcel-application-<name>.pdf §A (address, county, section-township-range); §E map caption (boundary centre point when a polygon is on file)
-  gap: >-
-    Street address, county and Township/Range/Section print. City, state and ZIP exist only on the establishment record, are never asked per site, and never print on the site page — an operation with sites in more than one town or county has no way to say so. GPS coordinates print only as the drawn boundary's centre in the §E map caption, and only when a polygon is on file, so WSDA's 'in lieu of a street address' alternative is available on the map page but not in §A where the address sits. WSDA does not ask for a County Assessor's Parcel Number, so Trazo's `apn` field goes unused by this form.
-  fix: Add `location_same_as_operation` (boolean, suggest→confirm) with `city`/`state`/`zip` fields visible
-    when false, per the CCOF A3 fix; print the drawn-boundary centroid in §A when `polygon` is valid,
-    per the CCOF A5 fix.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked per parcel since 2026-11-10. When the operator answers that the parcel shares the operation's
+    city, state, ZIP code and country, the page prints the operation's address on file beside that
+    answer, with a [REVIEW] line naming any part of it that is blank. The operation's address is never
+    copied in without that answer. Since 2026-11-10 §A prints the drawn boundary's centre (the same
+    computation as the §E map caption) or states that no boundary is drawn, and asks for other location
+    information (coordinates, cross street or road, directions from a landmark) in its own field.
 - ref: '3'
   asks: Is the site fee attached? A $40 fee is required for each site application submitted by a renewing
     operation after the March 1 renewal deadline; not needed for new applicants or applications submitted
@@ -68,25 +78,32 @@ items:
 - ref: '4'
   asks: Which certification status are you applying for? Organic (last prohibited material applied at least
     36 months before anticipated harvest) / Transitional (at least 12 months).
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
+    questions:
+    - parcel_application.certification_status_requested
     models:
-    - product.services.transition_status_service.transition_verdict
-    prints: —
-  gap: No question asks which status the operator is applying for. The parcel's transition card states what
-    the records show (`transition_verdict`), which is not the operator's application.
-  fix: Add a `certification_status_requested` radio {organic, transitional} to page B, informed by (never overridden
-    by) the card.
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §B
+  note: >-
+    Asked since 2026-11-10, beside the computed transition card, which informs it and never overrides
+    it. When the records date a prohibited application whose 36 months (organic) or 12 months
+    (transitional) end after the expected first harvest, the page prints that arithmetic as a [REVIEW]
+    line. Hidden for a parcel stated currently certified.
 - ref: 4a
   asks: If you are applying for transitional certification, do you need a transitional certificate before harvest?
     Yes (I will market crops from this site with a Transitional claim) / No.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field asks it.
-  fix: A conditional `transitional_certificate_before_harvest` boolean behind the 4 fix.
+    questions:
+    - parcel_application.transitional_certificate_before_harvest
+    models:
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §B
+  note: >-
+    Asked since 2026-11-10 when the status applied for is transitional.
 - ref: '5'
   asks: When did you start making the day-to-day production decisions for this site (the date you first
     started managing it, or began managing it again after a temporary lease)?
@@ -196,29 +213,32 @@ items:
     - product.Parcel.product
     - product.Parcel.area
     - history.models.History
-    prints: parcels/parcel-application-<name>.pdf §A (total acreage), §B (harvest date when answered)
-  gap: 'Same three-part gap as CCOF A6/A7/A8: `expected_first_organic_harvest` is labeled ''(if in transition)''
-    rather than asked of every applicant and is not part of completion; `Parcel.area` is the right total-acreage
-    figure but is not duplicated onto §A next to the crop table; and there is no per-crop acres field
-    at all — a single-crop site can imply the whole site''s acreage, but a multi-crop site (WSDA''s own
-    worked example: apples grafted to a different variety on part of a site) cannot be split.'
-  fix: Relabel `expected_first_organic_harvest` to WSDA's wording and require it in completion; duplicate
-    the acreage line into §A; add a `crops_planned` rows answer (crop, variety, acres) prefilled from
-    open seasons.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A (total acreage), §B (harvest date when answered)
+  gap: >-
+    The harvest date is asked in the form's terms since 2026-11-10. What remains is the table:
+    `Parcel.area` is the right total-acreage figure but is not printed next to a crop table, and there
+    is no per-crop acres field at all. A single-crop site can imply the whole site's acreage, but a
+    multi-crop site (WSDA's own worked example: apples grafted to a different variety on part of a site)
+    cannot be split.
+  fix: >-
+    Add a `crops_planned` rows answer (crop, variety, harvest date, acres) prefilled from open seasons,
+    printed as a table in §A beside the total acreage.
 - ref: '9'
   asks: Is it possible crops produced on this site will be exported to Canada, considering whether any wholesale
     marketers you work with may export your crops there?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - parcel_application.operation_export_answer
     - g8_0_record_keeping.import_export_activity
     - g8_0_record_keeping.export_destinations
-    prints: modules/G8_0.pdf §C
-  gap: Since 2026-09-30 `import_export_activity` asks about export by a buyer, broker or trader (indirect)
-    and about plans, and `export_destinations` names the countries, so a farm-wide answer can say Canada. WSDA
-    asks it per site; Trazo answers once for the operation.
-  fix: Print the farm-wide answer on each site's parcel page, or ask per site when sites differ.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §B; modules/G8_0.pdf
+  note: >-
+    Asked once for the operation (G8.0, which includes export by a buyer, broker or trader and names the
+    countries), and since 2026-11-10 printed on every site's page. An operation where only some sites
+    may reach Canada answers for all of them, which can overstate for a site and never understates.
 - ref: '10'
   asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
     Stone fruit, Vegetable, Other): dates produced and acreage, for production under your management.'
@@ -239,30 +259,29 @@ items:
 - ref: '11'
   asks: Have any treated seeds been planted on the site while under your management (include seeds treated
     with allowed materials)? Yes / No.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g3_0_seeds.seeds_used
+    questions:
+    - parcel_application.treated_seed_planted
     models:
-    - certifications.osp_modules.g3_0_seeds
-    prints: —
-  gap: '`g3_0_seeds.seeds_used` records whether the farm-wide organic system uses treated seed at all, which
-    indicates this WSDA question may apply, but it is a farm-wide/season-level answer, not tied to a specific
-    site''s land-history record the way WSDA asks it here — brand and planting date, for a named site, for
-    a bounded management period.'
-  fix: Add a `treated_seed_planted` boolean plus `treatment_brand`/`planting_date` fields to the parcel module's
-    land-history page, distinct from the farm-wide seed-sourcing questions.
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Asked per parcel since 2026-11-10, apart from the farm-wide seed answers (G3.0). A Yes prints a
+    [REVIEW] line: the agent checks each treatment against the National List.
 - ref: 11a
   asks: If yes, provide the brand name of the treatment and the date the seed was planted.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g3_0_seeds.seeds_used
-    prints: —
-  gap: 'Follows from 11: no site-scoped field records a seed treatment''s brand or planting date.'
-  fix: 'Part of the 11 fix: `treatment_brand` and `planting_date`.'
+    questions:
+    - parcel_application.treated_seed_detail
+    models:
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Asked when ref 11 is Yes. A Yes with no brand or date prints a [REVIEW] line saying so.
 - ref: '12'
   asks: Is treated wood currently located on the site in a manner that comes into contact with soil, plants,
     or livestock?

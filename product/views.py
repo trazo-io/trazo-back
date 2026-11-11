@@ -123,6 +123,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
         from certifications.osp_modules.schema import serialize_module
         from certifications.services.parcel_land_history import land_history_summary
+        from certifications.services.parcel_map import parcel_boundary_centre
         from history.models import GeneralEvent
         from product.services.parcel_application_status import parcel_application_status, parcel_application_values
 
@@ -134,6 +135,9 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "buffer_zones": parcel.buffer_zones or [],
             "crop_history_count": parcel.crop_history.count(),
             "has_polygon": bool(parcel.polygon),
+            # §A coordinates (CCOF ORGB49 A5, WSDA AGR 2264 ref 2, OTCO C2 2.1): the centre the parcel PDF
+            # prints, from the same function, so the wizard shows the figure the certifier will read.
+            "boundary_centre": parcel_boundary_centre(parcel),
             # E-page map render (authenticated surface; CardWithMap wants both)
             "polygon": parcel.polygon or None,
             "map_metadata": parcel.map_metadata or None,

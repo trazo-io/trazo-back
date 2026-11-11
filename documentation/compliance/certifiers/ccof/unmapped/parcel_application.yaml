@@ -42,3 +42,19 @@ questions:
     WSDA AGR 2264 ref 6b asks whether the whole previously or currently certified site is applied for or
     only a portion. CCOF's Parcel Application asks no such question: F2 sends a currently certified
     parcel to section G, and a part of a parcel with a different history is a separate application.
+  parcel_application.location_zip: >-
+    Asked by WSDA AGR 2264 ref 2 and OTCO C2 2.1 4). CCOF's A3 asks street, city, county, state and
+    country, with no ZIP code.
+  parcel_application.certification_status_requested: >-
+    Asked by WSDA AGR 2264 ref 4. CCOF grants its transitional status on its own after review (ORGB49
+    §B) and does not ask for it on the parcel application.
+  parcel_application.transitional_certificate_before_harvest: >-
+    Asked by WSDA AGR 2264 ref 4a, which only a transitional application reaches.
+  parcel_application.treated_seed_planted: >-
+    Asked by WSDA AGR 2264 ref 11 for the site under the applicant's management. CCOF asks about seed
+    farm-wide on G3.0, not per parcel.
+  parcel_application.treated_seed_detail: >-
+    Asked by WSDA AGR 2264 ref 11a (brand of treatment and planting date).
+  parcel_application.operation_export_answer: >-
+    Prints the operation's G8.0 export answer on the parcel page for WSDA AGR 2264 ref 9, which asks it
+    per site.
