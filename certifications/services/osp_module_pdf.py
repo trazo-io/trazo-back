@@ -313,6 +313,22 @@ def _module_for_key(module_key: str):
     return module
 
 
+def module_document_title(module_key: str, parcel=None) -> str:
+    """The title a module PDF carries on the Documents shelf: "OSP module PDF — G3.0 Seeds &
+    Planting Stock", or "OSP module PDF — Parcel Application (East Block)".
+
+    It used to print the registry key ("g3_0_seeds", "parcel_application"), which is an
+    identifier, not a name a grower or a certifier has ever seen. The code and title are the
+    ones the module's own PDF heading prints, so the shelf row and the file it opens agree.
+    Stored English, like every other generated title on the shelf.
+    """
+    module = _module_for_key(module_key)
+    name = _en(module.title)
+    label = f"{module.code} {name}" if module.code else name
+    where = f" ({parcel.name})" if parcel is not None else ""
+    return f"OSP module PDF — {label}{where}"
+
+
 def _module_entry(osp, module_key: str) -> dict:
     # module_responses is an ENVELOPE: {"schema_version", "modules": {...},
     # "parcel_modules": {...}} — entries live under "modules" (WS-2.2 PUT shape).

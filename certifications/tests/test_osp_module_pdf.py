@@ -395,11 +395,32 @@ class PdfEndpointTests(TestCase):
         self.assertTrue(body.startswith(b"%PDF"))
         doc = GeneratedDocument.objects.get(establishment=self.establishment, source="module_pdf")
         self.assertEqual(doc.folder, "organic_system_plan")
+        # The shelf names the module the way its PDF heading does, never the registry key: it
+        # printed "OSP module PDF — g3_0_seeds" on every farm's Documents page until 2026-11-11.
+        self.assertEqual(doc.title, "OSP module PDF — G3.0 Seeds & Planting Stock")
 
     def test_parcel_application_pdf_endpoint(self):
         r = self.client.get(self._url(f"module-pdf/?module=parcel_application&parcel={self.parcel.id}"))
         self.assertEqual(r.status_code, 200)
         self.assertTrue(b"".join(r.streaming_content).startswith(b"%PDF"))
+        doc = GeneratedDocument.objects.get(establishment=self.establishment, source="module_pdf")
+        # Was "OSP module PDF — parcel_application (Block A)".
+        self.assertEqual(doc.title, "OSP module PDF — Parcel Application (Block A)")
+
+    def test_workbook_is_filed_under_the_forms_name(self):
+        r = self.client.get(self._url("attachments/?workbook=materials_list"))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Materials_List.xlsx", r["Content-Disposition"])
+        doc = GeneratedDocument.objects.get(establishment=self.establishment, source="workbook")
+        # The file keeps its stem; the shelf shows the form's name. Was
+        # "Common OSP workbook — Materials_List".
+        self.assertEqual(doc.title, "Common OSP workbook — Materials List")
+
+    def test_module_pdf_title_without_a_code_is_the_name_alone(self):
+        from certifications.services.osp_module_pdf import module_document_title
+
+        # Materials Application has no G-number; the title must not start with a stray space.
+        self.assertEqual(module_document_title("materials_application"), "OSP module PDF — Materials Application")
 
     def test_module_pdf_missing_param_400(self):
         self.assertEqual(self.client.get(self._url("module-pdf/")).status_code, 400)

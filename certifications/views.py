@@ -1834,7 +1834,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         from django.http import FileResponse
 
-        from certifications.services.osp_module_pdf import generate_module_pdf
+        from certifications.services.osp_module_pdf import generate_module_pdf, module_document_title
         from documents.services.filing import file_document
 
         osp = self.get_object()
@@ -1866,7 +1866,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment=establishment,
             source="module_pdf",
             folder="organic_system_plan",
-            title=f"OSP module PDF — {module_key}{f' ({parcel.name})' if parcel else ''}",
+            title=module_document_title(module_key, parcel),
             filename=filename,
             content=data,
             content_type="application/pdf",
@@ -2011,7 +2011,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             establishment=establishment,
             source="workbook",
             folder="organic_system_plan",
-            title=f"Common OSP workbook — {spec.filename}",
+            # The form's own name ("Field and Crop Information Form"), not the file stem
+            # ("Field_and_Crop_Information"), which is what the shelf printed before.
+            title=f"Common OSP workbook — {spec.title}",
             filename=f"{stem}-{spec.filename}.xlsx",
             content=data,
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
