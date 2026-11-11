@@ -154,8 +154,14 @@ class HardcodedFactorsAuditTest(TestCase):
             self.assertIn("reference", factor_data, f"{nutrient} factor missing reference")
             self.assertIn("last_verified", factor_data, f"{nutrient} factor missing verification date")
 
-            # Verify source is authoritative
+            # A published factor names its body; a Trazo estimate says it is one. Until 2026-11-11 this
+            # required an agency name in EVERY source, and the only way phosphorus and potassium could
+            # pass was to carry "EPA 40 CFR Part 98", an attribution the EPA Hub does not support
+            # (see carbon/tests/test_factor_provenance.py on citation-shaped checks).
             source = factor_data["source"].lower()
+            if factor_data.get("provenance") == "internal_estimate":
+                self.assertIn("trazo", source, f"{nutrient}: an internal estimate must say it is Trazo's")
+                continue
             authoritative_sources = ["usda", "epa", "ipcc", "peer-reviewed"]
 
             has_authoritative_source = any(auth_source in source for auth_source in authoritative_sources)

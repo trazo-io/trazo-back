@@ -714,6 +714,7 @@ jobs:
             history.tests.test_no_transparency_score_served \
             history.tests.test_transparency_calculator \
             history.tests.test_calapooia_fixture_integrity \
+            history.tests.test_audit_pdf_column_fit \
             history.tests.test_blue_oak_osp_answers \
             history.tests.test_calapooia_renewal_specimen \
             certifications.tests.test_certified_parcel_branch \
@@ -823,6 +824,7 @@ jobs:
             certifications.tests.test_storage_detail \
             certifications.tests.test_parcel_location_status \
             product.tests.test_parcel_planned_crops \
+            product.tests.test_parcel_crop_names \
             product.tests.test_land_history_periods \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \

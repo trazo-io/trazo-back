@@ -288,3 +288,61 @@ class FuelBasisTests(SimpleTestCase):
                     0,
                     f"{production_type} reported a 0 gal/ha assumed rate — the factor did not reach the payload",
                 )
+
+
+class CentralizedRegistryAgreesTests(SimpleTestCase):
+    """`emission_factors.EmissionFactorsRegistry` is the second registry: the calculators read their
+    fertilizer values from it. On 2026-09-07 `verified_emission_factors.py` stopped attributing
+    P2O5 and K2O to "EPA 40 CFR Part 98" (the EPA Hub publishes no fertilizer factors); this
+    registry kept the attribution until 2026-11-11, because no guard covered it, and its getters and
+    the CoolFarmService startup log called every factor "USDA-verified" in every process."""
+
+    PAIRS = {
+        "nitrogen": "nitrogen_fertilizer",
+        "phosphorus": "phosphorus_fertilizer",
+        "potassium": "potassium_fertilizer",
+    }
+
+    def test_fertilizer_values_match_the_verified_registry(self):
+        from carbon.services.emission_factors import EmissionFactorsRegistry
+
+        for nutrient, key in self.PAIRS.items():
+            with self.subTest(nutrient=nutrient):
+                self.assertEqual(
+                    EmissionFactorsRegistry.FERTILIZER_FACTORS[nutrient]["value"],
+                    VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS[key].value,
+                )
+
+    def test_an_internal_estimate_is_not_attributed_to_an_agency(self):
+        from carbon.services.emission_factors import EmissionFactorsRegistry
+
+        checked = 0
+        for nutrient, key in self.PAIRS.items():
+            verified = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS[key]
+            if verified.provenance != PROVENANCE_INTERNAL_ESTIMATE:
+                continue
+            checked += 1
+            entry = EmissionFactorsRegistry.FERTILIZER_FACTORS[nutrient]
+            with self.subTest(nutrient=nutrient):
+                self.assertEqual(entry["source"], verified.source)
+                self.assertEqual(entry["provenance"], PROVENANCE_INTERNAL_ESTIMATE)
+                for text in (entry["source"], entry["reference"], entry["notes"]):
+                    self.assertNotIn("EPA", text)
+                    self.assertNotIn("USDA", text)
+        self.assertEqual(checked, 2)  # phosphorus and potassium: the check read something
+
+    def test_the_getters_and_the_startup_log_claim_nothing_and_stay_quiet(self):
+        """At INFO they printed in every process; none of them may say USDA at any level."""
+        from carbon.services.coolfarm_service import CoolFarmService
+        from carbon.services.emission_factors import EmissionFactorsRegistry
+
+        with self.assertNoLogs("carbon", level="INFO"):
+            CoolFarmService()
+        with self.assertLogs("carbon", level="DEBUG") as logs:
+            EmissionFactorsRegistry.get_fertilizer_factor("phosphorus")
+            EmissionFactorsRegistry.get_fuel_factor("diesel")
+            EmissionFactorsRegistry.get_soil_management_factor("tillage")
+            CoolFarmService()
+        self.assertEqual(len(logs.output), 3 + 5 + 1)  # three getters; the service's five lookups and its own line
+        for line in logs.output:
+            self.assertNotIn("USDA", line)

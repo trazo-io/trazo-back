@@ -20,7 +20,7 @@ from rest_framework.test import APITestCase
 from company.models import Company, Establishment
 from history.models import GeneralEvent, History
 from history.services.block_ids import known_block_ids_for_parcel, known_block_ids_for_parcels
-from product.models import Parcel
+from product.models import Parcel, ParcelPlannedCrop
 from users.models import WorksIn
 
 DRAWN = [
@@ -128,7 +128,8 @@ class ParcelGeometryEndpointTests(APITestCase):
 
 
 class KnownSectionsBatchTests(APITestCase):
-    def test_batch_equals_the_per_parcel_answer_in_eight_queries(self):
+    def test_batch_equals_the_per_parcel_answer_in_nine_queries(self):
+        # Eight event models plus the crop table's block names (2026-11-11), whatever the number of parcels.
         company = Company.objects.create(name="Batch Co")
         farm = Establishment.objects.create(name="Batch Farm", company=company)
         parcels = [Parcel.objects.create(name=f"P{i}", establishment=farm, area=1) for i in range(4)]
@@ -136,10 +137,13 @@ class KnownSectionsBatchTests(APITestCase):
             season = History.objects.create(parcel=parcel, name=f"S{i}", start_date=timezone.now())
             for label in ("North", "north", "South", f"Only {i}"):
                 GeneralEvent.objects.create(history=season, name=label, date=timezone.now(), block_id=label)
+            ParcelPlannedCrop.objects.create(parcel=parcel, crop="Apples", block_name=f"Planted {i}")
 
         with CaptureQueriesContext(connection) as queries:
             batch = known_block_ids_for_parcels([p.id for p in parcels])
-        self.assertEqual(len(queries), 8)
+        self.assertEqual(len(queries), 9)
+        self.assertIn("Planted 0", batch[parcels[0].id])
+        self.assertNotIn("Planted 0", batch[parcels[1].id])
         for parcel in parcels:
             self.assertEqual(batch[parcel.id], known_block_ids_for_parcel(parcel))
         self.assertEqual(batch[parcels[3].id], [])

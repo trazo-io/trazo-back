@@ -1,7 +1,9 @@
 from datetime import datetime
 
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from company.models import Establishment
 
@@ -560,6 +562,21 @@ class ParcelCropHistory(models.Model):
         return f"{self.parcel.name} - {self.year}: {self.crop_grown}"
 
 
+#: The earliest planting year the crop table accepts; an orchard older than this is not a planting anyone dates.
+EARLIEST_YEAR_PLANTED = 1900
+
+
+def validate_year_planted(value):
+    """A plausible planting year: from 1900 to the current year. A planting that has not gone in yet has no year."""
+    if value is None:
+        return
+    this_year = timezone.localdate().year
+    if value < EARLIEST_YEAR_PLANTED or value > this_year:
+        raise ValidationError(
+            f"Year planted must be from {EARLIEST_YEAR_PLANTED} to {this_year}, or left blank.", code="year_planted"
+        )
+
+
 class ParcelPlannedCrop(models.Model):
     """A crop the operation grows now, or plans to grow, on a parcel, with its acreage.
 
@@ -568,6 +585,9 @@ class ParcelPlannedCrop(models.Model):
     for each crop to be included on the certificate) and OTCO C2 2.1 10) ask the same table. It is
     not `ParcelCropHistory`, which is the § 205.202(b) record of years that have happened, and it is
     not a season (`History`), which carries no acreage. Typed by the operator; never derived.
+
+    For an orchard a row is one block: its block name, rootstock, year planted and bearing status sit beside the
+    crop, variety and acres (approved 2026-11-04 as the orchard block table under each parcel).
     """
 
     parcel = models.ForeignKey(Parcel, on_delete=models.CASCADE, related_name="planned_crops")
@@ -584,6 +604,35 @@ class ParcelPlannedCrop(models.Model):
         blank=True,
         null=True,
         help_text="Acres of this crop on the parcel. Stated by the operator; never computed from the parcel area.",
+    )
+    # What identifies an orchard planting (overall review 2026-11, OV-FJ-C06): one row per block, so a parcel with
+    # three blocks of apples has three rows. All optional, typed by the operator, never derived. The block is a name,
+    # not an entity: activities keep their free-text `CommonEvent.block_id` and nothing points here by key.
+    block_name = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text=(
+            "The block or section name the farm uses for this planting, the same name it writes as 'block' on "
+            "activities (CommonEvent.block_id). Free text; nothing links to it."
+        ),
+    )
+    rootstock = models.CharField(
+        max_length=200, blank=True, default="", help_text="Rootstock, as the operation names it, e.g. 'M.9', 'OHxF 87'"
+    )
+    year_planted = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        validators=[validate_year_planted],
+        help_text="Year this planting went in, from 1900 to the current year. Blank is not stated.",
+    )
+    BEARING_STATUS_CHOICES = [("bearing", "Bearing"), ("non_bearing", "Not yet bearing")]
+    bearing_status = models.CharField(
+        max_length=20,
+        choices=BEARING_STATUS_CHOICES,
+        blank=True,
+        default="",
+        help_text="Whether this planting bears a crop yet. Blank is not stated, never read as not yet bearing.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

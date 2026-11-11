@@ -57,9 +57,11 @@ def blocks_match(a, b) -> bool:
 
 
 def known_block_ids_for_parcel(parcel) -> list:
-    """Distinct block identifiers already recorded against this parcel's events.
+    """Distinct block identifiers already recorded against this parcel's events, plus the block names
+    the operator typed on the parcel's crop table (`ParcelPlannedCrop.block_name`, 2026-11-11).
 
-    Powers the autocomplete on the event forms.
+    Powers the autocomplete on the event forms. A crop-table block is offered, never filled in: it is
+    the same free-text name, and nothing links an activity to the crop-table row.
 
     Case variants collapse to ONE entry, and the winner is the spelling the grower has used
     MOST — so a block written "Block 3" forty times and "BLOCK 3" once by accident is offered
@@ -78,10 +80,11 @@ def known_block_ids_for_parcel(parcel) -> list:
 def known_block_ids_for_parcels(parcel_ids) -> dict:
     """`known_block_ids_for_parcel` for many parcels at once: `{parcel_id: [...]}`.
 
-    One query per event model (8 in total) whatever the number of parcels, so a farm-wide list,
-    such as the multi-parcel picker's section chips, does not cost 8 queries per parcel. Every
-    requested id is a key, with `[]` when the parcel has no sections recorded. Same rules as the
-    single-parcel version, which delegates here so they cannot drift.
+    One query per event model (8) and one for the crop table's block names, 9 in total whatever the
+    number of parcels, so a farm-wide list, such as the multi-parcel picker's section chips, does not
+    cost 9 queries per parcel. Every requested id is a key, with `[]` when the parcel has no sections
+    recorded. Same rules as the single-parcel version, which delegates here so they cannot drift. A
+    crop-table row counts as one use of its spelling.
     """
     ids = list(dict.fromkeys(int(pid) for pid in parcel_ids))
     result: dict = {pid: [] for pid in ids}
@@ -112,8 +115,18 @@ def known_block_ids_for_parcels(parcel_ids) -> dict:
         EquipmentEvent,
     )
 
+    from product.models import ParcelPlannedCrop
+
     # {parcel_id: {casefolded key: {exact spelling: times used}}}
     spellings: dict = {pid: {} for pid in ids}
+
+    def count(parcel_id, label, uses):
+        normalized = normalize_block_id(label)
+        if not normalized:
+            return
+        bucket = spellings[parcel_id].setdefault(normalized.casefold(), {})
+        bucket[normalized] = bucket.get(normalized, 0) + uses
+
     for model in models:
         rows = (
             model.objects.filter(history__parcel_id__in=ids)
@@ -123,11 +136,11 @@ def known_block_ids_for_parcels(parcel_ids) -> dict:
             .annotate(uses=Count("id"))
         )
         for row in rows:
-            normalized = normalize_block_id(row["block_id"])
-            if not normalized:
-                continue
-            bucket = spellings[row["history__parcel_id"]].setdefault(normalized.casefold(), {})
-            bucket[normalized] = bucket.get(normalized, 0) + row["uses"]
+            count(row["history__parcel_id"], row["block_id"], row["uses"])
+    for row in (
+        ParcelPlannedCrop.objects.filter(parcel_id__in=ids).exclude(block_name="").values("parcel_id", "block_name")
+    ):
+        count(row["parcel_id"], row["block_name"], 1)
 
     for pid, keyed in spellings.items():
         # Most-used spelling wins; alphabetical tie-break keeps the result deterministic.

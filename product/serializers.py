@@ -1,4 +1,4 @@
-from django.db.models import Count, Q
+from django.db.models import Count, F, OuterRef, Q, Subquery
 
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -78,6 +78,23 @@ def with_open_season_count(parcels):
     return parcels.annotate(open_season_count=Count("histories", filter=Q(histories__finish_date__isnull=True)))
 
 
+def with_latest_season_crop(parcels):
+    """Annotate each parcel with the product of its most recently started season, in one query.
+
+    `crop_names` falls back to it once no season is underway; without it a block whose season
+    had just finished printed "15.4 ac" with no crop, as if it had never grown anything.
+    """
+    from history.models import History
+
+    latest = (
+        History.objects.filter(parcel=OuterRef("pk"), product__isnull=False)
+        # NULLS LAST: PostgreSQL sorts NULL first under DESC, so a season with no start date
+        # would outrank every dated one (same guard as lot_code_key).
+        .order_by(F("start_date").desc(nulls_last=True), "-id").values("product__name")[:1]
+    )
+    return parcels.annotate(latest_season_crop=Subquery(latest))
+
+
 class ParcelBasicSerializer(ModelSerializer):
     product = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
@@ -93,6 +110,10 @@ class ParcelBasicSerializer(ModelSerializer):
     # the caller annotated the queryset (`with_open_season_count`); None means "not counted",
     # never zero, so a caller that skipped the annotation cannot fake "no open season".
     open_season_count = serializers.SerializerMethodField()
+    # What the block grows, also when no season is underway (`product` is the CURRENT season's
+    # crop only, and other screens read its null as "nothing growing now"). A list, joined by the
+    # client in the reader's language.
+    crop_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Parcel
@@ -101,6 +122,7 @@ class ParcelBasicSerializer(ModelSerializer):
             "name",
             "description",
             "product",
+            "crop_names",
             "image",
             "has_current_production",
             "members",
@@ -125,6 +147,19 @@ class ParcelBasicSerializer(ModelSerializer):
         return (
             parcel.current_history.product.name if parcel.current_history and parcel.current_history.product else None
         )
+
+    def get_crop_names(self, parcel):
+        """Current season's crop, else the crops planned for the parcel, else its product, else the
+        crop of its latest season (`with_latest_season_crop`; absent when the caller skipped it)."""
+        if parcel.current_history_id and parcel.current_history.product_id:
+            return [parcel.current_history.product.name]
+        planned = list(dict.fromkeys(c.crop.strip() for c in parcel.planned_crops.all() if c.crop.strip()))
+        if planned:
+            return planned
+        if parcel.product_id:
+            return [parcel.product.name]
+        latest = getattr(parcel, "latest_season_crop", None)
+        return [latest] if latest else []
 
     def get_has_boundaries(self, parcel):
         return bool(parcel.polygon)
@@ -750,21 +785,44 @@ class ParcelPlannedCropSerializer(serializers.ModelSerializer):
     """One crop grown now or planned on a parcel (CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10).
 
     The parcel comes from the URL, never the body, so no id in a payload can move a row to another
-    parcel or company."""
+    parcel or company. An orchard row also carries its block name, rootstock, year planted and bearing
+    status; each is optional and blank means not stated."""
 
     class Meta:
         model = ParcelPlannedCrop
-        fields = ["id", "crop", "variety", "expected_harvest", "acres", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "crop",
+            "variety",
+            "expected_harvest",
+            "acres",
+            "block_name",
+            "rootstock",
+            "year_planted",
+            "bearing_status",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def to_internal_value(self, data):
-        # The form posts every field it renders; a blank date or acreage is "not stated", not a format error.
+        # The form posts every field it renders; a blank date, acreage or year is "not stated", not a format error.
         if hasattr(data, "copy"):
             data = data.copy()
-            for key in ("expected_harvest", "acres"):
+            for key in ("expected_harvest", "acres", "year_planted"):
                 if data.get(key) == "":
                     data[key] = None
         return super().to_internal_value(data)
+
+    def validate_block_name(self, value):
+        # The same normalisation `CommonEvent.block_id` gets on save, so the name typed here compares equal to the
+        # one written on activities.
+        from history.services.block_ids import normalize_block_id
+
+        return normalize_block_id(value) or ""
+
+    def validate_rootstock(self, value):
+        return " ".join((value or "").split())
 
     def validate_crop(self, value):
         value = " ".join(value.split())
