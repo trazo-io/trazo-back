@@ -543,9 +543,9 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
 
     def get_parcels(self, establishment):
         return ParcelBasicSerializer(
-            with_latest_season_crop(with_open_season_count(establishment.parcels.all())).prefetch_related(
-                "planned_crops"
-            ),
+            with_latest_season_crop(with_open_season_count(establishment.parcels.all()))
+            # get_crop_names reads both products; without these each parcel queried them.
+            .select_related("product", "current_history__product").prefetch_related("planned_crops"),
             many=True,
             context=self.context,
         ).data

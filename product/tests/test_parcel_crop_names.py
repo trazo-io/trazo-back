@@ -14,7 +14,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from company.serializers import EstablishmentSerializer
+from company.serializers import EstablishmentSerializer, RetrieveEstablishmentSerializer
 from history.models import History
 from product.models import Parcel, ParcelPlannedCrop, Product
 
@@ -90,3 +90,36 @@ class ParcelCropNamesTests(TestCase):
             "no per-parcel lookup of a season's product",
         )
         self.assertEqual([r["crop_names"] for r in rows if r["name"].startswith("Block")], [["Walnuts"]] * 4)
+
+    def test_a_season_with_no_start_date_does_not_outrank_a_dated_one(self):
+        """PostgreSQL sorts NULL first under DESC; the fallback orders NULLS LAST."""
+        self.season(self.walnuts, self.this_year)
+        History.objects.create(
+            parcel=self.parcel, product=Product.objects.create(name="Almonds"), name="Undated", start_date=None
+        )
+        self.assertEqual(self.row()["crop_names"], ["Walnuts"])
+
+    def test_the_retrieve_serializer_names_the_crop_without_a_query_per_parcel(self):
+        """The list/retrieve path (`RetrieveEstablishmentSerializer.get_parcels`) reads the same
+        field, so it carries the same prefetches (review of #388)."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        for i in range(3):
+            parcel = Parcel.objects.create(name=f"Block {i}", establishment=self.est, area=2.0)
+            # An open season, so get_crop_names dereferences current_history.product.
+            parcel.current_history = History.objects.create(
+                parcel=parcel, product=self.walnuts, name=f"S{i}", start_date=self.this_year
+            )
+            parcel.save(update_fields=["current_history"])
+        serializer = RetrieveEstablishmentSerializer(self.est)
+        with CaptureQueriesContext(connection) as ctx:
+            rows = serializer.get_parcels(self.est)
+        sqls = [q["sql"] for q in ctx.captured_queries]
+        self.assertEqual(sum("product_parcelplannedcrop" in q for q in sqls), 1)
+        self.assertEqual(
+            sum(q.lstrip().startswith('SELECT "product_product"') for q in sqls),
+            0,
+            "no per-parcel lookup of a parcel's or a season's product",
+        )
+        self.assertEqual([r["crop_names"] for r in rows if r["name"].startswith("Block")], [["Walnuts"]] * 3)

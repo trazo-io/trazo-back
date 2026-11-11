@@ -1,4 +1,4 @@
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Count, F, OuterRef, Q, Subquery
 
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -88,8 +88,9 @@ def with_latest_season_crop(parcels):
 
     latest = (
         History.objects.filter(parcel=OuterRef("pk"), product__isnull=False)
-        .order_by("-start_date", "-id")
-        .values("product__name")[:1]
+        # NULLS LAST: PostgreSQL sorts NULL first under DESC, so a season with no start date
+        # would outrank every dated one (same guard as lot_code_key).
+        .order_by(F("start_date").desc(nulls_last=True), "-id").values("product__name")[:1]
     )
     return parcels.annotate(latest_season_crop=Subquery(latest))
 

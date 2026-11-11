@@ -2050,7 +2050,7 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _module_status(entry: dict, module=None, osp=None) -> str:
+    def _module_status(entry: dict, module=None, osp=None, blocked=None) -> str:
         """Status as it stands against the CURRENT questionnaire, not as it was stamped.
 
         Adding a required question to a shipped module makes every previously-completed
@@ -2078,7 +2078,12 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if osp is not None:
                     from certifications.services.attestation_gates import blocked_attestations
 
-                    if blocked_attestations(module, answers, osp):
+                    # `blocked`: the caller already ran the gate for this module (the list row
+                    # does, to name the questions). It is not cheap: the materials gate scans the
+                    # establishment's input records once per reconciled question.
+                    if blocked is None:
+                        blocked = blocked_attestations(module, answers, osp)
+                    if blocked:
                         return "in_progress"
             return "completed"
         if entry.get("answers"):
@@ -2089,10 +2094,11 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from certifications.osp_modules.conditions import progress
         from certifications.services.agent_question_refs import blank_asked_questions
 
+        blocked = self._blocked_attestations(module, entry, osp)
         return {
             "key": module.key,
             "code": module.code,
-            "status": self._module_status(entry, module, osp),
+            "status": self._module_status(entry, module, osp, blocked=blocked),
             "not_applicable": bool(entry.get("not_applicable")),
             "na_attestation": entry.get("na_attestation"),
             "completed_at": entry.get("completed_at"),
@@ -2110,16 +2116,17 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # the records show). `_module_status` already reports such a module "in_progress"; the
             # list row printed "5 of 5 required answers" beside the open circle and said nothing
             # about why, so the grower saw a finished module that would not close (2026-11-11).
-            "blocked_attestations": self._blocked_attestation_keys(module, entry, osp),
+            "blocked_attestations": sorted(blocked),
         }
 
     @staticmethod
-    def _blocked_attestation_keys(module, entry: dict, osp) -> list:
+    def _blocked_attestations(module, entry: dict, osp) -> dict:
+        """The gate, run ONCE per module row and shared with `_module_status`."""
         if osp is None or module is None or entry.get("not_applicable"):
-            return []
+            return {}
         from certifications.services.attestation_gates import blocked_attestations
 
-        return sorted(blocked_attestations(module, entry.get("answers") or {}, osp))
+        return blocked_attestations(module, entry.get("answers") or {}, osp)
 
     @action(
         detail=True,
