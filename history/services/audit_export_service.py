@@ -5025,7 +5025,8 @@ class AuditExportService:
                 (
                     "OFPP (§ 205.201(a)(3))",
                     "FAIL",
-                    "No Organic Fraud Prevention Plan on file — required under SOE 2024",
+                    "No organic fraud prevention plan on file. § 205.201(a)(3) asks the OSP to describe how "
+                    "the operation prevents organic fraud, and certifiers ask for it as a fraud prevention plan.",
                     said("ofpp.missing"),
                 )
             )
@@ -16710,7 +16711,7 @@ class AuditExportService:
             Paragraph(
                 "Sources: FDA FSMA 204 Final Rule (21 CFR 1.1300), FDA FSMA "
                 "Produce Safety Rule (21 CFR 112), USDA NOP 7 CFR 205.201(c), "
-                "205.204, 205.303-311, 205.670, SOE Final Rule (88 FR 3622).",
+                "205.204, 205.303-311, 205.670, Strengthening Organic Enforcement rule (88 FR 3548).",
                 self._styles["footer_note"],
             )
         )
@@ -17293,7 +17294,7 @@ class AuditExportService:
         elements.append(self._spacer(0.18))
         elements.append(
             Paragraph(
-                "<b>SOE 2024 Compliance Items (88 FR 3622)</b>",
+                "<b>Strengthening Organic Enforcement Compliance Items (88 FR 3548)</b>",
                 self._sub_header_style(),
             )
         )

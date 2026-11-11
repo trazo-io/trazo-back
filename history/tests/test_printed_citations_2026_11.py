@@ -56,6 +56,19 @@ SEED_TEMPLATE = "certifications/management/commands/seed_osp_template.py"
 #: (finding, source, strings that must be gone, strings that must be printed). A string matches
 #: when it is a substring of one literal in the source.
 CASES = (
+    # Found by the review bot on back #377: the same errors in places the first pass missed.
+    (
+        "CIT10",
+        DOSSIER,
+        ("88 FR 3622)", "required under SOE 2024", "SOE 2024 Compliance Items"),
+        ("Strengthening Organic Enforcement Compliance Items (88 FR 3548)",),
+    ),
+    (
+        "CIT10",
+        "history/management/commands/_solana_verde_base.py",
+        ("SOE rule effective ", "Vulnerability assessment covers"),
+        ("88 FR 3548, effective 2023-03-20, compliance date 2024-03-19):\n",),
+    ),
     (
         "CIT01",
         PLAN,
