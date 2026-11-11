@@ -118,6 +118,9 @@ except ImportError:
     EMAIL_HOST_USER = ""
     EMAIL_HOST_PASSWORD = ""
 
+# The throttle counters live in their own Postgres cache whatever `default` is (see base.py).
+CACHES[THROTTLE_CACHE_ALIAS] = THROTTLE_CACHE
+
 # CSRF_TRUSTED_ORIGINS = [
 #     "http://localhost:3000",
 #     "http://app.localhost:3000",
@@ -217,6 +220,8 @@ REST_FRAMEWORK = {
         "login": "1000/minute",  # Extremely permissive for development
         "signup": "500/minute",  # Extremely permissive for development
         "password_reset": "500/hour",  # Extremely permissive for development
+        "verify_email": "500/hour",
+        "resend_verification": "500/hour",
         "carbon_calculation": "5000/hour",
         "api_sensitive": "2000/hour",
         "qr_scan": "10000/hour",

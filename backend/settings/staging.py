@@ -270,6 +270,9 @@ else:
 if "django_ratelimit" in INSTALLED_APPS:
     INSTALLED_APPS.remove("django_ratelimit")
 
+# The throttle counters live in their own Postgres cache whatever `default` is (see base.py).
+CACHES[THROTTLE_CACHE_ALIAS] = THROTTLE_CACHE
+
 # Staging-specific feature flags
 FEATURES = {
     "ENABLE_BLOCKCHAIN_VERIFICATION": config("ENABLE_BLOCKCHAIN_VERIFICATION", default=False, cast=bool),

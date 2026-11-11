@@ -155,6 +155,10 @@ REST_FRAMEWORK = {
         "login": "3/minute",
         "signup": "2/minute",
         "password_reset": "3/hour",
+        # The emailed sign-up code (36^6 values) and its resend, per address. Ten tries an hour
+        # covers a mistyped code; three resends an hour covers a lost email.
+        "verify_email": "10/hour",
+        "resend_verification": "3/hour",
         "carbon_calculation": "100/hour",
         "api_sensitive": "30/hour",
         "qr_scan": "300/hour",
@@ -173,8 +177,10 @@ REST_FRAMEWORK = {
 }
 
 # Per-LINK hourly ceilings on the anonymous review-link routes, counted in the database
-# (`CertifierAccessLog`), not in the cache. Every DRF throttle above counts in the cache, and
-# production's cache is DummyCache while REDIS_URL is unset, so those rates are inert there.
+# (`CertifierAccessLog`), not in the cache. Of the DRF rates above, only the security scopes
+# (login, signup, password_reset, verify_email, resend_verification) count in production, in the
+# `throttle` cache; the rest count in `default`, which production keeps as DummyCache on purpose
+# (see the CACHES note below), so `anon`, `user` and the certifier rates are inert there.
 # These hold either way. Counted per link, not per address: one link is one grower's records,
 # and its holder can be anywhere. A refused request writes no row, so it costs nothing.
 CERTIFIER_REVIEW_LINK_HOURLY_LIMITS = {
@@ -304,10 +310,30 @@ CELERY_TASK_QUEUES = {
 # tasks in one authoritative location.  Do not add CELERY_BEAT_SCHEDULE here.
 
 # Cache Configuration - default to DummyCache, overridden in prod.py when REDIS_URL is set
+#
+# `throttle` is a SEPARATE cache, in Postgres, holding only the counters of the limits that are
+# meant to count in production: sign-in, sign-up, password reset, email verification, invitation
+# accept and company-code check (see `backend/security/throttling.py`). It exists so those limits
+# work WITHOUT giving `default` a real backend. With a real `default` cache, three dormant
+# middlewares wake up on every request (OV-SEC-C06, inventory 2026-11-11), among them a
+# site-wide circuit breaker that answers 503 to everyone after 50 server errors in an hour, and
+# per-address blocks that would lock a shared farm office out for 30 minutes.
+# NEVER point `default` at a real backend in production until those are removed;
+# guard: `backend/security/tests/test_throttle_cache.py`.
+# The table is created by users migration 0017, so a deploy needs no manual step.
+THROTTLE_CACHE_ALIAS = "throttle"
+THROTTLE_CACHE = {
+    "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+    "LOCATION": "trazo_throttle_cache",
+    # One row per (scope, address). The cull default (300) would evict live counters on a busy
+    # hour; 20,000 rows is a few MB.
+    "OPTIONS": {"MAX_ENTRIES": 20000},
+}
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-    }
+    },
+    THROTTLE_CACHE_ALIAS: THROTTLE_CACHE,
 }
 
 # Django Channels Configuration

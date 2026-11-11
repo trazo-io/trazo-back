@@ -12,7 +12,9 @@ from backend.security.throttling import (
     AnonRateThrottle,
     LoginRateThrottle,
     PasswordResetRateThrottle,
+    ResendVerificationRateThrottle,
     SignupRateThrottle,
+    VerifyEmailRateThrottle,
 )
 
 from .serializers import BasicUserSerializer
@@ -104,7 +106,13 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = MeSerializer(request.user, context={"request": request})
         return Response(serializer.data)
 
-    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
+    @action(
+        detail=False,
+        methods=["post"],
+        authentication_classes=[],
+        permission_classes=[AllowAny],
+        throttle_classes=[AnonRateThrottle, VerifyEmailRateThrottle],
+    )
     def verify_email(self, request, pk=None):
         email = request.data.get("email")
         code = request.data.get("code")
@@ -228,7 +236,13 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=["post"], authentication_classes=[], permission_classes=[AllowAny])
+    @action(
+        detail=False,
+        methods=["post"],
+        authentication_classes=[],
+        permission_classes=[AllowAny],
+        throttle_classes=[AnonRateThrottle, ResendVerificationRateThrottle],
+    )
     def resend_verification_email(self, request, pk=None):
         """
         Resend verification email to user

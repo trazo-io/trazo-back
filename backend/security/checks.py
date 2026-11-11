@@ -32,8 +32,9 @@ from django.core.checks import Error, Warning, register
 from backend.storage import S3_BACKEND
 
 # Rates whose whole purpose is to stop an attack rather than to shape ordinary traffic.
-# If these are inert, the door is open.
-_SECURITY_CRITICAL_SCOPES = ("login", "signup", "password_reset")
+# If these are inert, the door is open. Each one counts in the `throttle` cache
+# (backend/security/throttling.py), not in `default`.
+_SECURITY_CRITICAL_SCOPES = ("login", "signup", "password_reset", "verify_email", "resend_verification")
 
 _INERT_CACHE_BACKENDS = (
     "django.core.cache.backends.dummy.DummyCache",
@@ -45,42 +46,39 @@ _INERT_CACHE_BACKENDS = (
 
 @register("security")
 def throttling_is_actually_enforced(app_configs, **kwargs):
-    """DRF throttles keep their counters in the Django cache. With DummyCache every read
+    """DRF throttles keep their counters in a Django cache. With DummyCache every read
     returns empty, so `allow_request` always succeeds and every declared rate is a no-op.
 
     MEASURED 2026-08-26 against this project's own settings: a ``3/minute`` throttle
     allowed 50 of 50 requests under DummyCache.
 
-    prod.py already falls back to DummyCache when REDIS_URL is unset, and in that branch it
-    disables ``django_ratelimit`` explicitly — but DRF's own throttles are left declared and
-    inert. That is worse than switching them off, because REST_FRAMEWORK still lists
-    "login": "3/minute" and nothing anywhere says it is not happening.
+    Since 2026-11-11 (OV-SEC-C06) the security-critical throttles count in their own cache,
+    ``CACHES["throttle"]`` (Postgres), and production keeps ``default`` as DummyCache on
+    purpose: a real ``default`` wakes three dormant middlewares (see the CACHES note in
+    base.py). So this check asks about the cache the critical scopes actually use. The
+    ``anon`` and ``user`` rates on ``default`` are inert in production by that choice, and
+    reporting them on every deploy would be noise that trains people to skip this check.
     """
     problems = []
 
-    backend = settings.CACHES.get("default", {}).get("BACKEND", "")
-    if backend not in _INERT_CACHE_BACKENDS:
-        return problems
-
     rest = getattr(settings, "REST_FRAMEWORK", {}) or {}
     rates = rest.get("DEFAULT_THROTTLE_RATES", {}) or {}
-    declared = {scope: rate for scope, rate in rates.items() if rate}
-    if not declared:
+    critical = sorted(s for s, rate in rates.items() if rate and s in _SECURITY_CRITICAL_SCOPES)
+    if not critical:
         return problems
 
-    critical = sorted(s for s in declared if s in _SECURITY_CRITICAL_SCOPES)
-    detail = (
-        f"CACHES['default'] is {backend}, which stores nothing, so all "
-        f"{len(declared)} DEFAULT_THROTTLE_RATES are no-ops "
-        f"({', '.join(sorted(declared))}). Set REDIS_URL so prod.py selects RedisCache, "
-        f"or delete the rates so the settings stop claiming a protection that is absent."
-    )
+    alias = getattr(settings, "THROTTLE_CACHE_ALIAS", "throttle")
+    backend = settings.CACHES.get(alias, {}).get("BACKEND", "")
+    if backend and backend not in _INERT_CACHE_BACKENDS:
+        return problems
 
-    message = "Rate limiting is configured but cannot work."
-    if critical:
-        message = (
-            "Rate limiting is configured but cannot work: " f"brute-force protection on {', '.join(critical)} is inert."
-        )
+    where = f"CACHES[{alias!r}] is {backend}" if backend else f"CACHES has no {alias!r} alias"
+    detail = (
+        f"{where}, so the {', '.join(critical)} throttles count nothing. Define it as "
+        f"backend/settings/base.py does (THROTTLE_CACHE, a DatabaseCache) and run migrate, "
+        f"which creates its table."
+    )
+    message = f"Rate limiting is configured but cannot work: brute-force protection on {', '.join(critical)} is inert."
 
     # Blocking is opt-in. See the module docstring for why the default cannot be Error.
     if getattr(settings, "SECURITY_CHECKS_STRICT", False):

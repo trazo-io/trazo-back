@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from backend.security.client_ip import throttle_ident
+from backend.security.throttling import throttle_cache
 from users.constants import PRODUCER
 from users.models import WorksIn
 
@@ -194,8 +195,9 @@ def accept_invitation(request, invitation_code):
     Accept a company invitation (can be used by authenticated or unauthenticated users)
     Enhanced with rate limiting and security measures
     """
-    # Rate limiting for invitation acceptance attempts
-    from django.core.cache import cache
+    # Rate limiting for invitation acceptance attempts. Counted in the `throttle` cache, which
+    # holds in production; the default cache there stores nothing (OV-SEC-C06).
+    cache = throttle_cache()
 
     client_ip = throttle_ident(request)
     rate_limit_key = f"invitation_accept_attempts:{client_ip}"

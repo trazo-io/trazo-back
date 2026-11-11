@@ -63,6 +63,21 @@ def health_check(request):
             health_status["checks"]["cache"] = {"status": "unhealthy", "error": str(e)}
             # Cache failures are warnings, not critical
 
+    # The throttle cache holds the sign-in, sign-up, reset and verification counters
+    # (OV-SEC-C06). Reported, never fatal: without it those limits stop counting, which is a
+    # security gap, not a reason to pull the instance out of rotation.
+    try:
+        from backend.security.throttling import throttle_cache
+
+        throttle = throttle_cache()
+        throttle.set("health_check", "ok", 10)
+        if throttle.get("health_check") != "ok":
+            raise Exception("Cache set/get mismatch")
+        health_status["checks"]["throttle_cache"] = {"status": "healthy"}
+    except Exception as e:
+        logger.warning(f"Throttle cache health check failed: {str(e)}")
+        health_status["checks"]["throttle_cache"] = {"status": "unhealthy", "error": str(e)}
+
     # Compliance reference data (National List, USDA Organic mirror).
     #
     # Reported, never fatal: stale reference data makes Trazo state wrong things about a farm's
