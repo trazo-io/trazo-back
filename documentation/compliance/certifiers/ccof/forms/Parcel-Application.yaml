@@ -430,19 +430,20 @@ items:
   asks: What crop production or other activities have occurred on this parcel during the past three years (or
     since the DLPM)? Fallow / Cover cropping / Pasture / Production of crops / Other, each with a from-to month/year
     range.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.crop_history
     models:
     - product.ParcelCropHistory
-    prints: parcels/parcel-application-<name>.pdf §F
-  gap: '`ParcelCropHistory` rows (year, crop grown, cover crop, production method, notes) carry this, with
-    years derived from season records and marked with that provenance — but there is no ''pasture'' option,
-    no month-level date range (year granularity only), and no ''other.'''
-  fix: Add `pasture` to the production-method choices (or a separate land-use enum) and an optional `period_from`/`period_to`
-    (MM/YYYY) on the row; print 'Fallow 03/2024-07/2025' when given.
+    - product.services.land_history
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Since 2026-11-11 each land-history row carries an optional from-to month range (`period_start`,
+    `period_end`), and the use list has pasture and other beside fallow and the production methods. §F
+    prints the range after the year ('03/2024 to 07/2025'). A year built from season records prints the
+    months its seasons cover in that year. Other is described in the row's notes (F7a).
 - ref: F7a
   asks: Additional information regarding the activities listed above.
   status: covered

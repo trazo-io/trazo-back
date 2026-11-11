@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from typing import Iterable, List, Optional
 
 from django.utils import timezone
@@ -57,6 +58,17 @@ class LandHistoryRow:
     last_prohibited_substance: str = ""
     date_last_prohibited: Optional[date] = None
     notes: str = ""
+    #: First and last month of the use (day 1). Typed rows carry what the operator stated; a derived row the
+    #: span its seasons cover inside the year (CCOF ORGB49 F7, OTCO C2 2.4).
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    #: Typed rows only (WSDA AGR 2264 ref 10; OTCO C2 2.4 seed / planting stock columns). Display words,
+    #: "" when not stated: a season record does not say these, so a derived row never claims them.
+    acres: Optional[Decimal] = None
+    propagule_type_display: str = ""
+    gmo_status_display: str = ""
+    seed_treated_display: str = ""
+    seed_treatment_name: str = ""
     #: On a derived row, the seasons it was built from. On a TYPED row, the seasons logged for the
     #: same year — the typed row still stands (it is the operator's own statement) but it no longer
     #: hides them: the packet showed a hand-typed 2025 line while its audit trail traced eight
@@ -156,9 +168,28 @@ def _derive_year(parcel, year: int, seasons) -> Optional[LandHistoryRow]:
             if desc and desc not in cover:
                 cover.append(desc[:80])
 
+    # The months the year's seasons cover, inside the year: a season sown the year before starts this year's
+    # span in January, and one still open runs to this month.
+    today = timezone.now()
+    starts, ends = [], []
+    for s in in_year:
+        start = s.start_date.date() if hasattr(s.start_date, "date") else s.start_date
+        finish = s.finish_date or today
+        finish = finish.date() if hasattr(finish, "date") else finish
+        if start > finish:
+            # An open season dated to start after today has covered no month yet; counting it printed a span
+            # that ran backwards ("12/2026 to 11/2026"; review of back PR 383).
+            continue
+        starts.append(max(start, date(year, 1, 1)))
+        ends.append(min(finish, date(year, 12, 31)))
+    period_start = min(starts).replace(day=1) if starts else None
+    period_end = max(ends).replace(day=1) if ends else None
+
     return LandHistoryRow(
         year=year,
         source=SOURCE_DERIVED,
+        period_start=period_start,
+        period_end=period_end,
         crop_grown="; ".join(crops),
         cover_crop="; ".join(cover),
         production_method=method,
@@ -193,6 +224,13 @@ def land_history_rows(parcel, *, limit: Optional[int] = None, through_year: Opti
             last_prohibited_substance=getattr(h, "last_prohibited_substance", "") or "",
             date_last_prohibited=getattr(h, "date_last_prohibited", None),
             notes=h.notes or "",
+            period_start=getattr(h, "period_start", None),
+            period_end=getattr(h, "period_end", None),
+            acres=getattr(h, "acres", None),
+            propagule_type_display=h.get_propagule_type_display() if getattr(h, "propagule_type", "") else "",
+            gmo_status_display=h.get_gmo_status_display() if getattr(h, "gmo_status", "") else "",
+            seed_treated_display=h.get_seed_treated_display() if getattr(h, "seed_treated", "") else "",
+            seed_treatment_name=getattr(h, "seed_treatment_name", "") or "",
             recorded=h,
         )
         # A split field is two typed rows for one year; keep both, keyed by block.
@@ -226,3 +264,52 @@ def land_history_rows(parcel, *, limit: Optional[int] = None, through_year: Opti
     if limit is not None:
         rows = rows[:limit]
     return rows
+
+
+def land_history_span(row) -> str:
+    """ "03/2024 to 07/2025", "from 03/2024", "to 07/2025", or "" with no month stated."""
+
+    def month(d):
+        return f"{d.month:02d}/{d.year}" if d else ""
+
+    start, end = month(row.period_start), month(row.period_end)
+    if start and end:
+        return start if start == end else f"{start} to {end}"
+    if start:
+        return f"from {start}"
+    if end:
+        return f"to {end}"
+    return ""
+
+
+def land_history_planting(row) -> str:
+    """OTCO C2 2.4's seed / planting stock columns for one year, or "" when none is stated.
+
+    Once any is stated, all three print, a blank one as "not stated": a type with no GMO answer must not
+    read as non-GMO."""
+    if not (row.propagule_type_display or row.gmo_status_display or row.seed_treated_display):
+        return ""
+    treated = {"Untreated": "untreated", "Treated": "treated", "Not known": "treatment not known"}.get(
+        row.seed_treated_display, "treatment not stated"
+    )
+    if treated == "treated" and row.seed_treatment_name:
+        treated = f"treated ({row.seed_treatment_name})"
+    return "planting: " + ", ".join(
+        [
+            row.propagule_type_display.lower() if row.propagule_type_display else "type not stated",
+            (
+                row.gmo_status_display
+                if row.gmo_status_display in ("GMO", "Non-GMO")
+                else ("GMO origin not known" if row.gmo_status_display else "GMO origin not stated")
+            ),
+            treated,
+        ]
+    )
+
+
+def format_acres(value) -> str:
+    """An acreage as the operator would write it: two decimals at most, trailing zeros dropped, thousands
+    grouped. Never scientific notation: `:g` printed 1234567 as "1.23457e+06" (review of back PR 383)."""
+    amount = Decimal(str(value)).quantize(Decimal("0.01"))
+    text = f"{amount:,.2f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text

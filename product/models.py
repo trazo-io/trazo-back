@@ -441,10 +441,50 @@ class ParcelCropHistory(models.Model):
             ("transitional", "Transitional"),
             ("regenerative", "Regenerative"),
             ("fallow", "Fallow"),
+            # CCOF ORGB49 F7 and OTCO C2 2.4 list pasture as a land use; WSDA AGR 2264 ref 10 lists it as a crop
+            # category. CCOF F7 also offers "Other", described in the notes.
+            ("pasture", "Pasture"),
+            ("other", "Other"),
         ],
         blank=True,
         null=True,
         help_text="Production method used during this year",
+    )
+    # CCOF ORGB49 F7 asks each activity "with a from-to month/year range", and OTCO C2 2.4 lets the history begin
+    # "the day after the last prohibited substance application date": a mid-year start the year alone cannot show.
+    # Optional; stored as the first day of the month. The row's `year` falls inside the period.
+    period_start = models.DateField(blank=True, null=True, help_text="First month of this use (stored as day 1)")
+    period_end = models.DateField(blank=True, null=True, help_text="Last month of this use (stored as day 1)")
+    # WSDA AGR 2264 ref 10 asks acreage per crop and year. Stated by the operator, never derived from the parcel area.
+    acres = models.DecimalField(
+        max_digits=10, decimal_places=2, blank=True, null=True, help_text="Acres of this crop or use this year"
+    )
+    # OTCO C2 2.4's "Seeds / Planting Stock Information" columns, per year: type, GMO or non-GMO, treated or
+    # untreated. Blank is "not stated", never a default: a GMO or treated-seed year in the window is what the
+    # columns exist to disclose.
+    propagule_type = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=[("seed", "Seed"), ("seedling", "Seedling"), ("planting_stock", "Planting stock")],
+        help_text="What the year's crop started from (OTCO C2 2.4)",
+    )
+    gmo_status = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=[("non_gmo", "Non-GMO"), ("gmo", "GMO"), ("unknown", "Not known")],
+        help_text="Whether the year's seed or planting stock was of GMO origin (OTCO C2 2.4)",
+    )
+    seed_treated = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=[("untreated", "Untreated"), ("treated", "Treated"), ("unknown", "Not known")],
+        help_text="Whether the year's seed or planting stock was treated (OTCO C2 2.4)",
+    )
+    seed_treatment_name = models.CharField(
+        max_length=200, blank=True, default="", help_text="Name of the seed treatment, when treated"
     )
     substances_applied = models.TextField(
         blank=True,

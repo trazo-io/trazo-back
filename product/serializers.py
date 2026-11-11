@@ -802,6 +802,14 @@ class ParcelCropHistorySerializer(CallerScopedRelatedFields, serializers.ModelSe
             "last_prohibited_substance",
             "date_last_prohibited",
             "notes",
+            # CCOF ORGB49 F7 month range, WSDA AGR 2264 ref 10 acreage, OTCO C2 2.4 seed / planting stock columns.
+            "period_start",
+            "period_end",
+            "acres",
+            "propagule_type",
+            "gmo_status",
+            "seed_treated",
+            "seed_treatment_name",
             "created_at",
             "updated_at",
         ]
@@ -823,4 +831,38 @@ class ParcelCropHistorySerializer(CallerScopedRelatedFields, serializers.ModelSe
         if hasattr(data, "copy"):
             data = data.copy()
             coerce_blank_nullable_dates(self, data)
+            # A month input sends "2024-03"; the period is stored as the first day of the month.
+            for key in ("period_start", "period_end"):
+                value = data.get(key)
+                if isinstance(value, str) and len(value) == 7 and value[4] == "-":
+                    data[key] = f"{value}-01"
+            if data.get("acres") == "":
+                data["acres"] = None
         return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        """A period's months run forward and hold the row's year; a treatment is named only for treated seed."""
+        attrs = super().validate(attrs)
+        instance = self.instance
+
+        def current(key):
+            return attrs[key] if key in attrs else getattr(instance, key, None)
+
+        start, end, year = current("period_start"), current("period_end"), current("year")
+        if start is not None:
+            attrs["period_start"] = start = start.replace(day=1)
+        if end is not None:
+            attrs["period_end"] = end = end.replace(day=1)
+        if start and end and end < start:
+            raise serializers.ValidationError({"period_end": "The last month comes before the first."})
+        if year is not None and start and start.year > year:
+            raise serializers.ValidationError({"period_start": f"The period starts after {year}, the row's year."})
+        if year is not None and end and end.year < year:
+            raise serializers.ValidationError({"period_end": f"The period ends before {year}, the row's year."})
+        acres = current("acres")
+        if acres is not None and acres <= 0:
+            raise serializers.ValidationError({"acres": "Acres must be more than zero, or left blank."})
+        if current("seed_treated") != "treated":
+            # A name kept under "untreated" would print a treatment for seed the row says was not treated.
+            attrs["seed_treatment_name"] = ""
+        return attrs
