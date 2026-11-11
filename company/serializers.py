@@ -9,7 +9,12 @@ from rest_framework.serializers import ModelSerializer
 from common.models import Gallery
 from common.serializers import GallerySerializer
 from common.validators import USContactFieldsMixin, USStateFieldMixin
-from product.serializers import ParcelBasicSerializer, parcel_members_map, with_open_season_count
+from product.serializers import (
+    ParcelBasicSerializer,
+    parcel_members_map,
+    with_latest_season_crop,
+    with_open_season_count,
+)
 from subscriptions.serializers import SubscriptionSerializer
 from users.models import WorksIn
 
@@ -83,11 +88,12 @@ class EstablishmentSerializer(ModelSerializer):
         # One query for the parcels with their product and album, one batch for every parcel's
         # members (see `parcel_members_map`), instead of ~8 queries per parcel.
         parcels = list(
-            with_open_season_count(establishment.parcels.all())
+            with_latest_season_crop(with_open_season_count(establishment.parcels.all()))
             # `current_history__product`: ParcelBasicSerializer.get_product names the season's crop.
             .select_related("product", "album", "current_history__product")
             # `crop_history` / `landowner_affidavits`: parcel_application_status reads them per parcel.
-            .prefetch_related("album__images", "crop_history", "landowner_affidavits")
+            # `planned_crops`: get_crop_names reads them per parcel.
+            .prefetch_related("album__images", "crop_history", "landowner_affidavits", "planned_crops")
         )
         context = {**self.context, "parcel_members": parcel_members_map(parcels)}
         return ParcelBasicSerializer(parcels, many=True, context=context).data
@@ -537,7 +543,11 @@ class RetrieveEstablishmentSerializer(ModelSerializer):
 
     def get_parcels(self, establishment):
         return ParcelBasicSerializer(
-            with_open_season_count(establishment.parcels.all()), many=True, context=self.context
+            with_latest_season_crop(with_open_season_count(establishment.parcels.all())).prefetch_related(
+                "planned_crops"
+            ),
+            many=True,
+            context=self.context,
         ).data
 
     def get_split_operation_declaration(self, establishment):

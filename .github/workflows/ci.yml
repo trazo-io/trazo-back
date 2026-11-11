@@ -818,6 +818,7 @@ jobs:
             certifications.tests.test_storage_detail \
             certifications.tests.test_parcel_location_status \
             product.tests.test_parcel_planned_crops \
+            product.tests.test_parcel_crop_names \
             product.tests.test_land_history_periods \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \

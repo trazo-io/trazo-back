@@ -2106,7 +2106,20 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Blank, showing, not required by Trazo, and asked by the plan's own agent. A soft flag:
             # completion never waits on it (the agent decides what it needs).
             "agent_asks_blank": (blank_asked_questions(module, entry, asks[1].get(module.key, {})) if asks else []),
+            # Attestations answered Yes over a list that cannot carry them (empty, or missing what
+            # the records show). `_module_status` already reports such a module "in_progress"; the
+            # list row printed "5 of 5 required answers" beside the open circle and said nothing
+            # about why, so the grower saw a finished module that would not close (2026-11-11).
+            "blocked_attestations": self._blocked_attestation_keys(module, entry, osp),
         }
+
+    @staticmethod
+    def _blocked_attestation_keys(module, entry: dict, osp) -> list:
+        if osp is None or module is None or entry.get("not_applicable"):
+            return []
+        from certifications.services.attestation_gates import blocked_attestations
+
+        return sorted(blocked_attestations(module, entry.get("answers") or {}, osp))
 
     @action(
         detail=True,
