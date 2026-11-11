@@ -197,6 +197,27 @@ def _cited_headings(prints: str) -> list:
     return out
 
 
+def _cover_without_review_notes(texts) -> list:
+    """The cover's page texts up to its review-notes list. The list quotes notes from other documents,
+    and a word in one of them ("address", "certificate") would otherwise be cited as one of the cover's
+    own headings on the page the list reaches (review of back #387). Page numbers are kept."""
+    from certifications.services.packet_review_notes import REVIEW_NOTES_HEADING
+
+    marker = _norm(REVIEW_NOTES_HEADING)
+    out, cut = [], False
+    for text in texts:
+        if cut:
+            out.append("")
+            continue
+        at = text.find(marker)
+        if at >= 0:
+            out.append(text[:at])
+            cut = True
+        else:
+            out.append(text)
+    return out
+
+
 def _heading_locations(prints, recorder, texts_cache) -> list:
     """Where each heading the register cites for a row is, read back from the built or filed bytes.
     02 includes every filed revision of the year, each marked as the filed document."""
@@ -212,6 +233,8 @@ def _heading_locations(prints, recorder, texts_cache) -> list:
                 continue
             if target not in texts_cache:
                 texts_cache[target] = page_texts(data)
+                if target == "00-cover.pdf":
+                    texts_cache[target] = _cover_without_review_notes(texts_cache[target])
             for number, text in enumerate(texts_cache[target], start=1):
                 if needle in text:
                     out.append(

@@ -871,6 +871,7 @@ jobs:
             certifications.tests.test_annual_update_documents \
             certifications.tests.test_renewal_fork_carries_filing \
             certifications.tests.test_renewal_packet_contents \
+            certifications.tests.test_packet_cover_lists_review_notes \
             certifications.tests.test_first_applicant_packet \
             history.tests.test_pdf_field_coverage \
             certifications.tests.test_packet_second_wsda_read \

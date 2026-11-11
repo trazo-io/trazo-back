@@ -3147,7 +3147,58 @@ def _product_types_cover_lines(osp, kv, styles) -> list:
     ]
 
 
-def _packet_cover_pdf(osp) -> bytes:
+#: How many of one document's review notes the cover prints before "and N more".
+_COVER_NOTES_PER_DOCUMENT = 5
+
+
+def _review_notes_cover_flowables(documents, styles) -> list:
+    """The cover's list of the review notes left in the packet's documents (overall review 2026-11,
+    OV-PK-W07, OV-PK-C07, OV-PK-O08: a first orchard packet carried 17 `[REVIEW]` lines across its files
+    and nothing said where). `documents` is `packet_review_notes.collect()` over the documents built
+    before the cover. The notes stay in their documents; this says where they are."""
+    from certifications.services.packet_review_notes import REVIEW_NOTES_HEADING, printable
+
+    out = [Spacer(1, 8), Paragraph(REVIEW_NOTES_HEADING, styles["header"])]
+    found = [d for d in documents if d.notes]
+    unreadable = [d for d in documents if d.unreadable]
+    total = sum(len(d.notes) for d in found)
+    if not total:
+        out.append(
+            Paragraph(
+                (
+                    "No review notes were found in the documents that could be read."
+                    if unreadable
+                    else "No review notes are left in the packet's documents."
+                ),
+                styles["body"],
+            )
+        )
+    else:
+        lead = f"{_count_phrase(total, 'review note')} in {_count_phrase(len(found), 'document')}. " + (
+            "It is a question for the operation to settle or explain before the packet is sent; it is listed "
+            "here so it is not found one page at a time."
+            if total == 1
+            else "Each is a question for the operation to settle or explain before the packet is sent; they are "
+            "listed here so nothing is found one page at a time."
+        )
+        out.append(Paragraph(_escape(lead), styles["body"]))
+    for d in found:
+        out.append(Paragraph(f"<b>{_escape(d.path)}</b>", styles["meta"]))
+        for note in d.notes[:_COVER_NOTES_PER_DOCUMENT]:
+            out.append(Paragraph(_escape(f"• {printable(note)}"), styles["meta"]))
+        if len(d.notes) > _COVER_NOTES_PER_DOCUMENT:
+            out.append(Paragraph(_escape(f"• and {len(d.notes) - _COVER_NOTES_PER_DOCUMENT} more"), styles["meta"]))
+    for d in unreadable:
+        out.append(
+            Paragraph(
+                _escape(f"{d.path}: this file could not be read, so any review notes in it are not listed here."),
+                styles["meta"],
+            )
+        )
+    return out
+
+
+def _packet_cover_pdf(osp, review_notes=None) -> bytes:
     """The cover a certifier reads first.
 
     Was four lines — name, version, today's date, a contents list — which is a cover for a
@@ -3157,6 +3208,10 @@ def _packet_cover_pdf(osp) -> bytes:
     in the packet at all. It also now carries the plan review — the list of things the
     operation's own records did after the plan's answers were written — because that is the
     one page where the operator will see it before the packet leaves.
+
+    `review_notes` is the packet's `packet_review_notes.collect()` result, listed after the plan
+    review. None (a cover rendered on its own, outside a packet build) prints no list: there are no
+    other documents to read.
     """
     from certifications.services.plan_review import plan_review
 
@@ -3391,6 +3446,17 @@ def _packet_cover_pdf(osp) -> bytes:
                 "confirm is still described correctly in the plan, or to add to the change summary.",
                 styles["meta"],
             )
+        )
+
+    if review_notes is not None:
+        # The cover's own notes (state registration, product types) are printed above and listed here
+        # too, so the count covers the whole packet, this page included.
+        from certifications.services.packet_review_notes import MARK, DocumentNotes, split_notes
+
+        own = [t for t in (f.getPlainText() for f in story if isinstance(f, Paragraph)) if MARK in t]
+        own = list(dict.fromkeys(n for t in own for n in split_notes(t)))
+        story += _review_notes_cover_flowables(
+            ([DocumentNotes("00-cover.pdf", own)] if own else []) + list(review_notes), styles
         )
 
     from certifications.services.packet_coverage import packet_certifier
@@ -5690,22 +5756,27 @@ def generate_osp_packet(osp, scope=None) -> bytes:
     establishment = osp.establishment
     manifest = build_manifest(osp)
     out = io.BytesIO()
+    # The ZIP's entries, in the order they are written at the end. The cover is the first entry but is
+    # rendered after the documents it lists the review notes of, so `write(..., first=True)` puts it
+    # at the front when it is ready.
+    entries = []
     with (
         scoped(scope),
         building(manifest),
         recording() as recorder,
-        zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf,
     ):
 
-        def write(path, data, filed=False):
+        def write(path, data, filed=False, first=False):
             # Every document is kept by path for 06, the question index, which is built last and
             # reads them back to say where each form and question is (T24).
-            zf.writestr(path, data)
+            if first:
+                entries.insert(0, [path, data])
+            else:
+                entries.append([path, data])
             recorder.documents[path] = data
             if filed:
                 recorder.filed.add(path)
 
-        write("00-cover.pdf", _packet_cover_pdf(osp))
         # "01-organic-system-plan.pdf", not "01-narrative-snapshot.pdf" (2026-09-07). This file
         # IS the organic system plan: the § 205.201(a) narratives plus the
         # producer attestation — and it is the document a reviewer opens the ZIP looking for.
@@ -5759,17 +5830,26 @@ def generate_osp_packet(osp, scope=None) -> bytes:
             workbook = build_workbook(establishment, spec.key, osp=osp)
             write(f"workbooks/{_workbook_filename(spec)}", workbook.getvalue())
 
-        # 06 — the agent-ordered index, built last because it cites the pages above.
+        # The cover, rendered now so it can list the review notes every document above carries
+        # (overall review 2026-11, OV-PK-W07). It is kept for 06 like the others, and still written first.
+        from certifications.services.packet_review_notes import collect
+
+        write("00-cover.pdf", _packet_cover_pdf(osp, review_notes=collect(list(entries))), first=True)
+
+        # 06, the agent-ordered index, built last because it cites the pages above (the cover's included).
         from certifications.services.question_index import index_pdf
 
-        zf.writestr("06-question-index.pdf", index_pdf(osp, recorder))
+        write("06-question-index.pdf", index_pdf(osp, recorder))
 
         # Every operator file (maps, affidavits, receipts, the files uploaded for a named
         # attachment, a sale's source documents, lot tags and label photos) was read once, before
         # any page was written, so the pages above name exactly what is written here. A file that
         # could not be read or did not fit is named on those pages and is not written.
         for _entry in manifest.attached():
-            zf.writestr(_entry.zip_path, _entry.data)
+            entries.append([_entry.zip_path, _entry.data])
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path, data in entries:
+            zf.writestr(path, data)
     return out.getvalue()
 
 
