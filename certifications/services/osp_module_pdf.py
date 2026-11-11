@@ -4193,7 +4193,7 @@ def _unchanged_but_changed_flowables(filing, osp, styles) -> list:
     reports what is true today, sets the two side by side (CCOF, WSDA and OTCO reviewer reads,
     2026-11-04: commingling attested unchanged while split and parallel production went from No to
     Yes). Compared from the plan the filing continues to the plan this packet is built from, with
-    `plan_version_changes.section_differences`, the comparison signing and filing are refused on
+    `plan_version_changes.section_differences`, the comparison signing is refused on
     (OV-PK-O01), so a revision signed since then prints here only when the plan moved after it.
     """
     if filing is None:

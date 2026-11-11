@@ -9,7 +9,7 @@ comparison existed: the same packet's 02s then printed "answers in them differ b
 v3" under the filing that said they had not. A certifier reading 02 and then 02s asks which is
 true.
 
-Signing and filing are now refused while an attested section differs between the plan the update
+Signing is now refused while an attested section differs between the plan the update
 continues and the version it produced, naming each section and what differs in it. "Differs" is
 `plan_version_changes.section_differences`, the comparison 02s prints: answers compiled into the
 section, the materials list, the operator's own narrative and the record types confirmed. Saving

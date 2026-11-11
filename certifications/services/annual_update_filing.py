@@ -12,9 +12,10 @@ can never erase an earlier filing.
 The rules, in the order they bite:
 
 * **Sign** hashes every signed field (`OSPAnnualUpdate.SIGNED_FIELDS`). From then on the content
-  changes only by correction; the viewset refuses edits with 409. Signing and filing are both
-  refused while the update attests a § 205.201(a) section unchanged that differs between the two
-  plan versions (`attested_sections_that_differ`); saving a draft never is.
+  changes only by correction; the viewset refuses edits with 409. Signing is refused while the
+  update attests a § 205.201(a) section unchanged that differs between the two plan versions
+  (`attested_sections_that_differ`); saving a draft never is, and neither is filing, which
+  records what was already sent.
 * **File** needs a signature, sets the filing date and method once, and freezes the document as
   rendered at that moment (`filed_pdf`, `filed_sha256`). Document 02 is those bytes from then on.
   The same bytes are filed to the farm's Documents (`organic_system_plan`, source
