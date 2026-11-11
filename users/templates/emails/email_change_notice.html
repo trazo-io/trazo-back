@@ -1,0 +1,12 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Your Trazo email is about to change{% endblock %}
+{% block header_title %}Your email is about to change{% endblock %}
+{% block header_subtitle %}Your Trazo account{% endblock %}
+{% block greeting %}Hi {{ display_name|default:"there" }},{% endblock %}
+
+{% block message %}
+    <p>Someone signed in to your Trazo account asked to change its login email from <strong>{{ user.email }}</strong> to <strong>{{ new_email }}</strong>.</p>
+    <p>Nothing changes until the link sent to {{ new_email }} is opened.</p>
+    <p>The request needed your password. If it was not you, someone knows it: sign in and change your password now. That cancels this email change and ends every session on the account. Then reply to this email so we can help.</p>
+{% endblock %}

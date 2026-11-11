@@ -1,0 +1,10 @@
+{% autoescape off %}Hi {{ display_name|default:"there" }},
+
+Someone signed in to your Trazo account asked to change its login email from {{ user.email }} to {{ new_email }}.
+
+Nothing changes until the link sent to {{ new_email }} is opened.
+
+The request needed your password. If it was not you, someone knows it: sign in and change your password now. That cancels this email change and ends every session on the account. Then reply to this email so we can help.
+
+The Trazo Team
+{% endautoescape %}

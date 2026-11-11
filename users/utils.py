@@ -371,3 +371,59 @@ def generate_invitation_code():
     Generate a secure invitation code for companies
     """
     return "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+
+
+def _display_name(user):
+    return user.first_name if user.first_name else (user.email or "").split("@")[0]
+
+
+def send_email_change_confirmation(user, new_email, link):
+    """
+    The single-use link that applies a change of login email, sent to the NEW address only
+    (overall review 2026-11, OV-SEC-C03). Nothing changes until it is opened.
+    """
+    from .models import EmailChangeRequest
+
+    context = {
+        "user": user,
+        "display_name": _display_name(user),
+        "new_email": new_email,
+        "link": link,
+        "expiry_hours": EmailChangeRequest.LIFETIME_HOURS,
+        "BASE_URL": settings.BASE_URL,
+    }
+    try:
+        return send_mail(
+            "Confirm your new Trazo email",
+            render_to_string("emails/email_change_confirm.txt", context),
+            settings.DEFAULT_FROM_EMAIL,
+            [new_email],
+            html_message=render_to_string("emails/email_change_confirm.html", context),
+        )
+    except Exception as e:
+        logger.error(f"Failed to send email change confirmation for user {user.pk}: {e}")
+        return False
+
+
+def send_email_change_notice(user, new_email):
+    """
+    Tell the CURRENT address that a change to another address was requested, so the owner of a
+    borrowed session learns of it before the link is opened (OV-SEC-C03).
+    """
+    context = {
+        "user": user,
+        "display_name": _display_name(user),
+        "new_email": new_email,
+        "BASE_URL": settings.BASE_URL,
+    }
+    try:
+        return send_mail(
+            "Your Trazo email is about to change",
+            render_to_string("emails/email_change_notice.txt", context),
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            html_message=render_to_string("emails/email_change_notice.html", context),
+        )
+    except Exception as e:
+        logger.error(f"Failed to send email change notice for user {user.pk}: {e}")
+        return False

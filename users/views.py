@@ -94,6 +94,7 @@ class UserViewSet(viewsets.ModelViewSet):
             "resend_verification_email",
             "request_password_reset",
             "confirm_password_reset",
+            "confirm_email_change",
         ]:
             return [AllowAny()]
         return [IsAuthenticated()]
@@ -352,14 +353,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
         logger.info(f"Password changed successfully for user: {user.email}")
 
-        # Blacklist the current refresh token to invalidate existing sessions
-        refresh_token = request.COOKIES.get("refresh")
-        if refresh_token:
-            try:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
-            except Exception:
-                pass  # Token may already be blacklisted or invalid
+        # End EVERY session, not only this one (OV-SEC-C03): this used to blacklist the current
+        # refresh token alone, so a session in another browser outlived the new password.
+        from .sessions import end_sessions
+
+        end_sessions(user)
 
         # Clear auth cookies — user must re-login with new password
         response = Response(
@@ -376,6 +374,126 @@ class UserViewSet(viewsets.ModelViewSet):
                 samesite=samesite,
             )
         return response
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def request_email_change(self, request, pk=None):
+        """
+        Start a change of the login email (overall review 2026-11, OV-SEC-C03).
+
+        Needs the current password. The new address gets a single-use link and the old address a
+        notice; nothing changes until the link is opened (``confirm_email_change``). Before this,
+        a PATCH of ``email`` changed the login with no password and told no one.
+        """
+        import hashlib
+        import secrets
+        from datetime import timedelta
+
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.core.validators import validate_email
+
+        from .constants import CONSUMER
+        from .models import EmailChangeRequest
+        from .utils import send_email_change_confirmation, send_email_change_notice
+
+        user = request.user
+        new_email = (request.data.get("new_email") or "").strip().lower()
+        password = request.data.get("password") or ""
+
+        if not user.check_password(password):
+            return Response(
+                {"error": "That is not your current password.", "code": "wrong_password"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_email(new_email)
+        except DjangoValidationError:
+            return Response(
+                {"error": "Enter a valid email address.", "code": "invalid_email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if new_email == (user.email or "").lower():
+            return Response(
+                {"error": "That is already your email.", "code": "same_email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(email__iexact=new_email).exclude(pk=user.pk).exists():
+            return Response(
+                {"error": "Another account uses that email.", "code": "email_taken"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        if EmailChangeRequest.objects.filter(user=user, created_at__gte=one_hour_ago).count() >= 3:
+            return Response(
+                {"error": "Too many email changes requested. Try again in an hour.", "code": "rate_limited"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # One pending change at a time: an older link stops working.
+        EmailChangeRequest.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
+        token = secrets.token_urlsafe(32)
+        EmailChangeRequest.objects.create(
+            user=user,
+            new_email=new_email,
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            expires_at=timezone.now() + timedelta(hours=EmailChangeRequest.LIFETIME_HOURS),
+        )
+        base = settings.BASE_CONSUMER_URL if int(user.user_type) == CONSUMER else settings.BASE_APP_URL
+        link = f"{base}auth/confirm-email-change?token={token}"
+        send_email_change_confirmation(user, new_email, link)
+        send_email_change_notice(user, new_email)
+        return Response({"pending_email": new_email}, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        authentication_classes=[],
+        permission_classes=[AllowAny],
+        throttle_classes=[AnonRateThrottle],
+    )
+    def confirm_email_change(self, request, pk=None):
+        """
+        Apply a pending email change from its link, then end every session (OV-SEC-C03).
+
+        Public: the link may be opened in a browser that is not signed in. The token is the proof,
+        and it reached only the new address.
+        """
+        import hashlib
+
+        from django.db import transaction
+
+        from .models import EmailChangeRequest
+        from .sessions import end_sessions
+
+        token = request.data.get("token") or ""
+        pending = (
+            EmailChangeRequest.objects.select_related("user")
+            .filter(token_hash=hashlib.sha256(token.encode()).hexdigest())
+            .first()
+        )
+        if pending is None or not pending.is_valid():
+            return Response(
+                {
+                    "error": "This link is no longer valid. Request the change again from your profile.",
+                    "code": "invalid_link",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = pending.user
+        if User.objects.filter(email__iexact=pending.new_email).exclude(pk=user.pk).exists():
+            return Response(
+                {"error": "Another account now uses that email.", "code": "email_taken"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with transaction.atomic():
+            user.email = pending.new_email
+            # The link reached the new address: that is the verification.
+            user.is_verified = True
+            user.save(update_fields=["email", "is_verified"])
+            pending.used_at = timezone.now()
+            pending.save(update_fields=["used_at"])
+            end_sessions(user)
+        return Response({"email": user.email}, status=status.HTTP_200_OK)
 
     @action(
         detail=False,
@@ -550,6 +668,11 @@ class UserViewSet(viewsets.ModelViewSet):
             user.is_verified = True
             user.is_active = True
             user.save(update_fields=["password", "is_verified", "is_active"])
+            # Every session that existed before the reset ends now (OV-SEC-C03): the review reset
+            # a password and the old session's /me and refresh still answered 200.
+            from .sessions import end_sessions
+
+            end_sessions(user)
 
             # Mark token as used
             reset_token.mark_as_used()
@@ -803,6 +926,19 @@ class CustomTokenRefreshView(TokenRefreshView):
             data = {"refresh": refresh_from_cookie}
         else:
             data = request.data
+
+        # A refresh token from before the password or email last changed may not mint a new
+        # session (OV-SEC-C03). Its blacklisting usually stops it already; this also covers a
+        # token that was never recorded as outstanding.
+        from .sessions import SESSION_ENDED, token_predates_credentials
+
+        try:
+            presented = RefreshToken(data.get("refresh"))
+            owner = User.objects.filter(id=presented.get("user_id")).first()
+            if owner is not None and token_predates_credentials(owner, presented):
+                return Response({"error": SESSION_ENDED, "code": "session_ended"}, status=401)
+        except TokenError:
+            pass  # the serializer below answers an invalid token
 
         serializer = self.get_serializer(data=data)
         try:
