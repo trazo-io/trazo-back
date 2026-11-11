@@ -168,7 +168,6 @@ urlpatterns = [
         name="calculate-event-carbon",
     ),
     # Enhanced USDA Integration Endpoints
-    path("enhanced-event-impact/", views.calculate_event_impact, name="enhanced-event-impact"),
     # NEW USDA API Endpoints (Month 1 Implementation)
     path("usda/validate-compliance/", views.validate_usda_compliance, name="usda-validate-compliance"),
     path("usda/regional-factors/<str:state>/", views.get_regional_emission_factors, name="usda-regional-factors"),

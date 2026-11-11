@@ -64,17 +64,7 @@ from carbon.services.timeline_service import TimelineService
 from carbon.validation import APIResponseValidator, QRParameterValidator
 from common.us_states import normalize_state
 from company.models import Establishment
-from history.models import (
-    BusinessEvent,
-    ChemicalEvent,
-    EquipmentEvent,
-    GeneralEvent,
-    History,
-    PestManagementEvent,
-    ProductionEvent,
-    SoilManagementEvent,
-    WeatherEvent,
-)
+from history.models import History
 
 # Public-payload sanitisers. This module serves an ANONYMOUS production endpoint
 # (PublicProductionViewSet), so it is bound by the same privacy and claim rules as
@@ -105,7 +95,6 @@ from .serializers import (
     QuickEventTemplateSerializer,
 )
 from .services.enhanced_usda_factors import EnhancedUSDAFactors
-from .services.event_carbon_calculator import EventCarbonCalculator
 
 # `from .services.blockchain import blockchain_service` used to live in the block above, for
 # BlockchainVerificationViewSet — deleted 2026-09-08 with the rest of the blockchain routes.
@@ -4225,88 +4214,10 @@ def get_crop_template_detail(request, template_id):
         )
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def calculate_event_impact(request):
-    """
-    Calculate carbon impact for a specific event.
-    Enhanced with regional USDA factors and benchmark comparisons.
-    """
-    try:
-        event_id = request.data.get("event_id")
-        event_type = request.data.get("event_type", "chemical")  # Default to chemical
-
-        if not event_id:
-            return Response({"error": "event_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Get the appropriate event based on type
-        event = None
-        if event_type == "chemical":
-            event = get_object_or_404(ChemicalEvent, id=event_id)
-        elif event_type == "production":
-            event = get_object_or_404(ProductionEvent, id=event_id)
-        elif event_type == "weather":
-            event = get_object_or_404(WeatherEvent, id=event_id)
-        elif event_type == "equipment":
-            event = get_object_or_404(EquipmentEvent, id=event_id)
-        elif event_type == "soil":
-            event = get_object_or_404(SoilManagementEvent, id=event_id)
-        elif event_type == "pest":
-            event = get_object_or_404(PestManagementEvent, id=event_id)
-        elif event_type == "general":
-            event = get_object_or_404(GeneralEvent, id=event_id)
-        elif event_type == "business":
-            event = get_object_or_404(BusinessEvent, id=event_id)
-        else:
-            return Response({"error": f"Unsupported event type: {event_type}"}, status=status.HTTP_400_BAD_REQUEST)
-
-        calculator = EventCarbonCalculator()
-
-        # Calculate carbon impact based on event type
-        if isinstance(event, ChemicalEvent):
-            result = calculator.calculate_chemical_event_impact(event)
-        elif isinstance(event, ProductionEvent):
-            result = calculator.calculate_production_event_impact(event)
-        elif isinstance(event, WeatherEvent):
-            result = calculator.calculate_weather_event_impact(event)
-        elif isinstance(event, EquipmentEvent):
-            result = calculator.calculate_equipment_event_impact(event)
-        elif isinstance(event, SoilManagementEvent):
-            result = calculator.calculate_soil_management_event_impact(event)
-        elif isinstance(event, PestManagementEvent):
-            result = calculator.calculate_pest_management_event_impact(event)
-        elif isinstance(event, GeneralEvent):
-            result = calculator.calculate_general_event_impact(event)
-        elif isinstance(event, BusinessEvent):
-            result = calculator.calculate_business_event_impact(event)
-        else:
-            return Response({"error": f"Unsupported event instance: {type(event)}"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Add event metadata
-        result.update(
-            {
-                "event_id": event.id,
-                "event_type": event_type,
-                "timestamp": event.date.isoformat() if event.date else None,
-            }
-        )
-
-        return Response(result, status=status.HTTP_200_OK)
-
-    except (
-        BusinessEvent.DoesNotExist,
-        ChemicalEvent.DoesNotExist,
-        ProductionEvent.DoesNotExist,
-        WeatherEvent.DoesNotExist,
-        EquipmentEvent.DoesNotExist,
-        SoilManagementEvent.DoesNotExist,
-        PestManagementEvent.DoesNotExist,
-        GeneralEvent.DoesNotExist,
-    ):
-        return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        logger.error(f"Error calculating event impact: {str(e)}")
-        return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# 2026-11-11: `calculate_event_impact` (`enhanced-event-impact/`) was DELETED. No frontend caller,
+# and it fetched any event by integer id with an unscoped `get_object_or_404`, so any signed-in
+# account got another company's event date and carbon figure (backend/route_tenancy.py finding).
+# Guard: `carbon/tests/test_retired_claim_routes_stay_retired.py`.
 
 
 # ⛔ 2026-11-05 — the five `education/*` views (usda-methodology, regional-practices,

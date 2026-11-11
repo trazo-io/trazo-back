@@ -104,6 +104,12 @@ RETIRED_CLAIM_ROUTES = {
 #: would have 404'd whether or not the viewset was registered — a check that passes vacuously in
 #: both directions. Its `@action` paths are the only URLs it ever actually had.
 RETIRED_CLAIM_PATHS = {
+    "enhanced-event-impact/": (
+        "calculate_event_impact (deleted 2026-11-11): fetched any event by integer id with an "
+        "unscoped get_object_or_404, so any signed-in account got another company's event date "
+        "and carbon figure; it also labelled every result as computed from USDA and EPA-verified "
+        "factors. No frontend caller."
+    ),
     "blockchain/batch-verify/": (
         "batch_verify_productions: answered 200 {'status': 'completed', 'transaction_hashes': "
         "['0x000...0', ...]} out of ProductionBlockchainService's mock branch, for any "
