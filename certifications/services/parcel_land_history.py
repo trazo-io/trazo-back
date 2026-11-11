@@ -127,6 +127,8 @@ class ManagerRow:
     legal_description: str = ""
     #: A declaration of "none applied" over rows or records that name an application.
     contradiction: bool = False
+    #: The prior manager's `LandownerAffidavit`, for the signer and site lines under the table.
+    affidavit: object = None
 
 
 def _safe(text: str, limit: int = 60) -> str:
@@ -188,6 +190,7 @@ def prior_manager_rows(parcel) -> List[ManagerRow]:
                 landowner=aff.landowner_name or "",
                 legal_description=aff.parcel_legal_description or "",
                 contradiction=contradiction,
+                affidavit=aff,
             )
         )
     rows.sort(key=lambda r: (r.period_start or date.min, r.name))
@@ -561,3 +564,98 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
             "not_asked": coverage_not_asked,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# What each signer stated (CCOF ORGB49 Affidavit A-D; WSDA AGR 2262 refs 1-8 and the attestation)
+# ---------------------------------------------------------------------------
+
+#: CCOF ORGB49 Affidavit D's "Type" column, in the words its own heading lists.
+AFFIDAVIT_MATERIAL_TYPES = {
+    "fertilizer": "Fertilizer",
+    "pest_disease_control": "Pest or disease control",
+    "herbicide": "Herbicide",
+    "compost_manure": "Compost or manure",
+    "seed_treatment": "Seed treatment",
+    "adjuvant": "Adjuvant",
+    "other": "Other",
+}
+
+#: The signer's materials table as the parcel page prints it (CCOF Affidavit D; WSDA AGR 2262 refs 7 and 8).
+AFFIDAVIT_ROW_COLUMNS = ("Year", "Use", "Months", "Acres", "Material", "Manufacturer", "Applied", "Type")
+
+
+def _month(value) -> str:
+    text = str(value or "").strip()
+    return f"{text[5:7]}/{text[:4]}" if len(text) == 7 and text[4] == "-" else text
+
+
+def affidavit_row_cells(affidavit) -> list:
+    """One list of cell texts per typed row of the signer's table, "" where the signer left it blank."""
+    from product.services.land_history import format_acres
+
+    out = []
+    for row in affidavit.yearly_history or []:
+        if not isinstance(row, dict):
+            continue
+        start, end = _month(row.get("period_from")), _month(row.get("period_to"))
+        months = f"{start} to {end}" if start and end and start != end else (start or end)
+        try:
+            acres = format_acres(row["acres"]) if row.get("acres") not in (None, "") else ""
+        except Exception:  # noqa: BLE001 — a malformed stored value prints as typed, never sinks the page
+            acres = str(row.get("acres"))
+        out.append(
+            [
+                str(row.get("year") or ""),
+                str(row.get("land_use") or ""),
+                months,
+                acres,
+                str(row.get("inputs") or ""),
+                str(row.get("manufacturer") or ""),
+                str(row.get("date_applied") or ""),
+                AFFIDAVIT_MATERIAL_TYPES.get(row.get("material_type") or "", ""),
+            ]
+        )
+    return out
+
+
+def affidavit_signer_lines(affidavit) -> list[str]:
+    """What the signer stated beside the table: why they know the parcel, who they are, the site as they name
+    it, their last inspection, what stays with them, and treated seed in their period. A blank says nothing;
+    only a stated Yes to treated seed is a review line."""
+    from product.services.land_history import format_acres
+
+    lines = []
+    basis = dict(affidavit.SIGNER_BASIS_CHOICES).get(affidavit.signer_basis)
+    if affidavit.signer_basis == "other":
+        lines.append(f"Knows the parcel's history through: {affidavit.signer_basis_other or 'other (not described)'}.")
+    elif basis:
+        lines.append(f"Knows the parcel's history because they {basis[0].lower() + basis[1:]}.")
+    who = [x for x in (affidavit.signer_title, affidavit.signer_company) if x]
+    contact = [x for x in (affidavit.signer_email, affidavit.previous_manager_phone) if x]
+    if who or contact:
+        lines.append("Signer: " + "; ".join(([", ".join(who)] if who else []) + contact) + ".")
+    if affidavit.field_name:
+        lines.append(f"Site as the signer names it: {affidavit.field_name}.")
+    if affidavit.field_acres:
+        lines.append(f"Site acreage stated by the signer: {format_acres(affidavit.field_acres)} acres.")
+    if affidavit.last_inspection_date:
+        lines.append(f"Signer's last organic inspection of the site: {affidavit.last_inspection_date.isoformat()}.")
+    if affidavit.portion_remains == "yes":
+        acres = (
+            f"{format_acres(affidavit.acres_remaining)} acres"
+            if affidavit.acres_remaining is not None
+            else "acreage not stated"
+        )
+        lines.append(f"A portion of the site remains on the signer's certificate: {acres}.")
+    elif affidavit.portion_remains == "no":
+        lines.append("The whole site leaves the signer's certificate.")
+    if affidavit.treated_seed_planted == "yes":
+        lines.append(
+            "[REVIEW] Treated seed was planted during the signer's management: "
+            + (affidavit.treated_seed_detail or "no treatment brand or planting date given")
+            + "."
+        )
+    elif affidavit.treated_seed_planted == "no":
+        lines.append("No treated seed was planted during the signer's management (stated).")
+    return lines

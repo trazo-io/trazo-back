@@ -31,33 +31,31 @@ items:
   asks: 'Site name (example: North Field, Circle C-1, Fuji Blocks 28-35) — should match how you reference
     this site in your own input material application records; does not need to match how the applicant
     will reference it.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
     - certifications.models.LandownerAffidavit.field_name
-    prints: history/audit-export dossier (field-history affidavit table); count only on the parcel page
-  gap: 'Same as CCOF''s Affidavit A: `field_name` exists and is prefillable from the `Parcel` it concerns,
-    but the parcel page itself prints only a count of affidavits on file, never the name or table.'
-  fix: Prefill from the `Parcel` (suggest→confirm) and render each affidavit's summary table inline on
-    the parcel page, per the CCOF Affidavit A/F6 fix.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    The site name as the signer references it prints under 'Stated by <name>' since 2026-11-11.
 - ref: '2'
   asks: 'Site location: street address, GPS coordinates, and/or Township, Range, Section.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
     - certifications.models.LandownerAffidavit.parcel_legal_description
-    prints: history/audit-export dossier
-  gap: 'Same as CCOF''s Affidavit A: `parcel_legal_description` is a free-text field that CAN hold an
-    APN, Section-Township-Range or coordinates, but there is no dedicated address or coordinates field,
-    and none of it is prefilled from the `Parcel` it concerns.'
-  fix: Prefill §A from the `Parcel` (address, APN/STR) as suggestions the signer confirms, per the CCOF
-    Affidavit A fix.
+    - product.Parcel
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F; §A
+  note: >-
+    The signer's own description of the land (street, GPS or Township/Range/Section, free text) prints
+    in the manager table; the parcel the declaration belongs to is located in §A of the same page
+    (address, S/T/R, boundary centre).
 - ref: '3'
   asks: Acreage of the site.
   status: covered
@@ -87,103 +85,100 @@ items:
 - ref: 5a
   asks: 'If yes, identify the following: i. date of your last organic inspection; ii. the name of the certifier;
     iii. your organic certification number; iv. site number as listed on your certificate.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.prior_certifier_name
     - parcel_application.prior_certificate_site_number
     - parcel_application.certificate_card
+    - parcel_application.affidavit_card
     models:
+    - certifications.models.LandownerAffidavit.last_inspection_date
     - certifications.models.CertifierInspection.inspected_on
-    prints: parcels/parcel-application-<name>.pdf §F — certifier, certificate of record and the certificate's
-      site number; 02s-renewal-status-and-routing.pdf, the operation's own last inspection date
-  gap: The certifier, certificate number and site number are captured (closed 2026-09-09 with AGR 2264 ref
-    6). The date of the last organic inspection (i) is answered only when the signer is this operation
-    (its own inspection record, printed on 02s since 2026-11-08); a different previous manager's
-    inspection date has no field, and the parcel application does not print it.
-  fix: Print the operation's last inspection date in §F when the prior certifier is the operation's own.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F; 02s-renewal-status-and-routing.pdf
+  note: >-
+    Certifier, certificate number and site number are the parcel's own answers (closed 2026-09-09 with
+    AGR 2264 ref 6). The signer's last organic inspection date is the affidavit's own field since
+    2026-11-11 and prints under 'Stated by <name>'; the operation's own last inspection prints on 02s.
 - ref: 5b
   asks: If yes, will any acreage associated with this site remain under your management? Yes, a portion of
     the site remains on my certificate (acres remaining) / No, site completely removed from my certificate.
-  status: not_covered
-  severity: P2
-  trazo:
-    prints: —
-  gap: 'No field records the split for a partial transfer: a signer transferring part of a site cannot state
-    how much stays behind.'
-  fix: Add a `remaining_acres` numeric field visible when the signer indicates a partial transfer.
-- ref: '6'
-  asks: Have any treated seeds been planted on the site while under your management? Yes / No.
-  status: not_covered
-  severity: P2
-  trazo:
-    triggered_by:
-    - g3_0_seeds.seeds_used
-    models:
-    - certifications.osp_modules.g3_0_seeds
-    prints: —
-  gap: 'Same as AGR 2264 ref ''11'': `g3_0_seeds.seeds_used` is a farm-wide, current-tenant answer, not a signer-attested,
-    site-and-period-bound fact a departing prior manager could complete.'
-  fix: Same as AGR 2264 ref '11' — a `treated_seed_planted` boolean plus brand/date, scoped to the signer's
-    own management period.
-- ref: 6a
-  asks: If yes, provide the brand name of the treatment and the date the seed was planted.
-  status: not_covered
-  severity: P2
-  trazo:
-    triggered_by:
-    - g3_0_seeds.seeds_used
-    prints: —
-  gap: 'Follows from 6: nothing scoped to the signer''s own management period records a seed treatment or its
-    planting date.'
-  fix: 'Part of the 6 fix: brand and date fields scoped to the signer''s management period.'
-- ref: '7'
-  asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
-    Stone fruit, Vegetable, Other): dates produced and acreage, for production and activities that occurred
-    while under your management, for the transition period the applicant is seeking certification for.'
-  status: partial
-  severity: P2
-  trazo:
-    questions:
-    - parcel_application.crop_history
-    models:
-    - product.ParcelCropHistory
-    - certifications.LandownerAffidavit.yearly_history
-    prints: >-
-      parcels/parcel-application-<name>.pdf §F
-  gap: >-
-    Since 2026-11-11 a land-history row the operator types carries a month range, acres and pasture (AGR
-    2264 ref 10 is covered by it). AGR 2262 is the PREVIOUS manager's own table, signed by them: its
-    rows ride on the affidavit (`LandownerAffidavit.yearly_history`: year, land use, product,
-    manufacturer, application date), which has no month range and no acres.
-  fix: >-
-    Add `period_from`, `period_to` and `acres` to the affidavit's yearly_history rows and print them in
-    the affidavit table (the affidavit slice).
-- ref: '8'
-  asks: 'List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
-    your management, for the transition period the applicant seeks certification for: material name and
-    date of application. Or check ''N/A — No input materials have been applied while under my management.'''
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
-    - certifications.models.LandownerAffidavit (yearly_history)
+    - certifications.models.LandownerAffidavit.portion_remains
+    - certifications.models.LandownerAffidavit.acres_remaining
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Since 2026-11-11: whether a portion stays on the signer's certificate and how many acres, printed
+    under 'Stated by <name>'. A blank is not stated.
+- ref: '6'
+  asks: Have any treated seeds been planted on the site while under your management? Yes / No.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.treated_seed_planted
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    The signer's own answer for their management period since 2026-11-11, apart from the applicant's
+    (AGR 2264 ref 11). A Yes prints a [REVIEW] line; a No prints as stated.
+- ref: 6a
+  asks: If yes, provide the brand name of the treatment and the date the seed was planted.
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.treated_seed_detail
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Brand and planting date under a Yes; a Yes with none given says so in its [REVIEW] line.
+- ref: '7'
+  asks: 'Table, by crop category (Apple, Berries, Grains, Grapes, Hay/Silage, Herbs, Nuts, Pasture, Pears,
+    Stone fruit, Vegetable, Other): dates produced and acreage, for production and activities that occurred
+    while under your management, for the transition period the applicant is seeking certification for.'
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.yearly_history
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Each row of the signer's table carries the use, the months (`period_from`, `period_to`) and acres
+    since 2026-11-11, printed in the signer's table on the parcel page. The crop is named as the signer
+    names it rather than by WSDA's category list; WSDA takes alternative records 'provided they include
+    all applicable information'.
+- ref: '8'
+  asks: 'List any input materials (fertilizers, soil amendments, pesticides, etc.) applied while under
+    your management, for the transition period the applicant seeks certification for: material name and
+    date of application. Or check ''N/A — No input materials have been applied while under my management.'''
+  status: covered
+  trazo:
+    questions:
+    - parcel_application.affidavit_card
+    models:
+    - certifications.models.LandownerAffidavit.yearly_history
     - certifications.models.LandownerAffidavit.no_materials_applied
-    prints: history/audit-export dossier
-  gap: 'Same as CCOF''s Affidavit D: `yearly_history` rows carry product and application date (three of
-    WSDA''s expected columns, once manufacturer is included), but only through the audit-export dossier
-    — the parcel page itself prints only a count of affidavits on file, never the materials table. The
-    tri-state `no_materials_applied` (True/False/unanswered) correctly distinguishes an affirmative ''N/A''
-    from an unanswered form, mirroring WSDA''s own checkbox.'
-  fix: Render each affidavit's materials table inline on the parcel page, per the CCOF Affidavit D fix.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    The signer's materials (name and date of application) print in their table on the parcel page since
+    2026-11-11; the N/A is the tri-state no-materials answer, printed in the manager table's Materials
+    column, never inferred from an empty table.
 - ref: Attestation (signature)
   asks: By printing your name and providing this form, you attest all information in it is correct and complete.
     Print name, date, email, phone number.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
@@ -192,10 +187,10 @@ items:
     - certifications.models.LandownerAffidavit.signed_document
     - certifications.models.LandownerAffidavit.previous_manager_signed_date
     - certifications.models.LandownerAffidavit.previous_manager_phone
-    prints: history/audit-export dossier
-  gap: 'Same as CCOF''s Affidavit C: name, phone and signed date are captured, along with a scanned-signature
-    upload, but there is no email field, and the stored `attestation_text` defaults to MOFGA''s own wording
-    rather than WSDA''s — WSDA does accept alternative documents carrying the same information, so this is
-    not disqualifying by itself, but the wording on file will not read as AGR 2262''s own attestation.'
-  fix: Add a `signer_email` field, per the CCOF Affidavit C fix; optionally store a `attestation_template =
-    'wsda'` variant carrying AGR 2262's own wording when the certifier is WSDA.
+    - certifications.models.LandownerAffidavit.signer_email
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Name, signed date, phone and, since 2026-11-11, email. The signed copy carries AGR 2262's own
+    attestation; Trazo's stored attestation text is its standard wording, and WSDA takes alternative
+    records with the same information.

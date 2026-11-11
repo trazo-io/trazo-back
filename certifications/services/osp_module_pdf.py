@@ -1975,6 +1975,31 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                 bits.append("landowner: " + r.landowner)
             if bits:
                 out.append(Paragraph(_escape(f"{r.name}: " + "; ".join(bits)), meta))
+            # What the signer stated beside the table (CCOF Affidavit B, C; WSDA AGR 2262 refs 1, 3, 5a, 5b, 6)
+            # and their own materials table (CCOF Affidavit D; WSDA AGR 2262 refs 7, 8). Printed here because
+            # the parcel page is where a reviewer reads the land history; it lived in the audit dossier only.
+            if r.affidavit is not None:
+                from certifications.services.parcel_land_history import (
+                    AFFIDAVIT_ROW_COLUMNS,
+                    affidavit_row_cells,
+                    affidavit_signer_lines,
+                )
+
+                lines = affidavit_signer_lines(r.affidavit)
+                cells = affidavit_row_cells(r.affidavit)
+                if lines or cells:
+                    out.append(Paragraph(_escape(f"Stated by {r.name}:"), _sticks_to_next(meta)))
+                for line in lines:
+                    out.append(Paragraph(_escape(f"• {line}"), meta))
+                if cells:
+                    out.append(
+                        _register_table(
+                            AFFIDAVIT_ROW_COLUMNS,
+                            (0.45, 0.85, 0.85, 0.5, 1.2, 1.0, 0.85, 0.85),
+                            [([[c] for c in row], []) for row in cells],
+                            styles,
+                        )
+                    )
         for r in [current] + prior:
             if r.contradiction:
                 out.append(

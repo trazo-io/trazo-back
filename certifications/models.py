@@ -2200,6 +2200,10 @@ class LandownerAffidavit(models.Model):
     # land in an eligibility determination).
     #
     # Shape: [{year, land_use, inputs, applied_by, manufacturer, date_applied}]
+    #
+    # 2026-11-11: optional `material_type` (CCOF ORGB49 Affidavit D's "Type" column, one of
+    # `AFFIDAVIT_MATERIAL_TYPES`), and `period_from` / `period_to` ("YYYY-MM") and `acres` for the use the row
+    # describes (WSDA AGR 2262 ref 7: dates produced and acreage). Validated by the serializer.
     yearly_history = models.JSONField(
         default=list,
         blank=True,
@@ -2302,6 +2306,34 @@ class LandownerAffidavit(models.Model):
     )
 
     notes = models.TextField(blank=True, null=True)
+
+    # ------------------------------------------------------------------
+    # CCOF ORGB49 Affidavit of Land History B and C; WSDA AGR 2262 refs 5a, 5b, 6 and the attestation block.
+    # All optional and blank by default: a blank is "not stated", never a default answer.
+    # ------------------------------------------------------------------
+    #: CCOF B: "I have this knowledge because: I owned the parcel / I managed the parcel / Other". Inferred
+    #: before from whether `landowner_name` differs from the signer, which is a guess, not an attestation.
+    SIGNER_BASIS_CHOICES = [
+        ("owned", "Owned the parcel and controlled activities there"),
+        ("managed", "Managed the parcel and controlled activities there"),
+        ("other", "Other"),
+    ]
+    signer_basis = models.CharField(max_length=10, choices=SIGNER_BASIS_CHOICES, blank=True, default="")
+    signer_basis_other = models.CharField(max_length=300, blank=True, default="")
+    #: CCOF C signature block: Name, Title, Company, Email, Phone; WSDA AGR 2262: print name, email, phone.
+    signer_title = models.CharField(max_length=120, blank=True, default="")
+    signer_company = models.CharField(max_length=200, blank=True, default="")
+    signer_email = models.EmailField(blank=True, default="")
+    #: WSDA AGR 2262 5a(i): the date of the signer's last organic inspection, when the site was certified.
+    last_inspection_date = models.DateField(blank=True, null=True)
+    #: WSDA AGR 2262 5b: whether part of the site stays on the signer's certificate, and how many acres.
+    PORTION_CHOICES = [("yes", "A portion remains with the signer"), ("no", "The whole site was transferred")]
+    portion_remains = models.CharField(max_length=3, choices=PORTION_CHOICES, blank=True, default="")
+    acres_remaining = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    #: WSDA AGR 2262 6 and 6a: treated seed planted during the signer's own management, with brand and date.
+    TREATED_SEED_CHOICES = [("yes", "Yes"), ("no", "No")]
+    treated_seed_planted = models.CharField(max_length=3, choices=TREATED_SEED_CHOICES, blank=True, default="")
+    treated_seed_detail = models.TextField(blank=True, default="")
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
