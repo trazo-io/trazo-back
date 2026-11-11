@@ -1291,23 +1291,23 @@ PEST_EVENT_WIDTHS = [
 #: but a WORD wider than its column is not wrapped, it is split, and the landing page's preview
 #: of this very table printed "hydroxi / de", "s / pinosad", "(Xanthomona / s" and
 #: "grower-s / elected". Every column now holds its widest word as well as its header: the sum
-#: of those minimums is 6.81in, so the 7.00in frame has room for all of them.
+#: of those minimums is 6.99in, so the 7.00in frame has room for all of them.
 APPLICATION_LOG_WIDTHS_CERTIFIED = [
-    0.59 * inch,  # Date           : "2025-07-08"
-    0.57 * inch,  # Product        : prose; longest word "Naturalyte"
-    0.51 * inch,  # Type           : "Fungicide"
-    0.51 * inch,  # NPK / Conc.    : "hydroxide" (46.1% copper hydroxide)
-    0.47 * inch,  # Amount / Rate  : header "Amount"
-    0.36 * inch,  # Area           : "12.50"
-    0.55 * inch,  # Method         : "Fertigation"
-    0.76 * inch,  # Target / Purpose: "(Xanthomonas"
-    0.87 * inch,  # Organic Status : "Organic-approved", "grower-selected,"
+    0.59 * inch,  # Date: "2025-07-08"
+    0.53 * inch,  # Product: prose; longest word "Naturalyte"
+    0.51 * inch,  # Type: widest CHEMICAL_TYPE_LABELS word, "Fungicide"
+    0.51 * inch,  # NPK / Conc.: "hydroxide" (46.1% copper hydroxide)
+    0.47 * inch,  # Amount / Rate: header "Amount"
+    0.34 * inch,  # Area: "12.50"
+    0.65 * inch,  # Method: widest APPLICATION_METHOD_LABELS word, "incorporation"
+    0.72 * inch,  # Target / Purpose: "(Xanthomonas"
+    0.87 * inch,  # Organic Status: "Organic-approved", "grower-selected,"
     0.28 * inch,  # REI hrs
-    0.31 * inch,  # PHI days       : header "days"
+    0.31 * inch,  # PHI days: header "days"
     0.38 * inch,  # Buffer
-    0.55 * inch,  # EPA Reg #      : "62719-621"
+    0.55 * inch,  # EPA Reg #: "62719-621"
     0.29 * inch,  # RUP
-]  # = 7.00 in
+]  # = 7.00 in; every column at (or within 0.01in of) its own minimum
 
 #: The same table for a certification without the EPA/WPS columns.
 APPLICATION_LOG_WIDTHS_PLAIN = [
@@ -1317,10 +1317,10 @@ APPLICATION_LOG_WIDTHS_PLAIN = [
     0.51 * inch,  # NPK / Conc.
     0.47 * inch,  # Amount / Rate
     0.50 * inch,  # Area
-    0.55 * inch,  # Method
+    0.65 * inch,  # Method
     0.85 * inch,  # Target / Purpose
     0.87 * inch,  # Organic Status
-]  # = 5.80 in
+]  # = 5.90 in
 
 TABLE_HEADERS = {
     "MASS_BALANCE_PURCHASE_WIDTHS": [

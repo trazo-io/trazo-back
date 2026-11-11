@@ -84,9 +84,7 @@ WIDTH_LISTS = {
 #: and "grower-s / elected". Keyed by header so both variants are checked by the same list.
 WORST_CASE_WORDS = {
     "Product": ["Naturalyte", "Fertilizer", "Seaweed"],
-    "Type": ["Pesticide", "Fungicide", "Fertilizer", "Herbicide"],
     "NPK / Conc.": ["hydroxide", "spinosad"],
-    "Method": ["Fertigation", "fertigation", "Air-blast"],
     "Target / Purpose": ["(Xanthomonas", "orangeworm", "transitella)", "arboricola", "protectant"],
     "Organic Status": ["Organic-approved", "grower-selected,", "grower-reported", "Self-reported"],
 }
@@ -152,11 +150,24 @@ class ColumnFitTests(SimpleTestCase):
                     )
 
     def test_prose_columns_hold_their_widest_word(self):
-        """Prose wraps between words, never inside one."""
+        """Prose wraps between words, never inside one.
+
+        Columns that print a closed vocabulary take EVERY word of it from the source, not a
+        hand-picked sample: the first cut listed three Method words, missed "incorporation",
+        "Hand-placed" and "Fumigation", and passed while those split (review of back #390).
+        """
+        vocabularies = {
+            "Type": svc.CHEMICAL_TYPE_LABELS.values(),
+            "Method": svc.APPLICATION_METHOD_LABELS.values(),
+        }
+        words_for = {
+            header: [*WORST_CASE_WORDS.get(header, []), *(w for label in labels for w in str(label).split())]
+            for header, labels in vocabularies.items()
+        }
         for name in ("APPLICATION_LOG_WIDTHS_CERTIFIED", "APPLICATION_LOG_WIDTHS_PLAIN"):
             widths = WIDTH_LISTS[name]
             for index, header in enumerate(svc.TABLE_HEADERS[name]):
-                for word in WORST_CASE_WORDS.get(header, []):
+                for word in words_for.get(header, WORST_CASE_WORDS.get(header, [])):
                     needed = stringWidth(word, CELL_FONT, CELL_FONT_SIZE) + CELL_PADDING
                     with self.subTest(table=name, column=header, word=word):
                         self.assertGreaterEqual(
