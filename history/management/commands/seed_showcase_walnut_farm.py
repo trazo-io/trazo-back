@@ -527,6 +527,13 @@ def _load_osp_answers() -> dict:
             problems.append(f"{module.key}.{key}: {value!r} is not one of the options")
         for key in validate_answer_keys(module, answers):
             problems.append(f"{module.key}.{key}: no such question")
+    from certifications.services.common_osp_records import RECORD_TYPES_BY_KEY
+
+    for key in fixture.get("common_osp_records") or []:
+        if key not in RECORD_TYPES_BY_KEY:
+            problems.append(f"common_osp_records.{key}: no such record type")
+        elif RECORD_TYPES_BY_KEY[key].free_text:
+            problems.append(f"common_osp_records.{key}: a free-text row needs a label; not supported here")
     if problems:
         raise CommandError(f"{os.path.basename(OSP_ANSWERS_PATH)} is out of step:\n  " + "\n  ".join(problems))
     return fixture
@@ -877,6 +884,24 @@ class Command(BaseCommand):
             # writes them; that date is also what "Check the plan against your records" measures
             # change from.
             answered_at = (plan.submitted_at - timedelta(days=10)).isoformat()
+
+            # The Common OSP § 11 record types the farm keeps. G8.0's records attestation stands
+            # on this list: answered Yes over an empty list, the module reports "in progress" (the
+            # attestation gate), which is what it did here before this list was seeded. These are
+            # the demo operator's statements, like every attestation in the answers file; on a
+            # real operation only the operator's own action writes them
+            # (`common_osp_records.confirm`). The narratives loop above replaced this section, so
+            # it is written after it.
+            from certifications.services.common_osp_records import CONFIRMATIONS_KEY
+            from certifications.services.common_osp_records import OSP_SECTION_KEY as RECORDS_SECTION
+
+            records_section = dict(plan.sections.get(RECORDS_SECTION) or {})
+            records_section[CONFIRMATIONS_KEY] = {
+                key: {"confirmed": True, "confirmed_at": answered_at, "confirmed_by": user.id}
+                for key in answers_fixture.get("common_osp_records") or []
+            }
+            plan.sections[RECORDS_SECTION] = records_section
+
             responses = plan.module_responses or {}
             modules = responses.get("modules") or {}
             for definition in MODULE_REGISTRY:
