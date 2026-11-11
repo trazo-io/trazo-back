@@ -522,20 +522,24 @@ items:
     signed statement covering the planting date and full names of all materials used (including growing
     media); container systems on impermeable flooring must additionally describe the removal of contamination
     sources before transition.'
-  status: not_covered
+  status: partial
   severity: P2
   trazo:
     questions:
     - parcel_application.container_production
     models:
     - product.Parcel.container_production
-    prints: —
-  gap: '''All crops grown in ground'' is exactly the operator''s own `container_production = False` answer,
-    but it is never printed as the N/A statement CCOF''s checkbox expects. For any parcel that IS container
-    production, none of the planting-date, materials or contamination-removal statements are captured.'
-  fix: Print 'All crops grown in ground' from the boolean when false. When the production system is not
-    in-ground (see F3), add `container_planting_date`, a materials statement (textarea or upload), and
-    a contamination-removal description; print under §G.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A (the container answer)
+  gap: >-
+    The 'all crops are grown in ground' half is the operator's own `container_production` = No, which
+    prints in §A as the answer to 'Is this parcel container or greenhouse production?', not in §G's
+    checkbox wording. For a parcel that IS container production, none of the planting-date, materials or
+    contamination-removal statements are captured. Re-judged 2026-11-10: A9 cites the same question as
+    covered, and the No does print.
+  fix: >-
+    When the production system is not in-ground (see F3), add `container_planting_date`, a materials
+    statement (textarea or upload), and a contamination-removal description; print under §G.
 - ref: Affidavit A
   asks: 'This affidavit pertains to the following parcel: name; block/lot; acreage; street address; city/county/state/country;
     and geographic coordinates or APN/Section-Township-Range.'
