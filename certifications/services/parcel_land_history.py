@@ -170,10 +170,20 @@ def _declared(affidavit) -> Tuple[str, bool]:
     return DECLARED_NOT_ANSWERED, False
 
 
+def operation_affidavits(parcel) -> list:
+    """The operation's own signed-for-its-own-period affidavits (OTCO C2 2.5, CCOF ORGB49 §G), newest signed
+    first. `.all()` then a filter in Python, so a caller's prefetch of `landowner_affidavits` is used."""
+    own = [a for a in parcel.landowner_affidavits.all() if getattr(a, "signer_role", "") == "this_operation"]
+    return sorted(own, key=lambda a: (a.previous_manager_signed_date or date.min, a.pk), reverse=True)
+
+
 def prior_manager_rows(parcel) -> List[ManagerRow]:
-    """One row per `LandownerAffidavit` on the parcel, oldest management period first."""
+    """One row per previous manager's `LandownerAffidavit` on the parcel, oldest management period first. The
+    operation's own affidavit is not a prior party's and rides on the current manager's row."""
     rows: List[ManagerRow] = []
     for aff in parcel.landowner_affidavits.all():
+        if getattr(aff, "signer_role", "prior_manager") == "this_operation":
+            continue
         declared, contradiction = _declared(aff)
         rows.append(
             ManagerRow(
@@ -231,6 +241,11 @@ def current_manager_row(parcel, answers: Optional[dict] = None) -> ManagerRow:
         declared = "Not asked: parcel stated certified"
     else:
         declared = DECLARED_NOT_ANSWERED
+    # OTCO C2 2.5: the current manager signs too. Its signed affidavit, when on file, fills the row's Signed and
+    # Attachment columns and its statements print under the table like a prior manager's.
+    own = operation_affidavits(parcel)
+    signed_own = next((a for a in own if affidavit_attachment_name(a)), None)
+    chosen = signed_own or (own[0] if own else None)
     return ManagerRow(
         name=parcel.establishment.name,
         role=CURRENT_MANAGER,
@@ -238,7 +253,14 @@ def current_manager_row(parcel, answers: Optional[dict] = None) -> ManagerRow:
         period_end=None,
         last_prohibited=last_prohibited,
         declared=declared,
+        signed=chosen.previous_manager_signed_date if chosen is not None else None,
+        attachment=(
+            f"parcels/affidavits/{affidavit_attachment_name(chosen)}"
+            if chosen is not None and affidavit_attachment_name(chosen)
+            else ""
+        ),
         contradiction=contradiction,
+        affidavit=chosen,
     )
 
 
@@ -311,6 +333,10 @@ def tenure_declaration(parcel) -> str:
         return "no input materials of any kind (declared)"
     if answer_value(answers, "dlpm_none_within_tenure") is True:
         return "no prohibited material (declared)"
+    # The operation's own signed affidavit for its period (OTCO C2 2.5, CCOF ORGB49 §G) is a statement too, and
+    # only once the signed copy is on file: a row typed in Trazo is not a signature.
+    if any(affidavit_attachment_name(a) for a in operation_affidavits(parcel)):
+        return "its own signed affidavit (attached)"
     return ""
 
 

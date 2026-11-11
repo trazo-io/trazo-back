@@ -1926,12 +1926,18 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     Paragraph(_escape(r.declared), meta),
                     Paragraph(
                         _escape(
-                            r.signed.isoformat() if r.signed else ("—" if r.role == CURRENT_MANAGER else "unsigned")
+                            r.signed.isoformat()
+                            if r.signed
+                            else ("unsigned" if r.role != CURRENT_MANAGER or r.affidavit is not None else "—")
                         ),
                         meta,
                     ),
                     Paragraph(
-                        _escape("—" if r.role == CURRENT_MANAGER else ("attached" if r.attachment else "not attached")),
+                        _escape(
+                            "attached"
+                            if r.attachment
+                            else ("not attached" if r.role != CURRENT_MANAGER or r.affidavit is not None else "—")
+                        ),
                         meta,
                     ),
                 ]
@@ -1962,7 +1968,16 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             )
         )
         out.append(table)
-        for r in prior:
+        # OTCO C2 2.5 asks the current manager to sign as well; the operation's own affidavit, once signed and
+        # attached, is that signature. Its absence is stated, never implied by a dash.
+        if current.affidavit is None:
+            out.append(
+                Paragraph(
+                    _escape(f"{current.name} has no signed affidavit of its own for its period on file."),
+                    meta,
+                )
+            )
+        for r in [current] + prior:
             bits = []
             if r.attachment:
                 bits.append("signed affidavit attached at " + r.attachment)
@@ -2010,7 +2025,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                 )
         out.append(
             Paragraph(
-                "A prior manager's signed affidavit, where one is attached, is in the packet's "
+                "A signed affidavit, where one is attached, is in the packet's "
                 "parcels/affidavits/ folder. Dates are as each signer stated them.",
                 meta,
             )

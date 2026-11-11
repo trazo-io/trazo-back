@@ -14448,7 +14448,9 @@ class AuditExportService:
         )
         if affidavits:
             elements.append(self._spacer(0.15))
-            elements.append(self._body("<b>Landowner Affidavits (prior-manager attestation)</b>"))
+            elements.append(
+                self._body("<b>Land-use affidavits (previous managers, and the operation for its own period)</b>")
+            )
             # "Last Prohibited Substance" used to head a column rendering
             # `last_prohibited_date`, so a certifier read "Last Prohibited Substance:
             # 2019-05-12". There is no substance NAME on this model \u2014 the affidavit records
@@ -14511,7 +14513,10 @@ class AuditExportService:
                     declared = "Not answered"
                 aff_data.append(
                     [
-                        self._cell(aff.previous_manager_name or "\u2014"),
+                        self._cell(
+                            (aff.previous_manager_name or "\u2014")
+                            + (" (this operation)" if getattr(aff, "signer_role", "") == "this_operation" else "")
+                        ),
                         self._cell(period),
                         self._cell(_fmt_date(aff.last_prohibited_date)),
                         self._cell(declared),

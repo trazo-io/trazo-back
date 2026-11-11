@@ -1830,6 +1830,8 @@ class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelS
             "landowner_signed_date",
             "signed_document",
             "notes",
+            # OTCO C2 2.5 / CCOF ORGB49 §G: the operation's own signed affidavit for its own period.
+            "signer_role",
             # CCOF ORGB49 Affidavit B, C; WSDA AGR 2262 5a, 5b, 6, 6a and the attestation block.
             "signer_basis",
             "signer_basis_other",
@@ -1856,6 +1858,23 @@ class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelS
                 if data.get(key) == "":
                     data[key] = None
         return super().to_internal_value(data)
+
+    #: The signed copy is the certifier's own form, scanned or saved: a PDF or an image.
+    SIGNED_COPY_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff"}
+
+    def validate_signed_document(self, value):
+        """Size and type gate for the signed copy, the same 50 MB limit as every document upload."""
+        if not value:
+            return value
+        import os
+
+        from documents.serializers import _validate_document_file
+
+        _validate_document_file(value)
+        ext = os.path.splitext(getattr(value, "name", "") or "")[1].lower()
+        if ext not in self.SIGNED_COPY_EXTENSIONS:
+            raise serializers.ValidationError("The signed copy must be a PDF or an image.")
+        return value
 
     def validate_yearly_history(self, rows):
         """Each row's optional `material_type`, `period_from` / `period_to` ("YYYY-MM") and `acres`.

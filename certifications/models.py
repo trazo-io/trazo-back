@@ -2179,6 +2179,18 @@ class LandownerAffidavit(models.Model):
     )
     field_acres = models.FloatField(blank=True, null=True)
 
+    #: Who signs. OTCO C2 2.5 requires every party that managed the parcel in the past 36 months to sign,
+    #: the current landowner/manager requesting certification included, and CCOF ORGB49 §G asks an Affidavit
+    #: of Land History "signed and dated by each person identified in question F6": when the operation itself
+    #: managed the parcel, it signs one for its own period. Such an affidavit is the operation's, never a
+    #: previous manager's: it does not appear among prior parties and it does not count toward "every prior
+    #: party signed". The signed copy is the agent's own form, uploaded; Trazo does not sign anything.
+    SIGNER_ROLE_CHOICES = [
+        ("prior_manager", "A previous manager or owner"),
+        ("this_operation", "This operation, for its own period"),
+    ]
+    signer_role = models.CharField(max_length=20, choices=SIGNER_ROLE_CHOICES, default="prior_manager")
+
     # Prior land manager/user (MOFGA field 3) — the signer of record
     previous_manager_name = models.CharField(max_length=200)
     previous_manager_address = models.CharField(max_length=300, blank=True, null=True)

@@ -506,25 +506,22 @@ items:
     If not currently certified organic: provide one or more copies of the Affidavit of Land History,
     signed and dated by each person named in F6, OR alternative documents containing all the same
     information.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
     - certifications.models.LandownerAffidavit.signed_document
+    - certifications.models.LandownerAffidavit.signer_role
     prints: >-
-      parcels/parcel-application-<name>.pdf §F — each affidavit's row on the manager table; the
-      signed document rides in the packet ZIP under parcels/affidavits/<pk>-<signer>.<ext>, named on
-      the page
-  gap: >-
-    Closed 2026-09-09 for every affidavit a PRIOR manager signed: table on the page, signed file in
-    the ZIP. Remaining: the self-affidavit path — when F6 is 'N/A' the OPERATOR is the attesting
-    person, and the operator's `dlpm_none_within_tenure` declaration prints on the table but is not
-    a signed Affidavit of Land History.
-  fix: >-
-    Allow a `signer_role = operator` affidavit whose materials table prefills from
-    `substance_applications`, signed and shipped the same way.
+      parcels/parcel-application-<name>.pdf §F — the manager table (the operation's row and each previous
+      manager's), each signer's statements, and the signed documents in the ZIP under parcels/affidavits/
+  note: >-
+    Closed 2026-09-09 for previous managers. Since 2026-11-11 the operation signs one for its own period
+    too (`signer_role = this_operation`): CCOF's affidavit, signed on CCOF's form and uploaded. It fills
+    the operation's row (Signed, Attachment), its statements print under the table, and once the signed
+    copy is on file it is a statement covering the operation's own period in the 36-month accounting. It
+    is never counted as a previous party's. A missing one is stated on the page.
 - ref: G (container)
   asks: 'For container systems: check ''Not applicable, all crops are grown in ground,'' OR provide a
     signed statement covering the planting date and full names of all materials used (including growing

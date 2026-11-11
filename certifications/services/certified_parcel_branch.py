@@ -501,7 +501,8 @@ def _prior_manager_item(parcel, document_name: str) -> Item:
     three is not the item (review of back #86)."""
     from certifications.services.parcel_land_history import affidavit_attachment_name
 
-    rows = list(parcel.landowner_affidavits.all())
+    # The operation's own affidavit for its own period is not a prior party's (OTCO C2 2.5's current manager).
+    rows = [a for a in parcel.landowner_affidavits.all() if getattr(a, "signer_role", "") != "this_operation"]
     if not rows:
         return Item(PRIOR_MANAGER, MISSING, f"{document_name}: none on file.")
     unsigned = [a.previous_manager_name or "unnamed" for a in rows if not affidavit_attachment_name(a)]
