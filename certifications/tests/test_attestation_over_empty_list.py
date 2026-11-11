@@ -214,6 +214,24 @@ class AttestationGateAPITests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         row = next(r for r in response.data["modules"] if r["key"] == G8)
         self.assertEqual(row["status"], "in_progress", "a green tick here is one a certifier sends back")
+        # ...and the row says WHY, so the list does not show a full count beside an open circle.
+        self.assertEqual(row["blocked_attestations"], [ATTESTATION])
+        self.assertTrue(
+            all(r["blocked_attestations"] == [] for r in response.data["modules"] if r["key"] != G8),
+            "only the module holding the gated Yes names it",
+        )
+
+    def test_a_negative_attestation_names_nothing_in_the_list_row(self):
+        self.osp.module_responses = {
+            "modules": {G8: {"answers": {ATTESTATION: {"value": False, "at": "2026-01-01T00:00:00Z"}}}}
+        }
+        self.osp.save(update_fields=["module_responses"])
+
+        response = self.client.get(
+            f"/api/companies/{self.company.id}/establishments/{self.establishment.id}/osps/{self.osp.id}/modules/"
+        )
+        row = next(r for r in response.data["modules"] if r["key"] == G8)
+        self.assertEqual(row["blocked_attestations"], [])
 
 
 class LegacyAttestationInThePacketTests(TestCase):
