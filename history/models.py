@@ -2218,8 +2218,9 @@ class ProductionEvent(CommonEvent):
         blank=True,
         null=True,
         help_text=(
-            "Regulatory classification per NOP 7 CFR 205.204. "
-            "Non-organic treated seed with prohibited substances disqualifies the crop."
+            "Regulatory classification per NOP 7 CFR 205.204. § 205.204(a)(2) sets when nonorganic "
+            "seed treated with a National List substance may be used; whether a crop may be sold "
+            "as organic is the certifying agent's decision."
         ),
     )
     seed_treatment = models.CharField(
@@ -2351,10 +2352,10 @@ class ProductionEvent(CommonEvent):
         null=True,
         help_text=(
             "Date this planting stock came under continuous organic management. 7 CFR "
-            "205.204(a)(4): PERENNIAL planting stock must be under organic management for at "
-            "least ONE YEAR before the crop it produces may be sold as organic. Without this "
-            "date the packet cannot show the year has elapsed — the grower's own nursery "
-            "invoice date is the usual answer."
+            "205.204(a)(4): nonorganically produced PERENNIAL planting stock may itself be sold, "
+            "labeled or represented as organic only after ONE YEAR of organic management. Without "
+            "this date the packet cannot show that year; the grower's own nursery invoice date is "
+            "the usual answer."
         ),
     )
 

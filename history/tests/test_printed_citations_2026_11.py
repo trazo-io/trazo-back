@@ -56,6 +56,12 @@ SEED_TEMPLATE = "certifications/management/commands/seed_osp_template.py"
 #: (finding, source, strings that must be gone, strings that must be printed). A string matches
 #: when it is a substring of one literal in the source.
 CASES = (
+    (
+        "CIT03/CIT13",
+        MODELS,
+        ("disqualifies the crop", "before the crop it produces may be sold as organic"),
+        ("may itself be sold, ", "is the certifying agent's decision"),
+    ),
     # Found by the review bot on back #377: the same errors in places the first pass missed.
     (
         "CIT10",
