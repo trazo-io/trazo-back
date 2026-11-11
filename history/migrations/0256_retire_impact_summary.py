@@ -21,7 +21,7 @@ User with CASCADE). So:
    (every TransactionTestCase flush);
 3. remove the model from the state only. The table and the content type stay.
 
-Step 2 (0257) drops the table. Reversing this one restores the foreign key and puts the model back
+Step 2 (0258) drops the table. Reversing this one restores the foreign key and puts the model back
 in the state over the table still there. The rows come back only through the DataOperationLog
 report, with the command from ff15233b; this migration does not restore data.
 """
