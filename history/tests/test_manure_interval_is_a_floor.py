@@ -210,12 +210,23 @@ class SeederAndMigrationPutTreeCropsOnTheNinetyDayFloorTests(TestCase):
             expected = crop.category not in CropType.NO_SOIL_CONTACT_CATEGORIES
             self.assertEqual(crop.has_soil_contact, expected, f"{crop.name} ({crop.category})")
 
+    def test_a_rerun_keeps_a_value_set_on_purpose(self):
+        # Review of back #371: the seeder used to write the category default on every run, which
+        # flipped a deliberate 120-day floor (ground-collected avocados) back to 90.
+        call_command("populate_usda_crop_types", "--crops-only", verbosity=0)
+        CropType.objects.filter(slug="avocados").update(has_soil_contact=True)
+        call_command("populate_usda_crop_types", "--crops-only", verbosity=0)
+        self.assertTrue(CropType.objects.get(slug="avocados").has_soil_contact)
+
     def test_the_migration_moves_existing_tree_crops_and_nothing_else(self):
         apples = _crop("Apples (migration test)", "apples_migration_test", "tree_fruit", True)
         lettuce = _crop("Lettuce (migration test)", "lettuce_migration_test", "vegetable", True)
+        # The one documented decision on a tree crop (see the migration's header) is left alone.
+        avocados = _crop("Avocados (migration test)", "avocados", "tree_fruit", True)
         migration = importlib.import_module("carbon.migrations.0055_tree_crops_have_no_soil_contact")
         migration.tree_crops_have_no_soil_contact(django_apps, None)
-        apples.refresh_from_db()
-        lettuce.refresh_from_db()
+        for crop in (apples, lettuce, avocados):
+            crop.refresh_from_db()
         self.assertFalse(apples.has_soil_contact)
         self.assertTrue(lettuce.has_soil_contact)
+        self.assertTrue(avocados.has_soil_contact)

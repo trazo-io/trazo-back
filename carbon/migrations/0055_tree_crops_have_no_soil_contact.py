@@ -7,16 +7,27 @@
 # allows apples and walnuts. The seeder now sets the flag from the category; this brings the
 # rows that already exist into line. No-op where 0037's update already holds.
 #
-# Reverse is a no-op: the earlier True values were the default, not a recorded decision.
+# Nothing records whether a True on a tree crop is the stale default or a decision. One decision
+# is documented: the Solana Verde demo seeder (history/management/commands/_solana_verde_base.py)
+# creates "avocados" with has_soil_contact=True because the fruit is collected from the ground,
+# which puts it on the 120-day floor. That row is left as it is (review of back #371). Under the
+# floor reading a False flag never blocks a 120-day record anyway; it only stops refusing 90.
+#
+# Reverse is a no-op: the earlier True values on the rows changed were the default.
 
 from django.db import migrations
 
 TREE_CATEGORIES = ("tree_fruit", "tree_nut")
+DOCUMENTED_SOIL_CONTACT_SLUGS = ("avocados",)
 
 
 def tree_crops_have_no_soil_contact(apps, schema_editor):
     CropType = apps.get_model("carbon", "CropType")
-    CropType.objects.filter(category__in=TREE_CATEGORIES, has_soil_contact=True).update(has_soil_contact=False)
+    (
+        CropType.objects.filter(category__in=TREE_CATEGORIES, has_soil_contact=True)
+        .exclude(slug__in=DOCUMENTED_SOIL_CONTACT_SLUGS)
+        .update(has_soil_contact=False)
+    )
 
 
 class Migration(migrations.Migration):
