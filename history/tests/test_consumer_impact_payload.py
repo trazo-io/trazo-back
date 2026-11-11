@@ -12,27 +12,21 @@ holding a listed certification or, failing that, scans of seasons with USDA-fact
 entries. Its tooltip promises products whose producer recorded their farming activities, so it
 now gets that count. And "recent scans" took three productions by id, not by date.
 
-`clear_impact_summaries` deletes the stored rows through `data_operations`, so history 0256 can
-retire the model; these tests hold its dry run, apply, idempotence and exact restore.
+`clear_impact_summaries` emptied the stored rows in production through `data_operations`, and
+history 0256 retired the model with it (`test_retired_impact_summary` holds that).
 """
 
-import io
 import json
-import tempfile
 from datetime import timedelta
-from pathlib import Path
 
 from django.contrib.auth import get_user_model
-from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
 from rest_framework.test import APIClient
 
-from common.models import DataOperationLog
 from company.models import Company, Establishment
 from history.models import GeneralEvent, History, HistoryScan, ProductionEvent
-from history.models_consumer import UserImpactSummary
 from product.models import Parcel
 
 URL = "/api/consumer/dashboard/impact_dashboard/"
@@ -88,7 +82,7 @@ class TheDashboardCountsLiveTests(TestCase):
                 "documented_products": 1,  # scanned twice, counted once; the others show nothing
             },
         )
-        self.assertEqual(data["quick_stats"], {"documented_products": 1, "better_choices": 1})
+        self.assertEqual(data["quick_stats"], {"documented_products": 1})
 
     def test_no_retired_field_reaches_the_wire(self):
         data = _get(self.shopper)
@@ -96,10 +90,6 @@ class TheDashboardCountsLiveTests(TestCase):
         self.assertIn("documented_products", served)  # the check read the payload
         for word in RETIRED_WORDS:
             self.assertNotIn(word, served.lower(), word)
-
-    def test_the_dashboard_stores_nothing(self):
-        _get(self.shopper)
-        self.assertFalse(UserImpactSummary.objects.exists())
 
 
 class RecentScansAreTheMostRecentTests(TestCase):
@@ -118,45 +108,3 @@ class RecentScansAreTheMostRecentTests(TestCase):
 
         recent = [scan["production_public_id"] for scan in _get(shopper)["recent_scans"]]
         self.assertEqual(recent, [str(p.public_id) for p in (productions[3], productions[2], productions[1])])
-
-
-class ClearImpactSummariesTests(TestCase):
-    def setUp(self):
-        self.user = get_user_model().objects.create_user(email="stored@example.com", password="x")
-        self.row = UserImpactSummary.objects.create(
-            user=self.user,
-            total_scans=3,
-            total_carbon_offset_kg=12.5,
-            miles_driving_offset=31.0,
-            trees_equivalent=0.6,
-            achievements_earned=["first_scan"],
-            points_earned=30,
-            first_scan_date=timezone.now() - timedelta(days=30),
-        )
-        UserImpactSummary.objects.filter(pk=self.row.pk).update(last_updated=timezone.now() - timedelta(days=200))
-        self.stored = UserImpactSummary.objects.values().get(pk=self.row.pk)
-        self.dir = Path(tempfile.mkdtemp())
-
-    def _run(self, name, *flags):
-        report = self.dir / name
-        call_command("clear_impact_summaries", "--report", str(report), *flags, stdout=io.StringIO())
-        return json.loads(report.read_text())
-
-    def test_a_dry_run_changes_nothing(self):
-        report = self._run("dry.json")
-        self.assertEqual([c["pk"] for c in report["changes"]], [self.row.pk])
-        self.assertEqual(report["changes"][0]["before"]["total_carbon_offset_kg"], 12.5)
-        self.assertTrue(UserImpactSummary.objects.filter(pk=self.row.pk).exists())
-
-    def test_apply_deletes_logs_and_a_second_run_finds_nothing(self):
-        self._run("apply.json", "--apply")
-        self.assertFalse(UserImpactSummary.objects.exists())
-        log = DataOperationLog.objects.get(operation="clear_impact_summaries", action=DataOperationLog.ACTION_APPLY)
-        self.assertEqual(log.counts["rows"], 1)
-        self.assertEqual(self._run("again.json")["changes"], [])
-
-    def test_restore_puts_every_column_back(self):
-        self._run("apply.json", "--apply")
-        log = DataOperationLog.objects.get(operation="clear_impact_summaries", action=DataOperationLog.ACTION_APPLY)
-        call_command("clear_impact_summaries", "--restore", f"log:{log.pk}", stdout=io.StringIO())
-        self.assertEqual(UserImpactSummary.objects.values().get(pk=self.row.pk), self.stored)

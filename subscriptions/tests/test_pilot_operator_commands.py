@@ -251,7 +251,6 @@ class AuthorshipClassificationTests(TestCase):
         ("notifications.NotificationChannel", "user"),
         ("certifications.OMRIProduct", "added_by"),
         ("certifications.WSDAMaterial", "added_by"),
-        ("history.UserImpactSummary", "user"),  # shopper-side model
         ("account.EmailAddress", "user"),
         ("socialaccount.SocialAccount", "user"),
         # Counted separately, scoped to the company's objects.

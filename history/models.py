@@ -5645,9 +5645,3 @@ class ProductionPlanItem(models.Model):
     @property
     def is_open(self) -> bool:
         return self.status == self.PENDING
-
-
-# Registered here, not by whichever module happens to import it. Until 2026-11-10 the consumer view
-# and serializer imported it, so a process that never loaded the consumer URLs had no such model and
-# `makemigrations` proposed deleting it. History 0256 retires it; this import goes with it.
-from .models_consumer import UserImpactSummary  # noqa: E402,F401

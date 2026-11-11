@@ -93,12 +93,8 @@ class TheModelsAndTablesAreGoneTests(TestCase):
             with self.assertRaises(LookupError, msg=name):
                 apps.get_model("history", name)
 
-    def test_the_impact_summary_stays(self):
-        """The signed-in consumer dashboard reads it; it is not part of this retirement."""
-        self.assertEqual(apps.get_model("history", "UserImpactSummary")._meta.db_table, "history_userimpactsummary")
-
     def test_no_table_is_left(self):
-        self.assertIn("history_userimpactsummary", _tables())  # the check read the real catalogue
+        self.assertIn("history_history", _tables())  # the check read the real catalogue
         self.assertEqual(set(_migration(STEP_2).TABLES) & _tables(), set())
 
     def test_both_steps_freeze_the_same_tables(self):
@@ -110,7 +106,6 @@ class TheModelsAndTablesAreGoneTests(TestCase):
             "history.UserProductComparison_products",
         }
         self.assertTrue(retired <= census.RETIRED_TABLES, retired - census.RETIRED_TABLES)
-        self.assertNotIn("history.UserImpactSummary", census.RETIRED_TABLES)
 
 
 class TheChainTests(TransactionTestCase):
