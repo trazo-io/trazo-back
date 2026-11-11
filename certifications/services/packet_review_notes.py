@@ -69,6 +69,12 @@ class DocumentNotes:
     unreadable: bool = False
 
 
+#: The cover's heading for the list. The question index stops reading the cover at it: the list quotes
+#: other documents' notes, whose words ("address", "certificate") must not read as the cover's own
+#: headings (review of back #387).
+REVIEW_NOTES_HEADING = "Before sending: review notes left in this packet"
+
+
 def collect(documents) -> list:
     """`DocumentNotes` for each document that carries a note or could not be read, in packet order.
 
@@ -261,12 +267,28 @@ def _line_below(at, segments, page_count):
 
 
 def _wraps_onto(current, below, segments) -> bool:
-    """Whether `below` continues `current` as a wrapped line rather than starting a new paragraph."""
+    """Whether `below` continues `current` as a wrapped line rather than starting a new paragraph.
+
+    A line wrapped when the next word would not have fitted: `current`'s end, a space and `below`'s first
+    word reach past the right edge its column runs to. The edge is measured on the column's OTHER lines
+    (same left edge, similar size), never on `current` itself: measured with it, a note that was the widest
+    line in its column always "wrapped", and an unrelated paragraph below was glued onto the note (review of
+    back #387). Not on the whole page either: a page number or a right-aligned header sits past the text
+    frame and would hide every real wrap. When no other line of the column reaches within half a line
+    height of `current`'s end, nothing shows that `current` is a full line, so nothing is joined: a note's
+    tail left off the cover list is better than someone else's sentence added to it.
+    """
     if current.text.endswith((".", "?", "!")):
         return False
-    right = max(s.x1 for s in segments if abs(s.x0 - current.x0) <= 1.5 and s.height <= 2 * current.height)
+    column = [
+        s.x1
+        for s in segments
+        if s is not current and s is not below and abs(s.x0 - current.x0) <= 1.5 and s.height <= 2 * current.height
+    ]
+    if not column or max(column) < current.x1 - 0.5 * current.height:
+        return False
     space = 0.25 * current.height
-    return current.x1 + space + (below.first_word_x1 - below.x0) > right - 1
+    return current.x1 + space + (below.first_word_x1 - below.x0) > max(column) - 1
 
 
 def split_notes(text: str) -> list:

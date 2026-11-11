@@ -14,7 +14,7 @@ import zipfile
 from datetime import date
 from unittest import mock
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 import openpyxl
 from pdfminer.high_level import extract_text
@@ -215,3 +215,61 @@ class CollectorTests(TestCase):
                 "since this was stated."
             ],
         )
+
+
+class ReviewOfBack387Tests(SimpleTestCase):
+    """The two defects the review of back #387 found, each pinned on the smallest input."""
+
+    @staticmethod
+    def _seg(text, x0, x1, bottom, first_word_x1=None, height=10.0):
+        from certifications.services.packet_review_notes import _Segment
+
+        return _Segment(text=text, x0=x0, x1=x1, bottom=bottom, height=height, first_word_x1=first_word_x1 or x0 + 20)
+
+    def test_a_short_note_line_never_takes_in_the_paragraph_below(self):
+        from certifications.services.packet_review_notes import _wraps_onto
+
+        full = self._seg("A full body line that runs to the right edge of the frame", 72, 540, 700)
+        note = self._seg("[REVIEW] Certificate date not recorded", 72, 300, 650)
+        below = self._seg("An unrelated paragraph starts here", 72, 400, 638)
+        self.assertFalse(_wraps_onto(note, below, [full, note, below]))
+
+    def test_a_full_note_line_still_wraps(self):
+        from certifications.services.packet_review_notes import _wraps_onto
+
+        full = self._seg("A full body line that runs to the right edge of the frame", 72, 540, 700)
+        note = self._seg("[REVIEW] A note long enough to fill the line up to the", 72, 530, 650)
+        below = self._seg("margin and carry on", 72, 160, 638, first_word_x1=110)
+        self.assertTrue(_wraps_onto(note, below, [full, note, below]))
+
+    def test_a_note_that_is_the_widest_line_of_its_column_does_not_take_in_the_next_paragraph(self):
+        # The case the review described: measured with the note line itself, the edge was the note's
+        # own end and every line below "wrapped".
+        from certifications.services.packet_review_notes import _wraps_onto
+
+        other = self._seg("A short meta line", 72, 250, 700)
+        note = self._seg("[REVIEW] Certificate date not recorded", 72, 300, 650)
+        below = self._seg("An unrelated meta paragraph", 72, 200, 638)
+        self.assertFalse(_wraps_onto(note, below, [other, note, below]))
+
+    def test_with_no_other_line_to_measure_nothing_is_joined(self):
+        from certifications.services.packet_review_notes import _wraps_onto
+
+        note = self._seg("[REVIEW] The only line in its column", 72, 300, 650)
+        below = self._seg("Something else", 72, 200, 638)
+        self.assertFalse(_wraps_onto(note, below, [note, below]))
+
+    def test_the_question_index_stops_reading_the_cover_at_the_list(self):
+        from certifications.services.packet_review_notes import REVIEW_NOTES_HEADING
+        from certifications.services.question_index import _cover_without_review_notes, _norm
+
+        pages = [
+            _norm("Operation Legal name: Render Co Address: OR"),
+            _norm(f"Plan review ... {REVIEW_NOTES_HEADING} [REVIEW] The operation's address on file has no zip"),
+            _norm("[REVIEW] another address note"),
+        ]
+        cut = _cover_without_review_notes(pages)
+        self.assertEqual(len(cut), 3, "page numbers are kept")
+        self.assertIn("address", cut[0])
+        self.assertNotIn("address", cut[1])
+        self.assertEqual(cut[2], "")

@@ -3156,9 +3156,9 @@ def _review_notes_cover_flowables(documents, styles) -> list:
     OV-PK-W07, OV-PK-C07, OV-PK-O08: a first orchard packet carried 17 `[REVIEW]` lines across its files
     and nothing said where). `documents` is `packet_review_notes.collect()` over the documents built
     before the cover. The notes stay in their documents; this says where they are."""
-    from certifications.services.packet_review_notes import printable
+    from certifications.services.packet_review_notes import REVIEW_NOTES_HEADING, printable
 
-    out = [Spacer(1, 8), Paragraph("Before sending: review notes left in this packet", styles["header"])]
+    out = [Spacer(1, 8), Paragraph(REVIEW_NOTES_HEADING, styles["header"])]
     found = [d for d in documents if d.notes]
     unreadable = [d for d in documents if d.unreadable]
     total = sum(len(d.notes) for d in found)
@@ -5757,18 +5757,22 @@ def generate_osp_packet(osp, scope=None) -> bytes:
     manifest = build_manifest(osp)
     out = io.BytesIO()
     # The ZIP's entries, in the order they are written at the end. The cover is the first entry but is
-    # rendered after the documents it lists the review notes of, so its place is held here.
-    entries = [["00-cover.pdf", None]]
+    # rendered after the documents it lists the review notes of, so `write(..., first=True)` puts it
+    # at the front when it is ready.
+    entries = []
     with (
         scoped(scope),
         building(manifest),
         recording() as recorder,
     ):
 
-        def write(path, data, filed=False):
+        def write(path, data, filed=False, first=False):
             # Every document is kept by path for 06, the question index, which is built last and
             # reads them back to say where each form and question is (T24).
-            entries.append([path, data])
+            if first:
+                entries.insert(0, [path, data])
+            else:
+                entries.append([path, data])
             recorder.documents[path] = data
             if filed:
                 recorder.filed.add(path)
@@ -5830,14 +5834,12 @@ def generate_osp_packet(osp, scope=None) -> bytes:
         # (overall review 2026-11, OV-PK-W07). It is kept for 06 like the others, and still written first.
         from certifications.services.packet_review_notes import collect
 
-        cover = _packet_cover_pdf(osp, review_notes=collect(entries[1:]))
-        entries[0][1] = cover
-        recorder.documents["00-cover.pdf"] = cover
+        write("00-cover.pdf", _packet_cover_pdf(osp, review_notes=collect(list(entries))), first=True)
 
         # 06, the agent-ordered index, built last because it cites the pages above (the cover's included).
         from certifications.services.question_index import index_pdf
 
-        entries.append(["06-question-index.pdf", index_pdf(osp, recorder)])
+        write("06-question-index.pdf", index_pdf(osp, recorder))
 
         # Every operator file (maps, affidavits, receipts, the files uploaded for a named
         # attachment, a sale's source documents, lot tags and label photos) was read once, before
