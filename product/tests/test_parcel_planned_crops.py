@@ -10,6 +10,7 @@ multi-crop parcel could not be split, and the total printed only as the drawn ar
 import io
 from datetime import date
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -230,3 +231,165 @@ class TheRegisterReadsTheTable(_Parcel):
         self.osp.save(update_fields=["certifier_name"])
         self.assertEqual(self.row("otco", "C2", "2.1-9").state, "answered")
         self.assertEqual(self.row("otco", "C2", "2.1-10").state, "answered")
+
+
+# What identifies an orchard planting (overall review 2026-11, OV-FJ-C06; approved 2026-11-04 as "an orchard block
+# table under each parcel"). A block is one row: block name, rootstock, year planted, bearing status, all optional,
+# all the operator's. The block is a free-text name, the one written as "block" on activities; nothing links to it.
+
+
+class OrchardColumnsOnTheRoute(_Parcel):
+    def test_the_orchard_fields_round_trip(self):
+        r = self.client.post(
+            self.url(),
+            {
+                "crop": "Apples",
+                "variety": "Honeycrisp",
+                "acres": "4",
+                "block_name": "  Block  3 ",
+                "rootstock": " M.9  T337 ",
+                "year_planted": "2015",
+                "bearing_status": "bearing",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 201, r.content)
+        body = r.json()
+        # The block name is normalised as `CommonEvent.block_id` is, so it compares equal to the activities' block.
+        self.assertEqual(
+            (body["block_name"], body["rootstock"], body["year_planted"], body["bearing_status"]),
+            ("Block 3", "M.9 T337", 2015, "bearing"),
+        )
+        crop = ParcelPlannedCrop.objects.get()
+        self.assertEqual((crop.parcel, crop.block_name, crop.year_planted), (self.parcel, "Block 3", 2015))
+        got = self.client.get(self.url(f"{crop.id}/")).json()
+        self.assertEqual((got["block_name"], got["bearing_status"]), ("Block 3", "bearing"))
+
+        # Blank is "not stated": the form posts every field it renders.
+        r = self.client.patch(
+            self.url(f"{crop.id}/"),
+            {"block_name": "", "rootstock": "", "year_planted": "", "bearing_status": ""},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        crop.refresh_from_db()
+        self.assertEqual((crop.block_name, crop.rootstock, crop.year_planted, crop.bearing_status), ("", "", None, ""))
+
+    def test_a_row_without_the_orchard_fields_still_saves(self):
+        r = self.client.post(self.url(), {"crop": "Carrots", "acres": "2"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(
+            (r.json()["block_name"], r.json()["year_planted"], r.json()["bearing_status"]),
+            ("", None, ""),
+        )
+
+    def test_an_implausible_year_or_an_unknown_bearing_status_is_refused(self):
+        this_year = timezone.localdate().year
+        for year in (this_year + 1, 1899):
+            r = self.client.post(self.url(), {"crop": "Apples", "year_planted": year}, format="json")
+            self.assertEqual(r.status_code, 400, (year, r.content))
+            self.assertIn("year_planted", r.json())
+        r = self.client.post(self.url(), {"crop": "Apples", "bearing_status": "partly"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("bearing_status", r.json())
+        self.assertFalse(ParcelPlannedCrop.objects.exists())
+        r = self.client.post(self.url(), {"crop": "Apples", "year_planted": this_year}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+
+    def test_another_tenant_cannot_write_the_orchard_fields(self):
+        crop = self.crop(block_name="Block 3", bearing_status="bearing")
+        outsider = User.objects.create_user(email="orchard-outsider@crops.test", password="x")
+        WorksIn.objects.create(user=outsider, company=Company.objects.create(name="Other"), role=WorksIn.COMPANY_ADMIN)
+        self.client.force_authenticate(outsider)
+        r = self.client.patch(self.url(f"{crop.id}/"), {"block_name": "Mine", "bearing_status": ""}, format="json")
+        self.assertIn(r.status_code, (403, 404))
+        r = self.client.post(self.url(), {"crop": "Pears", "block_name": "Mine"}, format="json")
+        self.assertIn(r.status_code, (403, 404))
+        crop.refresh_from_db()
+        self.assertEqual((crop.block_name, crop.bearing_status), ("Block 3", "bearing"))
+        self.assertEqual(ParcelPlannedCrop.objects.count(), 1)
+
+
+class YearPlantedModelValidation(_Parcel):
+    def test_a_future_year_is_refused_by_the_model(self):
+        this_year = timezone.localdate().year
+        with self.assertRaises(ValidationError) as caught:
+            ParcelPlannedCrop(parcel=self.parcel, crop="Apples", year_planted=this_year + 1).full_clean()
+        self.assertIn("year_planted", caught.exception.message_dict)
+        with self.assertRaises(ValidationError):
+            ParcelPlannedCrop(parcel=self.parcel, crop="Apples", year_planted=1899).full_clean()
+        # This year, 1900 and blank are all accepted.
+        for year in (this_year, 1900, None):
+            ParcelPlannedCrop(parcel=self.parcel, crop="Apples", year_planted=year).full_clean()
+
+
+class TheOrchardColumnsPrintInSectionA(_Parcel):
+    def test_the_columns_print_when_a_row_states_one(self):
+        from certifications.services.parcel_application_lines import ORCHARD_CROP_COLUMNS, planned_crop_table
+
+        self.crop(
+            variety="Honeycrisp", block_name="Block 3", rootstock="M.9", year_planted=2015, bearing_status="bearing"
+        )
+        self.crop(block_name="Block 4", bearing_status="non_bearing", year_planted=2024, acres=2)
+        self.crop(crop="Pears", acres=3)
+        header, _widths, rows = planned_crop_table(self.parcel)
+        self.assertEqual(header, ORCHARD_CROP_COLUMNS)
+        cells = [[c[0] for c in row] for row, _notes in rows]
+        self.assertEqual(
+            cells,
+            [
+                ["Apples", "Block 3", "Honeycrisp", "M.9", "2015", "Bearing", "Not stated", "Not stated"],
+                ["Apples", "Block 4", "Not stated", "Not stated", "2024", "Not yet bearing", "Not stated", "2"],
+                # A row on an orchard parcel that states none of them prints "Not stated" in each.
+                ["Pears", "Not stated", "Not stated", "Not stated", "Not stated", "Not stated", "Not stated", "3"],
+            ],
+        )
+        page = self.page()
+        for words in ("Block", "Rootstock", "Year planted", "Bearing status", "Block 3", "M.9", "2015"):
+            self.assertIn(words, page)
+        self.assertIn("Not yet bearing", page)
+        # Three Apples rows would be ambiguous; the review line names the block.
+        self.assertIn("[REVIEW] No acres are given for: Apples (Block 3).", page)
+
+    def test_a_blank_bearing_status_prints_not_stated_never_not_yet_bearing(self):
+        from certifications.services.parcel_application_lines import planned_crop_table
+
+        self.crop(block_name="Block 3", acres=4)
+        _header, _widths, rows = planned_crop_table(self.parcel)
+        self.assertEqual(rows[0][0][5], ["Not stated"])
+        page = self.page()
+        self.assertIn("Bearing status", page)
+        self.assertNotIn("Not yet bearing", page)
+        self.assertNotIn("Non-bearing", page)
+
+    def test_a_parcel_with_no_orchard_field_keeps_the_four_columns(self):
+        from certifications.services.parcel_application_lines import PLANNED_CROP_COLUMNS, planned_crop_table
+
+        self.crop(variety="Nantes", acres=2)
+        header, widths, rows = planned_crop_table(self.parcel)
+        self.assertEqual(header, PLANNED_CROP_COLUMNS)
+        self.assertEqual(len(widths), 4)
+        self.assertEqual(len(rows[0][0]), 4)
+        page = self.page()
+        for words in ("Rootstock", "Year planted", "Bearing status"):
+            self.assertNotIn(words, page)
+
+
+class TheActivityFormsOfferTheBlockNames(_Parcel):
+    """The activity form's block chips (`known_block_ids`) offer the crop table's block names. Offered, never
+    filled in: `CommonEvent.block_id` stays free text and nothing links it to a crop-table row."""
+
+    def test_a_crop_table_block_is_offered_on_its_own_parcel_only(self):
+        from history.models import GeneralEvent
+        from history.services.block_ids import known_block_ids_for_parcel
+
+        self.crop(block_name="Block 7")
+        other = Parcel.objects.create(name="Lower Bench", establishment=self.est, area=2.0)
+        ParcelPlannedCrop.objects.create(parcel=other, crop="Pears", block_name="River Block")
+        season = History.objects.create(name="Apples 2026", parcel=self.parcel, start_date=timezone.now())
+        for _ in range(2):
+            GeneralEvent.objects.create(history=season, name="Mow", date=timezone.now(), block_id="Block 3")
+        # The crop table's "block 3" is the same block as the activities' "Block 3": one chip, their spelling.
+        self.crop(block_name="block 3")
+        self.assertEqual(known_block_ids_for_parcel(self.parcel), ["Block 3", "Block 7"])
+        self.assertEqual(known_block_ids_for_parcel(other), ["River Block"])

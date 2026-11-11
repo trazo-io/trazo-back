@@ -40,11 +40,14 @@ items:
     - parcel_application.block_identifiers
     models:
     - product.Parcel.application_answers
+    - product.ParcelPlannedCrop.block_name
     prints: >-
       parcels/parcel-application-<name>.pdf §A
   note: >-
     Asked on page A since 2026-11-10. Whether the map shows permanent identifiers is judged on the map
-    row.
+    row. Since 2026-11-11 each row of the A8 crop table can also name its block (with rootstock, year
+    planted and bearing status), printed in the §A table when any row on the parcel states one; the
+    parcel-level answer stays the one that covers this row.
 - ref: A3
   asks: Street address; City; County; State/Province; Country.
   status: covered
