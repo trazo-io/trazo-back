@@ -53,7 +53,14 @@ class EmissionFactorsRegistryTest(TestCase):
             factor = emission_factors.get_fertilizer_factor(nutrient)
             self.assertIsInstance(factor["value"], (int, float))
             self.assertGreater(factor["value"], 0)
-            self.assertIn("EPA", factor["source"])
+            # A published factor names its body; a Trazo estimate says it is one. Phosphorus and
+            # potassium are estimates: until 2026-11-11 this demanded "EPA" in their source too, and
+            # they carried an EPA attribution the EPA Hub does not support.
+            if factor.get("provenance") == "internal_estimate":
+                self.assertIn("Trazo", factor["source"])
+                self.assertNotIn("EPA", factor["source"])
+            else:
+                self.assertIn("EPA", factor["source"])
 
     def test_all_fuel_factors_present(self):
         """Test that all required fuel factors are present"""
