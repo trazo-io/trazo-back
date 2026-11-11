@@ -1,3 +1,6 @@
+import math
+import re
+
 from django.utils import timezone
 
 from dateutil.relativedelta import relativedelta
@@ -1827,10 +1830,64 @@ class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelS
             "landowner_signed_date",
             "signed_document",
             "notes",
+            # CCOF ORGB49 Affidavit B, C; WSDA AGR 2262 5a, 5b, 6, 6a and the attestation block.
+            "signer_basis",
+            "signer_basis_other",
+            "signer_title",
+            "signer_company",
+            "signer_email",
+            "last_inspection_date",
+            "portion_remains",
+            "acres_remaining",
+            "treated_seed_planted",
+            "treated_seed_detail",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        # The form posts every field it renders: a blank date or acreage is "not stated", not a format error.
+        # `.get`, not `.copy`: a list body has .copy() too, and its .get() call raised a 500 where DRF
+        # answers a non-object body with a 400 (review of back PR 394).
+        if hasattr(data, "get") and hasattr(data, "copy"):
+            data = data.copy()
+            for key in ("last_inspection_date", "acres_remaining"):
+                if data.get(key) == "":
+                    data[key] = None
+        return super().to_internal_value(data)
+
+    def validate_yearly_history(self, rows):
+        """Each row's optional `material_type`, `period_from` / `period_to` ("YYYY-MM") and `acres`.
+
+        Refused rather than stored when malformed: these print on the certifier's page as stated."""
+        if not isinstance(rows, list):
+            raise serializers.ValidationError("A list of rows is expected.")
+        from certifications.services.parcel_land_history import AFFIDAVIT_MATERIAL_TYPES
+
+        months = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                raise serializers.ValidationError(f"Row {index}: an object is expected.")
+            kind = row.get("material_type") or ""
+            if kind and kind not in AFFIDAVIT_MATERIAL_TYPES:
+                raise serializers.ValidationError(f"Row {index}: unknown material type {kind!r}.")
+            start, end = row.get("period_from") or "", row.get("period_to") or ""
+            for value in (start, end):
+                if value and not months.match(str(value)):
+                    raise serializers.ValidationError(f"Row {index}: months are written YYYY-MM.")
+            if start and end and str(end) < str(start):
+                raise serializers.ValidationError(f"Row {index}: the last month comes before the first.")
+            acres = row.get("acres")
+            if acres not in (None, ""):
+                try:
+                    number = float(str(acres))
+                except ValueError:
+                    raise serializers.ValidationError(f"Row {index}: acres must be a number.")
+                # float() takes "NaN" and "Infinity", and both pass `<= 0` (review of back PR 394).
+                if not math.isfinite(number) or number <= 0 or "," in str(acres):
+                    raise serializers.ValidationError(f"Row {index}: acres must be a plain number above zero.")
+        return rows
 
     def get_attestation_default(self, obj):
         """
@@ -1849,6 +1906,21 @@ class LandownerAffidavitSerializer(CallerScopedRelatedFields, serializers.ModelS
         """
         if "attestation_text" in attrs and not (attrs.get("attestation_text") or "").strip():
             attrs["attestation_text"] = LandownerAffidavit.ATTESTATION_TEXT
+        instance = self.instance
+
+        def current(key):
+            return attrs[key] if key in attrs else getattr(instance, key, None)
+
+        # A detail kept under an answer that no longer asks for it would print beside the wrong answer.
+        if current("signer_basis") != "other":
+            attrs["signer_basis_other"] = ""
+        if current("portion_remains") != "yes":
+            attrs["acres_remaining"] = None
+        if current("treated_seed_planted") != "yes":
+            attrs["treated_seed_detail"] = ""
+        acres = current("acres_remaining")
+        if acres is not None and acres <= 0:
+            raise serializers.ValidationError({"acres_remaining": "Acres must be more than zero, or left blank."})
         return attrs
 
 

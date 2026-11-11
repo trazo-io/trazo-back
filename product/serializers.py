@@ -535,7 +535,9 @@ class CreateParcelSerializer(CallerScopedRelatedFields, USContactFieldsMixin, Mo
         could set a pump test but never clear one, because the only way multipart can express
         "empty" is an empty string, which DRF rejects for Decimal and Date fields.
         """
-        if hasattr(data, "copy"):
+        # `.get`, not `.copy`: a list body has .copy() too, and its .get() call raised a 500 where DRF
+        # answers a non-object body with a 400 (review of back PR 394).
+        if hasattr(data, "get") and hasattr(data, "copy"):
             data = data.copy()
             for field in self._BLANKABLE_MULTIPART_FIELDS:
                 if field in data and data.get(field) in ("", "null", None):
@@ -807,7 +809,9 @@ class ParcelPlannedCropSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         # The form posts every field it renders; a blank date, acreage or year is "not stated", not a format error.
-        if hasattr(data, "copy"):
+        # `.get`, not `.copy`: a list body has .copy() too, and its .get() call raised a 500 where DRF
+        # answers a non-object body with a 400 (review of back PR 394).
+        if hasattr(data, "get") and hasattr(data, "copy"):
             data = data.copy()
             for key in ("expected_harvest", "acres", "year_planted"):
                 if data.get(key) == "":
@@ -886,7 +890,9 @@ class ParcelCropHistorySerializer(CallerScopedRelatedFields, serializers.ModelSe
         """
         from history.serializers import coerce_blank_nullable_dates
 
-        if hasattr(data, "copy"):
+        # `.get`, not `.copy`: a list body has .copy() too, and its .get() call raised a 500 where DRF
+        # answers a non-object body with a 400 (review of back PR 394).
+        if hasattr(data, "get") and hasattr(data, "copy"):
             data = data.copy()
             coerce_blank_nullable_dates(self, data)
             # A month input sends "2024-03"; the period is stored as the first day of the month.

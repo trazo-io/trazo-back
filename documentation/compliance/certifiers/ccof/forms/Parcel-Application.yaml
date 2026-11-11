@@ -551,44 +551,49 @@ items:
 - ref: Affidavit A
   asks: 'This affidavit pertains to the following parcel: name; block/lot; acreage; street address; city/county/state/country;
     and geographic coordinates or APN/Section-Township-Range.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
-    - certifications.models.LandownerAffidavit (field_name, field_acres, parcel_legal_description)
-    prints: history/audit-export dossier (field-history affidavit table); count only on the parcel page
-  gap: '`field_name`, `field_acres`, and a free-text `parcel_legal_description` (which can hold APN/STR/coordinates)
-    exist; there is no block/lot field and no address/city/county/state/country fields at all, and none
-    of it is prefilled from the `Parcel` it concerns.'
-  fix: Prefill §A from the `Parcel` (name, acres, APN/STR, address, county) as suggestions the signer
-    confirms; add a `parcel_address` text field.
+    - certifications.models.LandownerAffidavit.field_name
+    - certifications.models.LandownerAffidavit.field_acres
+    - certifications.models.LandownerAffidavit.parcel_legal_description
+    - product.Parcel
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F; §A for the parcel the affidavit hangs on
+  note: >-
+    An affidavit belongs to one parcel, and prints on that parcel's page, whose §A carries the name,
+    block numbers, acreage to certify, address with city, county, state and country, APN or S/T/R and
+    the boundary centre. Since 2026-11-11 the parcel page prints, under the manager table, what each
+    signer stated ('Stated by <name>'), and their own materials table. The signer's own site name,
+    acreage and legal description print there as they stated them.
 - ref: Affidavit B
   asks: 'I have direct and comprehensive knowledge of the activities and materials applied to the parcel
     from [date] through [date]. I have this knowledge because: I owned the parcel / I managed the parcel
     / Other (describe).'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
     - certifications.models.LandownerAffidavit.management_period_start
     - certifications.models.LandownerAffidavit.management_period_end
-    - certifications.models.LandownerAffidavit.landowner_name
-    prints: history/audit-export dossier
-  gap: The knowledge period (`management_period_start`/`management_period_end`) is captured. The basis
-    of knowledge — owned, managed, or other — is not an explicit field; a reader can only infer it from
-    whether `landowner_name` differs from the signer, which is a guess, not an attestation.
-  fix: Add `signer_basis` {owner, manager, other} and `signer_basis_other`; print it.
+    - certifications.models.LandownerAffidavit.signer_basis
+    - certifications.models.LandownerAffidavit.signer_basis_other
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    The period prints in the manager table. The basis of knowledge (owned / managed / other, with the
+    description) is its own field since 2026-11-11, no longer inferred from the landowner name. Since
+    2026-11-11 the parcel page prints, under the manager table, what each signer stated ('Stated by
+    <name>'), and their own materials table.
 - ref: Affidavit C
   asks: 'Attestation of material use during the knowledge period (excluding anything more than 3 years
     ago): no materials of any kind were used / all materials used are listed in the Table of Materials
     Used / all materials used are listed on attached pages. Signature block: Name, Title, Company, Email,
     Phone, Signature, Date; and the 18 U.S.C. § 1001 false-statement notice.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
@@ -596,23 +601,31 @@ items:
     - certifications.models.LandownerAffidavit.no_materials_applied
     - certifications.models.LandownerAffidavit.attestation_text
     - certifications.models.LandownerAffidavit.signed_document
-    prints: history/audit-export dossier
-  gap: The tri-state attestation (`no_materials_applied` = True/False/unanswered) is honestly modeled
-    and the scanned signature upload exists, along with name, phone and signed date — but Title, Company
-    and Email have no fields, and the stored attestation text is MOFGA's wording rather than CCOF's own
-    (CCOF does accept alternative documents, so this is not disqualifying by itself).
-  fix: Add `signer_title`, `signer_company`, `signer_email`; optionally store a `attestation_template
-    = 'ccof'` variant carrying CCOF's exact wording when the certifier is CCOF.
+    - certifications.models.LandownerAffidavit.signer_title
+    - certifications.models.LandownerAffidavit.signer_company
+    - certifications.models.LandownerAffidavit.signer_email
+    - certifications.models.LandownerAffidavit.previous_manager_phone
+    - certifications.models.LandownerAffidavit.previous_manager_signed_date
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    The tri-state no-materials answer gives C's first two choices (none / listed); a signed copy
+    attached is the third (attached pages). Title, company and email are fields since 2026-11-11, beside
+    name, phone and the signed date. The stored attestation text defaults to Trazo's standard wording;
+    the signed copy carries CCOF's own, and CCOF accepts alternative documents with the same
+    information. Since 2026-11-11 the parcel page prints, under the manager table, what each signer
+    stated ('Stated by <name>'), and their own materials table.
 - ref: Affidavit D
   asks: 'Table of Materials Used: Full Product Name, Full Manufacturer Name, Application Date(s), Type.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     models:
-    - certifications.models.LandownerAffidavit (yearly_history)
-    prints: history/audit-export dossier
-  gap: '`yearly_history` rows carry year, land use, product (inputs), manufacturer and application date
-    — three of the four columns. There is no `Type` column (fertilizer / herbicide / seed treatment, etc.).'
-  fix: Add `material_type` (choices mirroring CCOF's list) to the row; print it.
+    - certifications.models.LandownerAffidavit.yearly_history
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F
+  note: >-
+    Each row carries product, manufacturer, application date and, since 2026-11-11, the Type
+    (`material_type`: fertilizer, pest or disease control, herbicide, compost or manure, seed treatment,
+    adjuvant, other). The signer's table prints on the parcel page under 'Stated by <name>'.
