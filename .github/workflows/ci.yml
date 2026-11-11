@@ -666,6 +666,11 @@ jobs:
       # sibling repo.
       # 2026-11-11: the same module now also holds history 0258, which drops the table: refuses a
       # row, waits at most 5 s for a lock, and reverses to the table as 0256 left it.
+      #
+      # 2026-11-11: common.tests.test_migration_fit joins. scripts/migration_fit.py (run by
+      # migration-fit.yml on every push to main) fails an open PR whose new migrations build on an
+      # older migration than main's latest: the 0256 pair replayed, the 0248 merge, and the shapes
+      # it must not flag. It reads only this repo (scripts/, history/migrations/).
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -896,6 +901,7 @@ jobs:
             history.tests.test_retired_shopper_models \
             history.tests.test_consumer_impact_payload \
             history.tests.test_retired_impact_summary \
+            common.tests.test_migration_fit \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \
