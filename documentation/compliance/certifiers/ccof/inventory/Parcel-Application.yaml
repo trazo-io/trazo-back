@@ -17,6 +17,11 @@ overrides:
   ref: B
   kind: instruction
   reason: Section B is an explanation of CCOF's transitional status; it asks nothing.
+- op: set
+  ref: A2
+  optional: true
+  reason: ORGB49 R11 prints "Block/lot numbers or greenhouse/shadehouse numbering, if applicable"; a parcel
+    with no blocks, lots or houses has nothing to give.
 - op: rename
   ref: G
   to: G (currently certified)
@@ -68,6 +73,7 @@ items:
 - ref: A2
   text: 'Block/lot numbers or greenhouse/shadehouse numbering, if applicable:'
   kind: question
+  optional: true
 - ref: A3
   text: 'Street address:'
   kind: question
