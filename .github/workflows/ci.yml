@@ -472,6 +472,10 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-11: product.tests.test_parcel_planned_crops joins. The crops a parcel grows now or is planned to grow,
+      # with acres (CCOF ORGB49 A7, A8; WSDA AGR 2264 ref 8; OTCO C2 2.1 9-10): the nested route's tenancy, the
+      # section A table and its review lines, and the register rows. Builds its own farms; no sibling repo.
+      #
       # 2026-11-10: certifications.tests.test_parcel_location_status joins. Parcel location (CCOF ORGB49 A2, A3, A5, A9;
       # WSDA AGR 2264 ref 2; OTCO C2 2.1), the status applied for (ref 4, 4a), export per site (ref 9) and treated
       # seed planted on the parcel (ref 11, 11a). Builds its own farms; no sibling repo.
@@ -803,6 +807,7 @@ jobs:
             certifications.tests.test_facility_pest_scope \
             certifications.tests.test_storage_detail \
             certifications.tests.test_parcel_location_status \
+            product.tests.test_parcel_planned_crops \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

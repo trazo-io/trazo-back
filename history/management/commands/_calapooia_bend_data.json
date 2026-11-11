@@ -4788,7 +4788,8 @@
     "treated_lumber_present": false,
     "container_production": false,
     "full_prior_site_area": "entire",
-    "site_tenure": "own"
+    "site_tenure": "own",
+    "acres_to_certify": "12.0"
    },
    "area": 5.0586,
    "buffer_zones": [
@@ -4918,7 +4919,8 @@
     "treated_lumber_present": false,
     "container_production": false,
     "full_prior_site_area": "entire",
-    "site_tenure": "own"
+    "site_tenure": "own",
+    "acres_to_certify": "18.0"
    },
    "area": 7.5272,
    "buffer_zones": [
@@ -5047,7 +5049,8 @@
     "treated_lumber_present": false,
     "container_production": false,
     "full_prior_site_area": "entire",
-    "site_tenure": "own"
+    "site_tenure": "own",
+    "acres_to_certify": "13.5"
    },
    "area": 5.6656,
    "buffer_zones": [
@@ -5178,7 +5181,8 @@
     "landowner_email": "halvorsen.trust@example.com",
     "landowner_phone": "541-555-0118",
     "landowner_address": "31200 River Rd, Tangent, OR",
-    "lease_management_detail": "Leased since March 2012, on a written lease renewed every five years (current term 2022 to 2027). Calapooia Bend Farm is responsible for day-to-day management."
+    "lease_management_detail": "Leased since March 2012, on a written lease renewed every five years (current term 2022 to 2027). Calapooia Bend Farm is responsible for day-to-day management.",
+    "acres_to_certify": "11.0"
    },
    "area": 4.5325,
    "buffer_zones": [
@@ -5305,7 +5309,8 @@
     "treated_lumber_present": false,
     "container_production": false,
     "full_prior_site_area": "entire",
-    "site_tenure": "own"
+    "site_tenure": "own",
+    "acres_to_certify": "16.0"
    },
    "area": 6.6369,
    "buffer_zones": [
@@ -5432,7 +5437,8 @@
     "treated_lumber_present": false,
     "container_production": false,
     "full_prior_site_area": "entire",
-    "site_tenure": "own"
+    "site_tenure": "own",
+    "acres_to_certify": "14.0"
    },
    "area": 5.7465,
    "buffer_zones": [
@@ -24979,6 +24985,64 @@
    "rinsed": null,
    "rinse_detail": "",
    "notes": ""
+  }
+ ],
+ "parcel_planned_crops": [
+  {
+   "#parcel": 297,
+   "_id": 900,
+   "crop": "Blueberries",
+   "variety": "Duke",
+   "expected_harvest": "2027-06-21",
+   "acres": "12.0"
+  },
+  {
+   "#parcel": 298,
+   "_id": 901,
+   "crop": "Spinach",
+   "variety": "",
+   "expected_harvest": "2027-05-10",
+   "acres": "18.0"
+  },
+  {
+   "#parcel": 298,
+   "_id": 902,
+   "crop": "Carrots",
+   "variety": "",
+   "expected_harvest": "2026-10-05",
+   "acres": "18.0"
+  },
+  {
+   "#parcel": 299,
+   "_id": 903,
+   "crop": "Blueberries",
+   "variety": "Draper",
+   "expected_harvest": "2027-07-05",
+   "acres": "13.5"
+  },
+  {
+   "#parcel": 300,
+   "_id": 904,
+   "crop": "Blueberries",
+   "variety": "Liberty",
+   "expected_harvest": "2027-07-19",
+   "acres": "11.0"
+  },
+  {
+   "#parcel": 301,
+   "_id": 905,
+   "crop": "Carrots",
+   "variety": "",
+   "expected_harvest": "2026-09-07",
+   "acres": "16.0"
+  },
+  {
+   "#parcel": 302,
+   "_id": 906,
+   "crop": "Onions",
+   "variety": "",
+   "expected_harvest": "2026-08-17",
+   "acres": "14.0"
   }
  ]
 }

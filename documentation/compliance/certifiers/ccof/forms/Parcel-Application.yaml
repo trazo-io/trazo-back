@@ -117,32 +117,34 @@ items:
 - ref: A7
   asks: Parcel acreage — total acres to be certified organic at this location, excluding non-production
     areas (homes, parking, post-harvest handling/storage).
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: 'each parcel''s application under parcels/: Section E'
+    questions:
+    - parcel_application.acres_to_certify
     models:
     - product.Parcel.area
-    prints: parcels/parcel-application-<name>.pdf §E (should also be §A)
-  gap: '`Parcel.area` (stored in hectares, displayed in both units) is exactly the production-only figure
-    CCOF wants, but it prints under §E (''Mapped area'') rather than §A.'
-  fix: Duplicate the acreage line into §A as 'Parcel acreage (to be certified).'
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Asked per parcel since 2026-11-11, as its own figure: the parcel area on file can hold homes,
+    parking or packing areas the form leaves out. §A prints it with the parcel area on file beside it,
+    and a [REVIEW] line when it exceeds that area or when the crops listed add up to more.
 - ref: A8
   asks: 'Table: crop, and # of acres, for each crop currently grown or planned on this parcel.'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
+    questions:
+    - parcel_application.crop_table
     models:
-    - product.Parcel.product
-    - history.models.History
-    prints: —
-  gap: 'Crop names appear in the §F land-history rows and the Field and Crop Information workbook, but
-    no per-crop acreage field exists anywhere — `History` carries no area, and `Parcel.product` is a single
-    FK. A single-crop parcel can imply the whole parcel''s acreage, but a multi-crop parcel cannot be
-    split (the pilot''s Bottom Ground A: spinach then carrots in the same year).'
-  fix: Add a `crops_planned` rows answer (crop, acres) on page A, prefilled with crop names from open
-    seasons and acres left for the operator to confirm; validate the sum against parcel acreage; print
-    as a table in §A and feed the workbook's crop cell.
+    - product.ParcelPlannedCrop
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    A table of rows the operator types (`ParcelPlannedCrop`: crop, variety, expected harvest, acres)
+    since 2026-11-11, printed in §A with 'Not stated' for a blank column and a [REVIEW] line for a crop
+    with no acres. Crops of seasons still open on the parcel are offered in the app as a starting point
+    and named in a [REVIEW] line when the list leaves them out; nothing is added to the table unasked.
 - ref: A9
   asks: Is production at this parcel in containers (not in the ground)? Yes → complete or update G3.1
     Container & Greenhouse/Shadehouse Production.
