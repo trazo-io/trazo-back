@@ -327,6 +327,9 @@ class PlantingNopGapTests(TestCase):
         )
         self.assertIn("205.204(a)(4)", text)
         self.assertIn("UNDER the 12-month minimum", text)
+        # 2026-11 citation review: (a)(4) governs selling the STOCK as organic, not the crop.
+        self.assertIn("governs the planting stock itself", text)
+        self.assertNotIn("crop may not be sold as organic", text)
 
     def test_annual_transplants_are_not_judged_against_the_perennial_year(self):
         """§ 205.204(a)(4) governs perennial planting stock, not annual seedlings.

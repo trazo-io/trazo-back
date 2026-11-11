@@ -112,7 +112,8 @@ class Command(BaseCommand):
         has_ofpp = est.fraud_prevention_plan_uploaded
         monitoring = (
             "Monitoring practices: (farmer to complete — describe cadence and methods).\n\n"
-            "Fraud Prevention Plan (7 CFR 205.201(a)(3), SOE rule effective 2024-03-19):\n"
+            "Fraud Prevention Plan (7 CFR 205.201(a)(3); Strengthening Organic Enforcement rule, "
+            "88 FR 3548, effective 2023-03-20, compliance date 2024-03-19):\n"
             + (
                 f"  - Uploaded on {est.fraud_prevention_plan_date} by "
                 f"{est.ofpp_responsible_person or '(responsible person not set)'}.\n"

@@ -1516,7 +1516,9 @@ class ChemicalEvent(CommonEvent):
         help_text="Which rows/blocks/area were treated, when applied_scope is 'part'",
     )
 
-    # EPA Worker Protection Standard (WPS) Compliance Fields - 40 CFR 170.309
+    # Pesticide application fields. The EPA Worker Protection Standard's application record is
+    # 40 CFR 170.311(b)(1) (product, EPA reg. no., active ingredient, site, start/end times, REI);
+    # applicator certification for restricted use pesticides is 7 U.S.C. 136j(a)(2)(F), not the WPS.
     applicator_name = models.CharField(
         max_length=150, blank=True, null=True, help_text="Name of the certified applicator who applied the chemical"
     )
@@ -1981,12 +1983,12 @@ class ChemicalEvent(CommonEvent):
                     f"K: {self.potassium_percentage}%)"
                 )
 
-        # EPA WPS Compliance Validation - 40 CFR 170.309
+        # Restricted Use Pesticides: 7 U.S.C. 136j(a)(2)(F), not the Worker Protection Standard
         # Restricted Use Pesticides (RUPs) require certified applicator
         if self.restricted_use_pesticide and not self.applicator_certification:
             errors["applicator_certification"] = (
                 "Applicator certification is required for Restricted Use Pesticides (RUPs) "
-                "per EPA Worker Protection Standard 40 CFR 170.309"
+                "under the federal certified-applicator rule (7 U.S.C. 136j(a)(2)(F))"
             )
 
         # REI validation - must be non-negative

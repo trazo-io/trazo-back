@@ -574,11 +574,20 @@ class DraftOSPIsNotAnActiveOneTests(TestCase):
         rendered = self._rendered()
 
         self.assertIn("No drift findings", rendered)
-        self.assertIn("OMRI reference subset", rendered)
+        self.assertIn("Input catalogs: read before relying", rendered)
         self.assertIn("authoritative database", rendered)
 
     def test_the_subset_disclaimer_prints_when_the_check_could_not_run(self):
-        self.assertIn("OMRI reference subset", self._rendered())
+        self.assertIn("Input catalogs: read before relying", self._rendered())
+
+    def test_the_disclaimer_promises_no_subscription_and_calls_no_list_partial(self):
+        """Review finding OV-MT-C05 (2026-11): the copies are the published lists as of their
+        editions. "A full-coverage OMRI Certifier Subscription is on the Trazo roadmap" was a
+        promise on a certifier document, and "partial copy" no longer described the WSDA list."""
+        rendered = self._rendered()
+        self.assertIn("as of the edition date given below", rendered)
+        self.assertNotIn("roadmap", rendered)
+        self.assertNotIn("partial copy", rendered)
 
     def test_no_fabricated_wsda_identifier_reaches_the_osp_reference_section(self):
         from certifications.models import WSDAMaterial
@@ -639,7 +648,7 @@ class CatalogFreshnessTests(TestCase):
 
         line = self.svc._catalog_freshness_line()
 
-        self.assertNotIn("Input catalogs last synced: National List (eCFR)", line)
+        self.assertNotIn("Input catalogs: National List (eCFR)", line)
         self.assertIn("National List (eCFR) — last attempt", line)
         self.assertIn("no successful sync on record", line)
 
@@ -657,26 +666,47 @@ class CatalogFreshnessTests(TestCase):
         line = self.svc._catalog_freshness_line()
         for label in ("OMRI", "WSDA", "CDFA OIM", "National List (eCFR)"):
             self.assertIn(f"{label} — never synced", line)
-        self.assertNotIn("last synced", line)
+        self.assertNotIn("Input catalogs:", line)
 
-    def test_a_successful_run_still_prints_its_date(self):
-        from certifications.models import IngestionRun
+    def test_a_successful_run_prints_the_edition_beside_the_load_date(self):
+        """Review finding OV-MT-C05 (2026-11): the line printed only the date the loader ran,
+        so a March WSDA edition loaded in November read as current in November."""
+        from datetime import date
 
+        from certifications.models import IngestionRun, OMRIProduct
+
+        OMRIProduct.objects.create(omri_id="dow-2900", product_name="Entrust", list_edition_date=date(2026, 9, 26))
+        OMRIProduct.objects.create(omri_id="dow-2901", product_name="Old row", list_edition_date=date(2026, 9, 5))
         run = IngestionRun.objects.create(source="omri", status="ok")
 
         line = self.svc._catalog_freshness_line()
 
-        self.assertIn(f"OMRI {run.ran_at.date().isoformat()}", line)
+        self.assertIn(f"OMRI list of 2026-09-26 (loaded {run.ran_at.date().isoformat()})", line)
+        self.assertNotIn("last synced", line)
 
-    def test_a_later_failure_does_not_hide_behind_an_earlier_success(self):
+    def test_a_catalog_with_no_stored_edition_says_so(self):
         from certifications.models import IngestionRun
 
+        run = IngestionRun.objects.create(source="cdfa_oim", status="ok")
+
+        line = self.svc._catalog_freshness_line()
+
+        self.assertIn(
+            f"CDFA OIM list, edition date not recorded in Trazo (loaded {run.ran_at.date().isoformat()})", line
+        )
+
+    def test_a_later_failure_does_not_hide_behind_an_earlier_success(self):
+        from datetime import date
+
+        from certifications.models import IngestionRun, WSDAMaterial
+
+        WSDAMaterial.objects.create(wsda_id="1123", brand_name="Kaligreen", list_effective_date=date(2026, 3, 6))
         ok = IngestionRun.objects.create(source="wsda", status="ok")
         IngestionRun.objects.create(source="wsda", status="error", message="boom")
 
         line = self.svc._catalog_freshness_line()
 
-        self.assertIn(f"WSDA {ok.ran_at.date().isoformat()}", line)
+        self.assertIn(f"WSDA list of 2026-03-06 (loaded {ok.ran_at.date().isoformat()})", line)
         self.assertIn("the date above is the last attempt that succeeded", line)
 
 

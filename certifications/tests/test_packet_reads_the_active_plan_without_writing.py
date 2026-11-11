@@ -173,6 +173,7 @@ class PacketReadsTheActivePlanTests(APITestCase):
         with self._packet() as zf:
             plan_titles = _outline_titles(zf.read("01-organic-system-plan.pdf"))
             index_titles = _outline_titles(zf.read("06-question-index.pdf"))
-        self.assertIn("Producer Attestation (7 CFR 205.401(d))", plan_titles)
+        # 2026-11 citation review: § 205.401(d) is "other information", not an attestation rule.
+        self.assertIn("Producer Attestation", plan_titles)
         self.assertTrue(any("(a)(2)" in t for t in plan_titles), plan_titles)
         self.assertTrue(any(t.startswith("O1") for t in index_titles), index_titles)

@@ -2409,8 +2409,9 @@ class OFPPMissingError(Exception):
     Raised when strict-mode export is requested for an organic audit and the
     establishment either (a) has no Organic Fraud Prevention Plan uploaded, or
     (b) has an OFPP upload whose filename matches the misfiled-invoice
-    heuristic. SOE 2024 (88 FR 3622, effective 2024-03-19) makes the OFPP a
-    certification-eligibility requirement under 7 CFR 205.201(a)(3).
+    heuristic. 7 CFR 205.201(a)(3), as amended by the Strengthening Organic Enforcement rule
+    (88 FR 3548; effective 2023-03-20, compliance date 2024-03-19), asks the plan to describe the
+    monitoring practices and procedures that verify suppliers and prevent organic fraud.
 
     Strict mode is OPT-IN: it is meant for the "Mark as Submitted" or
     certifier-handoff export flow. The default ``generate_pdf()`` call still
@@ -2557,7 +2558,7 @@ class AuditExportService:
         "organic": [
             "osp_reference",  # 7 CFR 205.201 — OSP header (Sprint 5A)
             "drift_findings",  # Sprint 5.1 — OSP ↔ events drift (§ 205.400(f)(2) operation change)
-            "producer_attestation",  # 7 CFR 205.401 / 205.400(a) — signed attestation
+            "producer_attestation",  # signed producer attestation (no part 205 paragraph prescribes it)
             "regulatory_scope",  # FSMA 204 + PSR + ICS scoping statements
             "farm",
             "field_map",  # Common OSP Parcel Application — schematic boundary + adjoining land
@@ -3334,13 +3335,18 @@ class AuditExportService:
                 if not ofpp_flags["uploaded"]:
                     raise OFPPMissingError(
                         reason=(
-                            "No Organic Fraud Prevention Plan on file. SOE "
-                            "2024 (7 CFR 205.201(a)(3), effective 2024-03-"
-                            "19) requires every certified operation to "
-                            "maintain a written OFPP with a vulnerability "
-                            "assessment and monitoring procedures. An "
-                            "operation without a valid OFPP is ineligible "
-                            "for certification."
+                            "No Organic Fraud Prevention Plan on file. 7 CFR "
+                            "205.201(a)(3), as amended by the Strengthening "
+                            "Organic Enforcement rule (88 FR 3548; effective "
+                            "March 20, 2023, compliance date March 19, 2024), "
+                            "requires the organic system plan to describe the "
+                            "monitoring practices and procedures to verify "
+                            "suppliers in the supply chain and organic status "
+                            "of agricultural products received, and to prevent "
+                            "organic fraud, as appropriate to the operation's "
+                            "activities, scope, and complexity. Upload the plan "
+                            "before submitting; the certifying agent decides "
+                            "whether it meets the rule."
                         )
                     )
                 if ofpp_flags["filename_suspicious"]:
@@ -3348,10 +3354,12 @@ class AuditExportService:
                         reason=(
                             "OFPP upload filename matches the misfiled-"
                             "invoice heuristic. Trazo treats this as a "
-                            "missing OFPP for submission purposes — upload "
-                            "a substantive OFPP (vulnerability assessment + "
-                            "monitoring procedures + supplier verification) "
-                            "before re-exporting."
+                            "missing OFPP for submission purposes. Upload "
+                            "the plan itself (the monitoring practices and "
+                            "procedures to verify suppliers and to prevent "
+                            "organic fraud that 7 CFR 205.201(a)(3) asks the "
+                            "organic system plan to describe) before "
+                            "re-exporting."
                         ),
                         doc_name=ofpp_flags.get("doc_name"),
                     )
@@ -5028,9 +5036,10 @@ class AuditExportService:
                     "FAIL",
                     f"Uploaded file <{ofpp_flags['doc_name']}> matches the "
                     "misfiled-invoice pattern, so Trazo does not count it as an "
-                    "Organic Fraud Prevention Plan on file. The OSP must include a "
-                    "plan with a vulnerability assessment and monitoring "
-                    "procedures (SOE 2024).",
+                    "Organic Fraud Prevention Plan on file. § 205.201(a)(3) asks the "
+                    "OSP to describe the monitoring practices and procedures to verify "
+                    "suppliers and the organic status of products received, and to "
+                    "prevent organic fraud.",
                     said("ofpp.suspicious", filename=ofpp_flags["doc_name"]),
                 )
             )
@@ -8036,10 +8045,11 @@ class AuditExportService:
                     )
                 )
 
-            # § 205.204(a)(4) — PERENNIAL planting stock must be under continuous organic
-            # management for at least a year before its crop sells as organic. Printed as a
-            # computed elapsed time rather than a bare date, because the date alone leaves the
-            # inspector to do the arithmetic the rule is actually about.
+            # § 205.204(a)(4): nonorganic PERENNIAL planting stock may itself be sold, labeled or
+            # represented as organic only after a year under organic management. The paragraph is
+            # about the STOCK, not the crop it bears (2026-11 citation review; module G3.2 reads it
+            # the same way). Printed as a computed elapsed time rather than a bare date, because
+            # the date alone leaves the inspector to do the arithmetic the rule is actually about.
             _mgmt_start = getattr(seed_ev, "stock_organic_management_start", None)
             # 🔴 2026-08-21 — the 12-month rule is about PERENNIAL planting stock. This fired on
             # ANY planting event carrying an organic-management date, so an organic vegetable
@@ -8074,8 +8084,12 @@ class AuditExportService:
                         elements.append(
                             Paragraph(
                                 "<b>[REVIEW] 7 CFR 205.204(a)(4):</b> this perennial planting stock had "
-                                "been under organic management for less than one year at planting. Its "
-                                "crop may not be sold as organic until the year has elapsed.",
+                                "been under organic management for less than one year at planting. The "
+                                "paragraph governs the planting stock itself: nonorganically produced "
+                                "planting stock may be sold, labeled, or represented as organically "
+                                "produced only after it has been maintained under a system of organic "
+                                "management for no less than 1 year. It does not, by itself, bar the crop "
+                                "the stock bears from organic sale.",
                                 self._warning_style(),
                             )
                         )
@@ -8347,15 +8361,22 @@ class AuditExportService:
                     )
                 )
 
-            # Warning for non-organic treated seed (disqualifying per 7 CFR 205.204(a)(2))
+            # Warning for non-organic treated seed. § 205.204(a)(2) says when treated seed MAY be
+            # used; it states no consequence, and the outcome is the certifying agent's (2026-11
+            # citation review).
             treated = [ev for ev in traceable if ev.seed_certification_status == "non_organic_treated"]
             if treated:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        "<b>[WARNING] NOP 7 CFR 205.204(a)(2):</b> Non-organic seed treated "
-                        "with substances not on the National List disqualifies the crop from "
-                        "organic sale. "
+                        "<b>[WARNING] NOP 7 CFR 205.204(a)(2):</b> Non-organic treated seed is "
+                        "recorded. This paragraph allows nonorganically produced seeds and planting "
+                        "stock treated with a substance included on the National List of synthetic "
+                        "substances allowed for use in organic crop production to be used to produce "
+                        "an organic crop when an equivalent organically produced or untreated variety "
+                        "is not commercially available. A treatment not on that list is outside it, "
+                        "unless Federal or State phytosanitary regulations require it (§ 205.204(a)(5)). "
+                        "What follows for the crop is the certifying agent's decision. "
                         "Review the highlighted planting events with your certifier before harvest.",
                         self._warning_style(),
                     )
@@ -8605,8 +8626,11 @@ class AuditExportService:
         if has_amendments_without_approval:
             elements.append(
                 Paragraph(
-                    "<b>[WARNING] NOP 7 CFR 205.203(b):</b> Some amendments are missing organic approval status. "
-                    "All soil amendments must be OMRI-listed or NOP-approved for organic operations.",
+                    "<b>[WARNING] 7 CFR 205.203(d) and (e), § 205.105:</b> Some amendments have no organic "
+                    "basis recorded. § 205.203(d) sets out what a producer may apply to manage crop nutrients "
+                    "and soil fertility, § 205.203(e) what a producer must not use, and § 205.105 excludes "
+                    "synthetic substances not provided for in § 205.601 and nonsynthetic substances prohibited "
+                    "in § 205.602. Record the basis for each amendment.",
                     self._warning_style(),
                 )
             )
@@ -12436,7 +12460,7 @@ class AuditExportService:
             ),
         ]
         if sales:
-            output_rows.insert(2, ("Sales Records on File (§ 205.307(a))", str(len(sales))))
+            output_rows.insert(2, ("Sales Records on File (§ 205.103(b)(2) and (b)(3))", str(len(sales))))
 
         # Direct same-unit comparison only when it is actually meaningful —
         # not for boxes-vs-pounds where the units are explicitly incomparable
@@ -12552,10 +12576,10 @@ class AuditExportService:
             elements.append(self._spacer(0.05))
             elements.append(Paragraph(f"<b>[REVIEW] 7 CFR 205.103(b)(2): {_msg}</b>", self._warning_style()))
 
-        # Itemized SOE sales records (§ 205.307(a)) — buyer, date, quantity, invoice.
+        # Itemized sales records (§ 205.103(b)(2) and (b)(3)): buyer, date, quantity, invoice.
         if sales:
             elements.append(self._spacer(0.08))
-            elements.append(self._body("<b>Itemized Sales Records (7 CFR 205.307(a))</b>"))
+            elements.append(self._body("<b>Itemized Sales Records (7 CFR 205.103(b)(2) and (b)(3))</b>"))
             # "Lot(s)" closes the trace: the harvest table above lists a lot per pick, this
             # column says which of those picks each buyer received. Without it the packet shows
             # harvests and sales side by side and cannot answer the § 205.103(b)(2) question an
@@ -13065,7 +13089,7 @@ class AuditExportService:
             parcel = None
 
         # Parcel identity (Common OSP Parcel Application keys records to APN + S-T-R) and the
-        # treated-lumber contamination source (7 CFR 205.272).
+        # treated-lumber contamination source (7 CFR 205.206(f)).
         if parcel is not None:
             id_rows = [
                 ("Assessor's Parcel Number (APN)", getattr(parcel, "apn", None)),
@@ -13092,10 +13116,12 @@ class AuditExportService:
                 )
                 elements.append(
                     Paragraph(
-                        "<b>[REVIEW] 7 CFR 205.272 — Treated lumber present:</b> "
+                        "<b>[REVIEW] Treated lumber present (7 CFR 205.206(f)):</b> "
                         + (_desc or "treated lumber recorded on parcel")
                         + (f" (installed {_installed})" if _installed else "")
-                        + ". Confirm it does not contact the organic crop or soil.",
+                        + ". Confirm whether it contacts soil or livestock and when it was installed: "
+                        "§ 205.206(f) bars lumber treated with arsenate or other prohibited materials for "
+                        "new installations or replacement purposes in contact with soil or livestock.",
                         self._warning_style(),
                     )
                 )
@@ -14009,9 +14035,11 @@ class AuditExportService:
                         "No post-harvest processing or storage events are recorded for this "
                         f"production. {self._post_harvest_steps_phrase()} If any of these steps "
                         "occur off-farm, that facility must be a certified organic handler "
-                        "and its organic certificate must accompany the lot (7 CFR 205.272 "
-                        "commingling prevention). Record post-harvest handling events and storage "
-                        "locations so the audit trail is unbroken from field to sale."
+                        "(7 CFR 205.100(a)), subject to the exemptions in § 205.101: an operation "
+                        "that only stores product kept in sealed, tamper-evident packages or "
+                        "containers is exempt under § 205.101(e). Certifiers expect the handler's "
+                        "organic certificate with the lot records. Record post-harvest handling "
+                        "events and storage locations so the audit trail is unbroken from field to sale."
                     )
                 )
             return elements
@@ -14066,7 +14094,9 @@ class AuditExportService:
         elements.append(
             Paragraph(
                 "Off-farm post-harvest handling (custom hulling, drying, cold storage) must "
-                "be performed by a certified organic handler (7 CFR 205.272). Retain the handler's "
+                "be performed by a certified organic handler (7 CFR 205.100(a)), subject to the "
+                "exemptions in § 205.101: storage of product that stays in sealed, tamper-evident "
+                "packages or containers is exempt under § 205.101(e). Retain the handler's "
                 "organic certificate with the lot records for inspection. Whether Trazo holds a copy "
                 "is stated in the handler's certificate block. Dedicated organic "
                 "equipment / bins or documented clean-out "
@@ -15216,8 +15246,9 @@ class AuditExportService:
                     "No change notifications are on file for this plan or its earlier versions. If the "
                     "operation added/removed acreage, changed "
                     "a practice/input, applied or was contacted by a prohibited substance, or added a "
-                    "new label/handling step, § 205.400(f) requires prior (or, for a prohibited-substance "
-                    "application, immediate) notification to the certifier."
+                    "new label/handling step, § 205.400(f) requires it to immediately notify the "
+                    "certifying agent: of the application, including drift, of a prohibited substance "
+                    "((f)(1)), and of any change that may affect its compliance ((f)(2))."
                 )
             )
         else:
@@ -16123,32 +16154,36 @@ class AuditExportService:
         Both branches of the section call this; neither may skip it.
         """
         out = [self._spacer(0.08)]
+        # 2026-11 (review finding OV-MT-C05): the copies are the PUBLISHED lists as of their
+        # edition dates (omri_seed.csv carries the full Crop Products List, wsda_seed.csv the full
+        # WSDA list), not a "curated subset" or a "partial copy", and no OMRI subscription is
+        # promised. What the reader needs is the edition each comparison was made against, which
+        # the freshness line below prints beside the date Trazo loaded it.
+        copies = (
+            "Trazo's copies of the published OMRI Crop Products List and WSDA Organic Input Material "
+            "List, each as of the edition date given below, and of the CDFA Registered OIM list"
+        )
         if has_findings_table:
             disclaimer = (
-                "<b>OMRI reference subset — read before relying on findings above.</b> "
-                "This report cross-references inputs against a curated OMRI reference "
-                "subset maintained by Trazo. <b>OMRI (omri.org) is the authoritative "
-                "database of record.</b> For any input shown as \u201cunresolved\u201d in the "
-                "table above, use the embedded OMRI search link to verify against the "
-                "full OMRI listing before approving or rejecting. A full-coverage OMRI "
-                "Certifier Subscription is on the Trazo roadmap."
+                "<b>Input catalogs: read before relying on the findings above.</b> "
+                f"This report cross-references inputs against {copies}. "
+                "<b>OMRI (omri.org), WSDA and CDFA are the authoritative databases of record.</b> "
+                "A listing can be added or withdrawn after an edition is published. For any input "
+                "shown as \u201cunresolved\u201d in the table above, use the embedded OMRI search "
+                "link to check the current OMRI listing before approving or rejecting."
             )
         else:
             disclaimer = (
-                "<b>OMRI reference subset — read before relying on the result above.</b> "
-                "This report cross-references inputs against a curated OMRI reference "
-                "subset maintained by Trazo, not the full OMRI listing, and against a "
-                "partial copy of the WSDA Organic Input Material List and the CDFA "
-                "Registered OIM list. <b>OMRI (omri.org), WSDA and CDFA are the "
-                "authoritative databases of record.</b> A result of no findings means no "
-                "input resolved outside the reference material Trazo holds; it is not a "
-                "statement about the full listings. A full-coverage OMRI Certifier "
-                "Subscription is on the Trazo roadmap."
+                "<b>Input catalogs: read before relying on the result above.</b> "
+                f"This report cross-references inputs against {copies}. "
+                "<b>OMRI (omri.org), WSDA and CDFA are the authoritative databases of record.</b> "
+                "A result of no findings means no input resolved outside those copies; it is not a "
+                "statement about listings added or withdrawn after those editions."
             )
         out.append(Paragraph(disclaimer, self._warning_style()))
 
-        # Catalog freshness stamp — says when the reference material above was last
-        # refreshed, and names any catalog whose last sync attempt failed or never ran.
+        # Catalog freshness stamp: which published edition each catalog holds and when Trazo
+        # loaded it, and names any catalog whose last sync attempt failed or never ran.
         freshness_line = self._catalog_freshness_line()
         if freshness_line:
             out.append(self._spacer(0.05))
@@ -16171,13 +16206,34 @@ class AuditExportService:
             return False
         return bool(unreviewed_changes())
 
-    def _catalog_freshness_line(self):
-        """One-line summary of when each input catalog was last SUCCESSFULLY refreshed.
+    @staticmethod
+    def _catalog_edition(source):
+        """The published edition date of the list a catalog's rows were transcribed from.
 
-        Auditor-facing: proves Trazo checks the live regulation on a schedule rather
-        than relying on a stale seed. A catalog whose last attempt failed, or that has
-        never been synced, is NAMED — dropping it silently would leave the reader to
-        assume the ones listed are the whole story.
+        The load date alone says when someone last ran the loader, never how current the list
+        is: a 2026-11 load of a March edition printed as "WSDA 2026-11-10" (review finding
+        OV-MT-C05). OMRI rows carry `list_edition_date`, WSDA rows `list_effective_date`; the
+        newest one is the edition the last load applied (a delisted OMRI row keeps the older
+        edition it was last seen on). CDFA OIM has no model of its own (it is a flag on those
+        rows) and no stored edition, so None: the line says so rather than borrow a date.
+        """
+        from django.db.models import Max
+
+        from certifications.models import OMRIProduct, WSDAMaterial
+
+        field = {"omri": (OMRIProduct, "list_edition_date"), "wsda": (WSDAMaterial, "list_effective_date")}.get(source)
+        if field is None:
+            return None
+        model, column = field
+        return model.objects.aggregate(edition=Max(column))["edition"]
+
+    def _catalog_freshness_line(self):
+        """One-line summary of which edition each input catalog holds and when it was loaded.
+
+        Auditor-facing: a catalog's currency is the EDITION of the published list it holds;
+        the date Trazo loaded it is printed beside it, never in its place. A catalog whose last
+        attempt failed, or that has never been synced, is NAMED: dropping it silently would
+        leave the reader to assume the ones listed are the whole story.
         """
         try:
             from certifications.models import IngestionRun
@@ -16205,7 +16261,17 @@ class AuditExportService:
                 continue
             latest_ok = runs.filter(status__in=self._CATALOG_SYNC_OK_STATUSES).first()
             if latest_ok is not None:
-                synced.append(f"{label} {latest_ok.ran_at.date().isoformat()}")
+                loaded = latest_ok.ran_at.date().isoformat()
+                if source == "national_list_ecfr":
+                    # Not an edition: the committed National List compared with the eCFR text.
+                    synced.append(f"{label} checked {loaded}")
+                else:
+                    edition = self._catalog_edition(source)
+                    synced.append(
+                        f"{label} list of {edition.isoformat()} (loaded {loaded})"
+                        if edition
+                        else f"{label} list, edition date not recorded in Trazo (loaded {loaded})"
+                    )
                 if latest is not None and latest.pk != latest_ok.pk:
                     problems.append(
                         f"{label} — last attempt {latest.ran_at.date().isoformat()} "
@@ -16222,7 +16288,7 @@ class AuditExportService:
 
         line = ""
         if synced:
-            line = "Input catalogs last synced: " + ", ".join(synced) + "."
+            line = "Input catalogs: " + "; ".join(synced) + "."
         if problems:
             prefix = " " if line else ""
             line += (
@@ -16236,7 +16302,8 @@ class AuditExportService:
 
     def _build_producer_attestation_section(self):
         """
-        Signed producer attestation — 7 CFR 205.401 / 205.400(a).
+        Signed producer attestation. No part 205 paragraph prescribes one, so the heading cites
+        none; the body cites § 205.400(f) for the notice promise.
 
         A certifier-acceptable submission requires a dated statement from the
         producer affirming the truth of the submitted information. Trazo can't
@@ -16245,7 +16312,7 @@ class AuditExportService:
         canonical § 205.401 certification used by CCOF, Oregon Tilth, and
         MOFGA.
         """
-        elements = [self._section_header("Producer Attestation (7 CFR 205.401 / 205.400(a))")]
+        elements = [self._section_header("Producer Attestation")]
 
         try:
             establishment = self.production.parcel.establishment
@@ -16299,14 +16366,16 @@ class AuditExportService:
         # 205.400(a) duty to comply; 205.400(f) change-notification) — do NOT alter
         # without regulatory review; this is the language every major certifier
         # accepts. (§ 205.401(d) is a catch-all "other information" subsection and
-        # is NOT itself an attestation mandate, so it is not cited in the body.)
+        # is NOT itself an attestation mandate, so it is cited neither in the body nor in
+        # the heading.) 2026-11 citation review: "promptly" became "immediately", the
+        # word § 205.400(f) uses.
         attestation_text = (
             "I, the undersigned, hereby certify under penalty of law that the "
             "information contained in this document is true, complete, and "
             "accurate to the best of my knowledge and belief, and that all "
             "organic production practices described herein comply with the "
             "requirements of the USDA National Organic Program (7 CFR Part 205). "
-            "I agree to promptly notify my certifying agent of any changes to "
+            "I agree to immediately notify my certifying agent of any changes to "
             "the production, handling, or management practices that may affect "
             "the organic status of the operation (7 CFR 205.400(f))."
         )
@@ -16977,7 +17046,7 @@ class AuditExportService:
             def P(text):
                 return Paragraph(self._safe_narrative(str(text)), cell_style)
 
-            # SOE (§ 205.307(a)) itemized sales — prefer the dedicated SalesRecord
+            # Itemized sales (§ 205.103(b)(2) and (b)(3)): prefer the dedicated SalesRecord
             # rows over the single legacy sold_to/organic_on_invoice fields.
             scope = self._scope_productions()
             multi = len(scope) > 1
@@ -17041,7 +17110,7 @@ class AuditExportService:
                     P("Post-Harvest Sales Record"),
                     P("Recorded" if (_soe_sales or _sold_to_any) else "Not recorded"),
                     P(
-                        f"{len(_soe_sales)} itemized sales record(s) on file (§ 205.307(a)); "
+                        f"{len(_soe_sales)} itemized sales record(s) on file (§ 205.103(b)(2) and (b)(3)); "
                         f"buyers: {_soe_sales_buyers}"
                         if _soe_sales
                         else (
@@ -17210,7 +17279,8 @@ class AuditExportService:
             )
 
         # ----------------------------------------------------------------
-        # SOE 2024 Compliance Items (88 FR 3622, effective 2024-03-19)
+        # SOE Compliance Items (Strengthening Organic Enforcement, 88 FR 3548; effective
+        # 2023-03-20, compliance date 2024-03-19)
         # Inspectors look for these items during the annual inspection.
         # The block surfaces what Trazo CAN verify from data on file plus the
         # operator's standing attestations — not blanket Trazo guarantees.
@@ -17245,8 +17315,9 @@ class AuditExportService:
                 "<b>Fraud Prevention Plan (7 CFR 205.201(a)(3)):</b> "
                 f"{_held} "
                 f"({_where}: {ofpp_doc_name}; effective {ofpp_date}; responsible: {ofpp_person}). "
-                "Inspector should review the plan for documented monitoring procedures, "
-                "supplier verification, and deviation/corrective-action protocols."
+                "Inspector should review the plan for the monitoring practices and procedures "
+                "\u00a7 205.201(a)(3) asks it to describe, including supplier verification and "
+                "the prevention of organic fraud."
             )
         elif establishment is not None and ofpp["uploaded"] and ofpp["filename_suspicious"]:
             ofpp_text = (
@@ -17255,9 +17326,11 @@ class AuditExportService:
                 f"A file is uploaded (<code>{ofpp_doc_name}</code>) but its "
                 "filename matches the pattern of a misfiled invoice/receipt, so "
                 "Trazo does not count it as a fraud prevention plan on file. "
-                "\u00a7 205.201(a)(3) (SOE, effective 2024-03-19) describes a plan "
-                "with a vulnerability assessment, supplier verification, monitoring "
-                "procedures, and deviation / corrective-action protocols. Upload the "
+                "\u00a7 205.201(a)(3) requires the organic system plan to describe "
+                "the monitoring practices and procedures to verify suppliers in the "
+                "supply chain and organic status of agricultural products received, "
+                "and to prevent organic fraud, as appropriate to the operation's "
+                "activities, scope, and complexity. Upload the "
                 "plan itself before the next inspection; the certifying agent decides "
                 "whether the plan on file meets the rule."
             )
@@ -17266,9 +17339,10 @@ class AuditExportService:
                 "<b>[GAP] Fraud prevention plan not on file in Trazo "
                 "(7 CFR 205.201(a)(3)):</b> "
                 "No Organic Fraud Prevention Plan is on file in Trazo for this operation. "
-                "SOE (effective 2024-03-19) requires every certified operation to "
-                "maintain a written OFPP. Upload the plan via the Farm "
-                "settings before the next inspection."
+                "\u00a7 205.201(a)(3) requires the organic system plan to describe the "
+                "monitoring practices and procedures to verify suppliers and the organic "
+                "status of products received, and to prevent organic fraud. Upload the "
+                "plan via the Farm settings before the next inspection."
             )
         elements.append(Paragraph(ofpp_text, self._styles["body"]))
 
@@ -17317,7 +17391,7 @@ class AuditExportService:
 
         # 4. Non-retail container labeling — § 205.307 is the correct cite.
         # § 205.273 covers Imports and is NOT about non-retail labeling. Under
-        # the post-SOE rule (88 FR 3622, effective 2024-03-19), § 205.307(a)
+        # the post-SOE rule (88 FR 3548; compliance date 2024-03-19), § 205.307(a)
         # requires ONLY two items on a non-retail container: (1) identification
         # of the product as organic, and (2) the production lot number /
         # shipping ID / other unique identifier linking the container to audit
@@ -17416,10 +17490,12 @@ class AuditExportService:
         elements.append(self._spacer(0.08))
         elements.append(
             Paragraph(
-                "SOE (Strengthening Organic Enforcement) rule effective March 19, 2024 requires "
-                "fraud prevention plans (7 CFR 205.201(a)(3)), enhanced traceability "
-                "(7 CFR 205.103(b)(2)), 5-year record retention (7 CFR 205.103(b)(4)), "
-                "and supply-chain traceability audits (7 CFR 205.501(a)(21)).",
+                "The Strengthening Organic Enforcement rule (88 FR 3548; effective March 20, 2023, "
+                "compliance date March 19, 2024) amended 7 CFR 205.201(a)(3) (monitoring practices "
+                "and procedures to verify suppliers and the organic status of products received, "
+                "and to prevent organic fraud), 7 CFR 205.103(b)(2) (records traceable back to the "
+                "last certified operation) and 7 CFR 205.501(a)(21) (supply chain traceability "
+                "audits by certifying agents).",
                 self._styles["footer_note"],
             )
         )

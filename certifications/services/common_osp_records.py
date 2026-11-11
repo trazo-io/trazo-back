@@ -382,7 +382,9 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         key="mulching",
         label="Mulching",
         group=GROUP_CROP,
-        cfr_cite="7 CFR 205.206(a)(6)",
+        # (c)(1) biodegradable mulch, (c)(6) plastic or synthetic mulch removed at season end.
+        # Was "205.206(a)(6)", a paragraph that does not exist (2026-11 citation review).
+        cfr_cite="7 CFR 205.206(c)(1) and (c)(6)",
         # Trazo has no dedicated mulching subtype. MO ("Mowing / Orchard-Floor") covers mowing,
         # mulching and floor management together, so an MO event is evidence of floor work but
         # NOT proof that mulch was applied — the basis string says so rather than overstating.
