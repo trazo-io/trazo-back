@@ -402,8 +402,10 @@ api/^scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryScanViewSet	(IsSuperUs
 api/^users/$	users.views.UserViewSet	IsAuthenticated	get=list,post=create
 api/^users/(?P<pk>[^/.]+)/$	users.views.UserViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^users/change_password/$	users.views.UserViewSet	IsAuthenticated	post=change_password
+api/^users/confirm_email_change/$	users.views.UserViewSet	AllowAny	post=confirm_email_change
 api/^users/confirm_password_reset/$	users.views.UserViewSet	AllowAny	post=confirm_password_reset
 api/^users/me/$	users.views.UserViewSet	IsAuthenticated	get=me
+api/^users/request_email_change/$	users.views.UserViewSet	IsAuthenticated	post=request_email_change
 api/^users/request_password_reset/$	users.views.UserViewSet	AllowAny	post=request_password_reset
 api/^users/resend_verification_email/$	users.views.UserViewSet	AllowAny	post=resend_verification_email
 api/^users/roles/$	users.views.UserViewSet	IsAuthenticated	get=roles

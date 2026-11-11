@@ -33,9 +33,11 @@ def token_predates_credentials(user, token) -> bool:
     except (KeyError, TypeError, ValueError):
         # A token without an issue time cannot prove it is newer than the change.
         return True
-    # Whole seconds, as `iat` is: a token issued in the same second as the change stays valid
-    # (that is the token the change itself may have just issued).
-    return issued < int(changed.timestamp())
+    # Against the UNROUNDED change time (review of #379). `iat` is whole seconds; flooring the
+    # cutoff too let a token issued earlier in the same second pass, and with refresh rotation one
+    # such pass becomes access that never ends. The cost: a sign-in in the same second as the
+    # change is refused once and works on the retry.
+    return issued < changed.timestamp()
 
 
 def end_sessions(user) -> None:

@@ -89,6 +89,20 @@ class AccountTakeoverChainTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "Laurel B.")
 
+    def test_another_account_cannot_touch_this_one(self):
+        # The outsider proof for UserViewSet in backend/route_tenancy.py: an account from another
+        # company sees this row as missing and cannot change it.
+        outsider = User.objects.create_user(
+            email="outsider@elsewhere.example", password=PASSWORD, is_active=True, user_type=PRODUCER
+        )
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(outsider).access_token}")
+        self.assertEqual(client.get(f"/api/users/{self.user.pk}/").status_code, 404)
+        response = client.patch(f"/api/users/{self.user.pk}/", {"first_name": "Mallory"}, format="json")
+        self.assertEqual(response.status_code, 404)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Laurel")
+
     def test_requesting_a_change_needs_the_password(self):
         response = self._client(self.other_browser).post(
             "/api/users/request_email_change/",
@@ -198,6 +212,20 @@ class AccountTakeoverChainTests(TestCase):
             {"token": "reset-token-xyz", "email": self.user.email, "new_password": "Walnut#Orchard2027"},
             format="json",
         )
+        # A sign-in a moment later (`iat` is whole seconds, the cutoff is not, so a token minted
+        # in the very same second as the change is refused by design).
+        User.objects.filter(pk=self.user.pk).update(credentials_changed_at=timezone.now() - timedelta(seconds=2))
         self.user.refresh_from_db()
         fresh = self._session()
         self.assertEqual(self._me_status(fresh), 200)
+
+    def test_a_token_from_earlier_in_the_same_second_is_refused(self):
+        # Review of #379: the cutoff used to be floored to the second, so this token passed.
+        from types import SimpleNamespace
+
+        from users.sessions import token_predates_credentials
+
+        changed = timezone.now().replace(microsecond=700000)
+        user = SimpleNamespace(credentials_changed_at=changed)
+        self.assertTrue(token_predates_credentials(user, {"iat": int(changed.timestamp())}))
+        self.assertFalse(token_predates_credentials(user, {"iat": int(changed.timestamp()) + 1}))
