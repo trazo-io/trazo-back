@@ -842,6 +842,7 @@ jobs:
             certifications.tests.test_parcel_land_history \
             history.tests.test_packet_transition_status \
             certifications.tests.test_annual_update_revisions \
+            certifications.tests.test_attested_unchanged_checked_at_signing \
             certifications.tests.test_annual_update_signer_is_the_responsible_person \
             certifications.tests.test_annual_update_lock \
             certifications.tests.test_annual_update_company_details \

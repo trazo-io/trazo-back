@@ -73,6 +73,13 @@ def _form_section(form: Form) -> list[str]:
     out += [f"**{questions} questions** — {tally}" + (f" · not questions: {others}" if others else ""), ""]
     if form.register_status != "complete":
         out += ["> This form's register entry is a draft — treat absences as unreviewed, not as gaps.", ""]
+    if not form.reproduced:
+        out += [
+            f"> Not reproduced since {form.not_reproduced_decided}: the packet and the copy sheet name this form "
+            "and send the operation to the agent's own copy; they print none of the rows below and do not link "
+            f"the file. The rows record the edition read on {form.retrieved}. Basis: {form.not_reproduced_basis}",
+            "",
+        ]
 
     out += [
         f"| Ref | What {agent} asks | Status | Sev | Where it lives in Trazo | Note |",

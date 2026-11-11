@@ -169,7 +169,10 @@ class ThePlanAndTheFilingTests(_Farm):
         # Run 3, R3-03: named as a subtotal, never as the figure an agent's fee form asks for.
         self.assertIn("it is not any certifying agent's fee figure", filing)
         self.assertIn("Renewal Fee Form (AGR 2521), sent with its renewal application, sets the basis", filing)
-        self.assertIn("asked for income received in the previous calendar year", filing)
+        # WSDA updates the fee form and asked Trazo not to reproduce it (reply received by 2026-11-09; overall review
+        # 2026-11, OV-PK-W01): no basis read from an earlier published copy is restated.
+        self.assertIn("WSDA updates the form regularly and does not publish it", filing)
+        self.assertNotIn("last published", filing)
         self.assertNotIn("ask for this figure", filing)
 
     def _packet_annual_update(self):

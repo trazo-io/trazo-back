@@ -4,6 +4,10 @@ AGR 2121 §J 13, §K 1 and §L 1 ask whether another operation takes the crop to
 custom handles it, and a Yes is answered by attaching AGR 2519 for that facility. The form is WSDA's, filed
 with WSDA, one per facility. The copy sheet gives, per facility another operation runs, every value Trazo
 holds and names what the record leaves empty. It never ticks a box on the form.
+
+Only a facility that stores or handles the crop while this operation still owns it is listed (overall
+review 2026-11, OV-PK-W04): a buyer that takes title on delivery is not a third party acting for the
+operation, and the plan's own answers say which is which.
 """
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -45,17 +49,29 @@ class _Farm(TestCase):
             establishment=self.est, name=fields.pop("name", "Valley Cold Storage"), **fields
         )
 
-    def sheet(self, certifier=WSDA):
+    #: The plan's answers, {module: {question: value}}. A facility is listed only when they say the
+    #: operation still owns the crop there; these say so for an off-farm handler.
+    answers = {"g6_1_harvest_transport": {"handled_by_another_operation": "yes_certified"}}
+
+    def sheet(self, certifier=WSDA, answers=None):
+        answers = self.answers if answers is None else answers
         osp = OrganicSystemPlan.objects.create(
             establishment=self.est,
             version_number=OrganicSystemPlan.objects.count() + 1,
             status="draft",
             certifier_name=certifier,
+            module_responses={
+                "schema_version": 1,
+                "modules": {
+                    module: {"answers": {key: {"value": value} for key, value in questions.items()}}
+                    for module, questions in answers.items()
+                },
+            },
         )
         return agent_form_sheet(osp)
 
-    def row(self, item, certifier=WSDA):
-        return next(r for r in self.sheet(certifier)["rows"] if r["item"] == item)
+    def row(self, item, certifier=WSDA, answers=None):
+        return next(r for r in self.sheet(certifier, answers)["rows"] if r["item"] == item)
 
 
 class SerializerTests(_Farm):
@@ -140,6 +156,103 @@ class CopySheetTests(_Farm):
         self.facility(name="Valley Cold Storage")
         items = {r["item"] for r in self.sheet(CCOF)["rows"]}
         self.assertNotIn("facilities_2519", items)
+
+
+#: The plan in the review's specimen (OV-PK-W04): "Before the buyer, does the crop go anywhere else?
+#: Nowhere: it goes straight to the buyer", and off-farm handling "Yes, but ownership of the crop
+#: transfers to that operation before or upon delivery".
+STRAIGHT_TO_THE_BUYER = {
+    "g6_1_harvest_transport": {
+        "first_stop_before_buyer": ["none"],
+        "handled_by_another_operation": "yes_ownership_transfers",
+    }
+}
+#: The buyer still takes title on delivery, and the crop waits in a contracted cold store first.
+COLD_STORE_THEN_BUYER = {
+    "g6_1_harvest_transport": {
+        "first_stop_before_buyer": ["cold_storage"],
+        "handled_by_another_operation": "yes_ownership_transfers",
+    },
+    "g6_2_storage": {
+        "storage_locations": ["commercial_cold_off_farm"],
+        "owns_crop_in_storage": "yes",
+        "third_party_storage_contracted": True,
+    },
+}
+
+
+class OnlyBeforeTitlePassesTests(_Farm):
+    """OV-PK-W04: the sheet listed the farm's two buyers as AGR 2519 third parties and said a
+    responsibility statement "fits", beside a plan saying the crop goes straight to the buyer and
+    ownership transfers."""
+
+    def buyer(self, name="Marion Bend Fruit Co.", **fields):
+        return self.facility(
+            name=name,
+            facility_type=fields.pop("facility_type", "packer"),
+            role=fields.pop("role", "handling"),
+            certification_number=fields.pop("certification_number", "OTCO-5512"),
+            certifier_name=fields.pop("certifier_name", "Oregon Tilth"),
+            **fields,
+        )
+
+    def cold_store(self):
+        return self.facility(
+            name="Valley Cold Storage",
+            facility_type="cold_storage",
+            role="storage",
+            certification_number="WSDA-1234",
+            certifier_name="WSDA",
+        )
+
+    def test_a_buyer_that_takes_title_is_not_listed_and_a_contracted_cold_store_is(self):
+        self.buyer()
+        self.cold_store()
+        row = self.row("facilities_2519", answers=COLD_STORE_THEN_BUYER)
+        self.assertEqual(row["kind"], "value")
+        self.assertEqual([f["name"] for f in row["value"]], ["Valley Cold Storage"])
+        (cold,) = row["value"]
+        self.assertEqual(cold["basis"], ["K 1"])
+        # The "fits" sentence is worded from `responsibility`, which only a listed facility carries.
+        self.assertEqual(cold["responsibility"], "certified_third_party")
+        self.assertEqual(row["extra"]["not_on_behalf"], ["Marion Bend Fruit Co."])
+        self.assertEqual(row["extra"]["not_stated"], [])
+
+    def test_straight_to_the_buyer_lists_no_facility_and_names_the_buyers(self):
+        self.buyer(name="Cascade Organic Distributors, Portland DC", facility_type="cold_storage", role="")
+        self.buyer()
+        row = self.row("facilities_2519", answers=STRAIGHT_TO_THE_BUYER)
+        self.assertEqual((row["kind"], row["value"]), ("note", None))
+        self.assertEqual(row["extra"]["reason"], "none_on_behalf")
+        self.assertEqual(
+            row["extra"]["not_on_behalf"], ["Cascade Organic Distributors, Portland DC", "Marion Bend Fruit Co."]
+        )
+
+    def test_custom_handling_where_the_operation_keeps_ownership_is_listed(self):
+        self.buyer(name="Ridge Custom Pack")
+        row = self.row(
+            "facilities_2519", answers={"g6_1_harvest_transport": {"handled_by_another_operation": "yes_uncertified"}}
+        )
+        (entry,) = row["value"]
+        self.assertEqual((entry["name"], entry["basis"]), ("Ridge Custom Pack", ["L 1"]))
+
+    def test_a_plan_that_does_not_say_lists_nothing_and_names_the_facility(self):
+        self.cold_store()
+        row = self.row("facilities_2519", answers={})
+        self.assertEqual((row["kind"], row["value"]), ("note", None))
+        # Not "none on behalf": the plan has not said so.
+        self.assertEqual(row["extra"]["reason"], "none_stated")
+        self.assertEqual(row["extra"]["not_stated"], ["Valley Cold Storage"])
+        self.assertEqual(row["extra"]["not_on_behalf"], [])
+
+    def test_a_hidden_answer_says_nothing(self):
+        """`third_party_storage_contracted` shows only for off-farm storage; a stale Yes left under an
+        on-farm-only answer is not read as a contract."""
+        self.cold_store()
+        stale = {"g6_2_storage": {"storage_locations": ["on_farm_cold"], "third_party_storage_contracted": True}}
+        row = self.row("facilities_2519", answers=stale)
+        self.assertIsNone(row["value"])
+        self.assertEqual(row["extra"]["not_stated"], ["Valley Cold Storage"])
 
 
 class RegisterTests(SimpleTestCase):

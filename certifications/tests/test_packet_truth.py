@@ -107,10 +107,19 @@ class CertificateFromAnotherAgentTests(_Farm):
         self.assertNotIn("which did not issue it", cover)
 
     def test_the_new_agents_cert_no_row_says_the_certificate_is_another_agents(self):
+        """This read the Cert No row of WSDA's fee form, which 02s no longer reproduces (overall review
+        2026-11, OV-PK-W01) and no other renewal row cites the cover's certificate, so the rule is
+        held where it is applied."""
+        from certifications.services.packet_coverage import _qualified_where
+
+        standing, where = _qualified_where(
+            "in this packet", "00-cover.pdf: Legal name, Certificate", True, "Cascadia Organic Certifiers"
+        )
+        self.assertEqual(standing, "in this packet")
+        self.assertIn("the certificate on the cover names Cascadia Organic Certifiers", where)
         osp = self._moving()
         fee = next(f for f in renewal_routing(osp)[1] if f.document_id == "AGR 2521")
-        header = next(r for r in fee.rows if r.ref.startswith("Header"))
-        self.assertIn("the certificate on the cover names Cascadia Organic Certifiers", header.where)
+        self.assertEqual(fee.rows, ())
 
     def test_a_client_id_row_is_not_sent_to_a_cover_that_prints_none(self):
         osp = self._plan(CCOF)
@@ -191,11 +200,11 @@ class UnchangedButChangedTests(_Farm):
             created_by=self.user,
         )
         text = self._file("02s-renewal-status-and-routing.pdf", new)
-        self.assertIn("Sections attested unchanged whose answers changed", text)
+        self.assertIn("Sections attested unchanged that changed", text)
         self.assertIn("between plan v1 and v2", text)
-        self.assertIn("§ 205.201(a)(5)", text[text.index("Sections attested unchanged whose") :][:600])
+        self.assertIn("§ 205.201(a)(5)", text[text.index("Sections attested unchanged that changed") :][:600])
         # split_operation compiles into (a)(5) only: (a)(1) is not called changed.
-        self.assertNotIn("§ 205.201(a)(1)", text[text.index("Sections attested unchanged whose") :][:600])
+        self.assertNotIn("§ 205.201(a)(1)", text[text.index("Sections attested unchanged that changed") :][:600])
 
 
 class CoverCountTests(_Farm):

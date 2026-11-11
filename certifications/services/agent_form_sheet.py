@@ -18,9 +18,11 @@ What this may and may not do (same red line as the plan itself, § 205.201(a)):
     client words them.
 
 Oregon Tilth (OSP Update Form, Rev. 2024/09/20), CCOF (Annual Renewal Contract, and the Crop Update
-ORGB88 when crops change) and WSDA (Renewal Fee Form AGR 2521, and Site Update Information AGR 2516):
-each form is mapped item by item in the register, and `test_agent_form_sheet_and_sales_period` holds
-every line of every form to a row here, both ways.
+ORGB88 when crops change) and WSDA (Renewal Fee Form AGR 2521, Site Update Information AGR 2516 and
+Additional Facilities AGR 2519): each form is mapped item by item in the register, and
+`test_agent_form_sheet_and_sales_period` holds every line of every form to a row here, both ways. A
+form the agent asked Trazo not to reproduce (WSDA's fee form) maps every line to one row that sends
+the operator to the agent's own copy, and is not linked.
 """
 
 from __future__ import annotations
@@ -76,20 +78,16 @@ SUBMISSION = {
         "mail": "CCOF, 877 Cedar Street, Suite 248, Santa Cruz, CA 95060",
         "phone": "(831) 423-2263",
     },
-    # AGR 2521 (R 05/26) and AGR 2516 (R 01/20) as published, read 2026-11-04: "A renewal fee is due
-    # with your renewal application by March 1"; "Late fee ($100 for each month after March 1)"; "You
-    # are encouraged to submit your application packet and forms by email to organic@agr.wa.gov;
-    # however your fee form and check must be sent hardcopy. Make checks payable to: WSDA Organic
-    # Program, PO Box 42591 (US mail), 1111 Washington St SE (Private courier), Olympia, WA 98504-2560".
-    # WSDA sends the renewal application and fee form itself, and the fee form it sends is not
-    # always the published edition (WSDA, 2026-10-26).
+    # WSDA's renewal date from its own pages ("your business must renew your application by March 1
+    # each year", agr.wa.gov new-applicant-info, read 2026-10-01; `wsda/scope.yaml`), and its contact
+    # details. WSDA sends the renewal application and the fee form itself, updates the fee form
+    # regularly, does not publish it, and asked Trazo not to reproduce it (reply received by 2026-11-09). The late fee,
+    # payee, mailing box, courier address and "fee form and check by mail" this held until 2026-11-11
+    # came only from the R 05/26 fee form file, so they went with it (overall review 2026-11,
+    # OV-PK-W01 and OV-PK-W17).
     "wsda": {
         "due": "03-01",
-        "late_fee_per_month": "100",
         "email": "organic@agr.wa.gov",
-        "check_payable_to": "WSDA Organic Program",
-        "mail": "PO Box 42591, Olympia, WA 98504-2560",
-        "courier": "1111 Washington St SE, Olympia, WA 98504-2560",
         "phone": "(360) 902-1805",
         "url": "https://agr.wa.gov/organic",
     },
@@ -162,20 +160,16 @@ FORM_ITEM_ROWS = {
         },
     },
     "wsda": {
+        # Not reproduced (`not_reproduced` in the register; WSDA, reply received by 2026-11-09): every item of the copy
+        # WSDA once published is answered by the one row that sends the operator to the copy WSDA sent.
         "2521-renewal-fee": {
-            "header": ("wsda_due", "wsda_send"),
-            "Header (business, contact, certificate)": (
-                "business_name",
-                "contact_name",
-                "contact_email",
-                "cert_no",
-                "contact_phone",
-            ),
-            "1": ("wsda_gross_income",),
-            "2": ("wsda_renewal_fee",),
-            "3": ("wsda_late_fee",),
-            "4": ("wsda_how_sent",),
-            "4a": ("wsda_sent_date",),
+            "header": ("wsda_due",),
+            "Header (business, contact, certificate)": ("wsda_fee_form",),
+            "1": ("wsda_fee_form",),
+            "2": ("wsda_fee_form",),
+            "3": ("wsda_fee_form",),
+            "4": ("wsda_fee_form",),
+            "4a": ("wsda_fee_form",),
         },
         "2516-site-update": {
             "Instructions (changes per site)": ("site_changes",),
@@ -262,23 +256,34 @@ def _form_meta(agent: str, stem: str) -> dict:
     """One of the agent's forms as the register names it, by file stem; blanks if unreadable.
 
     A form the agent sends with its renewal names no edition: the copy it sends is not always the
-    one it published (WSDA, 2026-10-26), the same rule the renewal supplement keeps.
+    one it published (WSDA, reply received by 2026-11-09), the same rule the renewal supplement keeps.
     """
     from certifications.services.packet_coverage import _load_forms
 
     forms, _loaded = _load_forms(agent)
     form = next((f for f in forms if f.path.stem == stem), None)
     if form is None:
-        return {"title": "", "document_id": "", "revision": "", "url": "", "stem": stem, "sent_with_renewal": False}
+        return {
+            "title": "",
+            "document_id": "",
+            "revision": "",
+            "url": "",
+            "stem": stem,
+            "sent_with_renewal": False,
+            "not_reproduced": False,
+        }
     return {
         "title": form.title,
         "document_id": form.document_id,
         "revision": "" if form.sent_with_renewal else form.revision,
-        "url": form.url,
+        # A form the agent asked Trazo not to reproduce is not linked either: the link was to the
+        # outdated copy the agent warned about (WSDA AGR 2521; overall review 2026-11, OV-PK-W01).
+        "url": form.url if form.reproduced else "",
         "stem": stem,
         # The app labels the link as an earlier published copy, so the operator fills in the one the
         # agent sent, as 02s already says (review of #282).
         "sent_with_renewal": bool(form.sent_with_renewal),
+        "not_reproduced": not form.reproduced,
     }
 
 
@@ -390,8 +395,9 @@ def _ccof_rows(osp, filing, ctx, submission, company, client_id) -> list[SheetRo
 
 
 def _wsda_rows(osp, filing, ctx, submission, company) -> list[SheetRow]:
-    """WSDA's Renewal Fee Form (AGR 2521) and Site Update Information (AGR 2516). The renewal
-    application itself WSDA sends and does not publish, so it has no rows."""
+    """WSDA's Renewal Fee Form (AGR 2521), Site Update Information (AGR 2516) and Additional
+    Facilities and Third-Parties (AGR 2519). The renewal application itself WSDA sends and does not
+    publish, so it has no rows; nor does the fee form, which WSDA sends with it."""
     from datetime import date
 
     from certifications.certifying_agents import agent_for_name
@@ -402,20 +408,23 @@ def _wsda_rows(osp, filing, ctx, submission, company) -> list[SheetRow]:
     certificate = certificate_of_record(est.id)
     held = agent_for_name(certificate.agent)
     cert_no = certificate.number if certificate.number and held is not None and held.slug == "wsda" else ""
-    contact_phone = (getattr(est, "contact_phone", "") or "").strip() or ctx["phone"]
     parcels, excluded = _land_rows(osp)
 
-    # Item 1 is "Gross annual income received in the last calendar year": money received, from the
-    # operation's books. Trazo's subtotal is sales DATED in that year, so it is shown as a cross-check
-    # beside the line the operator fills, never as the figure (renewal audit, 2026-11-04).
+    # The fee form is not reproduced (WSDA, reply received by 2026-11-09: "Our fee forms are updated regularly.
+    # Inputting it in your system would potentially cause an operation to use an outdated form.";
+    # overall review 2026-11, OV-PK-W01). Until 2026-11-11 the sheet itemised lines 1 to 4a of the
+    # R 05/26 file and linked it. One row now sends the operator to the copy WSDA sent, with the one
+    # figure Trazo holds that the operator may want beside it: the sales records subtotal for the
+    # prior calendar year, a cross-check from Trazo's records and never a fee figure. Sales are
+    # counted by the date on the sale record, not by when they were paid (renewal audit, 2026-11-04).
     if filing is None:
-        income = SheetRow("2521", "wsda_gross_income", "yours", extra={"reason": "no_filing"})
+        fee_form = SheetRow("2521", "wsda_fee_form", "yours", extra={"reason": "no_filing"})
     else:
         year = filing.reporting_year - 1
         sales = organic_sales_between(est, date(year, 1, 1), date(year, 12, 31))
-        income = SheetRow(
+        fee_form = SheetRow(
             "2521",
-            "wsda_gross_income",
+            "wsda_fee_form",
             "yours",
             extra={
                 "year": year,
@@ -427,21 +436,7 @@ def _wsda_rows(osp, filing, ctx, submission, company) -> list[SheetRow]:
         )
     return [
         SheetRow("0", "wsda_due", "note", extra=submission),
-        SheetRow("0", "wsda_send", "note", extra=submission),
-        _value_or_edit("2521", "business_name", getattr(company, "name", "") or "", "company", "company", "name"),
-        _contact_name_row("2521", ctx),
-        _value_or_edit("2521", "contact_email", ctx["email"], "establishment", "establishment", "contact_email"),
-        (
-            SheetRow("2521", "cert_no", "value", cert_no, "certificate")
-            if cert_no
-            else SheetRow("2521", "cert_no", "not_recorded", extra={"where": "agent_certificate"})
-        ),
-        _value_or_edit("2521", "contact_phone", contact_phone, "establishment", "establishment", "contact_phone"),
-        income,
-        SheetRow("2521", "wsda_renewal_fee", "yours"),
-        SheetRow("2521", "wsda_late_fee", "yours", extra=submission),
-        SheetRow("2521", "wsda_how_sent", "yours", extra=submission),
-        SheetRow("2521", "wsda_sent_date", "yours"),
+        fee_form,
         SheetRow(
             "2516",
             "site_changes",
@@ -451,7 +446,7 @@ def _wsda_rows(osp, filing, ctx, submission, company) -> list[SheetRow]:
             {"excluded": excluded},
         ),
         SheetRow("2516", "acreage_removed", "note"),
-        *_wsda_2519_rows(est, getattr(company, "name", "") or "", cert_no),
+        *_wsda_2519_rows(osp, getattr(company, "name", "") or "", cert_no),
     ]
 
 
@@ -461,7 +456,118 @@ RESPONSIBILITY_CERTIFIED = "certified_third_party"
 RESPONSIBILITY_UNCERTIFIED = "uncertified_third_party"
 
 
-def _facility_2519(facility, crops) -> dict:
+#: Facility types that hold the crop rather than handle it, read when the record's `role` is unset.
+_STORAGE_TYPES = frozenset({"cold_storage", "dry_storage"})
+#: G6.1 "Is your organic crop handled off the farm by another operation?" (AGR 2121 §J 13, §L 1). Under
+#: these two Yes answers the operation keeps ownership while another operation handles the crop; under
+#: "Yes, but ownership of the crop transfers to that operation before or upon delivery" and "No" no
+#: off-farm handler handles it on the operation's behalf.
+_HANDLED_ON_BEHALF = frozenset({"yes_certified", "yes_uncertified"})
+_NOT_HANDLED_ON_BEHALF = frozenset({"yes_ownership_transfers", "no"})
+
+#: Why a facility is on AGR 2519: the AGR 2121 question whose Yes attaches the form for it.
+BASIS_STORES = "K 1"  # another operation stores the crop on this operation's behalf
+BASIS_HANDLES = "L 1"  # another operation custom handles the crop and this operation keeps ownership
+
+
+@dataclass(frozen=True)
+class _OwnershipAnswers:
+    """The plan's own answers about who owns the crop where, each None while unanswered or hidden."""
+
+    #: G6.1 `handled_by_another_operation` (§J 13, §L 1).
+    handled: str | None
+    #: G6.1 `first_stop_before_buyer` (§J 13): "none" is "Nowhere: it goes straight to the buyer".
+    straight_to_buyer: bool
+    #: G6.2 `third_party_storage_contracted` (§K 1).
+    storage_contracted: bool | None
+    #: G6.2 `owns_crop_in_storage`: "yes" or "no, ownership passes when it is delivered".
+    owns_in_storage: str | None
+
+
+def _ownership_answers(osp) -> _OwnershipAnswers:
+    """Read from the questions the plan shows: a hidden question's stored answer is stale and says
+    nothing (the rule `conditions.visible_questions` keeps everywhere else)."""
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.conditions import answer_value, effective_value, visible_questions
+
+    modules = (osp.module_responses or {}).get("modules") or {}
+
+    def shown(module_key: str, question_key: str):
+        module = MODULES_BY_KEY.get(module_key)
+        answers = (modules.get(module_key) or {}).get("answers") or {}
+        if module is None or (modules.get(module_key) or {}).get("not_applicable"):
+            return None
+        for _page, question in visible_questions(module, answers):
+            if question.key == question_key:
+                return effective_value(question, answer_value(answers, question_key))
+        return None
+
+    stops = shown("g6_1_harvest_transport", "first_stop_before_buyer") or []
+    contracted = shown("g6_2_storage", "third_party_storage_contracted")
+    return _OwnershipAnswers(
+        handled=shown("g6_1_harvest_transport", "handled_by_another_operation") or None,
+        straight_to_buyer="none" in stops,
+        storage_contracted=contracted if isinstance(contracted, bool) else None,
+        owns_in_storage=shown("g6_2_storage", "owns_crop_in_storage") or None,
+    )
+
+
+#: What the plan's answers say about one facility another operation runs (`_on_behalf`).
+LISTED = "listed"
+NOT_ON_BEHALF = "not_on_behalf"
+NOT_STATED = "not_stated"
+
+
+def _on_behalf(facility, plan: _OwnershipAnswers) -> tuple[str, tuple]:
+    """(LISTED, bases) when the plan says the facility stores or handles the crop while this operation
+    still owns it; (NOT_ON_BEHALF, ()) when the plan's answers say it does not; (NOT_STATED, ()) when
+    they do not say.
+
+    Overall review 2026-11, OV-PK-W04: the sheet listed every facility another operation runs, so a
+    buyer that takes title on delivery was offered AGR 2519 and told a responsibility statement "fits",
+    beside a plan saying the crop goes straight to the buyer and ownership transfers. AGR 2519 covers
+    facilities a business "or a contracted third-party perform" for it (R 01/24), which a buyer that
+    owns the crop is not. Each side of the facility is read against the answers that ask about it:
+
+      stores   listed (K 1) when the plan contracts off-farm storage or says the operation still owns
+               the crop in someone else's storage; not on behalf when it says no contract, ownership
+               passing on delivery, or the crop going straight to the buyer.
+      handles  listed (L 1) when off-farm handling is "Yes" by a certified or an uncertified operation;
+               not on behalf when it is "Yes, but ownership transfers" or "No", or the crop goes
+               straight to the buyer.
+
+    A facility that both stores and handles is listed when either side is, and is named as not on
+    behalf only when both sides say so. Nothing is inferred from the facility's name.
+    """
+    stores = facility.role in ("storage", "both") or (not facility.role and facility.facility_type in _STORAGE_TYPES)
+    handles = facility.role in ("handling", "both") or (
+        not facility.role and facility.facility_type not in _STORAGE_TYPES
+    )
+    outcomes, bases = [], []
+    if stores:
+        if plan.storage_contracted is True or plan.owns_in_storage == "yes":
+            outcomes.append(LISTED)
+            bases.append(BASIS_STORES)
+        elif plan.storage_contracted is False or plan.owns_in_storage == "no" or plan.straight_to_buyer:
+            outcomes.append(NOT_ON_BEHALF)
+        else:
+            outcomes.append(NOT_STATED)
+    if handles:
+        if plan.handled in _HANDLED_ON_BEHALF:
+            outcomes.append(LISTED)
+            bases.append(BASIS_HANDLES)
+        elif plan.handled in _NOT_HANDLED_ON_BEHALF or plan.straight_to_buyer:
+            outcomes.append(NOT_ON_BEHALF)
+        else:
+            outcomes.append(NOT_STATED)
+    if LISTED in outcomes:
+        return LISTED, tuple(bases)
+    if outcomes and all(outcome == NOT_ON_BEHALF for outcome in outcomes):
+        return NOT_ON_BEHALF, ()
+    return NOT_STATED, ()
+
+
+def _facility_2519(facility, crops, bases=()) -> dict:
     """One facility's AGR 2519, from its record: what to copy, and what the record leaves empty."""
     from certifications.facility_activities import ACTIVITY_KEYS
 
@@ -502,30 +608,47 @@ def _facility_2519(facility, crops) -> dict:
         ),
         "exemption_basis": "" if certified else (facility.exemption_basis or "").strip(),
         "missing": missing,
+        # The AGR 2121 questions whose Yes puts it on this form (`_on_behalf`).
+        "basis": list(bases),
     }
 
 
-def _wsda_2519_rows(est, business_name: str, cert_no: str) -> list[SheetRow]:
+def _wsda_2519_rows(osp, business_name: str, cert_no: str) -> list[SheetRow]:
     """WSDA's Additional Facilities and Third-Parties (AGR 2519), one per facility another operation
-    runs for this one (AGR 2121 §J 13, §K 1, §L 1). The operation's own facilities are not listed: the
-    form covers an own facility only at a different address from the primary certified location, which
-    Trazo does not know, so the sheet names them for the operator to decide."""
+    runs that stores or handles the crop while this operation still owns it (AGR 2121 §J 13, §K 1,
+    §L 1; `_on_behalf`). The facilities the plan says get the crop after it changes hands are named,
+    not listed, and so are those the plan does not yet say either way. The operation's own facilities
+    are not listed: the form covers an own facility only at a different address from the primary
+    certified location, which Trazo does not know, so the sheet names them for the operator to decide."""
     from certifications.models import PostHarvestFacility
     from certifications.services.facility_crops import crops_by_facility
 
+    est = osp.establishment
     facilities = list(PostHarvestFacility.objects.filter(establishment=est).order_by("name", "pk"))
     third_party = [f for f in facilities if not f.is_own]
     own = [f.name for f in facilities if f.is_own]
-    crops = crops_by_facility(est) if third_party else {}
-    header = {"business_name": business_name, "cert_no": cert_no, "own_facilities": own}
-    if not third_party:
-        main = SheetRow("2519", "facilities_2519", "note", extra={**header, "reason": "none_on_file"})
+    plan = _ownership_answers(osp)
+    judged = [(f, *_on_behalf(f, plan)) for f in third_party]
+    listed = [(f, bases) for f, outcome, bases in judged if outcome == LISTED]
+    header = {
+        "business_name": business_name,
+        "cert_no": cert_no,
+        "own_facilities": own,
+        "not_on_behalf": [f.name for f, outcome, _bases in judged if outcome == NOT_ON_BEHALF],
+        "not_stated": [f.name for f, outcome, _bases in judged if outcome == NOT_STATED],
+    }
+    if not listed:
+        # "none_on_behalf" only when the plan places every one of them after the crop changes hands;
+        # while it is silent about any, the sheet says that instead of "none".
+        reason = "none_on_file" if not third_party else "none_stated" if header["not_stated"] else "none_on_behalf"
+        main = SheetRow("2519", "facilities_2519", "note", extra={**header, "reason": reason})
     else:
+        crops = crops_by_facility(est)
         main = SheetRow(
             "2519",
             "facilities_2519",
             "value",
-            [_facility_2519(f, crops.get(f.pk, [])) for f in third_party],
+            [_facility_2519(f, crops.get(f.pk, []), bases) for f, bases in listed],
             "facilities",
             header,
         )
