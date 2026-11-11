@@ -50,7 +50,16 @@ Usage
     poetry run python manage.py seed_showcase_walnut_farm
     poetry run python manage.py seed_showcase_walnut_farm --establishment 160
     poetry run python manage.py seed_showcase_walnut_farm --close-current   # after harvest
+    poetry run python manage.py seed_showcase_walnut_farm --with-open-items # landing hero, Nov 2026
     poetry run python manage.py seed_showcase_walnut_farm --verify-only
+
+`--with-open-items` is the state the landing hero has shown since 2026-11-11, on purpose: a
+readiness card that is all green tells a grower nothing about what Trazo catches. It finishes
+North Block's current season with the shaker wash-down never logged (§ 205.272: the harvester
+came off conventional ground with no cleaning record), keeps East Block's season underway, and
+puts the company on the comped Pilot plan. Every finding the card then shows is computed by the
+product from those records; the two "not on your materials list" items need no help, because
+the drift detector really does not find Kocide 3000-O or Entrust SC on the plan.
 """
 
 from __future__ import annotations
@@ -122,9 +131,12 @@ FARM_DESCRIPTION = (
 )
 
 CERTIFIER_NAME = "Pacific Slope Organic Certifiers"
-HANDLER_NAME = "Cache Creek Nut Company"
-INPUT_SUPPLIER = "Yolo Ag Supply, Woodland CA"
-NURSERY_SUPPLIER = "Capay Valley Nursery"
+# Businesses are obviously fictional ("Sample ..."). The handler was "Cache Creek Nut Company,
+# receiving scale, Woodland CA", one word off a real Woodland nut processor; a demo packet gets
+# forwarded, and every invented invoice and certificate date would have sat on that name.
+HANDLER_NAME = "Sample Valley Hulling Co."
+INPUT_SUPPLIER = "Sample Ag Supply, Woodland CA"
+NURSERY_SUPPLIER = "Sample Nursery Co."
 FARM_MANAGER = "Paula Rivas"
 CROP_CONSULTANT = "D. Okafor, PCA #48213"
 
@@ -481,6 +493,62 @@ def _album(image_key):
     return _gallery_from_urls(DEMO_IMAGES.get(image_key) or [])
 
 
+OSP_ANSWERS_PATH = os.path.join(os.path.dirname(__file__), "_blue_oak_osp_answers.json")
+
+
+def _load_osp_answers() -> dict:
+    """Blue Oak's module answers, checked against the questionnaire as it stands today.
+
+    Fails the seed, naming the module and question, when a module has no entry, a required
+    question is unanswered, a choice is not one of the options, or an answer names a question that
+    no longer exists. A content change to a module therefore breaks this seeder until the fixture
+    answers it, which is the point: the screenshot cannot drift from the product.
+    """
+    import json
+
+    from certifications.osp_modules import MODULE_REGISTRY
+    from certifications.osp_modules.conditions import invalid_choice_answers, missing_required, validate_answer_keys
+
+    with open(OSP_ANSWERS_PATH, encoding="utf-8") as fh:
+        fixture = json.load(fh)
+    problems = []
+    for module in MODULE_REGISTRY:
+        spec = fixture.get(module.key)
+        if spec is None:
+            problems.append(f"{module.key}: no entry")
+            continue
+        answers = spec.get("answers") or {}
+        not_applicable = bool(spec.get("not_applicable"))
+        if not_applicable and not module.allows_not_applicable:
+            problems.append(f"{module.key}: marked not applicable, which this module does not allow")
+        for key in missing_required(module, answers, not_applicable):
+            problems.append(f"{module.key}.{key}: required and unanswered")
+        for key, value in invalid_choice_answers(module, answers).items():
+            problems.append(f"{module.key}.{key}: {value!r} is not one of the options")
+        for key in validate_answer_keys(module, answers):
+            problems.append(f"{module.key}.{key}: no such question")
+    if problems:
+        raise CommandError(f"{os.path.basename(OSP_ANSWERS_PATH)} is out of step:\n  " + "\n  ".join(problems))
+    return fixture
+
+
+def _module_entry(module_key: str, fixture: dict, answered_at: str, user) -> dict:
+    """One `module_responses["modules"]` entry in the shape the module save path writes."""
+    from certifications.osp_modules import CONTENT_VERSION
+
+    spec = fixture[module_key]
+    not_applicable = bool(spec.get("not_applicable"))
+    return {
+        "status": "not_applicable" if not_applicable else "completed",
+        "answers": {key: {"at": answered_at, "value": value} for key, value in (spec.get("answers") or {}).items()},
+        "completed_at": answered_at,
+        "completed_by": user.id,
+        "not_applicable": not_applicable,
+        "na_attestation": {"at": answered_at, "by": user.id} if not_applicable else None,
+        "definition_version": CONTENT_VERSION,
+    }
+
+
 def _q(value, places="0.01"):
     return Decimal(value).quantize(Decimal(places))
 
@@ -499,6 +567,15 @@ class Command(BaseCommand):
             "--close-current",
             action="store_true",
             help="Finish, publish and sell the current-year season too (run after real harvest).",
+        )
+        parser.add_argument(
+            "--with-open-items",
+            action="store_true",
+            help=(
+                "The state the November 2026 landing hero shows: North Block's current season "
+                "finished with its shaker wash-down never logged (a § 205.272 finding), East "
+                "Block's still underway, and the company on the comped Pilot plan."
+            ),
         )
         parser.add_argument(
             "--photo-dir",
@@ -547,8 +624,10 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"Showcase farm: {est.name} (id {est.id})"))
 
+        with_open_items = options["with_open_items"]
+
         self._seed_farm_profile(est)
-        self._seed_subscription(est)
+        self._seed_subscription(est, pilot=with_open_items)
         self._seed_certifications(est, prior_year)
         osp = self._seed_osp(est, user)
         # Two filings: the year the closed season covers (submitted, as it would be by now)
@@ -566,24 +645,36 @@ class Command(BaseCommand):
 
         close_current = options["close_current"]
         total_events = 0
-        for block, parcel in zip(BLOCKS, parcels):
+        for index, (block, parcel) in enumerate(zip(BLOCKS, parcels)):
             self._seed_parcel_profile(parcel, block)
 
             closed = self._create_production(parcel, block, prior_year, product, crop, user, finished=True)
             total_events += self._seed_season(closed, user, block, prior_year, cutoff=None, photos=True)
             self._seed_sale(closed, block, prior_year)
 
-            cutoff = None if close_current else today
-            current = self._create_production(parcel, block, current_year, product, crop, user, finished=close_current)
-            total_events += self._seed_season(current, user, block, current_year, cutoff=cutoff, photos=True)
-            if close_current:
+            # --with-open-items: the first block is finished in Trazo and the second is still
+            # being wrapped up, which is where a two-block orchard is in November.
+            finish_current = close_current or (with_open_items and index == 0)
+            # ...and the finished one is the season the readiness card reviews, so that is where
+            # the wash-down goes unlogged.
+            log_wash_down = not (with_open_items and index == 0)
+            cutoff = None if finish_current else today
+            current = self._create_production(parcel, block, current_year, product, crop, user, finished=finish_current)
+            total_events += self._seed_season(
+                current, user, block, current_year, cutoff=cutoff, photos=True, log_wash_down=log_wash_down
+            )
+            if finish_current:
                 self._seed_sale(current, block, current_year)
 
-            # The parcel card reads this to show what is growing right now.
-            parcel.current_history = current
+            # The parcel card reads this to show what is growing right now. A finished season is
+            # not growing: `Parcel.finish_history_record` nulls the pointer when a grower finishes
+            # one, and writing it here anyway printed "Season underway" on a block whose season
+            # had closed.
+            parcel.current_history = None if finish_current else current
             parcel.save(update_fields=["current_history"])
 
-            self.stdout.write(f"  {block['parcel_name']}: {prior_year} closed + {current_year} in progress.")
+            state = "finished" if finish_current else "in progress"
+            self.stdout.write(f"  {block['parcel_name']}: {prior_year} closed + {current_year} {state}.")
 
         self._seed_scans(est)
         self.stdout.write(self.style.SUCCESS(f"  {total_events} events written."))
@@ -654,16 +745,21 @@ class Command(BaseCommand):
         est.save()
         self.stdout.write("  Farm profile, photo + OFPP flags set.")
 
-    def _seed_subscription(self, est):
+    def _seed_subscription(self, est, pilot=False):
         """Compliance plan, so no usage meter reads 'over limit' in the shot.
 
         A Starter company with two parcels and four productions renders red usage meters and an
         upsell banner directly under the headline — true to the plan limits, wrong for a
         screenshot of the plan we sell.
+
+        `pilot`: the comped Pilot plan, which is where a design-partner farm actually is in
+        November 2026. It has the same certifier exports. With one farm and nothing to add, the
+        farm home draws no farm-switcher row; on Compliance the row holds a "Farm limit" lock.
         """
-        plan = Plan.objects.filter(slug="compliance-yearly").first()
+        slug = "pilot" if pilot else "compliance-yearly"
+        plan = Plan.objects.filter(slug=slug).first()
         if plan is None:
-            self.stdout.write(self.style.WARNING("  compliance-yearly plan missing — skipped."))
+            self.stdout.write(self.style.WARNING(f"  {slug} plan missing (run create_plans), skipped."))
             return
         now = timezone.now()
         Subscription.objects.update_or_create(
@@ -677,7 +773,7 @@ class Command(BaseCommand):
                 "trial_end": None,
             },
         )
-        self.stdout.write("  Subscription: Compliance (yearly).")
+        self.stdout.write(f"  Subscription: {plan.name}.")
 
     def _seed_certifications(self, est, prior_year):
         """One organic certificate, expiring inside the deadline strip's 120-day horizon.
@@ -753,7 +849,7 @@ class Command(BaseCommand):
         if not plans:
             plans = [OrganicSystemPlan.objects.create(establishment=est, version_number=1, created_by=user)]
 
-        completed_at = timezone.now().isoformat()
+        answers_fixture = _load_osp_answers()
         for index, plan in enumerate(plans):
             is_newest = index == len(plans) - 1
 
@@ -769,16 +865,22 @@ class Command(BaseCommand):
             plan.approved_at = plan.approved_at or timezone.now() - timedelta(days=180)
             plan.approval_certifier_name = CERTIFIER_NAME
 
-            # Mark every registered module answered. G2.0 in particular IS the
-            # fraud-prevention plan when completed (2026-08-09) — leaving it unanswered puts a
-            # blocker on the readiness card no matter what the farm-profile flag says.
+            # Every registered module ANSWERED, from `_blue_oak_osp_answers.json`. G2.0 in
+            # particular IS the fraud-prevention plan when completed (2026-08-09); leaving it
+            # unanswered puts a blocker on the readiness card no matter what the farm-profile flag
+            # says.
+            #
+            # This loop used to stamp `completed_at` over an EMPTY answers dict. The answers the
+            # screenshots showed existed only in database copies, and the OSP page now counts
+            # required answers, so the farm read "8 of 20 modules have every answer" (2026-11-11).
+            # The answers are dated a little before the plan was filed, which is when a grower
+            # writes them; that date is also what "Check the plan against your records" measures
+            # change from.
+            answered_at = (plan.submitted_at - timedelta(days=10)).isoformat()
             responses = plan.module_responses or {}
             modules = responses.get("modules") or {}
             for definition in MODULE_REGISTRY:
-                entry = modules.get(definition.key) or {}
-                entry.setdefault("answers", {})
-                entry["completed_at"] = entry.get("completed_at") or completed_at
-                modules[definition.key] = entry
+                modules[definition.key] = _module_entry(definition.key, answers_fixture, answered_at, user)
             responses["modules"] = modules
             plan.module_responses = responses
             plan.save()
@@ -936,15 +1038,15 @@ class Command(BaseCommand):
         HistoryScan.objects.filter(history__parcel__establishment=est).delete()
         now = timezone.now()
         total = 0
-        for offset, production in enumerate(published):
-            # A deterministic, unremarkable curve: a handful of scans a day over the last
-            # month, more on the lot that shipped first. No randomness — a seeder that
-            # produces a different screenshot every run is not reproducible.
-            counts = [4, 2, 5, 3, 6, 2, 4, 3, 5, 2, 4, 6, 3, 2, 5]
-            scans = []
-            for day, count in enumerate(counts):
-                for n in range(count if offset == 0 else max(1, count - 1)):
-                    scans.append(now - timedelta(days=day * 2, hours=n * 3 + 1))
+        newest = max(published, key=lambda production: (production.finish_date, production.id))
+        for production in published:
+            # A handful of scans on the lot that shipped most recently, and none on the rest.
+            # This farm sells in-shell to one handler, so the people scanning are a buyer's
+            # receiving and QA staff, not shoppers. It used to be 97 scans a month (179 across four
+            # lots), a volume no wholesale lot sees, printed under the farm name on the landing
+            # hero. Deterministic, so every run produces the same screenshot.
+            days_ago = [2, 5, 9, 16, 23, 27] if production.id == newest.id else []
+            scans = [now - timedelta(days=day, hours=3) for day in days_ago]
             # One at a time, not bulk_create: `claim_token` is minted in `HistoryScan.save()`,
             # which bulk_create skips, and the blank tokens then collide on a unique index.
             for i, when in enumerate(scans):
@@ -978,7 +1080,7 @@ class Command(BaseCommand):
             buyer_name=HANDLER_NAME,
             quantity=block["acres"] * Decimal("4200"),
             quantity_unit="lb",
-            invoice_number=f"CCN-{year}-{block['code']}-0118",
+            invoice_number=f"SVH-{year}-{block['code']}-0118",
             organic_on_invoice=True,
             organic_label_category="100_percent_organic",
             bill_of_lading=f"BOL-{year}-{block['code']}-4471",
@@ -996,7 +1098,7 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ the season
 
-    def _seed_season(self, production, user, block, year, cutoff, photos):
+    def _seed_season(self, production, user, block, year, cutoff, photos, log_wash_down=True):
         """One organic Chandler walnut season, in the order it actually happens.
 
         `cutoff` truncates the program at today's date for a season still under way — the
@@ -1739,30 +1841,35 @@ class Command(BaseCommand):
             production_efficiency="normal",
         )
 
-        cleaning = add(
-            ProductionEvent,
-            _dt(year, 9, 20, 7),
-            photo_key="equipment-cleaning",
-            type=ProductionEvent.EQUIPMENT_MAINTENANCE,
-            name="Shaker and sweeper cleaning before harvest",
-            description=(
-                "Shaker and sweeper are shared with a neighbouring conventional operation. Both "
-                "were pressure-washed, scrubbed and inspected before entering organic ground, per "
-                "SOP-CLEAN-002 (§ 205.272). Cleaning photographed and logged."
-            ),
-            performed_by=FARM_MANAGER,
-            equipment_type="harvester",
-            equipment_operation_type="CL",
-            equipment_hours=_q("2.50"),
-            cleaning_date=date(year, 9, 20),
-            cleaning_asset_class="equipment",
-            cleaning_method="Pressure wash, manual scrub of contact surfaces, visual inspection",
-            cleaning_materials_used="Potable water; no sanitizer required for dry nut contact surfaces",
-            cleaned_by=f"{FARM_MANAGER} (farm manager)",
-            cleaning_protocol_reference="SOP-CLEAN-002 (§ 205.272)",
-            shared_with_conventional=True,
-            production_efficiency="normal",
-        )
+        # `log_wash_down=False` (--with-open-items) is the season where nobody logged the wash-down:
+        # the shaker still came off conventional ground, so the harvest keeps
+        # `shared_with_conventional` and the readiness card reports § 205.272 as missing.
+        cleaning = None
+        if log_wash_down:
+            cleaning = add(
+                ProductionEvent,
+                _dt(year, 9, 20, 7),
+                photo_key="equipment-cleaning",
+                type=ProductionEvent.EQUIPMENT_MAINTENANCE,
+                name="Shaker and sweeper cleaning before harvest",
+                description=(
+                    "Shaker and sweeper are shared with a neighbouring conventional operation. Both "
+                    "were pressure-washed, scrubbed and inspected before entering organic ground, per "
+                    "SOP-CLEAN-002 (§ 205.272). Cleaning photographed and logged."
+                ),
+                performed_by=FARM_MANAGER,
+                equipment_type="harvester",
+                equipment_operation_type="CL",
+                equipment_hours=_q("2.50"),
+                cleaning_date=date(year, 9, 20),
+                cleaning_asset_class="equipment",
+                cleaning_method="Pressure wash, manual scrub of contact surfaces, visual inspection",
+                cleaning_materials_used="Potable water; no sanitizer required for dry nut contact surfaces",
+                cleaned_by=f"{FARM_MANAGER} (farm manager)",
+                cleaning_protocol_reference="SOP-CLEAN-002 (§ 205.272)",
+                shared_with_conventional=True,
+                production_efficiency="normal",
+            )
 
         harvest = add(
             ProductionEvent,
@@ -1783,7 +1890,7 @@ class Command(BaseCommand):
             amount_determination="scale_verified",
             harvest_destination="sold_direct",
             buffer_disposition="not_harvested",
-            harvest_contract_number=f"CCN-{year}-DA-118",
+            harvest_contract_number=f"SVH-{year}-DA-118",
             shared_with_conventional=True,
             equipment_cleaning_event=cleaning,
             fuel_consumed=_q(acres * Decimal("3.4")),
@@ -1795,10 +1902,11 @@ class Command(BaseCommand):
             observation="Moisture at delivery 8.2%. Weigh ticket attached to the lot record.",
             extra_data={"yield_lb_acre": 4200, "moisture_pct_at_delivery": 8.2},
         )
-        if harvest is not None and cleaning is None:
+        if harvest is not None and cleaning is None and log_wash_down:
             # Only reachable on a truncated season, where neither event exists. Guard kept so a
             # future cutoff change cannot silently produce a shared-equipment harvest with no
-            # cleaning link — that is a § 205.272 finding, not a screenshot.
+            # cleaning link. That is a § 205.272 finding, and it is only ever produced on
+            # purpose, by --with-open-items.
             harvest.shared_with_conventional = False
             harvest.save(update_fields=["shared_with_conventional"])
 
@@ -1918,10 +2026,10 @@ class Command(BaseCommand):
                 "  In progress, events run to today, and its entry timestamps sit naturally against them."
             )
         else:
-            # --close-current was used, so "in progress" would be a false claim about the very
-            # artifact this note exists to keep honest.
+            # --close-current or --with-open-items closed it, so "in progress" would be a false
+            # claim about the very artifact this note exists to keep honest.
             self.stdout.write(
-                "  Closed this crop year (--close-current). Its events are recent, so the entry "
+                "  Closed this crop year. Its events are recent, so the entry "
                 "timestamps still read far more naturally than the prior season's."
             )
         self.stdout.write(
