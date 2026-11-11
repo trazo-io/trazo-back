@@ -338,10 +338,26 @@ def tenure_declaration(parcel) -> str:
     if answer_value(answers, "dlpm_none_within_tenure") is True:
         return "no prohibited material (declared)"
     # The operation's own signed affidavit for its period (OTCO C2 2.5, CCOF ORGB49 §G) is a statement too, and
-    # only once the signed copy is on file: a row typed in Trazo is not a signature.
-    if any(affidavit_attachment_name(a) for a in operation_affidavits(parcel)):
+    # only once the signed copy is on file (a row typed in Trazo is not a signature) and only when the period it
+    # states covers the operation's own part of the window: one stating six months must not read as covering
+    # all of it (review of back PR 396).
+    if any(_own_affidavit_covers(a, parcel) for a in operation_affidavits(parcel)):
         return "its own signed affidavit (attached)"
     return ""
+
+
+def _own_affidavit_covers(affidavit, parcel, today: Optional[date] = None) -> bool:
+    """Signed copy on file, and a stated period from the start of the operation's part of the window (its tenure
+    start, or the window start if earlier) through today."""
+    if not affidavit_attachment_name(affidavit):
+        return False
+    began = getattr(parcel, "date_began_managing", None)
+    start, end = affidavit.management_period_start, affidavit.management_period_end
+    if not (began and start):
+        return False
+    today = today or date.today()
+    own_from = max(began, _months_back(today, WINDOW_MONTHS))
+    return start <= own_from and (end is None or end >= today)
 
 
 def _verification_of_no_lapse(parcel, assessment) -> str:

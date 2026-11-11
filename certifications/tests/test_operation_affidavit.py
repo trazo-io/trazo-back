@@ -86,9 +86,10 @@ class TheOperationsAffidavitIsItsOwn(_Parcel):
         self.assertEqual(row.affidavit, mine)
 
     def test_a_signed_copy_is_a_statement_for_the_operations_period_and_an_unsigned_row_is_not(self):
-        self.own(signed=False)
+        began = self.parcel.date_began_managing
+        self.own(signed=False, management_period_start=began)
         self.assertEqual(tenure_declaration(self.parcel), "")
-        self.own(signed=True)
+        self.own(signed=True, management_period_start=began)
         self.assertEqual(tenure_declaration(self.parcel), "its own signed affidavit (attached)")
         account = coverage(self.parcel, prior_manager_rows(self.parcel))
         self.assertIn("the operation from", account.text)
@@ -174,3 +175,20 @@ class TheSignedCopyUploads(_Parcel):
             self.assertEqual(r.status_code, 400, name)
         aff.refresh_from_db()
         self.assertFalse(aff.signed_document)
+
+
+class ReviewFindingsOn396(_Parcel):
+    def test_a_signed_copy_stating_part_of_the_period_does_not_cover_it(self):
+        # Six months stated, signed and attached: the operation's own period is still not accounted for.
+        began = self.parcel.date_began_managing
+        self.own(management_period_start=began, management_period_end=began + timedelta(days=180))
+        self.assertEqual(tenure_declaration(self.parcel), "")
+        self.assertIn("is not covered", coverage(self.parcel, prior_manager_rows(self.parcel)).text)
+
+    def test_a_signed_copy_with_no_period_does_not_cover_it(self):
+        self.own()
+        self.assertEqual(tenure_declaration(self.parcel), "")
+
+    def test_a_signed_copy_from_tenure_start_to_present_covers_it(self):
+        self.own(management_period_start=self.parcel.date_began_managing)
+        self.assertEqual(tenure_declaration(self.parcel), "its own signed affidavit (attached)")
