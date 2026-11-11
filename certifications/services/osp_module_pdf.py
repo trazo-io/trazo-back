@@ -2025,8 +2025,8 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                 )
         out.append(
             Paragraph(
-                "A signed affidavit, where one is attached, is in the packet's "
-                "parcels/affidavits/ folder. Dates are as each signer stated them.",
+                "A signed affidavit, a prior manager's or the operation's own, where one is attached, is in "
+                "the packet's parcels/affidavits/ folder. Dates are as each signer stated them.",
                 meta,
             )
         )

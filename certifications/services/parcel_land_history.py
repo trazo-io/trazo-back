@@ -173,7 +173,11 @@ def _declared(affidavit) -> Tuple[str, bool]:
 def operation_affidavits(parcel) -> list:
     """The operation's own signed-for-its-own-period affidavits (OTCO C2 2.5, CCOF ORGB49 §G), newest signed
     first. `.all()` then a filter in Python, so a caller's prefetch of `landowner_affidavits` is used."""
-    own = [a for a in parcel.landowner_affidavits.all() if getattr(a, "signer_role", "") == "this_operation"]
+    manager = getattr(parcel, "landowner_affidavits", None)
+    if manager is None:
+        # Callers pass light stand-ins for a parcel (tests, previews); one without affidavits has none.
+        return []
+    own = [a for a in manager.all() if getattr(a, "signer_role", "") == "this_operation"]
     return sorted(own, key=lambda a: (a.previous_manager_signed_date or date.min, a.pk), reverse=True)
 
 
