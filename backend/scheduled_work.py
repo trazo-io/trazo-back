@@ -209,6 +209,19 @@ PERIODIC_WORK = {
             "it or soften the notice before a crew number is handed to a farm."
         ),
     },
+    "purge_closure_exports": {
+        "source": JOB,
+        "cadence": "daily",
+        "command": "purge_closure_exports",
+        "runner": NOTHING,
+        "kind": PROMISE,
+        "note": (
+            "The privacy policy (7.1) says a closed account's export is deleted 30 days after it "
+            "is written. `close_account --export` writes it to private storage under "
+            "account-closures/ so the farm can download it before deletion; kept longer, it is the "
+            "data the farm asked Trazo to delete. Added 2026-11-11 (OV-CLM-C06)."
+        ),
+    },
 }
 
 # Work whose absence has a named party on the other side. Deleting an entry from here is a decision

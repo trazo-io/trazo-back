@@ -416,7 +416,12 @@ class EveryDispatchTargetResolves(SimpleTestCase):
 
     def test_every_item_with_a_named_party_is_dispatched_or_says_why_not(self):
         """The two LEGAL items and the crew audio promise are the reason any of this exists."""
-        for key in ("send-renewal-reminders", "gdpr-cleanup-scan-data", "release_stale_field_note_audio"):
+        for key in (
+            "send-renewal-reminders",
+            "gdpr-cleanup-scan-data",
+            "release_stale_field_note_audio",
+            "purge_closure_exports",
+        ):
             with self.subTest(work=key):
                 self.assertTrue(
                     PERIODIC_WORK[key].get("cadence"),

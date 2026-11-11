@@ -6,6 +6,7 @@ import dj_database_url
 import sentry_sdk
 from decouple import config
 
+from backend.sentry_scrub import scrub_event
 from backend.settings.base import *
 
 # Imported explicitly: base.py imports a fixed list of names from subdomain_config, so
@@ -21,6 +22,10 @@ if SENTRY_DSN:
         profiles_sample_rate=0.1,
         send_default_pii=False,
         environment=config("ENVIRONMENT", default="production"),
+        # No request bodies, no query strings, no credentials in paths (backend/sentry_scrub.py).
+        max_request_body_size="never",
+        before_send=scrub_event,
+        before_send_transaction=scrub_event,
     )
 
 # Import secure settings after base settings are loaded
