@@ -187,6 +187,27 @@ def _join(words: list[str], conjunction: str) -> str:
 #: The planned-crop table's columns (CCOF ORGB49 A8 crop and acres; WSDA AGR 2264 ref 8 adds variety and the
 #: estimated harvest date; OTCO C2 2.1 10) crop and acres).
 PLANNED_CROP_COLUMNS = ("Crop", "Variety", "Expected harvest", "Acres")
+PLANNED_CROP_WIDTHS = (2.0, 2.0, 1.4, 0.9)
+
+#: The same table with an orchard planting's columns (block, rootstock, year planted, bearing status; overall
+#: review 2026-11, OV-FJ-C06). Printed only when a row on the parcel states one of them, so a vegetable parcel's
+#: table keeps its four readable columns. Widths total 6.5 in, inside the module PDF's frame (6.8 in less its padding),
+#: and leave "Not stated" and a YYYY-MM-DD date on one line.
+ORCHARD_CROP_COLUMNS = (
+    "Crop",
+    "Block",
+    "Variety",
+    "Rootstock",
+    "Year planted",
+    "Bearing status",
+    "Expected harvest",
+    "Acres",
+)
+ORCHARD_CROP_WIDTHS = (0.95, 0.8, 0.95, 0.8, 0.75, 0.8, 0.85, 0.6)
+
+#: The orchard fields on `ParcelPlannedCrop`; any one of them stated on any row switches the table to the orchard
+#: columns.
+ORCHARD_FIELDS = ("block_name", "rootstock", "year_planted", "bearing_status")
 
 
 def _acres_number(raw):
@@ -242,22 +263,40 @@ def open_season_crops(parcel) -> list[str]:
     return names
 
 
-def planned_crop_rows(parcel) -> list[tuple[list[str], list[str]]]:
-    """(cells, notes) per planned crop, in the shape `_register_table` prints."""
+def _states_orchard_fields(crop) -> bool:
+    return any(getattr(crop, field) not in (None, "") for field in ORCHARD_FIELDS)
+
+
+def planned_crop_table(parcel) -> tuple[tuple[str, ...], tuple[float, ...], list[tuple[list[str], list[str]]]]:
+    """(header, widths, rows) for the planned-crop table, rows as (cells, notes) in the shape `_register_table`
+    prints.
+
+    The orchard columns print for every row once any row on the parcel states a block, rootstock, year planted or
+    bearing status; a blank cell then prints "Not stated" like the other columns. A blank bearing status is never
+    printed as not yet bearing."""
+    crops = list(parcel.planned_crops.all().order_by("pk"))
+    orchard = any(_states_orchard_fields(crop) for crop in crops)
     rows = []
-    for crop in parcel.planned_crops.all().order_by("pk"):
-        rows.append(
-            (
-                [
-                    [crop.crop],
-                    [crop.variety or "Not stated"],
-                    [crop.expected_harvest.isoformat() if crop.expected_harvest else "Not stated"],
-                    [format_acres(crop.acres) if crop.acres is not None else "Not stated"],
-                ],
-                [],
-            )
-        )
-    return rows
+    for crop in crops:
+        harvest = crop.expected_harvest.isoformat() if crop.expected_harvest else "Not stated"
+        acres = format_acres(crop.acres) if crop.acres is not None else "Not stated"
+        if orchard:
+            cells = [
+                [crop.crop],
+                [crop.block_name or "Not stated"],
+                [crop.variety or "Not stated"],
+                [crop.rootstock or "Not stated"],
+                [str(crop.year_planted) if crop.year_planted is not None else "Not stated"],
+                [crop.get_bearing_status_display() if crop.bearing_status else "Not stated"],
+                [harvest],
+                [acres],
+            ]
+        else:
+            cells = [[crop.crop], [crop.variety or "Not stated"], [harvest], [acres]]
+        rows.append((cells, []))
+    if orchard:
+        return ORCHARD_CROP_COLUMNS, ORCHARD_CROP_WIDTHS, rows
+    return PLANNED_CROP_COLUMNS, PLANNED_CROP_WIDTHS, rows
 
 
 def planned_crop_lines(parcel, answers: dict) -> list[str]:
@@ -276,7 +315,8 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
         lines.append(
             f"Acres listed: {format_acres(listed)} across {len(stated)} crop{'s' if len(stated) != 1 else ''}."
         )
-    missing = [c.crop for c in crops if c.acres is None]
+    # A parcel with three blocks of apples has three "Apples" rows, so a row with a block name is named by it.
+    missing = [f"{c.crop} ({c.block_name})" if c.block_name else c.crop for c in crops if c.acres is None]
     if missing:
         lines.append(f"[REVIEW] No acres are given for: {', '.join(missing)}.")
     to_certify = _acres_number(answer_value(answers, "acres_to_certify"))

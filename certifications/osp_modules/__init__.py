@@ -343,7 +343,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.12.04: parcel crops and acreage. The parcel application asks the total acres to be certified (CCOF A7, OTCO
 #   C2 2.1 9), WSDA AGR 2264 ref 8 total site acreage) and lists the crops grown now or planned, each with variety,
 #   expected harvest and acres (CCOF A8, WSDA ref 8, OTCO 2.1 10), as rows on `ParcelPlannedCrop`. Optional.
-CONTENT_VERSION = "2026.12.04"
+# 2026.12.05: orchard columns on the parcel crop table. Each row may also state its block name, rootstock, year
+#   planted and bearing status (overall review 2026-11, OV-FJ-C06); the parcel PDF prints them when any row on the
+#   parcel states one. Optional.
+CONTENT_VERSION = "2026.12.05"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
