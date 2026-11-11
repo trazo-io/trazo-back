@@ -1135,7 +1135,8 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
                     f"Very low NPK total ({total_npk:.1f}%). Please verify the values are correct."
                 )
 
-        # EPA WPS Compliance Validation - 40 CFR 170.309
+        # Pesticide application checks. RUP applicator certification is 7 U.S.C. 136j(a)(2)(F), not
+        # the Worker Protection Standard; the REI is a 40 CFR 170.311(b)(1)(v) record item.
         restricted_use = data.get("restricted_use_pesticide", False)
         applicator_cert = data.get("applicator_certification")
         rei_hours = data.get("rei_hours")
@@ -1147,7 +1148,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
                 {
                     "applicator_certification": (
                         "Applicator certification is required for Restricted Use Pesticides (RUPs) "
-                        "per EPA Worker Protection Standard 40 CFR 170.309"
+                        "under the federal certified-applicator rule (7 U.S.C. 136j(a)(2)(F))"
                     )
                 }
             )

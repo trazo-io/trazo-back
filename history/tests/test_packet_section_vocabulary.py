@@ -71,7 +71,9 @@ CERTIFIER_ANCHORED_HEADINGS = {
     "Soil & Water Management": "Common OSP G4.0",
     "Pest Management": "Common OSP G5.0",
     "Organic System Plan": "7 CFR 205.201",
-    "Producer Attestation": "7 CFR 205.401 / 205.400(a)",
+    # No part 205 paragraph prescribes an attestation (2026-11 citation review: § 205.401(d) is
+    # "other information"), so the heading carries no cite; the body cites § 205.400(f).
+    "Producer Attestation": "certifier attestation wording; body cites 7 CFR 205.400(f)",
 }
 
 #: "Mass-Balance Audit Summary" was an anchored heading here until 2026-09-30, sourced to

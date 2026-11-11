@@ -411,7 +411,7 @@ class ThePacketDoesNotPrintAnUnreviewedListAsSynced(TestCase):
 
         line = self.svc._catalog_freshness_line()
 
-        self.assertNotIn(f"National List (eCFR) {changed.ran_at.date().isoformat()}", line)
+        self.assertNotIn(f"National List (eCFR) checked {changed.ran_at.date().isoformat()}", line)
         self.assertIn("Not confirmed current", line)
         self.assertIn("has changed since Trazo's National List was last reviewed against it", line)
 
@@ -424,11 +424,11 @@ class ThePacketDoesNotPrintAnUnreviewedListAsSynced(TestCase):
 
         line = self.svc._catalog_freshness_line()
 
-        self.assertNotIn(f"National List (eCFR) {changed.ran_at.date().isoformat()}", line)
-        self.assertNotIn("Input catalogs last synced: National List", line)
+        self.assertNotIn(f"National List (eCFR) checked {changed.ran_at.date().isoformat()}", line)
+        self.assertNotIn("Input catalogs: National List", line)
         self.assertIn("has changed since Trazo's National List was last reviewed against it", line)
 
     def test_an_unchanged_check_still_prints_its_date(self):
         run = IngestionRun.objects.create(source="national_list_ecfr", status="unchanged")
         line = self.svc._catalog_freshness_line()
-        self.assertIn(f"National List (eCFR) {run.ran_at.date().isoformat()}", line)
+        self.assertIn(f"National List (eCFR) checked {run.ran_at.date().isoformat()}", line)

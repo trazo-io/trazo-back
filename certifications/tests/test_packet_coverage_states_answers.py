@@ -234,7 +234,10 @@ class CoveragePageTests(_Plan):
             after = form_coverage(self.osp, "ccof")
             self.assertEqual(after[0].standing, "answered")
             text = self._page()
-        self.assertIn("Forms this packet answers S1.0 Synthetic Labels (SYN-1)", text)
+        self.assertIn("Forms whose questions this packet answers S1.0 Synthetic Labels (SYN-1)", text)
+        # Review finding OV-PK-C02 (2026-11): no agent has accepted these pages in place of its form.
+        self.assertNotIn("Forms this packet answers S1.0", text)
+        self.assertIn("decides whether it accepts these pages in place of its own forms", text)
 
     def test_the_open_questions_are_named_by_number_never_as_a_ratio(self):
         text = self._page()

@@ -287,7 +287,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
     being rendered ARE the frozen copy (review of back #129).
 
     The PDF includes: cover with establishment + version + submission metadata,
-    § 205.401(d) attestation, then each § 205.201(a)(1)-(6) section verbatim.
+    producer attestation, then each § 205.201(a)(1)-(6) section verbatim.
     """
     from certifications.models import OSP_SECTION_KEYS
 
@@ -343,14 +343,15 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
         )
     story.append(Spacer(1, 0.15 * inch))
 
-    # § 205.401(d) attestation — the same wording used in the audit export.
+    # Producer attestation, the same wording used in the audit export. No part 205 paragraph
+    # prescribes it, so the heading cites none (§ 205.401(d) is "other information").
     attestation = (
         "I, the undersigned, hereby certify under penalty of law that the "
         "information contained in this document is true, complete, and "
         "accurate to the best of my knowledge and belief, and that all "
         "organic production practices described herein comply with the "
         "requirements of the USDA National Organic Program (7 CFR Part 205). "
-        "I agree to promptly notify my certifying agent of any changes to "
+        "I agree to immediately notify my certifying agent of any changes to "
         "the production, handling, or management practices that may affect "
         "the organic status of the operation (7 CFR 205.400(f))."
     )
@@ -358,7 +359,7 @@ def generate_osp_snapshot_pdf(osp, generated_from_records=None) -> bytes:
     # (R8-28); document 01, eleven pages on the specimen, had none (recordkeeping review F-17).
     from history.services.audit_export_service import OutlinedHeading
 
-    story.append(OutlinedHeading("Producer Attestation (7 CFR 205.401(d))", styles["header"], level=0))
+    story.append(OutlinedHeading("Producer Attestation", styles["header"], level=0))
     story.append(Paragraph(attestation, styles["body"]))
     story.append(Spacer(1, 0.1 * inch))
     story.extend(signature_block(osp.establishment, styles["body"]))

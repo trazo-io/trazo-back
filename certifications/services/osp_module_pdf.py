@@ -3818,7 +3818,7 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     story += [
         Spacer(1, 10),
         Paragraph(
-            "Producer attestation (7 CFR 205.401(d)): the information above is true, complete and accurate to "
+            "Producer attestation: the information above is true, complete and accurate to "
             "the best of my knowledge, and I will notify my certifying agent of any change that may affect "
             "the organic status of the operation (7 CFR 205.400(f)).",
             styles["meta"],
@@ -5279,7 +5279,9 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
                 f"Listed against {agent_label}'s own form numbering, the certifying agent on this "
                 "operation's record. A form is listed as answered only when every question on it that "
                 "applies to this operation has an answer in this plan. Items the form itself marks "
-                "optional are named under the form when they have no answer."
+                "optional are named under the form when they have no answer. The certifying agent "
+                "decides whether it accepts these pages in place of its own forms; until it says so, "
+                "the grower completes the agent's form, copying from these pages."
             ),
             styles["meta"],
         )
@@ -5293,7 +5295,10 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
     filed = [f for f in forms if f.standing == "filed_with_agent"]
 
     if answered:
-        story.append(Paragraph("Forms this packet answers", styles["header"]))
+        # Not "Forms this packet answers" (review finding OV-PK-C02, 2026-11): no certifier has
+        # said it accepts these pages in place of its forms, and an optional item may still be
+        # open, so the heading claims the questions, not the form, and never "in full".
+        story.append(Paragraph("Forms whose questions this packet answers", styles["header"]))
         for form in answered:
             story.append(
                 Paragraph(_escape(f"{_named(form)}: {_coverage_location(form.location, parcel_names)}"), styles["body"])
@@ -5638,7 +5643,7 @@ def generate_osp_packet(osp, scope=None) -> bytes:
 
         write("00-cover.pdf", _packet_cover_pdf(osp))
         # "01-organic-system-plan.pdf", not "01-narrative-snapshot.pdf" (2026-09-07). This file
-        # IS the organic system plan — the § 205.201(a) narratives plus the § 205.401(d)
+        # IS the organic system plan: the § 205.201(a) narratives plus the
         # producer attestation — and it is the document a reviewer opens the ZIP looking for.
         # "Narrative snapshot" describes how we build it (a frozen copy of the narratives at
         # submission), which is our vocabulary, not theirs. The frozen-version meaning is not
