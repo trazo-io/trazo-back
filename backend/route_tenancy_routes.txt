@@ -495,7 +495,6 @@ api/carbon/company-crop-options/	carbon.views.get_company_crop_options	IsAuthent
 api/carbon/crop-templates/	carbon.views.get_crop_templates	IsAuthenticated	-
 api/carbon/crop-templates/<str:template_id>/	carbon.views.get_crop_template_detail	IsAuthenticated	-
 api/carbon/deepgram-token/	carbon.views.deepgram_token	IsAuthenticated	-
-api/carbon/enhanced-event-impact/	carbon.views.calculate_event_impact	IsAuthenticated	-
 api/carbon/evidence/<int:carbon_entry_id>/photos/	carbon.views.get_evidence_photos_enhanced	IsAuthenticated	-
 api/carbon/evidence/upload/	carbon.views.upload_evidence_photo_enhanced	IsAuthenticated	-
 api/carbon/evidence/validate/	carbon.views.validate_photo_evidence	IsAuthenticated	-

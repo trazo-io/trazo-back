@@ -100,11 +100,6 @@ ROUTE_TENANCY = {
     ),
     "carbon.views.calculate_event_carbon_impact": Route(CATALOG, "pure calculation from the request body"),
     "carbon.views.calculate_event_carbon_impact_enhanced": Route(CATALOG, "pure calculation from the request body"),
-    "carbon.views.calculate_event_impact": Route(
-        DEAD,
-        "no frontend caller",
-        finding="get_object_or_404 on any event id returns another company's event date and carbon",
-    ),
     "carbon.views.deepgram_token": Route(COMPANY, "quota read from request.user.get_active_company()"),
     "carbon.views.get_ai_event_suggestions": Route(CATALOG, "query params only, no tenant rows"),
     "carbon.views.get_company_crop_options": Route(CATALOG, "static list despite the name"),
@@ -542,4 +537,4 @@ ROUTE_TENANCY = {
 UNPROVEN_CEILING = 48
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 18
+OPEN_FINDINGS_CEILING = 17
