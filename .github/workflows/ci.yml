@@ -664,6 +664,8 @@ jobs:
       # step refuses a row, waits at most 5 s for a lock and reverses to the foreign key 0016
       # created. clear_impact_summaries and its tests went with the model. It does not read the
       # sibling repo.
+      # 2026-11-11: the same module now also holds history 0258, which drops the table: refuses a
+      # row, waits at most 5 s for a lock, and reverses to the table as 0256 left it.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
