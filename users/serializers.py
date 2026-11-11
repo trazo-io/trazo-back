@@ -198,9 +198,11 @@ class RegisterSerializer(BasicUserSerializer):
         if value:  # Only validate if code is provided
             import logging
 
-            from django.core.cache import cache
-
+            from backend.security.throttling import throttle_cache
             from company.models import Company
+
+            # Counted in the `throttle` cache, which holds in production (OV-SEC-C06).
+            cache = throttle_cache()
 
             logger = logging.getLogger(__name__)
 

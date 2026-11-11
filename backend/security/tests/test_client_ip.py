@@ -21,10 +21,21 @@ from rest_framework.throttling import SimpleRateThrottle
 
 from backend.security.checks import _SECURITY_CRITICAL_SCOPES
 from backend.security.client_ip import client_ip, throttle_ident
-from backend.security.throttling import ClientIPMixin, LoginRateThrottle, PasswordResetRateThrottle, SignupRateThrottle
+from backend.security.throttling import (
+    ClientIPMixin,
+    LoginRateThrottle,
+    PasswordResetRateThrottle,
+    ResendVerificationRateThrottle,
+    SignupRateThrottle,
+    VerifyEmailRateThrottle,
+    throttle_cache,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
-LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+LOCMEM = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "throttle": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "throttle"},
+}
 RATES = {
     "anon": "1000/minute",
     "user": "1000/minute",
@@ -95,6 +106,8 @@ class AuthEndpointsAreThrottledTests(SimpleTestCase):
             "/api/auth/login/": LoginRateThrottle,
             "/api/auth/register/": SignupRateThrottle,
             "/api/users/request_password_reset/": PasswordResetRateThrottle,
+            "/api/users/verify_email/": VerifyEmailRateThrottle,
+            "/api/users/resend_verification_email/": ResendVerificationRateThrottle,
         }
         self.assertEqual({t.scope for t in wired.values()}, set(_SECURITY_CRITICAL_SCOPES))
         for path, throttle in wired.items():
@@ -108,6 +121,7 @@ class LoginThrottleBehaviourTests(TestCase):
 
     def setUp(self):
         cache.clear()
+        throttle_cache().clear()
 
     def _post(self, **headers):
         return self.client.post(

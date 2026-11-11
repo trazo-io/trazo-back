@@ -24,50 +24,61 @@ from django.test import SimpleTestCase, override_settings
 
 from backend.security.checks import throttling_is_actually_enforced
 
-_DUMMY = {"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}}
-_LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
-_REDIS = {"default": {"BACKEND": "django_redis.cache.RedisCache"}}
+_DUMMY_BACKEND = {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}
+_DB_BACKEND = {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "t"}
+# Since 2026-11-11 the critical scopes count in CACHES["throttle"]; `default` is inert in
+# production on purpose (OV-SEC-C06), so the check asks about `throttle`.
+_INERT_THROTTLE = {"default": _DUMMY_BACKEND, "throttle": _DUMMY_BACKEND}
+_LOCMEM_THROTTLE = {"default": _DUMMY_BACKEND, "throttle": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+_NO_THROTTLE = {"default": _DUMMY_BACKEND}
+_PROD_SHAPE = {"default": _DUMMY_BACKEND, "throttle": _DB_BACKEND}
 _RATES = {"DEFAULT_THROTTLE_RATES": {"login": "3/minute", "user": "500/hour"}}
 
 
 class ThrottlingCheckSeverityTests(SimpleTestCase):
-    @override_settings(CACHES=_DUMMY, REST_FRAMEWORK=_RATES)
+    @override_settings(CACHES=_INERT_THROTTLE, REST_FRAMEWORK=_RATES)
     def test_does_not_block_a_deploy_by_default(self):
         """The regression that broke production. If this ever returns ERROR again, every
-        management command on a Redis-less environment starts failing — including the one
+        management command on a misconfigured environment starts failing, including the one
         that boots the web process."""
         messages = throttling_is_actually_enforced(None)
-        self.assertTrue(messages, "the check went silent — the finding is real, keep reporting it")
+        self.assertTrue(messages, "the check went silent; the finding is real, keep reporting it")
         for message in messages:
             self.assertEqual(message.level, WARNING, f"{message.id} would abort manage.py check")
             self.assertFalse(message.is_serious())
 
-    @override_settings(CACHES=_DUMMY, REST_FRAMEWORK=_RATES, SECURITY_CHECKS_STRICT=True)
+    @override_settings(CACHES=_INERT_THROTTLE, REST_FRAMEWORK=_RATES, SECURITY_CHECKS_STRICT=True)
     def test_blocks_when_a_deploy_asks_it_to(self):
         messages = throttling_is_actually_enforced(None)
         self.assertTrue(messages)
         self.assertTrue(any(m.level == ERROR and m.id == "security.E001" for m in messages))
 
-    @override_settings(CACHES=_DUMMY, REST_FRAMEWORK=_RATES)
+    @override_settings(CACHES=_INERT_THROTTLE, REST_FRAMEWORK=_RATES)
     def test_still_names_the_scopes_that_matter(self):
         """Downgrading severity must not soften the message: an operator skimming a deploy
         log needs to see WHICH protection is off, not that 'something' is."""
         message = throttling_is_actually_enforced(None)[0]
         self.assertIn("login", message.msg)
         self.assertIn("DummyCache", message.hint)
-        self.assertIn("REDIS_URL", message.hint)
+        self.assertIn("throttle", message.hint)
 
-    @override_settings(CACHES=_LOCMEM, REST_FRAMEWORK=_RATES)
+    @override_settings(CACHES=_NO_THROTTLE, REST_FRAMEWORK=_RATES)
+    def test_a_missing_throttle_alias_is_reported(self):
+        message = throttling_is_actually_enforced(None)[0]
+        self.assertIn("no 'throttle' alias", message.hint)
+
+    @override_settings(CACHES=_LOCMEM_THROTTLE, REST_FRAMEWORK=_RATES)
     def test_locmem_is_also_inert_across_workers(self):
         self.assertTrue(throttling_is_actually_enforced(None))
 
-    @override_settings(CACHES=_REDIS, REST_FRAMEWORK=_RATES)
-    def test_silent_on_a_real_cache(self):
+    @override_settings(CACHES=_PROD_SHAPE, REST_FRAMEWORK=_RATES)
+    def test_silent_on_production_shape(self):
         """ANTI-VACUITY: a check that fires on everything is noise, and one that fires on
-        nothing is decoration."""
+        nothing is decoration. Production's shape (inert `default`, Postgres `throttle`) is the
+        configuration this check must accept, or every deploy log carries a false alarm."""
         self.assertEqual(throttling_is_actually_enforced(None), [])
 
-    @override_settings(CACHES=_DUMMY, REST_FRAMEWORK={"DEFAULT_THROTTLE_RATES": {}})
-    def test_silent_when_nothing_claims_to_be_throttled(self):
-        """No rates declared means no promise is being broken."""
+    @override_settings(CACHES=_INERT_THROTTLE, REST_FRAMEWORK={"DEFAULT_THROTTLE_RATES": {"user": "500/hour"}})
+    def test_silent_when_no_security_scope_is_declared(self):
+        """No critical rate declared means no brute-force promise is being broken."""
         self.assertEqual(throttling_is_actually_enforced(None), [])

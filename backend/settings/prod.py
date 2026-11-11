@@ -207,35 +207,27 @@ else:
     CELERY_TASK_STORE_EAGER_RESULT = True
     CELERY_RESULT_BACKEND = "cache+memory://"
 
-# Override Redis Cache settings for production - No SSL for Railway internal Redis
-if REDIS_URL:
-    CACHES = {
-        "default": {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_URL,
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                # Remove SSL requirements for Railway internal Redis
-                "SSL": False,
-                "CONNECTION_POOL_KWARGS": {"retry_on_timeout": True},
-            },
-        }
-    }
-else:
-    # No Redis: use dummy cache and disable django_ratelimit to prevent
-    # SystemCheckError E003 ("not a shared cache").
-    # Rate limiting will be re-enabled automatically when REDIS_URL is set.
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-        }
-    }
+# Cache. NEVER give `default` a real backend in production while the dormant middlewares in
+# MIDDLEWARE still exist (OV-SEC-C06, inventory 2026-11-11): with a cache that stores things,
+# `CircuitBreakerMiddleware` answers 503 to every user for a minute once 50 server errors have
+# happened within an hour, and `EnhancedRateLimitMiddleware` / `rate_limiting.SecurityMiddleware`
+# block whole addresses (a farm office behind one NAT) for 5 to 30 minutes on ordinary use.
+# Until 2026-11-11 setting REDIS_URL switched `default` to Redis and armed all of that; REDIS_URL
+# now reaches Celery only. The limits that must hold count in the `throttle` cache (base.py).
+# Guard: backend/security/tests/test_throttle_cache.py.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+    },
+    THROTTLE_CACHE_ALIAS: THROTTLE_CACHE,
+}
 
-    RATELIMIT_ENABLE = False
-
-    # Remove django_ratelimit from INSTALLED_APPS to prevent system check errors
-    if "django_ratelimit" in INSTALLED_APPS:
-        INSTALLED_APPS.remove("django_ratelimit")
+# django_ratelimit counts in `default`, so it stays off, and it is removed from INSTALLED_APPS
+# because its system check refuses a non-shared cache (E003). Its decorators on the carbon views
+# are no-ops here; re-enabling it would also wake those.
+RATELIMIT_ENABLE = False
+if "django_ratelimit" in INSTALLED_APPS:
+    INSTALLED_APPS.remove("django_ratelimit")
 
 # USDA API Configuration - Use environment variables for security
 USDA_NASS_API_KEY = os.environ.get("USDA_NASS_API_KEY", None)

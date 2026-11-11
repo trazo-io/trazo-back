@@ -627,6 +627,11 @@ jobs:
       # the old one; a password change, reset or email change ends every session (access tokens by
       # issue time, refresh tokens blacklisted). It does not read the sibling repo.
       #
+      # 2026-11-11: backend.security.tests.test_throttle_cache and test_checks join (overall review
+      # 2026-11, OV-SEC-C06). The sign-in, sign-up, reset, verification, invitation and company-code
+      # limits count in the Postgres `throttle` cache with `default` inert, and prod.py cannot give
+      # `default` a real backend while the dormant middlewares exist. Neither reads the sibling repo.
+      #
       # 2026-11-07: users.tests.test_superuser_from_environment joins. A superuser comes from
       # createsuperuser --noinput and the environment; the command that kept its credentials in the
       # source stays deleted. It does not read the sibling repo.
@@ -973,6 +978,8 @@ jobs:
             reviews.tests.test_reviews_scoped \
             history.tests.test_public_scans_scoped \
             backend.security.tests.test_client_ip \
+            backend.security.tests.test_throttle_cache \
+            backend.security.tests.test_checks \
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_user_privilege_fields_read_only \
             users.tests.test_superuser_from_environment \
