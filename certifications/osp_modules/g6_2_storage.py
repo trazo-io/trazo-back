@@ -319,6 +319,12 @@ G6_2_STORAGE = Module(
                     # no stored plan loses what it shows (review of back #369).
                     visible_when=(
                         Condition("storage_locations", "includes", "uncertified_facility"),
+                        # Repeats owns_crop_in_storage's own gate, the chained-gates convention.
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
                         Condition("owns_crop_in_storage", "ne", "no"),
                     ),
                     compiles_to=CompileRule(template="Records provided by the uncertified storage facility: {answer}"),
@@ -347,6 +353,12 @@ G6_2_STORAGE = Module(
                     # no stored plan loses what it shows (review of back #369).
                     visible_when=(
                         Condition("storage_locations", "includes", "uncertified_facility"),
+                        # Repeats owns_crop_in_storage's own gate, the chained-gates convention.
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
                         Condition("owns_crop_in_storage", "ne", "no"),
                     ),
                 ),
