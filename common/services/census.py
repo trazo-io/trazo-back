@@ -76,6 +76,10 @@ RETIRED_TABLES = {
     "history.UserProductComparison_products",
     "history.UserShoppingGoal",
     "history.UserShoppingInsight",
+    # history 0256 (2026-11-10) takes UserImpactSummary out of the model state, 0257 drops the table.
+    # Emptied first by clear_impact_summaries (the command lives in the code up to #367's merge
+    # commit ff15233b; 0256 deletes it); production held 0 rows after its apply on 2026-11-11.
+    "history.UserImpactSummary",
 }
 
 #: Loose `(type, id)` pairs that point at an event row by code with no foreign key behind them.

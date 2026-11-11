@@ -50,12 +50,9 @@ class ConsumerDashboardViewSet(viewsets.ViewSet):
                 "recent_scans": EnhancedHistoryScanSerializer(
                     recent_scans, many=True, context={"request": request}
                 ).data,
-                "quick_stats": {
-                    "documented_products": impact_metrics["documented_products"],
-                    # The key the deployed app reads until it switches to `documented_products`.
-                    # Same honest count; it leaves with history 0256.
-                    "better_choices": impact_metrics["documented_products"],
-                },
+                # `better_choices` carried the same count here for app tabs on the build before
+                # `documented_products` (2026-11-10); it left with history 0256.
+                "quick_stats": {"documented_products": impact_metrics["documented_products"]},
             }
         )
 

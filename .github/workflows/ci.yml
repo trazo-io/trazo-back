@@ -651,6 +651,12 @@ jobs:
       # achievements reach the wire, "Documented Products" counts productions with a served event,
       # and clear_impact_summaries deletes the stored rows with an exact restore. It does not read
       # the sibling repo.
+      #
+      # 2026-11-11: history.tests.test_retired_impact_summary joins. UserImpactSummary leaves the
+      # state in history 0256 with its table kept and its foreign key to users_user dropped; the
+      # step refuses a row, waits at most 5 s for a lock and reverses to the foreign key 0016
+      # created. clear_impact_summaries and its tests went with the model. It does not read the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -875,6 +881,7 @@ jobs:
             carbon.tests.test_retiring_offset_benchmark_report \
             history.tests.test_retired_shopper_models \
             history.tests.test_consumer_impact_payload \
+            history.tests.test_retired_impact_summary \
             history.tests.test_carbon_write_path_and_gaming \
             carbon.tests.test_soil_area_estimate_not_recorded_inputs \
             carbon.tests.test_soil_carbon_boundary \
