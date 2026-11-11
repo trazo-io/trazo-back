@@ -1,13 +1,13 @@
 """
 Unit Tests for Emission Factors Consistency
 
-These tests ensure that all carbon calculation modules use consistent EPA/USDA-verified
-emission factors and prevent future data inconsistencies.
+These tests ensure that all carbon calculation modules use the same emission factors and
+prevent future data inconsistencies. Provenance is per factor, never blanket.
 
 Current Factor Values (as of v3.2.0):
 - Nitrogen: 10.5 kg CO2e per kg N (EPA + IPCC AR6)
-- Phosphorus: 1.19 kg CO2e per kg P2O5 (source under review — see emission-factors.md)
-- Potassium: 0.65 kg CO2e per kg K2O (source under review — see emission-factors.md)
+- Phosphorus: 1.19 kg CO2e per kg P2O5 (Trazo estimate, see verified_emission_factors.py)
+- Potassium: 0.65 kg CO2e per kg K2O (Trazo estimate, see verified_emission_factors.py)
 - Diesel: 2.70 kg CO2e per liter / 10.21 kg CO2e per gallon (EPA 40 CFR Part 98)
 - Gasoline: 2.32 kg CO2e per liter / 8.78 kg CO2e per gallon (EPA 40 CFR Part 98)
 """
@@ -53,7 +53,14 @@ class EmissionFactorsRegistryTest(TestCase):
             factor = emission_factors.get_fertilizer_factor(nutrient)
             self.assertIsInstance(factor["value"], (int, float))
             self.assertGreater(factor["value"], 0)
-            self.assertIn("EPA", factor["source"])
+            # A published factor names its body; a Trazo estimate says it is one. Phosphorus and
+            # potassium are estimates: until 2026-11-11 this demanded "EPA" in their source too, and
+            # they carried an EPA attribution the EPA Hub does not support.
+            if factor.get("provenance") == "internal_estimate":
+                self.assertIn("Trazo", factor["source"])
+                self.assertNotIn("EPA", factor["source"])
+            else:
+                self.assertIn("EPA", factor["source"])
 
     def test_all_fuel_factors_present(self):
         """Test that all required fuel factors are present"""

@@ -13,13 +13,15 @@ class CoolFarmService:
         # Use centralized emission factors to ensure consistency
         self.emission_factors = {
             "fertilizer": {
-                "nitrogen": emission_factors.get_fertilizer_factor("nitrogen")["value"],  # USDA-verified
-                "phosphorus": emission_factors.get_fertilizer_factor("phosphorus")["value"],  # USDA-verified
-                "potassium": emission_factors.get_fertilizer_factor("potassium")["value"],  # USDA-verified
+                # Provenance per nutrient: see emission_factors.FERTILIZER_FACTORS (P and K are Trazo
+                # estimates, not agency figures).
+                "nitrogen": emission_factors.get_fertilizer_factor("nitrogen")["value"],
+                "phosphorus": emission_factors.get_fertilizer_factor("phosphorus")["value"],
+                "potassium": emission_factors.get_fertilizer_factor("potassium")["value"],
             },
             "fuel": {
-                "diesel": emission_factors.get_fuel_factor("diesel")["value"],  # EPA-verified
-                "gasoline": emission_factors.get_fuel_factor("gasoline")["value"],  # EPA-verified
+                "diesel": emission_factors.get_fuel_factor("diesel")["value"],  # EPA 40 CFR Part 98
+                "gasoline": emission_factors.get_fuel_factor("gasoline")["value"],  # EPA 40 CFR Part 98
                 "propane": 1.51,  # kg CO2e per liter (EPA 40 CFR Part 98: 5.72 kg/gal ÷ 3.785)
             },
             "electricity": {
@@ -33,9 +35,10 @@ class CoolFarmService:
             },
         }
 
-        logger.info(
-            f"CoolFarmService initialized with USDA-verified factors: N={self.emission_factors['fertilizer']['nitrogen']} kg CO2e/kg"
-        )
+        # Runs at import (the module-level singleton below), so at INFO it printed in every process,
+        # every `manage.py` command included, and it called the factors "USDA-verified" until
+        # 2026-11-11.
+        logger.debug(f"CoolFarmService initialized: N={self.emission_factors['fertilizer']['nitrogen']} kg CO2e/kg")
 
     def calculate_farm_emissions(
         self, inputs: Dict[str, Any], crop_type: str, area: float, region: Optional[str] = None

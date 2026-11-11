@@ -2,7 +2,7 @@
 Django Management Command: Validate Emission Factors Consistency
 
 This command validates that all carbon calculation modules are using consistent
-USDA-verified emission factors from the centralized registry.
+emission factors from the centralized registry. Provenance is per factor (see the registry).
 
 Usage:
     python manage.py validate_emission_factors
@@ -16,8 +16,18 @@ from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.emission_factors import emission_factors
 from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
+from carbon.services.verified_emission_factors import VerifiedEmissionFactors
 
 logger = logging.getLogger(__name__)
+
+#: What every calculator must agree on, read from the verified registry. Until 2026-11-11 these were
+#: literals from before the factors were corrected (nitrogen 5.86, phosphorus 0.20, potassium 0.15),
+#: so this command failed on every run.
+EXPECTED_FERTILIZER = {
+    "nitrogen": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["nitrogen_fertilizer"].value,
+    "phosphorus": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["phosphorus_fertilizer"].value,
+    "potassium": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["potassium_fertilizer"].value,
+}
 
 
 class Command(BaseCommand):
@@ -51,7 +61,7 @@ class Command(BaseCommand):
                 self.style.SUCCESS(
                     "\n✅ ALL VALIDATIONS PASSED\n"
                     "Emission factors are consistent across all modules!\n"
-                    f"Using USDA-verified factors version {emission_factors.VERSION}"
+                    f"Using centralized factors version {emission_factors.VERSION}"
                 )
             )
         else:
@@ -68,7 +78,6 @@ class Command(BaseCommand):
             metadata = emission_factors.get_metadata()
             self.stdout.write(f"✓ Registry version: {metadata['version']}")
             self.stdout.write(f"✓ Data source: {metadata['data_source']}")
-            self.stdout.write(f"✓ USDA verified: {metadata['usda_factors_used']}")
             self.stdout.write(f"✓ Total factors: {metadata['total_factors']}")
 
             # Test factor validation
@@ -83,8 +92,8 @@ class Command(BaseCommand):
 
             # Test individual factor retrieval
             nitrogen = emission_factors.get_fertilizer_factor("nitrogen")
-            if nitrogen["value"] == 5.86:
-                self.stdout.write("✓ Nitrogen factor correct: 5.86 kg CO2e per kg N")
+            if nitrogen["value"] == EXPECTED_FERTILIZER["nitrogen"]:
+                self.stdout.write(f"✓ Nitrogen factor correct: {nitrogen['value']} kg CO2e per kg N")
             else:
                 self.stdout.write(self.style.ERROR(f"✗ Nitrogen factor incorrect: {nitrogen['value']}"))
                 return False
@@ -111,7 +120,7 @@ class Command(BaseCommand):
             n3 = event_calc.USDA_FERTILIZER_FACTORS["nitrogen"]
             n_registry = emission_factors.get_fertilizer_factor("nitrogen")["value"]
 
-            if n1 == n2 == n3 == n_registry == 5.86:
+            if n1 == n2 == n3 == n_registry == EXPECTED_FERTILIZER["nitrogen"]:
                 self.stdout.write("✓ Nitrogen factor consistent across all calculators")
             else:
                 self.stdout.write(
@@ -126,7 +135,7 @@ class Command(BaseCommand):
                 return False
 
             # Check other key factors
-            factors_to_check = [("phosphorus", 0.20), ("potassium", 0.15)]
+            factors_to_check = [(name, EXPECTED_FERTILIZER[name]) for name in ("phosphorus", "potassium")]
 
             for factor_name, expected_value in factors_to_check:
                 f1 = carbon_calc.usda_factors["fertilizer"][factor_name]
@@ -166,13 +175,15 @@ class Command(BaseCommand):
         self.stdout.write("\n🔍 Validating Factor Values...")
 
         try:
-            # Check nitrogen factor specifically (main issue we're fixing)
+            # Nitrogen must match the verified registry. Until 2026-11-11 this compared against a
+            # hard-coded 5.86 labelled "correct USDA value", so it failed on every run once the
+            # factor became 10.5 (EPA 40 CFR Part 98 + IPCC).
+            expected = EXPECTED_FERTILIZER["nitrogen"]
             nitrogen = emission_factors.get_fertilizer_factor("nitrogen")
-            if nitrogen["value"] != 5.86:
-                self.stdout.write(self.style.ERROR(f"✗ Nitrogen factor should be 5.86, got {nitrogen['value']}"))
+            if nitrogen["value"] != expected:
+                self.stdout.write(self.style.ERROR(f"✗ Nitrogen factor should be {expected}, got {nitrogen['value']}"))
                 return False
-            else:
-                self.stdout.write("✓ Nitrogen factor is correct USDA value: 5.86")
+            self.stdout.write(f"✓ Nitrogen factor matches verified_emission_factors.py: {expected}")
 
             # Check that factors are positive
             all_factors = emission_factors.get_all_factors_simple()
