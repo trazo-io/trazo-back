@@ -1577,6 +1577,23 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             )
         )
 
+    elif embed == "planned_crops":
+        # CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10): the crops the operator listed, with acres,
+        # then the area on file and where the figures or the open seasons disagree with the list.
+        from certifications.services.parcel_application_lines import (
+            PLANNED_CROP_COLUMNS,
+            planned_crop_lines,
+            planned_crop_rows,
+        )
+        from product.services.parcel_application_status import parcel_application_values
+
+        rows = planned_crop_rows(parcel)
+        if rows:
+            out.append(_register_table(PLANNED_CROP_COLUMNS, (2.0, 2.0, 1.4, 0.9), rows, styles))
+            out.append(Spacer(1, 4))
+        for line in planned_crop_lines(parcel, parcel_application_values(parcel)):
+            out.append(Paragraph(_escape(line), styles["meta" if line.startswith("[REVIEW]") else "body"]))
+
     elif embed == "operation_export_answer":
         from certifications.services.parcel_application_lines import operation_export_lines
 
@@ -2152,7 +2169,7 @@ def _question_label(module, page, question, styles):
 
 #: Embeds printed under their question's label, so the question index can point at them. The older parcel
 #: embeds print their own headings and keep them.
-_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer"}
+_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer", "planned_crops"}
 
 
 #: Optional "kept elsewhere, say where" questions that stand in for a file. The certified-parcel card

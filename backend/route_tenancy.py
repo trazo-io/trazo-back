@@ -289,6 +289,15 @@ ROUTE_TENANCY = {
         "queryset scoped to the caller's companies; the parcel FK accepts only the caller's parcels",
         outsider_tests=(f"{_FK}.test_crop_history_cannot_be_written_on_another_companys_parcel",),
     ),
+    "product.views.ParcelPlannedCropViewSet": Route(
+        COMPANY,
+        "nested under the parcel; the parcel is the URL's and must be the URL's farm, never the body's",
+        outsider_tests=(
+            "product.tests.test_parcel_planned_crops.PlannedCropTenancyTests.test_another_company_reaches_nothing",
+            "product.tests.test_parcel_planned_crops.PlannedCropTenancyTests"
+            ".test_another_farms_parcel_reads_like_a_missing_one",
+        ),
+    ),
     "product.views.ParcelViewSet": Route(
         COMPANY,
         "queryset scoped to the caller's companies; CreateParcelSerializer.establishment accepts only "

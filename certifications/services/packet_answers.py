@@ -55,7 +55,17 @@ from dataclasses import dataclass
 #: Panels that are answered by records, not typed: each has a state of its own on the coverage page.
 #: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
 #: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
-EVIDENCED_EMBEDS = frozenset({"seedling_suppliers", "brand_owners", "sourced_products", "equipment_inventory"})
+EVIDENCED_EMBEDS = frozenset(
+    {"seedling_suppliers", "brand_owners", "sourced_products", "equipment_inventory", "planned_crops"}
+)
+
+#: Parcel panels answered by rows the operator typed, judged per parcel from the count `_Answers.parcels`
+#: puts under the panel's key. A table with no row is unanswered: the forms ask for at least one crop.
+PARCEL_EMBED_STATES = {
+    "planned_crops": lambda values: (
+        ("answered", "") if values.get("planned_crops") else ("unanswered", "no crop is listed for this parcel")
+    ),
+}
 
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
@@ -314,7 +324,11 @@ class _Answers:
                 # Run 3, R3-04: the parcel's route under THIS plan's agent, the same assessment its
                 # pages print, so a row the route skips is never listed as still open.
                 route = assess_for_plan(parcel, self.osp)
-                out.append((parcel.name, parcel_application_values(parcel), maps, attached, not_shipped, route))
+                values = parcel_application_values(parcel)
+                # The planned-crop table is rows on a model, not an answer: its count rides in the values
+                # under the embed's key so the per-parcel loop can judge it (`PARCEL_EMBED_STATES`).
+                values["planned_crops"] = parcel.planned_crops.count()
+                out.append((parcel.name, values, maps, attached, not_shipped, route))
             self._parcels = out
         return self._parcels
 
@@ -527,15 +541,18 @@ class _Answers:
                     states.append(("not_on_route", ""))
                     parts.append((name, "not_on_route", reason))
                     continue
-                state = question_state(
-                    module,
-                    question_key,
-                    values,
-                    na_attested=False,
-                    section_uploads=maps,
-                    identified_uploads=attached if question_key == "map_upload" else 0,
-                    not_shipped=not_shipped if question_key == "map_upload" else None,
-                )
+                if question_key in PARCEL_EMBED_STATES:
+                    state = PARCEL_EMBED_STATES[question_key](values)
+                else:
+                    state = question_state(
+                        module,
+                        question_key,
+                        values,
+                        na_attested=False,
+                        section_uploads=maps,
+                        identified_uploads=attached if question_key == "map_upload" else 0,
+                        not_shipped=not_shipped if question_key == "map_upload" else None,
+                    )
                 if on_route == ROUTE_UNRESOLVED and state[0] not in CLOSED_STATES:
                     unresolved.append(name)
                     state = ("route_unresolved", "")

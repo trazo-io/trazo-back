@@ -518,3 +518,40 @@ class ParcelCropHistory(models.Model):
 
     def __str__(self):
         return f"{self.parcel.name} - {self.year}: {self.crop_grown}"
+
+
+class ParcelPlannedCrop(models.Model):
+    """A crop the operation grows now, or plans to grow, on a parcel, with its acreage.
+
+    CCOF ORGB49 A8 ("List crops currently grown (or planned to be grown) on this parcel, and the
+    acreage for each crop"), WSDA AGR 2264 ref 8 (crop and variety, estimated harvest date, acres,
+    for each crop to be included on the certificate) and OTCO C2 2.1 10) ask the same table. It is
+    not `ParcelCropHistory`, which is the § 205.202(b) record of years that have happened, and it is
+    not a season (`History`), which carries no acreage. Typed by the operator; never derived.
+    """
+
+    parcel = models.ForeignKey(Parcel, on_delete=models.CASCADE, related_name="planned_crops")
+    crop = models.CharField(max_length=200, help_text="Crop, as the operation names it, e.g. 'Apples'")
+    variety = models.CharField(
+        max_length=200, blank=True, default="", help_text="Variety or varieties, e.g. 'Honeycrisp, Gala'"
+    )
+    expected_harvest = models.DateField(
+        blank=True, null=True, help_text="When harvest of this crop is expected to begin (WSDA AGR 2264 ref 8)"
+    )
+    acres = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Acres of this crop on the parcel. Stated by the operator; never computed from the parcel area.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["parcel_id", "pk"]
+        verbose_name = "Parcel Planned Crop"
+        verbose_name_plural = "Parcel Planned Crops"
+
+    def __str__(self):
+        return f"{self.parcel.name}: {self.crop}"

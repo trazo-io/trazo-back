@@ -20,10 +20,11 @@ from history.serializers import HistorySerializer
 from product.services.buffer_zones import BufferZoneError, normalize_buffer_rows
 from subscriptions.permissions import HasParcelCreationPermission
 
-from .models import Parcel, ParcelCropHistory, Product
+from .models import Parcel, ParcelCropHistory, ParcelPlannedCrop, Product
 from .serializers import (
     CreateParcelSerializer,
     ParcelCropHistorySerializer,
+    ParcelPlannedCropSerializer,
     ProductListSerializer,
     RetrieveParcelSerializer,
 )
@@ -122,6 +123,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from certifications.models import OSPChangeNotification
         from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
         from certifications.osp_modules.schema import serialize_module
+        from certifications.services.parcel_application_lines import open_season_crops
         from certifications.services.parcel_land_history import land_history_summary
         from certifications.services.parcel_map import parcel_boundary_centre
         from history.models import GeneralEvent
@@ -138,6 +140,10 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # §A coordinates (CCOF ORGB49 A5, WSDA AGR 2264 ref 2, OTCO C2 2.1): the centre the parcel PDF
             # prints, from the same function, so the wizard shows the figure the certifier will read.
             "boundary_centre": parcel_boundary_centre(parcel),
+            # §A crop table (CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10) and the crops of the seasons
+            # still open here, which the wizard offers as a starting point and the PDF checks the list against.
+            "planned_crops": ParcelPlannedCropSerializer(parcel.planned_crops.all().order_by("pk"), many=True).data,
+            "open_season_crops": open_season_crops(parcel),
             # E-page map render (authenticated surface; CardWithMap wants both)
             "polygon": parcel.polygon or None,
             "map_metadata": parcel.map_metadata or None,
@@ -904,6 +910,32 @@ class ProductsViewSet(CompanyNestedViewSet, mixins.ListModelMixin):
     queryset = Product.objects.all()
     serializer_class = ProductListSerializer
     filter_backends = [filters.OrderingFilter]
+
+
+class ParcelPlannedCropViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The crops a parcel grows now or is planned to grow, with acres (CCOF ORGB49 A8, WSDA AGR 2264
+    ref 8, OTCO C2 2.1 10). Nested under the parcel; the parcel is the URL's, and must be the URL's
+    farm's, so another company's or farm's parcel reads exactly like a missing one."""
+
+    serializer_class = ParcelPlannedCropSerializer
+
+    def _parcel(self):
+        return get_object_or_404(
+            Parcel,
+            pk=self.kwargs.get("parcel_pk"),
+            establishment_id=self.kwargs.get("establishment_pk"),
+            establishment__company=self.company,
+        )
+
+    def get_queryset(self):
+        return ParcelPlannedCrop.objects.filter(
+            parcel_id=self.kwargs.get("parcel_pk"),
+            parcel__establishment_id=self.kwargs.get("establishment_pk"),
+            parcel__establishment__company=self.company,
+        ).order_by("pk")
+
+    def perform_create(self, serializer):
+        serializer.save(parcel=self._parcel())
 
 
 class ParcelCropHistoryViewSet(viewsets.ModelViewSet):

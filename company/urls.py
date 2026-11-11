@@ -20,7 +20,7 @@ from certifications.views import (
 )
 from documents.views import GeneratedDocumentViewSet
 from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet, RecordsExportViewSet
-from product.views import ParcelViewSet, ProductsViewSet
+from product.views import ParcelPlannedCropViewSet, ParcelViewSet, ProductsViewSet
 from reviews.views import ReviewsViewSet
 
 from .views import CompanyViewSet, EstablishmentViewSet
@@ -119,6 +119,9 @@ parcel_router.register(
     HistoryViewSet,
     basename="parcel-histories",
 )
+# The crops a parcel grows now or is planned to grow, with acres (CCOF ORGB49 A8, WSDA AGR 2264 ref 8,
+# OTCO C2 2.1 10).
+parcel_router.register(r"planned-crops", ParcelPlannedCropViewSet, basename="parcel-planned-crops")
 
 # History routes
 history_router = routers.NestedDefaultRouter(parcel_router, r"histories", lookup="history")
