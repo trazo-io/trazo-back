@@ -336,9 +336,9 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   chart answers OTCO 7.2-2 / CCOF G6.4 A3. One optional, gated question; coaching only otherwise.
 # 2026.12.03: parcel location and status. The parcel application asks block numbers (CCOF A2); whether the parcel
 #   shares the operation's city, state, ZIP and country, and its own when not (CCOF A3, WSDA AGR 2264 ref 2, OTCO C2
-#   2.1 3-4); other location information beside the computed boundary centre (CCOF A5, OTCO 2.1); the status applied
-#   for and whether a transitional certificate is needed (WSDA AGR 2264 ref 4, 4a); and treated seed planted on the
-#   parcel (ref 11, 11a). The expected first organic harvest is asked as the forms word it, without "(if in
+#   2.1 3-4); the computed boundary centre, and other location information for a parcel with no street address
+#   (CCOF A5, OTCO 2.1); the status applied for and whether a transitional certificate is needed (WSDA AGR 2264
+#   ref 4, 4a); and treated seed planted on the parcel (ref 11, 11a). The expected first organic harvest is asked as the forms word it, without "(if in
 #   transition)". All optional; the export answer and the G3.1 pointer print from answers held elsewhere.
 CONTENT_VERSION = "2026.12.03"
 

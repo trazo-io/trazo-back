@@ -58,12 +58,13 @@ items:
     prints: >-
       parcels/parcel-application-<name>.pdf §A
   note: >-
-    Asked per parcel since 2026-11-10. When the operator answers that the parcel shares the operation's
+    Asked per parcel since 2026-11-10. When the operator answers that the site shares the operation's
     city, state, ZIP code and country, the page prints the operation's address on file beside that
-    answer, with a [REVIEW] line naming any part of it that is blank. The operation's address is never
-    copied in without that answer. Since 2026-11-10 §A prints the drawn boundary's centre (the same
-    computation as the §E map caption) or states that no boundary is drawn, and asks for other location
-    information (coordinates, cross street or road, directions from a landmark) in its own field.
+    answer, with a [REVIEW] line naming any part of it that is blank; the operation's address is never
+    copied in without that answer. §A prints the drawn boundary's centre (the same computation as the §E
+    map caption) or states that no boundary is drawn. A site with no street address is asked for
+    coordinates, a cross street or road, or directions in their own field, which is the form's 'in lieu
+    of a street address'.
 - ref: '3'
   asks: Is the site fee attached? A $40 fee is required for each site application submitted by a renewing
     operation after the March 1 renewal deadline; not needed for new applicants or applications submitted

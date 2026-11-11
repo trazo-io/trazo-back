@@ -91,7 +91,9 @@ class _Parcel(TestCase):
         return next(r for r in form_answer_states(self.osp, [form])[id(form)] if r.ref == ref)
 
     def shown(self, **answers) -> set:
-        values = {**self.parcel.application_answers, **answers}
+        from product.services.parcel_application_status import parcel_application_values
+
+        values = {**parcel_application_values(self.parcel), **answers}
         return {q.key for _p, q in visible_questions(PARCEL_APPLICATION, values)}
 
 
@@ -170,9 +172,15 @@ class LocationPrintsInSectionA(_Parcel):
     def test_no_boundary_is_said_not_left_blank(self):
         self.assertIn("No boundary is drawn on the parcel map, so no coordinates are computed", self.page())
 
-    def test_location_notes_print(self):
+    def test_location_notes_print_for_a_parcel_with_no_street_address(self):
+        self.parcel.address = ""
+        self.parcel.save(update_fields=["address"])
         self.answer(location_notes="North side of Squilchuck Rd, 0.4 mi past the Mission Ridge turnoff")
         self.assertIn("0.4 mi past the Mission Ridge turnoff", self.page())
+
+    def test_location_notes_are_not_asked_beside_a_street_address(self):
+        self.assertNotIn("location_notes", self.shown())
+        self.assertIn("location_notes", self.shown(address=""))
 
     def test_container_production_names_g3_1_and_its_state(self):
         self.parcel.container_production = True
@@ -268,6 +276,33 @@ class TheRegisterReadsTheAnswers(_Parcel):
 
     def test_wsda_4_is_open_until_stated(self):
         self.assertNotIn(self.row("wsda", "AGR 2264", "4").state, ("answered", "not_applicable"))
+
+    def test_ccof_a2_is_optional_as_the_form_prints_it(self):
+        # "if applicable": a parcel with no block numbering must not keep the form open.
+        self.osp.certifier_name = CCOF
+        self.osp.save(update_fields=["certifier_name"])
+        row = self.row("ccof", "ORGB49", "A2")
+        self.assertTrue(row.optional)
+        self.assertTrue(row.is_open)
+
+    def test_a_street_address_closes_the_alternative_location_rows(self):
+        # Review of back PR 372: an ungated optional field cited on these rows held them open for every
+        # parcel with a street address. With an address, the alternative does not apply.
+        self.osp.certifier_name = CCOF
+        self.osp.save(update_fields=["certifier_name"])
+        self.assertFalse(self.row("ccof", "ORGB49", "A5").is_open)
+        self.osp.certifier_name = OTCO
+        self.osp.save(update_fields=["certifier_name"])
+        self.assertFalse(self.row("otco", "C2", "2.1 (alternative location)").is_open)
+
+    def test_no_street_address_needs_the_alternative(self):
+        self.osp.certifier_name = OTCO
+        self.osp.save(update_fields=["certifier_name"])
+        self.parcel.address = ""
+        self.parcel.save(update_fields=["address"])
+        self.assertTrue(self.row("otco", "C2", "2.1 (alternative location)").is_open)
+        self.answer(location_notes="0.4 mi past the Mission Ridge turnoff")
+        self.assertEqual(self.row("otco", "C2", "2.1 (alternative location)").state, "answered")
 
     def test_ccof_a2_is_answered(self):
         self.osp.certifier_name = CCOF

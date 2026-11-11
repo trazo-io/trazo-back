@@ -54,18 +54,19 @@ items:
   status: covered
   trazo:
     questions:
-    - parcel_application.address
     - parcel_application.location_coordinates
     - parcel_application.location_notes
     models:
     - product.Parcel.polygon
+    - product.Parcel.address
     - product.Parcel.application_answers
     prints: >-
       parcels/parcel-application-<name>.pdf §A
   note: >-
     Since 2026-11-10 §A prints the drawn boundary's centre (the same computation as the §E map caption)
-    or states that no boundary is drawn, and asks for other location information (coordinates, cross
-    street or road, directions from a landmark) in its own field.
+    or states that no boundary is drawn. A parcel with no street address is asked for coordinates, a
+    cross street or road, or directions in their own field; with a street address that field does not
+    apply. The address itself is cited on the street-address row.
 - ref: 2.1-1
   asks: Parcel name and/or ID code.
   status: covered

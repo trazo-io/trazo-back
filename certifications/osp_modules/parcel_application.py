@@ -178,16 +178,19 @@ PARCEL_APPLICATION = Module(
                     key="location_notes",
                     kind="textarea",
                     label=text(
-                        "Other location information: coordinates, cross street or road, or directions from a "
-                        "landmark",
-                        "Otra información de ubicación: coordenadas, calle o camino que cruza, o indicaciones desde "
-                        "un punto de referencia",
+                        "With no street address: coordinates, a cross street or road, or directions from a " "landmark",
+                        "Sin dirección postal: coordenadas, una calle o camino que cruza, o indicaciones desde un "
+                        "punto de referencia",
                     ),
                     coaching=text(
-                        "Needed most when the parcel has no street address of its own.",
-                        "Hace más falta cuando la parcela no tiene una dirección propia.",
+                        "The boundary centre above counts as coordinates once a boundary is drawn.",
+                        "El centro del límite de arriba cuenta como coordenadas cuando hay un límite dibujado.",
                     ),
                     required=False,
+                    # OTCO C2 2.1 asks it "if the parcel does not have a street address", and WSDA AGR 2264 ref 2
+                    # takes coordinates "in lieu of a street address". Asked of every parcel, it held the register
+                    # rows citing it open for every parcel with an address (review of back PR 372).
+                    visible_when=(Condition(question="address", op="falsy"),),
                 ),
                 Question(
                     key="container_production",

@@ -33,6 +33,7 @@ items:
     prints: parcels/parcel-application-<name>.pdf §A
 - ref: A2
   asks: Block/lot numbers or greenhouse/shadehouse numbering, if applicable.
+  optional: true
   status: covered
   trazo:
     questions:
@@ -85,18 +86,19 @@ items:
   status: covered
   trazo:
     questions:
-    - parcel_application.address
     - parcel_application.location_coordinates
     - parcel_application.location_notes
     models:
     - product.Parcel.polygon
+    - product.Parcel.address
     - product.Parcel.application_answers
     prints: >-
       parcels/parcel-application-<name>.pdf §A
   note: >-
     Since 2026-11-10 §A prints the drawn boundary's centre (the same computation as the §E map caption)
-    or states that no boundary is drawn, and asks for other location information (coordinates, cross
-    street or road, directions from a landmark) in its own field.
+    or states that no boundary is drawn. A parcel with no street address is asked for coordinates, a
+    cross street or road, or directions in their own field; with a street address that field does not
+    apply. The address itself is cited on the street-address row.
 - ref: A6
   asks: At this parcel, when do you expect to begin harvesting crops you wish to market as organic (MM/DD/YY)?
     Crops harvested prior to inspection cannot be certified.
