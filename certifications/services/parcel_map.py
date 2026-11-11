@@ -209,20 +209,29 @@ def parcel_map_drawing(parcel, width: float = 4.9 * inch, height: float = 3.1 * 
 
 def parcel_map_caption(parcel) -> str:
     """The one-line fact row printed under the drawing: name, area, center point."""
-    ring = parcel_boundary_ring(parcel)
     name = (getattr(parcel, "name", "") or "—").strip()
     # `Parcel.area` is HECTARES; `area_display()` is the only correct way to print it. Printing
     # the raw number beside the word "acres" is a real incident on this page (2026-08-20).
     area = parcel.area_display() if hasattr(parcel, "area_display") and getattr(parcel, "area", None) else "—"
-    if not ring:
+    centre = parcel_boundary_centre(parcel)
+    if centre is None:
         return f"{name} · {area}"
+    return f"{name} · {area} · center {centre[0]:.6f}, {centre[1]:.6f}"
+
+
+def parcel_boundary_centre(parcel):
+    """(lat, lng) of the drawn boundary's bounding-box centre, or None when no usable boundary is drawn.
+
+    One computation for the map caption and the location section, so the two never print different
+    coordinates for the same parcel."""
+    ring = parcel_boundary_ring(parcel)
+    if not ring:
+        return None
     try:
         lngs = [float(pt[0]) for pt in ring]
         lats = [float(pt[1]) for pt in ring]
-    except (TypeError, ValueError):
-        return f"{name} · {area}"
+    except (TypeError, ValueError, IndexError):
+        return None
     # Bounding-box center — robust to the repeated GeoJSON closing vertex and to uneven vertex
     # spacing, both of which bias a plain vertex average.
-    cen_lng = (min(lngs) + max(lngs)) / 2.0
-    cen_lat = (min(lats) + max(lats)) / 2.0
-    return f"{name} · {area} · center {cen_lat:.6f}, {cen_lng:.6f}"
+    return ((min(lats) + max(lats)) / 2.0, (min(lngs) + max(lngs)) / 2.0)

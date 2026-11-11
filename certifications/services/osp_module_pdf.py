@@ -1558,6 +1558,31 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             for line in rest:
                 out.append(Paragraph(_escape(line), styles["body"]))
 
+    elif embed == "location_coordinates":
+        # CCOF ORGB49 A5, WSDA AGR 2264 ref 2, OTCO C2 2.1: coordinates in the location section, from
+        # the same computation as the map caption. A parcel with no boundary says so rather than
+        # printing nothing (the caption was the only place a coordinate reached the page).
+        from certifications.services.parcel_map import parcel_boundary_centre
+
+        centre = parcel_boundary_centre(parcel)
+        out.append(
+            Paragraph(
+                _escape(
+                    f"Boundary centre: {centre[0]:.6f}, {centre[1]:.6f} (computed from the boundary drawn on the "
+                    "parcel map)."
+                    if centre is not None
+                    else "No boundary is drawn on the parcel map, so no coordinates are computed for this parcel."
+                ),
+                styles["body"],
+            )
+        )
+
+    elif embed == "operation_export_answer":
+        from certifications.services.parcel_application_lines import operation_export_lines
+
+        for line in operation_export_lines(osp):
+            out.append(Paragraph(_escape(line), styles["body"]))
+
     elif embed == "buffer_editor":
         rows = parcel.buffer_zones or []
         if not rows:
@@ -2125,6 +2150,11 @@ def _question_label(module, page, question, styles):
     )
 
 
+#: Embeds printed under their question's label, so the question index can point at them. The older parcel
+#: embeds print their own headings and keep them.
+_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer"}
+
+
 #: Optional "kept elsewhere, say where" questions that stand in for a file. The certified-parcel card
 #: already prints each file's state ("none attached or referenced"), so listing the blank reference
 #: as an open question says the same thing twice.
@@ -2461,6 +2491,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 if rendered:
                     open_page(page)
                     answered_any = True
+                    if question.embed in _LABELLED_EMBEDS:
+                        story.append(_question_label(module, page, question, styles))
                     story.extend(rendered)
                 continue
             if question.kind == "upload":
@@ -2579,6 +2611,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 story.append(Paragraph(_escape(line), styles["meta"]))
             for line in _map_element_lines(osp, module, question, value, parcel):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+            if parcel is not None:
+                from certifications.services.parcel_application_lines import parcel_answer_lines
+
+                for line in parcel_answer_lines(osp, question.key, value, answers, parcel):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g3_1_container_greenhouse":
                 from certifications.services.structure_production import answer_contradictions
 
@@ -5675,28 +5712,13 @@ def _facility_pest_pointer(osp) -> list[str]:
     required questions still open. It never says "answered" for a section nobody has touched (review of back #368).
     The file path is named only inside a packet build, and a changed-sections packet that leaves G9.0 out says so.
     """
-    from certifications.osp_modules import MODULES_BY_KEY
-    from certifications.osp_modules.conditions import missing_required
-    from certifications.services.packet_attachments import current_manifest
-    from certifications.services.packet_scope import mark_omitted
+    from certifications.services.parcel_application_lines import module_pointer
 
-    entry = ((osp.module_responses or {}).get("modules") or {}).get("g9_0_facility_pest") or {}
-    where = "G9.0 Facility Pest Management" + (" (modules/G9_0.pdf)" if current_manifest() is not None else "")
-    lead = (
-        "Facility pest management (target pests, prevention, physical controls, materials, how product is protected "
-        f"and the records kept) is asked in {where}"
-    )
-    answers = entry.get("answers") or {}
-    if entry.get("not_applicable"):
-        state = ", which the operation marks not applicable."
-    elif not answers:
-        state = "; it is not answered yet."
-    else:
-        missing = missing_required(MODULES_BY_KEY["g9_0_facility_pest"], answers)
-        state = (
-            f"; {len(missing)} required question{'s' if len(missing) != 1 else ''} there "
-            f"{'are' if len(missing) != 1 else 'is'} not answered yet."
-            if missing
-            else "."
+    return [
+        module_pointer(
+            osp,
+            "g9_0_facility_pest",
+            "Facility pest management (target pests, prevention, physical controls, materials, how product is "
+            "protected and the records kept)",
         )
-    return [mark_omitted(lead + state)]
+    ]

@@ -69,6 +69,23 @@ PARCEL_APPLICATION = Module(
                     required=False,
                 ),
                 Question(
+                    # CCOF ORGB49 A2. How the operation's own records name the parts of this parcel.
+                    key="block_identifiers",
+                    kind="text",
+                    label=text(
+                        "Block, lot or greenhouse numbers on this parcel, if any",
+                        "Números de bloque, lote o invernadero en esta parcela, si los hay",
+                    ),
+                    coaching=text(
+                        "Use the numbers your field and harvest records use, so the inspector can match a record "
+                        "to the ground.",
+                        "Usa los números que usan tus registros de campo y de cosecha, para que el inspector pueda "
+                        "vincular un registro con el terreno.",
+                    ),
+                    required=False,
+                    placeholder=text("e.g., Blocks 28-35, House 2", "p. ej., Bloques 28-35, Invernadero 2"),
+                ),
+                Question(
                     key="apn",
                     kind="text",
                     label=text("APN (assessor's parcel number)", "APN (número de parcela del catastro)"),
@@ -92,10 +109,88 @@ PARCEL_APPLICATION = Module(
                     required=False,
                 ),
                 Question(
+                    # CCOF ORGB49 A3, WSDA AGR 2264 ref 2, OTCO C2 2.1 3) and 4) ask city, state, ZIP and
+                    # country per parcel. The operation's own address is NOT copied in silently: a parcel
+                    # leased in the next county over would print the home town. The operator says which.
+                    key="location_same_as_operation",
+                    kind="radio",
+                    label=text(
+                        "Is this parcel in the same city, state, ZIP code and country as the operation's address?",
+                        "¿Esta parcela está en la misma ciudad, estado, código postal y país que la dirección de la "
+                        "operación?",
+                    ),
+                    coaching=text(
+                        "The operation's address is the one on its farm profile. Answer No for a parcel in another "
+                        "town, and give its own below.",
+                        "La dirección de la operación es la del perfil de la finca. Responde No si la parcela está "
+                        "en otra localidad, e indica la suya abajo.",
+                    ),
+                    options=(
+                        Option(value="yes", label=text("Yes, the same", "Sí, la misma")),
+                        Option(value="no", label=text("No, it is elsewhere", "No, está en otro lugar")),
+                    ),
+                    required=False,
+                ),
+                Question(
+                    key="location_city",
+                    kind="text",
+                    label=text("City or nearest town", "Ciudad o localidad más cercana"),
+                    required=False,
+                    visible_when=(Condition(question="location_same_as_operation", op="eq", value="no"),),
+                ),
+                Question(
+                    key="location_state",
+                    kind="text",
+                    label=text("State or province", "Estado o provincia"),
+                    required=False,
+                    visible_when=(Condition(question="location_same_as_operation", op="eq", value="no"),),
+                ),
+                Question(
+                    key="location_zip",
+                    kind="text",
+                    label=text("ZIP or postal code", "Código postal"),
+                    required=False,
+                    visible_when=(Condition(question="location_same_as_operation", op="eq", value="no"),),
+                ),
+                Question(
+                    key="location_country",
+                    kind="text",
+                    label=text("Country", "País"),
+                    required=False,
+                    visible_when=(Condition(question="location_same_as_operation", op="eq", value="no"),),
+                ),
+                Question(
                     key="county",
                     kind="text",
                     label=text("County", "Condado"),
                     required=False,
+                ),
+                Question(
+                    # CCOF ORGB49 A5, WSDA AGR 2264 ref 2 (GPS), OTCO C2 2.1: the drawn boundary's centre,
+                    # computed, never typed. Stated as absent when no boundary is drawn.
+                    key="location_coordinates",
+                    kind="info",
+                    label=text("Coordinates", "Coordenadas"),
+                    embed="location_coordinates",
+                    required=False,
+                ),
+                Question(
+                    key="location_notes",
+                    kind="textarea",
+                    label=text(
+                        "With no street address: coordinates, a cross street or road, or directions from a " "landmark",
+                        "Sin dirección postal: coordenadas, una calle o camino que cruza, o indicaciones desde un "
+                        "punto de referencia",
+                    ),
+                    coaching=text(
+                        "The boundary centre above counts as coordinates once a boundary is drawn.",
+                        "El centro del límite de arriba cuenta como coordenadas cuando hay un límite dibujado.",
+                    ),
+                    required=False,
+                    # OTCO C2 2.1 asks it "if the parcel does not have a street address", and WSDA AGR 2264 ref 2
+                    # takes coordinates "in lieu of a street address". Asked of every parcel, it held the register
+                    # rows citing it open for every parcel with an address (review of back PR 372).
+                    visible_when=(Condition(question="address", op="falsy"),),
                 ),
                 Question(
                     key="container_production",
@@ -319,9 +414,19 @@ PARCEL_APPLICATION = Module(
                 Question(
                     key="expected_first_organic_harvest",
                     kind="date",
+                    # CCOF ORGB49 A6, OTCO C2 2.1 8) and WSDA AGR 2264 ref 8 ask it of every applicant, not
+                    # only a parcel in transition, so the label no longer says "(if in transition)". It asks
+                    # the same date it always did; a stored answer keeps its meaning.
                     label=text(
-                        "Expected first organic harvest (if in transition)",
-                        "Primera cosecha orgánica esperada (si está en transición)",
+                        "When do you expect to begin harvesting crops from this parcel that you plan to sell as "
+                        "organic?",
+                        "¿Cuándo esperas comenzar a cosechar en esta parcela cultivos que planeas vender como "
+                        "orgánicos?",
+                    ),
+                    coaching=text(
+                        "For a parcel new to certification, crops harvested before its inspection cannot be certified.",
+                        "En una parcela que se certifica por primera vez, lo cosechado antes de inspeccionarla no "
+                        "puede certificarse.",
                     ),
                     required=False,
                     # A parcel stated currently certified is not in transition, so the question does
@@ -329,6 +434,83 @@ PARCEL_APPLICATION = Module(
                     # listed it as an unanswered question). `ne`, not `one_of`: the deciding question
                     # is on page F, so the question stays visible until it is answered (review of #250).
                     visible_when=(Condition(question="currently_certified", op="ne", value="yes"),),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 4. The operator's application, which the transition card above
+                    # informs and never decides: the card states what the records show.
+                    key="certification_status_requested",
+                    kind="radio",
+                    label=text(
+                        "Which status are you applying for on this parcel?",
+                        "¿Qué estado solicitas para esta parcela?",
+                    ),
+                    coaching=text(
+                        "Transitional certification is a certifier's own program, not part of the USDA organic "
+                        "regulations, and not every certifier offers it.",
+                        "La certificación de transición es un programa propio del certificador, no forma parte del "
+                        "reglamento orgánico del USDA, y no todos los certificadores la ofrecen.",
+                    ),
+                    options=(
+                        Option(
+                            value="organic",
+                            label=text(
+                                "Organic: the last prohibited substance was applied at least 36 months before the "
+                                "expected harvest",
+                                "Orgánico: la última sustancia prohibida se aplicó al menos 36 meses antes de la "
+                                "cosecha esperada",
+                            ),
+                        ),
+                        Option(
+                            value="transitional",
+                            label=text(
+                                "Transitional: the last prohibited substance was applied at least 12 months before "
+                                "the expected harvest",
+                                "De transición: la última sustancia prohibida se aplicó al menos 12 meses antes de "
+                                "la cosecha esperada",
+                            ),
+                        ),
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="currently_certified", op="ne", value="yes"),),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 4a.
+                    key="transitional_certificate_before_harvest",
+                    kind="radio",
+                    label=text(
+                        "Do you need a transitional certificate before harvest?",
+                        "¿Necesitas un certificado de transición antes de la cosecha?",
+                    ),
+                    options=(
+                        Option(
+                            value="yes",
+                            label=text(
+                                "Yes: crops from this parcel will be sold with a transitional claim",
+                                "Sí: lo cosechado en esta parcela se venderá declarándolo de transición",
+                            ),
+                        ),
+                        Option(
+                            value="no",
+                            label=text(
+                                "No: no transitional claim will be made",
+                                "No: no se declarará como de transición",
+                            ),
+                        ),
+                    ),
+                    required=False,
+                    visible_when=(
+                        Condition(question="currently_certified", op="ne", value="yes"),
+                        Condition(question="certification_status_requested", op="eq", value="transitional"),
+                    ),
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 9 asks per site whether crops may be exported to Canada. Trazo asks
+                    # it once for the operation (G8.0) and prints that answer on every parcel's page.
+                    key="operation_export_answer",
+                    kind="info",
+                    label=text("Exports from this parcel", "Exportaciones desde esta parcela"),
+                    embed="operation_export_answer",
+                    required=False,
                 ),
             ),
         ),
@@ -759,6 +941,34 @@ PARCEL_APPLICATION = Module(
                     ),
                     nop_cite="§ 205.202(b)",
                     required=False,
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 11. About THIS parcel while the operation has managed it; the
+                    # farm-wide seed answers (G3.0) say what the operation buys, not where it was planted.
+                    key="treated_seed_planted",
+                    kind="radio",
+                    label=text(
+                        "Has treated seed been planted on this parcel since you began managing it? Include seed "
+                        "treated with allowed materials.",
+                        "¿Se ha sembrado semilla tratada en esta parcela desde que comenzaste a manejarla? Incluye "
+                        "la semilla tratada con materiales permitidos.",
+                    ),
+                    options=(
+                        Option(value="yes", label=text("Yes", "Sí")),
+                        Option(value="no", label=text("No", "No")),
+                    ),
+                    required=False,
+                ),
+                Question(
+                    # WSDA AGR 2264 ref 11a.
+                    key="treated_seed_detail",
+                    kind="textarea",
+                    label=text(
+                        "The brand name of each seed treatment, and the date that seed was planted",
+                        "La marca de cada tratamiento de semilla y la fecha en que se sembró esa semilla",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="treated_seed_planted", op="eq", value="yes"),),
                 ),
                 Question(
                     # CCOF ORGB49 F8: "Since the DLPM, have prohibited materials of any kind been applied

@@ -763,8 +763,11 @@ class IndexRowMixedPartsTests(TestCase):
         from certifications.services.packet_index_recorder import LabelLocation, Recorder
         from certifications.services.question_index import index_row
 
-        page = next(p for p in PARCEL_APPLICATION.pages for q in p.questions if q.visible_when)
-        question = next(q for q in page.questions if q.visible_when)
+        # The treated-lumber detail, which the row below (A10a) is about. "The first gated question" was a
+        # proxy for it until page A gained radio-gated location questions, whose trigger is not a boolean.
+        page, question = next(
+            (p, q) for p in PARCEL_APPLICATION.pages for q in p.questions if q.key == "treated_lumber_description"
+        )
         trigger = question.visible_when[0].question
         key = f"{PARCEL_APPLICATION.key}.{question.key}"
         recorder = Recorder()
