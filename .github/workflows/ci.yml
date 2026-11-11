@@ -342,6 +342,12 @@ jobs:
       # the count as litres, and the packet and PUR print it as a count, never a spray. It does
       # not read the sibling repo.
       #
+      # 2026-11-11 (OV-FJ-C12): test_spray_not_on_source_record joins. A spray can say its
+      # concentration or its clock time is not on the source record: the flag or the value, never
+      # both; the day is kept at the noon placeholder and no reader prints it; the PUR leaves boxes
+      # 17-18 blank and says why; a correction moves the flag and the value together. It does not
+      # read the sibling repo.
+      #
       # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
       # narratives with text that the submit gate, the OSP page and the onboarding checklist all
       # show; the checklist used to tick "text in all six sections" on one character per section.
@@ -740,6 +746,7 @@ jobs:
             history.tests.test_receipt_filed_on_record \
             history.tests.test_rehearsal_quantities \
             history.tests.test_pheromone_dispensers \
+            history.tests.test_spray_not_on_source_record \
             history.tests.test_manure_interval_is_a_floor \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \

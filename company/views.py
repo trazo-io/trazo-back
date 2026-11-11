@@ -987,6 +987,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         # already select_related above, so this costs no extra query.
                         "production_finished": event.history.finish_date is not None or event.history.published,
                         "performed_by": getattr(event, "performed_by", "") or "",
+                        # A spray whose time is not on the source record is stored at a noon
+                        # placeholder; the row prints the phrase, never that noon.
+                        "time_not_recorded": bool(getattr(event, "time_not_recorded", False)),
                         # WS-4 auto-narrative: structured VALUES only — the frontend
                         # composes localized wording (config/events/narrative.ts).
                         "detail": narrative_detail(event_type, event),

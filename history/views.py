@@ -4789,6 +4789,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         payload.update(
             {
                 "occurred_at": instance.date.isoformat() if getattr(instance, "date", None) else None,
+                # A spray whose time is not on the source record: the client prints the day and
+                # the phrase, never the noon placeholder `occurred_at` is stored at.
+                "time_not_recorded": bool(getattr(instance, "time_not_recorded", False)),
                 "performer": (getattr(instance, "performed_by", "") or "").strip(),
                 "applicator": (getattr(instance, "applicator_name", "") or "").strip(),
                 "review": {
@@ -4847,9 +4850,19 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         self._require_amend_permission(request, instance)
 
         if request.method == "GET":
+            from history.services.not_on_source_record import date_text
+
             all_fields = amendable_fields(type(instance))
             fields_on_record = [f for f in all_fields if has_value(instance, f)]
             fields_not_recorded = [f for f in all_fields if not has_value(instance, f)]
+
+            def current_value(f):
+                # A spray whose time is not on the source record is stored at a noon placeholder;
+                # the form shows the day and the phrase, never that noon as the time sprayed.
+                if f.name == "date" and getattr(instance, "time_not_recorded", False) and instance.date:
+                    return date_text(instance.date)
+                return getattr(instance, f.name, None)
+
             amendments = EventAmendment.objects.filter(event_type=event_type, event_id=instance.id).order_by(
                 "-created_at"
             )
@@ -4867,7 +4880,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         {
                             "name": f.name,
                             "label": str(getattr(f, "verbose_name", "") or f.name),
-                            "current_value": getattr(instance, f.name, None),
+                            "current_value": current_value(f),
                         }
                         for f in fields_on_record
                     ],
