@@ -19,6 +19,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 from certifications.osp_modules.conditions import answer_value, effective_value, is_answered
+from product.services.land_history import format_acres
 
 #: Months from the last prohibited application, per status applied for (WSDA AGR 2264 ref 4's own figures).
 _STATUS_MONTHS = {"organic": 36, "transitional": 12}
@@ -251,7 +252,7 @@ def planned_crop_rows(parcel) -> list[tuple[list[str], list[str]]]:
                     [crop.crop],
                     [crop.variety or "Not stated"],
                     [crop.expected_harvest.isoformat() if crop.expected_harvest else "Not stated"],
-                    [f"{float(crop.acres):g}" if crop.acres is not None else "Not stated"],
+                    [format_acres(crop.acres) if crop.acres is not None else "Not stated"],
                 ],
                 [],
             )
@@ -272,7 +273,9 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
     stated = [float(c.acres) for c in crops if c.acres is not None]
     listed = round(sum(stated), 2)
     if stated:
-        lines.append(f"Acres listed: {listed:g} across {len(stated)} crop{'s' if len(stated) != 1 else ''}.")
+        lines.append(
+            f"Acres listed: {format_acres(listed)} across {len(stated)} crop{'s' if len(stated) != 1 else ''}."
+        )
     missing = [c.crop for c in crops if c.acres is None]
     if missing:
         lines.append(f"[REVIEW] No acres are given for: {', '.join(missing)}.")
@@ -280,12 +283,12 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
     if to_certify is not None and stated and listed > to_certify + 0.005:
         # Stated, not flagged: a double crop lists the same ground twice, which is how the forms ask it.
         lines.append(
-            f"The crops listed add up to {listed:g} acres against {to_certify:g} acres to be certified; ground "
+            f"The crops listed add up to {format_acres(listed)} acres against {format_acres(to_certify)} acres to be certified; ground "
             "cropped more than once in the year is listed once per crop."
         )
     if to_certify is not None and area_acres is not None and to_certify > area_acres + 0.05:
         lines.append(
-            f"[REVIEW] The acres to be certified ({to_certify:g}) are more than the parcel area on file "
+            f"[REVIEW] The acres to be certified ({format_acres(to_certify)}) are more than the parcel area on file "
             f"({area_acres:.1f} acres)."
         )
     listed_names = [c.crop for c in crops]

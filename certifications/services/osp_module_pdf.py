@@ -1738,7 +1738,12 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
         # Typed years AND years derived from the seasons logged on this parcel — see
         # product/services/land_history.py for why reading only the typed table left the two
         # most recent (and best documented) years off a renewal's § 205.202(b) page.
-        from product.services.land_history import land_history_planting, land_history_rows, land_history_span
+        from product.services.land_history import (
+            format_acres,
+            land_history_planting,
+            land_history_rows,
+            land_history_span,
+        )
 
         # Unbounded on purpose. The Parcel Application is a LIVE document — its buffer rows,
         # map and identity render from current parcel state ("Live completion"), so capping
@@ -1771,7 +1776,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             if row.production_method_display:
                 bits.append(row.production_method_display.lower())
             if row.acres is not None:
-                bits.append(f"{float(row.acres):g} acres")
+                bits.append(f"{format_acres(row.acres)} acres")
             if row.cover_crop:
                 bits.append(f"cover crop: {row.cover_crop}")
             planting = land_history_planting(row)

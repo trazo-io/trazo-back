@@ -176,6 +176,10 @@ def _derive_year(parcel, year: int, seasons) -> Optional[LandHistoryRow]:
         start = s.start_date.date() if hasattr(s.start_date, "date") else s.start_date
         finish = s.finish_date or today
         finish = finish.date() if hasattr(finish, "date") else finish
+        if start > finish:
+            # An open season dated to start after today has covered no month yet; counting it printed a span
+            # that ran backwards ("12/2026 to 11/2026"; review of back PR 383).
+            continue
         starts.append(max(start, date(year, 1, 1)))
         ends.append(min(finish, date(year, 12, 31)))
     period_start = min(starts).replace(day=1) if starts else None
@@ -301,3 +305,11 @@ def land_history_planting(row) -> str:
             treated,
         ]
     )
+
+
+def format_acres(value) -> str:
+    """An acreage as the operator would write it: two decimals at most, trailing zeros dropped, thousands
+    grouped. Never scientific notation: `:g` printed 1234567 as "1.23457e+06" (review of back PR 383)."""
+    amount = Decimal(str(value)).quantize(Decimal("0.01"))
+    text = f"{amount:,.2f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text

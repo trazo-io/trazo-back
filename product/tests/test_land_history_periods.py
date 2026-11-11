@@ -155,3 +155,32 @@ class SectionFPrintsTheColumns(_Parcel):
         self.assertEqual((row.period_start, row.period_end), (date(2025, 4, 1), date(2025, 9, 1)))
         self.assertIsNone(row.acres)
         self.assertIn("2025 · 04/2025 to 09/2025 · Squash", self.page())
+
+
+class ReviewFindingsOn383(_Parcel):
+    def test_a_large_acreage_prints_in_full(self):
+        from product.services.land_history import format_acres
+
+        self.assertEqual(format_acres(1234567), "1,234,567")
+        self.assertEqual(format_acres("12.50"), "12.5")
+        self.assertEqual(format_acres(18), "18")
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel, year=2023, crop_grown="Range", production_method="pasture", acres=1234567
+        )
+        page = self.page()
+        self.assertIn("1,234,567 acres", page)
+        self.assertNotIn("e+06", page)
+
+    def test_an_open_season_dated_after_today_adds_no_months(self):
+        today = timezone.now()
+        History.objects.create(
+            name="Garlic (planned)",
+            parcel=self.parcel,
+            product=Product.objects.create(name="Garlic"),
+            start_date=today + timezone.timedelta(days=20),
+        )
+        rows = land_history_rows(self.parcel)
+        self.assertTrue(rows)
+        for row in rows:
+            if row.period_start and row.period_end:
+                self.assertLessEqual(row.period_start, row.period_end, row)
