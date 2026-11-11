@@ -138,6 +138,12 @@ class Command(BaseCommand):
 
             # Strip fields that don't exist on the CropType model
             clean_data = {k: v for k, v in data.items() if k not in self.IGNORED_FIELDS}
+            # The raw-manure floor reads this flag (history/services/manure_interval.py). Its
+            # field default is True, so a crop seeded without it got the 120-day soil-contact
+            # floor even for apples and walnuts. A crop entry may still state it explicitly.
+            clean_data.setdefault(
+                "has_soil_contact", clean_data.get("category") not in CropType.NO_SOIL_CONTACT_CATEGORIES
+            )
 
             crop_type, created = CropType.objects.get_or_create(slug=clean_data["slug"], defaults=clean_data)
 

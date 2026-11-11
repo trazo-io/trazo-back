@@ -6935,34 +6935,20 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
                 }
             )
 
-        # Interval must match the crop's edible-portion soil contact when the crop type carries an
-        # authoritative flag; otherwise defer (the PDF-side linter handles unknown crops).
+        # § 205.203(c)(1) sets a floor ("not less than"), so only an interval SHORTER than the
+        # crop's floor is refused: 90 days on a crop whose edible part touches the soil. 120 days
+        # on a tree crop is the stricter wait and is accepted. No crop known: defer to the export.
         if interval in ("90", "120"):
+            from history.services.manure_interval import below_minimum, below_minimum_message
+
             history = attrs.get("history") or (instance.history if instance else None)
             crop_type = None
             try:
                 crop_type = history.crop_type if history else None
             except Exception:  # noqa: BLE001 — FK may be unpopulated
                 crop_type = None
-            has_contact = getattr(crop_type, "has_soil_contact", None) if crop_type else None
-            if has_contact is not None:
-                has_contact = bool(has_contact)
-                if has_contact and interval == "90":
-                    raise serializers.ValidationError(
-                        {
-                            "manure_harvest_interval": "This crop's edible portion has direct soil "
-                            "contact, so 7 CFR 205.203(c)(1)(ii) requires a 120-day pre-harvest "
-                            "interval. Selecting 90 days is a record-keeping mismatch."
-                        }
-                    )
-                if not has_contact and interval == "120":
-                    raise serializers.ValidationError(
-                        {
-                            "manure_harvest_interval": "This crop's edible portion does NOT contact "
-                            "soil (tree / canopy crop), so 7 CFR 205.203(c)(1)(iii) requires a "
-                            "90-day pre-harvest interval. The 120-day choice is for root/leafy crops."
-                        }
-                    )
+            if crop_type is not None and below_minimum(interval, crop_type):
+                raise serializers.ValidationError({"manure_harvest_interval": below_minimum_message(crop_type)})
 
         return attrs
 

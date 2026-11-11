@@ -3092,11 +3092,10 @@ class ProductionEvent(CommonEvent):
         if not self.date or not self.history or not self.history.parcel:
             return None
 
-        crop_type = getattr(self.history, "crop_type", None)
-        soil_contact = True  # Conservative default (120-day window)
-        if crop_type is not None and crop_type.has_soil_contact is not None:
-            soil_contact = crop_type.has_soil_contact
-        interval_days = 120 if soil_contact else 90
+        from history.services.manure_interval import minimum_interval_days
+
+        # Unknown crop: 120, the floor that satisfies both paragraphs.
+        interval_days = minimum_interval_days(getattr(self.history, "crop_type", None))
 
         # SoilManagementEvent is defined later in this module; by the time this method
         # runs the entire module is loaded, so direct reference works without import.
@@ -4059,9 +4058,12 @@ class SoilManagementEvent(CommonEvent):
     # NOP Compliance: Raw Manure Harvest Interval (7 CFR 205.203(c)(1))
     # (c)(1) governs raw animal manure pre-harvest intervals; composted materials
     # live under (c)(2). Do not confuse the citations — an inspector flags either.
+    # The choice is the wait the farm keeps, read as a floor: "120" is compliant for any crop,
+    # "90" only where the edible part does not touch the soil. The labels say "at least" so a
+    # tree crop kept at 120 days does not print as a claim that its fruit touches the soil.
     MANURE_INTERVAL_CHOICES = [
-        ("120", "120 days — edible portion contacts soil (root crops, leafy greens)"),
-        ("90", "90 days — edible portion does NOT contact soil (tree fruit, trellised crops)"),
+        ("120", "At least 120 days (required when the edible part touches the soil)"),
+        ("90", "At least 90 days (only when the edible part does not touch the soil)"),
         ("na", "N/A — composted manure or no manure applied"),
     ]
     manure_harvest_interval = models.CharField(
@@ -4070,8 +4072,8 @@ class SoilManagementEvent(CommonEvent):
         blank=True,
         null=True,
         help_text=(
-            "Required harvest interval after raw manure application: "
-            "120 days if crop contacts soil, 90 days otherwise (7 CFR 205.203(c)(1))"
+            "The wait the farm keeps between raw manure and harvest, read as a floor (7 CFR 205.203(c)(1)): "
+            "at least 120 days when the edible part touches the soil, at least 90 days otherwise"
         ),
     )
     manure_application_date = models.DateField(
@@ -4356,50 +4358,22 @@ class SoilManagementEvent(CommonEvent):
                 "documentation, classify the event as raw manure."
             )
 
-        # NOP Manure interval vs crop soil-contact classification.
-        # Per 7 CFR 205.203(c)(1):
-        #   (c)(1)(ii) — 120 days required when edible portion has direct
-        #                soil contact (root crops, leafy greens).
-        #   (c)(1)(iii) — 90 days required when edible portion does NOT
-        #                 have direct soil contact (tree fruit, nuts,
-        #                 elevated vine fruits).
-        # A farmer selecting "120" for a canopy crop is factually wrong
-        # even when the resulting harvest date would satisfy the stricter
-        # rule: the choice wording includes "edible portion contacts
-        # soil" which is false for avocados / apples / etc., and a CCOF
-        # inspector reads that as a record-keeping failure under
-        # § 205.103. Block the mismatch at save time so the log cannot
-        # contain the wrong classification. We only BLOCK when the crop
-        # has an authoritative ``has_soil_contact`` flag set — when the
-        # crop type is unknown or the flag is None, we defer to the
-        # PDF-side consistency linter rather than guessing.
+        # NOP manure interval vs the crop's floor, 7 CFR 205.203(c)(1). The rule sets a minimum
+        # ("not less than" 120 days when the edible part touches the soil, 90 when it does not),
+        # so the only wrong answer is one SHORTER than the floor. Until 2026-11 this also refused
+        # 120 days on a tree crop as a "mis-classification", which blocked the stricter wait a
+        # certifier may ask of nuts swept from the orchard floor. One reading for every surface:
+        # history/services/manure_interval.py. Unknown crop: defer to the export's check.
         if self.manure_harvest_interval in ("90", "120"):
+            from history.services.manure_interval import below_minimum, below_minimum_message
+
             crop_type = None
             try:
                 crop_type = self.history.crop_type
             except Exception:  # noqa: BLE001 — FK not populated yet during form clean()
                 crop_type = None
-            if crop_type is not None and getattr(crop_type, "has_soil_contact", None) is not None:
-                has_contact = bool(crop_type.has_soil_contact)
-                selected = self.manure_harvest_interval
-                if has_contact and selected == "90":
-                    errors["manure_harvest_interval"] = (
-                        f"Crop '{crop_type.name}' has direct soil contact for its "
-                        "edible portion, so 7 CFR 205.203(c)(1)(ii) requires a "
-                        "120-day pre-harvest interval. Selecting 90 days is a "
-                        "record-keeping mismatch even if the harvest date would "
-                        "satisfy the stricter rule."
-                    )
-                elif not has_contact and selected == "120":
-                    errors["manure_harvest_interval"] = (
-                        f"Crop '{crop_type.name}' does NOT have direct soil "
-                        "contact for its edible portion (tree / canopy crop), "
-                        "so 7 CFR 205.203(c)(1)(iii) applies — the required "
-                        "interval is 90 days. The '120 days — edible portion "
-                        "contacts soil' choice is for root crops and leafy "
-                        "greens; using it here mis-classifies the crop and "
-                        "creates an inspector-visible record-keeping conflict."
-                    )
+            if crop_type is not None and below_minimum(self.manure_harvest_interval, crop_type):
+                errors["manure_harvest_interval"] = below_minimum_message(crop_type)
 
         # NOP Composting validation (7 CFR 205.203(c)(1)+(c)(2))
         if self.type == self.COMPOSTING:

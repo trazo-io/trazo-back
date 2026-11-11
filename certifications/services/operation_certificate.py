@@ -158,3 +158,42 @@ def certificate_from_another_agent(osp) -> AnotherAgent | None:
     if held is not None and held.slug == plan_slug:
         return None
     return AnotherAgent(certificate=certificate, confirmed=held is not None)
+
+
+def never_certified(establishment_id) -> bool:
+    """True only when nothing Trazo holds says this operation has ever been certified organic.
+
+    A first-time applicant applies under 7 CFR 205.401. The § 205.406(a) annual update continues
+    a certification that already exists, so it cannot be demanded of an operation that holds
+    none. Until 2026-11 every packet titled itself a renewal packet and told an operation with no
+    certificate to file an annual update before sending it (overall review, OV-PK-F01: the one
+    real grower at the time was a first-time applicant).
+
+    Deliberately wide in what counts as certified, so a renewing operation whose certificate
+    number was never typed in keeps the renewal reading: any NOP certification row in any status,
+    any plan version approved (active or superseded) or carrying an approval certificate number or
+    agent, or any annual update on record. Only an operation with none of these reads as never
+    certified. A read error keeps the renewal reading too.
+    """
+    from certifications.constants import NOP_CERTIFICATION_TYPES
+    from certifications.models import Certification, OrganicSystemPlan, OSPAnnualUpdate
+
+    try:
+        if Certification.objects.filter(
+            establishment_id=establishment_id, certification_type__in=NOP_CERTIFICATION_TYPES
+        ).exists():
+            return False
+        plans = OrganicSystemPlan.objects.filter(establishment_id=establishment_id)
+        if plans.filter(status__in=("active", "superseded")).exists():
+            return False
+        for field in ("approval_certificate_number", "approval_certifier_name"):
+            if plans.exclude(**{f"{field}__isnull": True}).exclude(**{f"{field}__regex": r"^\s*$"}).exists():
+                return False
+        if OSPAnnualUpdate.objects.filter(establishment_id=establishment_id).exists():
+            return False
+        if OSPAnnualUpdate.objects.filter(prior_osp__establishment_id=establishment_id).exists():
+            return False
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read the certification record for establishment %s", establishment_id)
+        return False
+    return True
