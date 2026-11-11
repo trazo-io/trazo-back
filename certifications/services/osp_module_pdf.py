@@ -1596,16 +1596,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
     elif embed == "crop_table":
         # CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10): the crops the operator listed, with acres,
         # then the area on file and where the figures or the open seasons disagree with the list.
-        from certifications.services.parcel_application_lines import (
-            PLANNED_CROP_COLUMNS,
-            planned_crop_lines,
-            planned_crop_rows,
-        )
+        # An orchard parcel's table adds block, rootstock, year planted and bearing status (planned_crop_table).
+        from certifications.services.parcel_application_lines import planned_crop_lines, planned_crop_table
         from product.services.parcel_application_status import parcel_application_values
 
-        rows = planned_crop_rows(parcel)
+        header, widths, rows = planned_crop_table(parcel)
         if rows:
-            out.append(_register_table(PLANNED_CROP_COLUMNS, (2.0, 2.0, 1.4, 0.9), rows, styles))
+            out.append(_register_table(header, widths, rows, styles))
             out.append(Spacer(1, 4))
         for line in planned_crop_lines(parcel, parcel_application_values(parcel)):
             out.append(Paragraph(_escape(line), styles["meta" if line.startswith("[REVIEW]") else "body"]))

@@ -2,8 +2,11 @@
 Centralized Emission Factors for Trazo Carbon Calculation System
 
 This module provides a single source of truth for all emission factors used in carbon calculations.
-All factors are USDA-verified and sourced from authoritative references to ensure consistency
-and prevent data inconsistencies across the application.
+Each factor carries its own `source`; read it per factor and never generalise it. Not every source
+is an agency: phosphorus and potassium are Trazo estimates (their source comes from
+`verified_emission_factors.py`, where they were corrected on 2026-09-07). Until 2026-11-11 this
+docstring, the getters' log lines and the startup log of every process called all of them
+"USDA-verified", the claim `.claude/rules/compliance.md` forbids.
 
 Version: 2.0.0
 Last Updated: 2024-12
@@ -13,6 +16,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from .verified_emission_factors import VerifiedEmissionFactors
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,8 +26,8 @@ class EmissionFactorsRegistry:
     Centralized registry for all emission factors used in carbon calculations.
 
     This class serves as the single source of truth for emission factors to prevent
-    inconsistencies across different calculation modules. All factors are USDA-verified
-    and include source attribution and versioning information.
+    inconsistencies across different calculation modules. Each factor includes its own source
+    attribution and versioning information.
     """
 
     # Version and metadata
@@ -30,9 +35,11 @@ class EmissionFactorsRegistry:
     LAST_UPDATED = "2025-01-21"
     DATA_SOURCE = "EPA Greenhouse Gas Emission Factors Hub & IPCC AR6 Guidelines"
 
-    # USDA Fertilizer Emission Factors (kg CO2e per kg nutrient)
-    # Source: USDA-ARS Corrected Research Findings, 2025
-    # Reference: Updated EPA Inventory - Research shows previous values underestimated emissions
+    # Fertilizer emission factors (kg CO2e per kg nutrient). Nitrogen: EPA 40 CFR Part 98 + IPCC.
+    # Phosphorus and potassium: Trazo estimates, their source read from verified_emission_factors.py
+    # so the two registries cannot drift apart again. Until 2026-11-11 these two entries read
+    # "EPA 40 CFR Part 98", the attribution verified_emission_factors.py dropped on 2026-09-07: the
+    # EPA Hub publishes no fertilizer factors.
     FERTILIZER_FACTORS = {
         "nitrogen": {
             "value": 10.5,  # kg CO2e per kg N (Global scientific consensus)
@@ -48,24 +55,26 @@ class EmissionFactorsRegistry:
             "field_component": 7.9,  # kg CO2e per kg N from field emissions (N2O)
         },
         "phosphorus": {
-            "value": 1.19,  # kg CO2e per kg P2O5 (EPA 40 CFR Part 98)
+            "value": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["phosphorus_fertilizer"].value,
             "unit": "kg CO2e per kg P2O5",
-            "source": "EPA 40 CFR Part 98",
-            "reference": "EPA Greenhouse Gas Emission Factors Hub",
-            "confidence": "high",
-            "last_verified": "2025-12-03",
-            "notes": "Manufacturing emissions only. Aligned with verified_emission_factors.py.",
+            "source": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["phosphorus_fertilizer"].source,
+            "provenance": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["phosphorus_fertilizer"].provenance,
+            "reference": "carbon/services/verified_emission_factors.py phosphorus_fertilizer",
+            "confidence": "estimate",
+            "last_verified": "2026-09-07",
+            "notes": "Manufacturing emissions only. A Trazo estimate within a cited range, not an agency's figure.",
             "literature_range": "1.0-1.5 kg CO2e per kg P2O5",
             "uncertainty": "±20%",
         },
         "potassium": {
-            "value": 0.65,  # kg CO2e per kg K2O (EPA 40 CFR Part 98)
+            "value": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["potassium_fertilizer"].value,
             "unit": "kg CO2e per kg K2O",
-            "source": "EPA 40 CFR Part 98",
-            "reference": "EPA Greenhouse Gas Emission Factors Hub",
-            "confidence": "high",
-            "last_verified": "2025-12-03",
-            "notes": "Manufacturing emissions only. Aligned with verified_emission_factors.py.",
+            "source": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["potassium_fertilizer"].source,
+            "provenance": VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["potassium_fertilizer"].provenance,
+            "reference": "carbon/services/verified_emission_factors.py potassium_fertilizer",
+            "confidence": "estimate",
+            "last_verified": "2026-09-07",
+            "notes": "Manufacturing emissions only. A Trazo estimate, held above the sparse published figures.",
             "literature_range": "0.5-0.7 kg CO2e per kg K2O",
             "uncertainty": "±15%",
         },
@@ -157,9 +166,7 @@ class EmissionFactorsRegistry:
         },
     }
 
-    # USDA Fuel Emission Factors (kg CO2e per unit)
-    # Source: EPA Emission Factors for Greenhouse Gas Inventories, 2023
-    # Reference: USDA Energy Efficiency and Conservation Guidelines
+    # Fuel emission factors (kg CO2e per unit). Source: EPA 40 CFR Part 98 Table C-1, cited per entry.
     FUEL_FACTORS = {
         "diesel": {
             "value": 2.70,  # kg CO2e per liter (10.21 kg/gal ÷ 3.78541 L/gal)
@@ -565,14 +572,14 @@ class EmissionFactorsRegistry:
             "value": 6.7,  # INCORRECT - do not use
             "status": "deprecated",
             "replacement": "nitrogen",
-            "reason": "Non-USDA verified value, replaced with official USDA factor of 5.86",
+            "reason": "Superseded: the nitrogen factor is 10.5 (EPA 40 CFR Part 98 + IPCC).",
         }
     }
 
     @classmethod
     def get_soil_management_factor(cls, management_type: str) -> Dict[str, Any]:
         """
-        Get USDA-verified soil management emission factor for a specific practice type.
+        Get the soil management emission factor for a specific practice type.
 
         Args:
             management_type (str): Soil management practice type ('tillage', 'cover_crops', etc.)
@@ -593,15 +600,15 @@ class EmissionFactorsRegistry:
         factor_data["version"] = cls.VERSION
         factor_data["accessed_at"] = datetime.now().isoformat()
 
-        logger.info(
-            f"Retrieved USDA soil management factor for {management_type}: {factor_data['value']} {factor_data['unit']}"
+        logger.debug(
+            f"Retrieved soil management factor for {management_type}: {factor_data['value']} {factor_data['unit']}"
         )
         return factor_data
 
     @classmethod
     def get_fertilizer_factor(cls, nutrient: str) -> Dict[str, Any]:
         """
-        Get USDA-verified fertilizer emission factor for a specific nutrient.
+        Get the fertilizer emission factor for a specific nutrient.
 
         Args:
             nutrient (str): Nutrient type ('nitrogen', 'phosphorus', 'potassium')
@@ -622,13 +629,13 @@ class EmissionFactorsRegistry:
         factor_data["version"] = cls.VERSION
         factor_data["accessed_at"] = datetime.now().isoformat()
 
-        logger.info(f"Retrieved USDA fertilizer factor for {nutrient}: {factor_data['value']} {factor_data['unit']}")
+        logger.debug(f"Retrieved fertilizer factor for {nutrient}: {factor_data['value']} {factor_data['unit']}")
         return factor_data
 
     @classmethod
     def get_fuel_factor(cls, fuel_type: str) -> Dict[str, Any]:
         """
-        Get USDA-verified fuel emission factor for a specific fuel type.
+        Get the fuel emission factor for a specific fuel type.
 
         Args:
             fuel_type (str): Fuel type ('diesel', 'gasoline', 'natural_gas', 'propane')
@@ -649,7 +656,7 @@ class EmissionFactorsRegistry:
         factor_data["version"] = cls.VERSION
         factor_data["accessed_at"] = datetime.now().isoformat()
 
-        logger.info(f"Retrieved USDA fuel factor for {fuel_type}: {factor_data['value']} {factor_data['unit']}")
+        logger.debug(f"Retrieved fuel factor for {fuel_type}: {factor_data['value']} {factor_data['unit']}")
         return factor_data
 
     @classmethod
@@ -693,7 +700,7 @@ class EmissionFactorsRegistry:
         factor_data["version"] = cls.VERSION
         factor_data["accessed_at"] = datetime.now().isoformat()
 
-        logger.info("Retrieved USDA organic certification factors")
+        logger.debug("Retrieved organic certification factors")
         return factor_data
 
     @classmethod

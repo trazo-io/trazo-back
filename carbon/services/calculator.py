@@ -11,7 +11,7 @@ class CarbonFootprintCalculator:
     """Service for calculating carbon footprints based on various inputs"""
 
     def __init__(self):
-        # Get standardized USDA-verified emission factors from centralized registry
+        # Emission factors from the centralized registry; provenance is per factor there
         self.usda_factors = {
             "fertilizer": {
                 "nitrogen": emission_factors.get_fertilizer_factor("nitrogen")["value"],
@@ -35,8 +35,8 @@ class CarbonFootprintCalculator:
         }
 
         # Log the standardization for audit purposes
-        logger.info(f"CarbonFootprintCalculator initialized with standardized USDA factors v{emission_factors.VERSION}")
-        logger.info(f"Nitrogen factor: {self.usda_factors['fertilizer']['nitrogen']} kg CO2e per kg N (USDA-verified)")
+        logger.debug(f"CarbonFootprintCalculator initialized with centralized factors v{emission_factors.VERSION}")
+        logger.debug(f"Nitrogen factor: {self.usda_factors['fertilizer']['nitrogen']} kg CO2e per kg N")
 
     def calculate_farm_footprint(
         self, inputs: Dict[str, Any], crop_type: str, area: float, region: Optional[str] = None

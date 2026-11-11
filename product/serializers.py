@@ -785,21 +785,44 @@ class ParcelPlannedCropSerializer(serializers.ModelSerializer):
     """One crop grown now or planned on a parcel (CCOF ORGB49 A8, WSDA AGR 2264 ref 8, OTCO C2 2.1 10).
 
     The parcel comes from the URL, never the body, so no id in a payload can move a row to another
-    parcel or company."""
+    parcel or company. An orchard row also carries its block name, rootstock, year planted and bearing
+    status; each is optional and blank means not stated."""
 
     class Meta:
         model = ParcelPlannedCrop
-        fields = ["id", "crop", "variety", "expected_harvest", "acres", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "crop",
+            "variety",
+            "expected_harvest",
+            "acres",
+            "block_name",
+            "rootstock",
+            "year_planted",
+            "bearing_status",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def to_internal_value(self, data):
-        # The form posts every field it renders; a blank date or acreage is "not stated", not a format error.
+        # The form posts every field it renders; a blank date, acreage or year is "not stated", not a format error.
         if hasattr(data, "copy"):
             data = data.copy()
-            for key in ("expected_harvest", "acres"):
+            for key in ("expected_harvest", "acres", "year_planted"):
                 if data.get(key) == "":
                     data[key] = None
         return super().to_internal_value(data)
+
+    def validate_block_name(self, value):
+        # The same normalisation `CommonEvent.block_id` gets on save, so the name typed here compares equal to the
+        # one written on activities.
+        from history.services.block_ids import normalize_block_id
+
+        return normalize_block_id(value) or ""
+
+    def validate_rootstock(self, value):
+        return " ".join((value or "").split())
 
     def validate_crop(self, value):
         value = " ".join(value.split())
