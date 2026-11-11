@@ -6,48 +6,84 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('product', '0029_parcel_planned_crop'),
+        ("product", "0029_parcel_planned_crop"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='acres',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Acres of this crop or use this year', max_digits=10, null=True),
+            model_name="parcelcrophistory",
+            name="acres",
+            field=models.DecimalField(
+                blank=True, decimal_places=2, help_text="Acres of this crop or use this year", max_digits=10, null=True
+            ),
         ),
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='gmo_status',
-            field=models.CharField(blank=True, choices=[('non_gmo', 'Non-GMO'), ('gmo', 'GMO'), ('unknown', 'Not known')], default='', help_text="Whether the year's seed or planting stock was of GMO origin (OTCO C2 2.4)", max_length=20),
+            model_name="parcelcrophistory",
+            name="gmo_status",
+            field=models.CharField(
+                blank=True,
+                choices=[("non_gmo", "Non-GMO"), ("gmo", "GMO"), ("unknown", "Not known")],
+                default="",
+                help_text="Whether the year's seed or planting stock was of GMO origin (OTCO C2 2.4)",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='period_end',
-            field=models.DateField(blank=True, help_text='Last month of this use (stored as day 1)', null=True),
+            model_name="parcelcrophistory",
+            name="period_end",
+            field=models.DateField(blank=True, help_text="Last month of this use (stored as day 1)", null=True),
         ),
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='period_start',
-            field=models.DateField(blank=True, help_text='First month of this use (stored as day 1)', null=True),
+            model_name="parcelcrophistory",
+            name="period_start",
+            field=models.DateField(blank=True, help_text="First month of this use (stored as day 1)", null=True),
         ),
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='propagule_type',
-            field=models.CharField(blank=True, choices=[('seed', 'Seed'), ('seedling', 'Seedling'), ('planting_stock', 'Planting stock')], default='', help_text="What the year's crop started from (OTCO C2 2.4)", max_length=20),
+            model_name="parcelcrophistory",
+            name="propagule_type",
+            field=models.CharField(
+                blank=True,
+                choices=[("seed", "Seed"), ("seedling", "Seedling"), ("planting_stock", "Planting stock")],
+                default="",
+                help_text="What the year's crop started from (OTCO C2 2.4)",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='seed_treated',
-            field=models.CharField(blank=True, choices=[('untreated', 'Untreated'), ('treated', 'Treated'), ('unknown', 'Not known')], default='', help_text="Whether the year's seed or planting stock was treated (OTCO C2 2.4)", max_length=20),
+            model_name="parcelcrophistory",
+            name="seed_treated",
+            field=models.CharField(
+                blank=True,
+                choices=[("untreated", "Untreated"), ("treated", "Treated"), ("unknown", "Not known")],
+                default="",
+                help_text="Whether the year's seed or planting stock was treated (OTCO C2 2.4)",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='parcelcrophistory',
-            name='seed_treatment_name',
-            field=models.CharField(blank=True, default='', help_text='Name of the seed treatment, when treated', max_length=200),
+            model_name="parcelcrophistory",
+            name="seed_treatment_name",
+            field=models.CharField(
+                blank=True, default="", help_text="Name of the seed treatment, when treated", max_length=200
+            ),
         ),
         migrations.AlterField(
-            model_name='parcelcrophistory',
-            name='production_method',
-            field=models.CharField(blank=True, choices=[('conventional', 'Conventional'), ('organic', 'Organic'), ('transitional', 'Transitional'), ('regenerative', 'Regenerative'), ('fallow', 'Fallow'), ('pasture', 'Pasture'), ('other', 'Other')], help_text='Production method used during this year', max_length=30, null=True),
+            model_name="parcelcrophistory",
+            name="production_method",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("conventional", "Conventional"),
+                    ("organic", "Organic"),
+                    ("transitional", "Transitional"),
+                    ("regenerative", "Regenerative"),
+                    ("fallow", "Fallow"),
+                    ("pasture", "Pasture"),
+                    ("other", "Other"),
+                ],
+                help_text="Production method used during this year",
+                max_length=30,
+                null=True,
+            ),
         ),
     ]
