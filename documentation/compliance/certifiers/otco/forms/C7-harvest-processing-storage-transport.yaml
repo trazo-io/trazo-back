@@ -74,34 +74,31 @@ items:
 - ref: 7.1-1
   asks: Describe the activities that take place at this facility — Handling/Processing (washing, sorting, mixing,
     drying, blending, packaging) / Storage / Other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_4_handling.on_farm_facility_table
+    - g6_2_storage.on_farm_storage_table
     - g6_4_handling.handling_activities
     - g6_2_storage.storage_locations
-    prints: modules/G6_4.pdf §A (handling_activities); modules/G6_2.pdf §A (storage_locations — on_farm_cold
-      / on_farm_dry / bins_silos)
-  gap: 'Both halves are captured and print, but for the OPERATION, not per facility: `handling_activities`
-    lists what is done anywhere on the farm and `storage_locations` lists storage types anywhere on the farm.
-    With no facility name (7.1-1) there is nothing to attribute either answer to, so an operation with a wash
-    shed and a separate cold room prints one merged list.'
-  fix: Once a facility name exists (7.1-1 fix), key both answers to it — or state on the module PDF that the
-    activities and storage types are listed for the whole operation.
+    models:
+    - certifications.PostHarvestFacility.role
+    prints: "modules/G6_4.pdf §B and modules/G6_2.pdf §A (each of the operation's own facilities with its role: handles, stores, or both); G6_4.pdf §A (handling_activities, the steps by name)"
+  note: "Closed 2026-11-10 (content 2026.12.02): each own facility is a record with its role since 2026-11-07, so the activities are stated per facility; the gap text predated it."
 - ref: 7.1-2
   asks: List the organic crops that are handled or stored at this facility, or attach a separate list (Attached).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g6_4_handling.on_farm_facility_table
+    - g6_2_storage.on_farm_storage_table
     - g6_4_handling.products_handled
-    prints: modules/G6_4.pdf §B (products_handled)
-  gap: The HANDLED half reuses CCOF G6.4 A2 — `products_handled` is one flat text field, functionally answered,
-    with no attach-a-list alternative for a high-SKU operation. The STORED half has no field at all — G6.2
-    records storage TYPES with no crops-stored breakdown (the gap CCOF G6.2 B1 records for the storage table).
-    Neither is per facility.
-  fix: Structured storage rows {name, address or "same as establishment", type, crops} on G6.2 (the CCOF B1
-    fix); an optional list upload beside products_handled.
+    models:
+    - certifications.PostHarvestFacility.products_detail
+    - certifications.FacilityProduct.category
+    - certifications.services.facility_crops.crops_by_facility
+    prints: "modules/G6_4.pdf §B and modules/G6_2.pdf §A (per own facility: the crops on the production records linked to it, the products the operation describes, and its product table)"
+  note: "Closed 2026-11-10 (content 2026.12.02): crops and products are stated per facility (facility records since 2026-11-07, product rows since 2026-11-09)."
 - ref: 7.2-1
   asks: Attach a facility layout, either hand drawn or digital, that shows the areas used for organic processing
     and storage. Attached.
@@ -119,20 +116,14 @@ items:
 - ref: 7.2-2
   asks: Attach a flow chart or describe how crops are harvested, received, processed, packaged, and stored.
     Include all equipment, machinery, and storage areas. Attached / Describe.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.process_flow
     - g6_4_handling.handling_site
     - g6_4_handling.facility_docs
-    prints: modules/G6_4.pdf §C (process_flow); §B (handling_site — buildings, pads, equipment); facility_docs
-      under attachments/g6_4_handling/facility_docs/ when uploaded
-  gap: 'Reuses CCOF G6.4 A3. The written-description half is covered: `process_flow` asks for the steps in
-    order from harvest to shipment and `handling_site` names the buildings, pads and equipment, both printed.
-    The flow-chart half (`facility_docs`) is an optional upload on a later page (it rides in the packet when
-    uploaded, since 2026-10-01), and nothing frames the two as OTCO''s either/or.'
-  fix: Relabel to make the either/or explicit.
+    prints: "modules/G6_4.pdf §C (process_flow, whose coaching and facility_docs' say either one answers); §B (handling_site); facility_docs under attachments/g6_4_handling/facility_docs/ when uploaded"
+  note: "Closed 2026-11-10 (content 2026.12.02): the either/or is stated on both questions."
 - ref: 7.3-1
   asks: What processing activities are performed? Not applicable or use contract processor (skip to section
     7.4) / Washing / Sorting / Freezing / Cutting / Cooking / Mixing / Packaging / Fermenting / Drying/dehydrating
@@ -283,8 +274,7 @@ items:
   asks: Describe how you clean and sanitize organic food contact surfaces (like counters, mixers, grinders,
     and storage areas), including any final rinse step. You may attach a Standard Operating Procedure (SOP).
     (The form prints this as 2); there is no 1).)
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_2_storage.storage_cleaned_before_organic
@@ -294,14 +284,8 @@ items:
     - g6_4_handling.food_contact_cleaning_methods_other
     - g6_4_handling.equipment_sanitizer_where_used
     - g6_4_handling.sanitizer_residual_free_assurance
-    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods; equipment_sanitizer_where_used; sanitizer_residual_free_assurance
-      — the final-rinse clause); modules/G6_2.pdf §B (storage_cleaned_before_organic, storage_cleaning_method
-      — the storage-areas clause); facility_docs (SOP upload) under attachments/g6_4_handling/facility_docs/ when uploaded
-  gap: 'Since 2026-09-12 the equipment half has a home asked of every handler: the cleaning-methods group,
-    the per-product where-used text and the residual-assurance group (which carries the final-rinse clause).
-    The SOP OTCO invites is uploadable as `facility_docs`, and since 2026-10-01 it rides in the packet and is
-    named on the G6.4 page; nothing asks which SOP sections it covers.'
-  fix: Ask which SOP sections the uploaded file covers.
+    prints: "modules/G6_4.pdf §C (cleaning methods, where used, residual-free assurance with the final rinse); modules/G6_2.pdf §B (storage areas); the optional SOP under attachments/g6_4_handling/facility_docs/"
+  note: "Closed 2026-11-10: OTCO asks the description and invites an optional SOP; every clause is answered. The earlier fix (which SOP sections a file covers) asked more than the form."
 - ref: 7.6-3
   asks: Do you use sanitizers or cleansers on equipment? No / Yes, materials have been added to the C11.
   status: covered
@@ -336,20 +320,13 @@ items:
 - ref: 7.7-1
   asks: Do you store crops? No, not applicable or I no longer own the product after harvest or delivery (skip
     to section 7.8) / Yes, I still own crops while they are in storage.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_2_storage.storage_locations
-    prints: modules/G6_2.pdf §A (storage_locations — any selection is 'yes, we store'); module N/A flag ('product
-      is never stored') is the printed 'no'
-  gap: 'The store / do-not-store half reuses WSDA §K 2: the module''s N/A attestation and the location list
-    between them state it. The OWNERSHIP clause has no question — nothing asks whether the operation still
-    owns the crop while it sits in storage, and `storage_locations`'' off-farm options read the same whether
-    the crop is the operation''s or was sold at the dock. OTCO uses that clause to decide whether §7.7 applies
-    at all, and the same fact gates 7.10 (retained ownership during off-site processing) and CCOF G6.2 A(1).'
-  fix: An `owns_crop_in_storage` [boolean] on G6.2 page A, visible when an off-farm option is selected, printed
-    with the facility table; reuse it for the 7.10-1 ownership branch.
+    - g6_2_storage.owns_crop_in_storage
+    prints: "modules/G6_2.pdf §A (storage_locations; owns_crop_in_storage, shown for off-farm storage); the module's not-applicable statement is the 'no storage' answer"
+  note: "Closed 2026-11-10 (content 2026.12.02)."
 - ref: 7.7-2
   asks: 'Complete the table below to list the storage facilities you use: Storage Facility Name and Location / Products/Crops
     Stored / Type of Storage / Documentation (OC, IS, OWN).'

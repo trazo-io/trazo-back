@@ -87,6 +87,43 @@ G6_2_STORAGE = Module(
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
+                # OTCO C7 7.7-1 and CCOF G6.2 A1: whether the operation still owns the crop while it sits in someone
+                # else's storage. OTCO uses it to decide whether 7.7 applies; CCOF opens section A on it (2026.12.02).
+                Question(
+                    key="owns_crop_in_storage",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "Do you still own the crop while it is stored at a facility you do not operate?",
+                        "¿El cultivo sigue siendo tuyo mientras está almacenado en una instalación que no operas?",
+                    ),
+                    coaching=text(
+                        "Answer No if ownership passes to the buyer or the facility when the crop is delivered there.",
+                        "Responde No si la propiedad pasa al comprador o a la instalación al entregar el cultivo.",
+                    ),
+                    nop_cite="§ 205.100(a)",
+                    visible_when=(
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="The operation owns the crop while it is in off-farm storage: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("yes", text("Yes, we still own it there", "Sí, sigue siendo nuestro")),
+                        Option(
+                            "no",
+                            text(
+                                "No, ownership passes when it is delivered",
+                                "No, la propiedad pasa al entregarlo",
+                            ),
+                        ),
+                    ),
+                ),
                 Question(
                     key="storage_other_description",
                     kind="text",
@@ -277,7 +314,19 @@ G6_2_STORAGE = Module(
                         "limpieza del espacio o contenedor utilizado.",
                     ),
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
+                    # CCOF G6.2 A1 "No, skip to section B" / OTCO C7 7.7-1: a crop no longer owned in storage closes
+                    # this section. Only an explicit No closes it: an unanswered ownership question leaves it open, so
+                    # no stored plan loses what it shows (review of back #369).
+                    visible_when=(
+                        Condition("storage_locations", "includes", "uncertified_facility"),
+                        # Repeats owns_crop_in_storage's own gate, the chained-gates convention.
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
+                        Condition("owns_crop_in_storage", "ne", "no"),
+                    ),
                     compiles_to=CompileRule(template="Records provided by the uncertified storage facility: {answer}"),
                 ),
                 # CCOF G6.2 A2 asks for an affidavit the uncertified facility's manager signs, and OTCO
@@ -299,7 +348,19 @@ G6_2_STORAGE = Module(
                     ),
                     required=False,
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("storage_locations", "includes", "uncertified_facility"),),
+                    # CCOF G6.2 A1 "No, skip to section B" / OTCO C7 7.7-1: a crop no longer owned in storage closes
+                    # this section. Only an explicit No closes it: an unanswered ownership question leaves it open, so
+                    # no stored plan loses what it shows (review of back #369).
+                    visible_when=(
+                        Condition("storage_locations", "includes", "uncertified_facility"),
+                        # Repeats owns_crop_in_storage's own gate, the chained-gates convention.
+                        Condition(
+                            "storage_locations",
+                            "includes_any",
+                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                        ),
+                        Condition("owns_crop_in_storage", "ne", "no"),
+                    ),
                 ),
                 # WSDA K1 asks whether a THIRD PARTY is contracted to store the crop, which
                 # none of the location options above can answer: "commercial cold storage
@@ -375,6 +436,7 @@ G6_2_STORAGE = Module(
                             "includes_any",
                             ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
                         ),
+                        Condition("owns_crop_in_storage", "ne", "no"),
                     ),
                 ),
             ),

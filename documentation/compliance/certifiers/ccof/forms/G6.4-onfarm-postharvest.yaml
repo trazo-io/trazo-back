@@ -60,19 +60,16 @@ items:
     received, processed, packaged, and stored. Identify ALL equipment, processes, pest control practices
     (including preventative practices and mechanical/physical controls), and storage areas. "Complete
     description attached" checkbox.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_4_handling.process_flow
+    - g6_4_handling.handling_site
     - g6_4_handling.facility_docs
-    prints: modules/G6_4.pdf §C (process_flow); §D (facility_docs)
-  gap: process_flow (page C, written-description half) is covered; facility_docs (page D, flow-chart half)
-    is an optional upload on a later, disconnected page — no explicit either/or framing, no prompt to
-    name pest-control practices at the handling site specifically (that's G9.0 territory, unreferenced
-    here too), and no "complete description attached" confirmation checkbox.
-  fix: Relabel to make the either/or explicit; add coaching listing CCOF's required elements; cross-reference
-    G9.0 for facility pest practices.
+    - g9_0_facility_pest.preventive_practices
+    - g9_0_facility_pest.mechanical_controls
+    prints: "modules/G6_4.pdf §C (process_flow; either it or the flow chart answers), §B (handling_site: buildings, pads, equipment); modules/G9_0.pdf §B (pest prevention and controls); facility_docs under attachments/g6_4_handling/facility_docs/"
+  note: "Closed 2026-11-10 (content 2026.12.02): the either/or is stated, and the pest practices the form names are answered on G9.0."
 - ref: A4
   asks: List any materials used for facility pest control at this post harvest handling location on your Grower
     Materials Application. None used.
