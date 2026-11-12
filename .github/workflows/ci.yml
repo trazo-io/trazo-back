@@ -355,6 +355,12 @@ jobs:
       # the buyer page, shared across parcels with a tank total refused, and a correction. It does
       # not read the sibling repo.
       #
+      # 2026-11-12: company.tests.test_applicators joins. Saved applicators under
+      # /api/companies/<id>/applicators/: members read, CA/FM write, another company's applicator
+      # answers like a missing one, the company comes from the URL and never the body, DELETE
+      # deactivates, a spray keeps its copied details after the profile changes, and close_account
+      # exports then deletes them. It does not read the sibling repo.
+      #
       # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
       # narratives with text that the submit gate, the OSP page and the onboarding checklist all
       # show; the checklist used to tick "text in all six sections" on one character per section.
@@ -773,6 +779,7 @@ jobs:
             history.tests.test_pheromone_dispensers \
             history.tests.test_spray_not_on_source_record \
             history.tests.test_spray_state_application_fields \
+            company.tests.test_applicators \
             history.tests.test_manure_interval_is_a_floor \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \

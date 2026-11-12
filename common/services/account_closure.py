@@ -17,8 +17,8 @@ and IP address, describing rows that no longer exist.
 THE FLOW, IN THE ORDER THE COMMAND ENFORCES IT
 ----------------------------------------------
 1. `plan(company)` is read-only: what would go, counted per table, plus files and people.
-2. `export(company)` writes ONE ZIP (each farm's records as CSV, every uploaded file, a manifest) to
-   private storage under `account-closures/`, and returns its key.
+2. `export(company)` writes ONE ZIP (each farm's records as CSV, the company's saved applicators,
+   every uploaded file, a manifest) to private storage under `account-closures/`, and returns its key.
 3. `apply(company, ...)` refuses unless that export exists. Then it unpublishes, releases the crew
    recordings, deletes the rows in one transaction, and only after the commit deletes the files.
    The export itself is removed 30 days later by `purge_closure_exports` (daily maintenance).
@@ -301,7 +301,8 @@ def read_manifest(key) -> dict:
 
 
 def export(company, allow_missing_files: bool = False) -> str:
-    """Write the closure export and return its storage key. Records per farm, every file, a manifest.
+    """Write the closure export and return its storage key. Records per farm, the company's saved
+    applicators, every file, a manifest.
 
     Refuses, writing nothing, when a file cannot be read from storage (review of #398: an S3 outage
     during the export would otherwise produce an export that `apply` accepts and a delete of files
@@ -310,14 +311,27 @@ def export(company, allow_missing_files: bool = False) -> str:
     from django.core.files.base import ContentFile
 
     from backend.storage import private_records_storage
-    from history.services.records_export import export_establishment_records_zip
+    from common.specimen import is_specimen
+    from company.models import Applicator
+    from history.services.records_export import _model_csv, export_establishment_records_zip
 
     p = plan(company)
     buffer = io.BytesIO()
     missing = []
+    farms = list(company.establishment_set.all().order_by("pk"))
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
-        for establishment in company.establishment_set.all().order_by("pk"):
+        for establishment in farms:
             bundle.writestr(f"records/farm-{establishment.pk}.zip", export_establishment_records_zip(establishment))
+        # The saved applicators are company data, not any one farm's, so they are not in a farm's
+        # records ZIP. Every spray already carries its own copy of the details it was saved with.
+        # Marked as a specimen only when every farm is fabricated: never mark a real operation's file.
+        bundle.writestr(
+            "applicators.csv",
+            _model_csv(
+                Applicator.objects.filter(company=company).order_by("pk"),
+                specimen=bool(farms) and all(is_specimen(f) for f in farms),
+            ),
+        )
         for storage, name in _files(p.collector):
             try:
                 with storage.open(name, "rb") as fh:

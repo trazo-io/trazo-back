@@ -514,3 +514,44 @@ class Establishment(models.Model):
         from common.location import joined_parts
 
         return joined_parts(self, ("city", "state", "country")) or ""
+
+
+class Applicator(models.Model):
+    """A person who applies sprays for this company, kept so their details are typed once.
+
+    WAC 16-228-1320(1)(l) asks a spray record for the licensed applicator's full name, license
+    number, complete address and telephone number. The spray form copies these values onto the
+    record (`ChemicalEvent.applicator_name`, `applicator_certification`, `applicator_address`,
+    `applicator_phone`) at the moment it is filled in.
+
+    NEVER a foreign key from a record to this row. The record keeps its own text copy, so editing
+    an address here, or deactivating the person, never rewrites a spray already logged
+    (owner decision 2026-11-11). A guard test asserts ChemicalEvent has no relation to this model.
+
+    Not the crew roster. `fieldnotes.CrewSender` is the list of phones allowed to send field
+    notes, and it is never the applicator of record. Two rosters, never one.
+
+    No hard delete through the API: "remove" sets `is_active=False`, which takes the person out of
+    the spray form's picker and keeps the row listed for reference.
+    """
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="applicators")
+    # Lengths match the record columns they are copied into, so a copy always fits.
+    full_name = models.CharField(max_length=150)
+    # Blank allowed: not every person who applies is licensed (a worker under a licensed
+    # applicator's supervision, or a product that needs no license).
+    license_number = models.CharField(max_length=100, blank=True, default="")
+    license_state = models.CharField(
+        max_length=2, blank=True, default="", help_text="Two-letter code of the state that issued the license."
+    )
+    address = models.CharField(max_length=255, blank=True, default="")
+    phone = models.CharField(max_length=40, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-is_active", "full_name", "pk")
+
+    def __str__(self) -> str:
+        return f"{self.full_name} (company {self.company_id})"

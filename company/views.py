@@ -41,8 +41,9 @@ from .constants import ALLOWED_PERIODS
 # everything else = needs attention), so anything forwarded to it that is not genuinely
 # actionable is displayed as an action item and counted in the headline.
 ACTIONABLE_READINESS_STATUSES = frozenset({"REVIEW", "FAIL"})
-from .models import Company, Establishment
+from .models import Applicator, Company, Establishment
 from .serializers import (
+    ApplicatorSerializer,
     CreateCompanySerializer,
     EstablishmentChartSerializer,
     EstablishmentDashboardMetricsSerializer,
@@ -1588,3 +1589,52 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 #
 # Found by `history/tests/test_anonymous_endpoint_inventory.py`, which now fails CI on any new
 # anonymous endpoint that has not been written down and reviewed.
+
+
+class ApplicatorViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """`/api/companies/<company_pk>/applicators/`: the people a spray record names as applicator.
+
+    The spray form offers the active ones and COPIES their details onto the record at save; the
+    record keeps the text, never a link to this row (see `company.models.Applicator`).
+
+    Permissions are the nested class default: any member reads, a Company Admin or Farm Manager
+    writes, and a non-member is refused before any row is looked up. Tenancy is the queryset: only
+    rows of the company in the URL exist here, so another company's applicator id answers exactly
+    like an id that does not exist. The company is never read from the body.
+
+    `?active=true` narrows the list to the people the picker may offer; `?active=false` to the
+    deactivated ones. DELETE deactivates and answers with the row: past records keep their copies
+    either way, and the row stays listed for reference.
+    """
+
+    serializer_class = ApplicatorSerializer
+    # A nested object must belong to the URL's company (ReadOnlyForViewers.has_object_permission).
+    object_company_path = "company"
+
+    _ACTIVE_FILTER = {"true": True, "false": False}
+
+    def get_queryset(self):
+        return Applicator.objects.filter(company=self.company)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        active = request.query_params.get("active")
+        if active is not None:
+            if active not in self._ACTIVE_FILTER:
+                return Response(
+                    {"active": ["Use true or false."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(is_active=self._ACTIVE_FILTER[active])
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.company)
+
+    def destroy(self, request, *args, **kwargs):
+        """Deactivate. The row is kept, and 200 carries it, because a 204 would read as "gone"."""
+        applicator = self.get_object()
+        if applicator.is_active:
+            applicator.is_active = False
+            applicator.save(update_fields=["is_active", "updated_at"])
+        return Response(self.get_serializer(applicator).data)

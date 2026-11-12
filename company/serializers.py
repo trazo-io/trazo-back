@@ -8,6 +8,7 @@ from rest_framework.serializers import ModelSerializer
 
 from common.models import Gallery
 from common.serializers import GallerySerializer
+from common.us_states import US_STATE_NAMES
 from common.validators import USContactFieldsMixin, USStateFieldMixin
 from product.serializers import (
     ParcelBasicSerializer,
@@ -18,7 +19,7 @@ from product.serializers import (
 from subscriptions.serializers import SubscriptionSerializer
 from users.models import WorksIn
 
-from .models import Company, Establishment
+from .models import Applicator, Company, Establishment
 
 
 class EstablishmentSerializer(ModelSerializer):
@@ -825,6 +826,37 @@ class CreateCompanySerializer(USContactFieldsMixin, USStateFieldMixin, ModelSeri
             "primary_commodities": {"required": False},
             "sustainability_commitment": {"required": False},
         }
+
+
+class ApplicatorSerializer(ModelSerializer):
+    """A saved applicator, for the spray form's picker and the list that manages it.
+
+    No `company` field at all. The company is the one in the URL and the view sets it on create,
+    so a `company` key in a request body is ignored rather than validated, and nothing here can
+    answer differently for another company's id.
+    """
+
+    class Meta:
+        model = Applicator
+        fields = (
+            "id",
+            "full_name",
+            "license_number",
+            "license_state",
+            "address",
+            "phone",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate_license_state(self, value):
+        """A two-letter US state code, or blank. Stored upper case."""
+        code = (value or "").strip().upper()
+        if code and code not in US_STATE_NAMES:
+            raise serializers.ValidationError("Enter the two-letter code of a US state, for example WA.")
+        return code
 
 
 class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
