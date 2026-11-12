@@ -331,18 +331,25 @@ def remember_tank_line_target(sender, instance, **kwargs):
 def hand_off_tank_mix_pass(sender, instance, **kwargs):
     """Deleting the line that carried a tank's pass hands the pass to the next line on its target.
 
-    The application emissions of one pass are counted on the lowest-numbered line of the tank still
-    recorded on that target. Without this, deleting line 1 would leave the pass counted nowhere
-    until someone happened to edit line 2.
+    The application emissions of one pass are counted on ONE record of the tank on that target
+    (`history/services/tank_mix.py`, `carrier_of`). Without this, deleting it would leave the pass
+    counted nowhere until someone happened to edit another line. When the deleted record held the
+    pass's MEASURED fuel, the new carrier gets that fuel (`hand_off_fuel`, through its own save, so
+    its audit trail shows it): otherwise the pass would quietly turn into an area estimate.
     """
     try:
         if not getattr(instance, "tank_mix_group", None) or instance.history_id is None:
             return
         from history.models import History
+        from history.services.tank_mix import hand_off_fuel
 
         # A cascade from the season or the parcel: everything on the target is going too.
         if not History.objects.filter(pk=instance.history_id).exists():
             return
+        remaining = ChemicalEvent.objects.filter(
+            tank_mix_group=instance.tank_mix_group, history_id=instance.history_id, block_id=instance.block_id
+        ).exclude(pk=instance.pk)
+        hand_off_fuel(instance, remaining)
         _recompute_tank_lines(instance, {(instance.history_id, instance.block_id)})
     except Exception as e:
         logger.error("Error handing off the tank pass of ChemicalEvent %s: %s", instance.id, e, exc_info=True)

@@ -265,6 +265,14 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
                 }
             )
 
+    # The record holding its tank pass's measured fuel leaves its block last (tank_mix.py).
+    if field_name == "block_id":
+        from history.services.tank_mix import carrier_move_refusal
+
+        message = carrier_move_refusal(event, event.history_id, coerced)
+        if message:
+            raise AmendmentError({field_name: message})
+
     # A spray's "not on the source record" mark and the value it stands in for change together.
     paired = _paired_changes(event, field_name, coerced, raw=new_value)
     coerced = paired.pop("__primary__", coerced)

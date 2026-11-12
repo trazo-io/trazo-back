@@ -488,6 +488,7 @@ class EditTests(_Orchard):
         self.assertEqual(tank["line"], 2)
         self.assertFalse(tank["carries_pass"])
         self.assertEqual(tank["pass_line"], 1)
+        self.assertEqual(tank["pass_record"], records[1].id)
         self.assertEqual(
             [(line["line"], line["commercial_name"], line["role"]) for line in tank["lines"]],
             [(1, "Entrust SC", "product"), (3, "Dyne-Amic", "adjuvant")],
@@ -673,6 +674,146 @@ class CarbonTests(_Orchard):
         records[1].save()
         self.assertGreater(self._entry(records[2])["application_emissions_kg_co2e"], 0)
         self.assertGreater(self._entry(records[1])["application_emissions_kg_co2e"], 0)
+
+
+class PassCarrierTests(_Orchard):
+    """Review of back #408: the pass is counted once, on ONE record that can count it, and a
+    measured fuel figure stays measured when that record leaves."""
+
+    def _records(self, body):
+        self.assertEqual(self._post(body).status_code, status.HTTP_201_CREATED)
+        return {r.tank_mix_line: r for r in ChemicalEvent.objects.filter(tank_mix_group=body["tank_mix_group"])}
+
+    def _breakdown(self, record):
+        return EventCarbonCalculator().calculate_chemical_event_impact(record)["breakdown"]
+
+    def _with_fuel(self):
+        body = self._one_target()
+        body["targets"][0]["application_fuel_consumed"] = "3"
+        body["application_fuel_type"] = "diesel"
+        body["application_fuel_unit"] = "gal"
+        return self._records(body)
+
+    # --- 1. the measured fuel follows the pass ---------------------------------------------------
+
+    def test_deleting_the_carrier_hands_its_measured_fuel_to_the_next_line(self):
+        records = self._with_fuel()
+        measured = entries_for_event(records[1], link=False)[0].baseline_data
+        self.assertAlmostEqual(measured["application_fuel_gallons"], 3.0, places=3)
+        records[1].delete()
+        records[2].refresh_from_db()
+        self.assertEqual(records[2].application_fuel_consumed, Decimal("3"))
+        self.assertEqual(records[2].application_fuel_type, "diesel")
+        handed = entries_for_event(records[2], link=False)[0].baseline_data
+        # Still the recorded 3 gallons, not an area estimate (4 L/ha over 4 acres is 1.71 gal).
+        self.assertAlmostEqual(handed["application_fuel_gallons"], 3.0, places=3)
+        self.assertAlmostEqual(
+            handed["application_emissions_kg_co2e"], measured["application_emissions_kg_co2e"], places=3
+        )
+        self.assertEqual(self._breakdown(records[3])["application_pass_counted_on_line"], 2)
+
+    def test_the_fuel_carrier_cannot_leave_its_block_before_the_other_products(self):
+        records = self._with_fuel()
+        url = reverse("events-detail", args=[records[1].id]) + "?event_type=2"
+        res = self.client.patch(url, {"block_id": "Block 9"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:300])
+        self.assertIn("Move them first", str(res.json()["block_id"]))
+        with self.assertRaises(AmendmentError):
+            apply_amendment(
+                event=records[1],
+                event_type=CHEMICAL_EVENT_TYPE,
+                field_name="block_id",
+                new_value="Block 9",
+                reason="Wrong block.",
+                user=self.user,
+            )
+        records[1].refresh_from_db()
+        self.assertIsNone(records[1].block_id)
+        # The other products move freely, and then the carrier moves last with its fuel.
+        for line in (2, 3):
+            other = reverse("events-detail", args=[records[line].id]) + "?event_type=2"
+            self.assertEqual(self.client.patch(other, {"block_id": "Block 9"}, format="json").status_code, 200)
+        self.assertEqual(self.client.patch(url, {"block_id": "Block 9"}, format="json").status_code, 200)
+        moved = ChemicalEvent.objects.get(pk=records[1].pk)
+        self.assertEqual((moved.block_id, moved.application_fuel_consumed), ("Block 9", Decimal("3")))
+        self.assertEqual(
+            self._breakdown(ChemicalEvent.objects.get(pk=records[2].pk))["application_pass_counted_on_line"], 1
+        )
+
+    # --- 2. the carrier is a record that can count the pass ------------------------------------
+
+    def test_a_line_with_no_amount_does_not_carry_the_pass(self):
+        products = _three_products()
+        for line, amount in zip(products, ("", "6", "8")):
+            line["volume_applied"] = amount
+        products[0].pop("volume_applied")
+        records = self._records(self._tank([{"parcel": self.north.id, "area_treated": "4"}], products=products))
+        self.assertEqual(self._breakdown(records[1])["application_pass_counted_on_line"], 2)
+        self.assertGreater(self._breakdown(records[2])["application_emissions_kg_co2e"], 0)
+        self.assertEqual(self._breakdown(records[3])["application_pass_counted_on_line"], 2)
+
+    def test_an_amount_of_zero_on_line_one_does_not_lose_the_pass(self):
+        products = _three_products()
+        for line, amount in zip(products, ("0", "6", "8")):
+            line["volume_applied"] = amount
+        records = self._records(self._tank([{"parcel": self.north.id, "area_treated": "4"}], products=products))
+        # An amount of 0 computes nothing at all (no breakdown keys), so it must not be the carrier.
+        counted = [self._breakdown(r).get("application_emissions_kg_co2e", 0) for r in records.values()]
+        self.assertEqual(sum(1 for kg in counted if kg > 0), 1, counted)
+
+    def test_when_no_line_records_an_amount_no_line_skips(self):
+        records = {
+            line: ChemicalEvent.objects.create(
+                history=self.north_season,
+                type="PE",
+                date=WHEN,
+                commercial_name=f"Product {line}",
+                tank_mix_group=uuid.UUID("00000000-0000-4000-8000-000000000001"),
+                tank_mix_line=line,
+                tank_mix_role="product",
+            )
+            for line in (1, 2)
+        }
+        for record in records.values():
+            self.assertNotIn("application_pass_counted_on_line", self._breakdown(record))
+
+    # --- 3. one record, even when two share a line number -----------------------------------------
+
+    def test_two_records_with_one_line_number_count_the_pass_once(self):
+        targets = [
+            {
+                "parcel": self.north.id,
+                "block_id": "Block 1",
+                "area_treated": "2",
+                "products": [{"volume_applied": "12"}, {"volume_applied": "3"}],
+            },
+            {
+                "parcel": self.north.id,
+                "block_id": "Block 2",
+                "area_treated": "2",
+                "products": [{"volume_applied": "12"}, {"volume_applied": "3"}],
+            },
+        ]
+        body = self._tank(targets, products=_three_products()[:2])
+        self.assertEqual(self._post(body).status_code, status.HTTP_201_CREATED)
+        records = ChemicalEvent.objects.filter(tank_mix_group=body["tank_mix_group"])
+        stray = records.get(block_id="Block 2", tank_mix_line=1)
+        apply_amendment(
+            event=stray,
+            event_type=CHEMICAL_EVENT_TYPE,
+            field_name="block_id",
+            new_value="Block 1",
+            reason="It went on Block 1.",
+            user=self.user,
+        )
+        on_block_1 = list(records.filter(block_id="Block 1").order_by("pk"))
+        self.assertEqual(sorted(r.tank_mix_line for r in on_block_1), [1, 1, 2])
+        carrying = [r for r in on_block_1 if self._breakdown(r)["application_emissions_kg_co2e"] > 0]
+        self.assertEqual(len(carrying), 1)
+        self.assertEqual(carrying[0].pk, min(r.pk for r in on_block_1 if r.tank_mix_line == 1))
+        detail = self.client.get(reverse("events-detail", args=[stray.id]), {"event_type": 2}).json()["tank_mix"]
+        self.assertFalse(detail["carries_pass"])
+        self.assertEqual(detail["pass_record"], carrying[0].pk)
 
 
 class AirBlastFuelTests(SimpleTestCase):

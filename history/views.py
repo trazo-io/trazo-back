@@ -3736,13 +3736,16 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             data["tank_mix"] = None
             return data
         others = tank_mix.other_lines(instance)
-        carrier = tank_mix.pass_carrier_line(instance)
+        # ONE record carries the pass, decided by (line, pk): two records left with one line
+        # number would otherwise both say they carry it.
+        carrier = tank_mix.pass_carrier(instance)
         data["tank_mix"] = {
             "group": str(instance.tank_mix_group),
             "line": instance.tank_mix_line,
             "role": instance.tank_mix_role,
-            "carries_pass": carrier is None or (instance.tank_mix_line or 0) <= carrier,
-            "pass_line": carrier,
+            "carries_pass": carrier is None or carrier.pk == instance.pk,
+            "pass_line": carrier.tank_mix_line if carrier is not None else None,
+            "pass_record": carrier.pk if carrier is not None else None,
             "lines": [
                 {
                     "id": other.id,

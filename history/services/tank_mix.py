@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -269,30 +270,130 @@ def same_target_lines(event):
     )
 
 
-def pass_carrier_line(event):
-    """The line number that carries the tank's application pass on `event`'s target, or None for a
-    record that is not a tank line (or not saved yet)."""
+def _positive(value) -> bool:
+    """A recorded number above zero (a Decimal, or a string such as "24" or "24 fl oz")."""
+    if value is None:
+        return False
+    match = re.match(r"\s*(\d+(?:\.\d+)?)", str(value))
+    return bool(match) and float(match.group(1)) > 0
+
+
+def records_application_figure(record) -> bool:
+    """Whether this record holds what its pass's application figure is computed from.
+
+    A recorded amount of the product (never a count of dispensers, which the calculator does not
+    convert), or the pass's recorded fuel. A record with neither cannot carry the pass: given the
+    pass, it would either count nothing (an amount of 0) or count it on a default amount nobody
+    recorded (a blank amount), while every other line skipped it.
+    """
+    from common.field_registry import is_count_unit
+
+    if is_count_unit(getattr(record, "volume_unit", None)):
+        return False
+    if _positive(getattr(record, "application_fuel_consumed", None)):
+        return True
+    return _positive(getattr(record, "volume_numeric", None)) or _positive(getattr(record, "volume", None))
+
+
+def _line_order(record):
+    line = record.tank_mix_line if record.tank_mix_line is not None else 10**6
+    return (line, record.pk or 0)
+
+
+def carrier_of(records):
+    """The ONE record, of these records of one target, that carries the pass: the lowest
+    (line, pk) that records an application figure. None when none does, and then no record skips
+    the pass. Ordered by pk after the line, so two records left with one line number (a block
+    correction can do that) never both carry it."""
+    for record in sorted(records, key=_line_order):
+        if records_application_figure(record):
+            return record
+    return None
+
+
+def pass_carrier(event):
+    """The record that carries the tank's application pass on `event`'s target, or None (not a
+    saved tank line, or no record there records an application figure)."""
     from history.models import ChemicalEvent
 
     # A saved record only: the carbon preview hands the calculator a plain stand-in object.
     if not isinstance(event, ChemicalEvent) or not event.tank_mix_group or event.pk is None:
         return None
-    lines = [line for line in same_target_lines(event).values_list("tank_mix_line", flat=True) if line is not None]
-    return min(lines) if lines else None
+    return carrier_of(same_target_lines(event))
+
+
+def pass_carrier_line(event):
+    """The line number of the record that carries the pass on `event`'s target, or None."""
+    carrier = pass_carrier(event)
+    return carrier.tank_mix_line if carrier is not None else None
 
 
 def pass_counted_on_line(event):
     """The line this record's application pass is counted on INSTEAD, or None when this record
-    carries it (a single product always does)."""
-    carrier = pass_carrier_line(event)
-    line = getattr(event, "tank_mix_line", None)
-    if carrier is None or line is None or line <= carrier:
+    carries it (a single product always does, and so does every line when none can)."""
+    carrier = pass_carrier(event)
+    if carrier is None or carrier.pk == event.pk:
         return None
-    return carrier
+    return carrier.tank_mix_line
 
 
 def carries_application_pass(event) -> bool:
     return pass_counted_on_line(event) is None
+
+
+FUEL_FIELDS = ("application_fuel_type", "application_fuel_consumed", "application_fuel_unit")
+
+
+def hand_off_fuel(leaving, remaining):
+    """Keep a pass's MEASURED fuel when the record that carried it leaves its target.
+
+    The write path records the pass's fuel on one record (line 1), and the others never hold it
+    (`record_bodies`). When that record is deleted, the next carrier would otherwise count the
+    pass from an area estimate: a measured figure turned into an estimate with nothing saying so.
+    The fuel is written onto the new carrier through `save()`, so the change is on its audit trail.
+    Nothing is written when the leaving record did not carry the pass or recorded no fuel, or when
+    the new carrier recorded fuel of its own. Returns the record written to, or None.
+    """
+    remaining = list(remaining)
+    if not remaining or not _positive(getattr(leaving, "application_fuel_consumed", None)):
+        return None
+    if carrier_of([leaving, *remaining]) is not leaving:
+        return None
+    successor = carrier_of(remaining) or sorted(remaining, key=_line_order)[0]
+    if _positive(successor.application_fuel_consumed):
+        return None
+    for name in FUEL_FIELDS:
+        setattr(successor, name, getattr(leaving, name))
+    successor.save(update_fields=list(FUEL_FIELDS))
+    return successor
+
+
+CARRIER_MOVE_REFUSED = (
+    "This product holds the measured fuel of its tank's pass, and the tank's other products are "
+    "still recorded on this block. Move them first and this one last: the fuel goes with the last "
+    "product to leave."
+)
+
+
+def carrier_move_refusal(event, history_id, block_id, fuel=None):
+    """The message refusing to move a record off its target, or None when the move is fine.
+
+    Moving the record that carries a pass's measured fuel while other products of the tank stay on
+    the block would leave them counting that pass from an estimate, and whose pass the fuel was is
+    not something Trazo can decide. `fuel` is the fuel the record will hold after the change.
+    """
+    from history.services.block_ids import normalize_block_id
+
+    if not getattr(event, "tank_mix_group", None) or getattr(event, "pk", None) is None:
+        return None
+    if (history_id, normalize_block_id(block_id)) == (event.history_id, event.block_id):
+        return None
+    if not _positive(event.application_fuel_consumed if fuel is None else fuel):
+        return None
+    carrier = pass_carrier(event)
+    if carrier is None or carrier.pk != event.pk or not other_lines(event):
+        return None
+    return CARRIER_MOVE_REFUSED
 
 
 def other_lines(event):

@@ -814,6 +814,27 @@ def _validate_tank_line_fuel(serializer, data):
         )
 
 
+def _validate_tank_line_move(serializer, data):
+    """A product holding its tank pass's measured fuel moves off its block last (`tank_mix`).
+
+    A season or block change on the record that carries the fuel, while other products of the tank
+    stay on the block, is refused with the way forward; clearing the fuel in the same edit lets it go.
+    """
+    instance = getattr(serializer, "instance", None)
+    if instance is None or not getattr(instance, "tank_mix_group", None):
+        return
+    if "block_id" not in data and "history" not in data:
+        return
+    if "application_fuel_consumed" in data and data["application_fuel_consumed"] in (None, "", 0):
+        return
+    from history.services.tank_mix import carrier_move_refusal
+
+    history = data.get("history", instance.history)
+    message = carrier_move_refusal(instance, getattr(history, "pk", history), data.get("block_id", instance.block_id))
+    if message:
+        raise serializers.ValidationError({"block_id": message})
+
+
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     _receipt_event_type = CHEMICAL_EVENT_TYPE
     # The record's receipt field OR a file filed on the record from Documents (record_receipts):
@@ -1279,6 +1300,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
 
         _validate_carrier_volume(self, data)
         _validate_tank_line_fuel(self, data)
+        _validate_tank_line_move(self, data)
         data = _validate_not_on_source_record(self, data)
         return _record_national_list_basis(self, data)
 
