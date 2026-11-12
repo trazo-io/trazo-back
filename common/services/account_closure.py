@@ -277,8 +277,36 @@ def find_export(company):
     return f"{EXPORT_PREFIX}{mine[-1]}" if mine else None
 
 
-def export(company) -> str:
-    """Write the closure export and return its storage key. Records per farm, every file, a manifest."""
+def fingerprint(p: ClosurePlan) -> str:
+    """What the export was taken from: every row to be deleted (table, id, last change) and every
+    file. `apply` recomputes it and refuses on a difference, so a record added or edited between
+    `--export` and `--apply` (the normal, human-paced gap) can never be deleted unexported."""
+    import hashlib
+
+    parts = []
+    for model, instances in _instances(p.collector):
+        stamp = "updated_at" if any(f.name == "updated_at" for f in model._meta.concrete_fields) else None
+        for obj in instances:
+            parts.append(f"{model._meta.label}:{obj.pk}:{getattr(obj, stamp, '') if stamp else ''}")
+    parts += [f"file:{name}" for _storage, name in p.files]
+    return hashlib.sha256("\n".join(sorted(parts)).encode()).hexdigest()
+
+
+def read_manifest(key) -> dict:
+    from backend.storage import private_records_storage
+
+    with private_records_storage().open(key, "rb") as fh:
+        with zipfile.ZipFile(io.BytesIO(fh.read())) as bundle:
+            return json.loads(bundle.read("manifest.json"))
+
+
+def export(company, allow_missing_files: bool = False) -> str:
+    """Write the closure export and return its storage key. Records per farm, every file, a manifest.
+
+    Refuses, writing nothing, when a file cannot be read from storage (review of #398: an S3 outage
+    during the export would otherwise produce an export that `apply` accepts and a delete of files
+    that were never captured). `allow_missing_files` is for a file already known to be gone, and the
+    manifest records that the gap was accepted."""
     from django.core.files.base import ContentFile
 
     from backend.storage import private_records_storage
@@ -294,8 +322,13 @@ def export(company) -> str:
             try:
                 with storage.open(name, "rb") as fh:
                     bundle.writestr(f"files/{name.lstrip('/')}", fh.read())
-            except Exception:  # noqa: BLE001 - a missing object is reported, never fatal to the export
+            except Exception:  # noqa: BLE001 - collected, then refused below unless accepted
                 missing.append(name)
+        if missing and not allow_missing_files:
+            raise ClosureRefused(
+                f"{len(missing)} file(s) could not be read from storage, so nothing was written. Retry, "
+                f"or pass --allow-missing-files if they are known to be gone: {missing[:5]}"
+            )
         bundle.writestr(
             "manifest.json",
             json.dumps(
@@ -305,6 +338,8 @@ def export(company) -> str:
                     "farms": company.establishment_set.count(),
                     "files": len(p.files) - len(missing),
                     "files_missing_from_storage": missing,
+                    "missing_files_accepted": bool(missing and allow_missing_files),
+                    "fingerprint": fingerprint(p),
                     "note": (
                         "Your organic records and uploaded files from Trazo. The USDA organic "
                         "regulations require a certified operation to keep its records for five "
@@ -339,21 +374,29 @@ def apply(company, confirm_name: str, run_by: str = "") -> dict:
     from auditlog.models import LogEntry
 
     from common.models import DataOperationLog
-    from fieldnotes.services.retention import release_note_audio
     from history.models import History
 
     if confirm_name != company.name:
         raise ClosureRefused("The confirmation name does not match the company name exactly.")
-    if not find_export(company):
+    key = find_export(company)
+    if not key:
         raise ClosureRefused("No closure export exists for this company. Run --export first and send it.")
+    p = plan(company)
+    manifest = read_manifest(key)
+    if manifest.get("fingerprint") != fingerprint(p):
+        raise ClosureRefused(
+            "Records or files changed since the export was written, so the farm's copy is incomplete. "
+            "Run --export again and send the new file before deleting."
+        )
+    if manifest.get("files_missing_from_storage") and not manifest.get("missing_files_accepted"):
+        raise ClosureRefused("The export is missing files and that was never accepted. Run --export again.")
 
     # Public pages first and outside the transaction: if anything below fails, the pages are still
-    # down, which is what the policy says happens "straight away".
+    # down, which is what the policy says happens "straight away". Unpublishing is reversible; the
+    # recordings are not, so they are released only after the rows are gone (below).
     unpublished = History.objects.filter(parcel__establishment__company=company, published=True).update(published=False)
+    recording_refs = list(_recordings(company).values_list("provider_media_ref", flat=True))
 
-    released = sum(1 for note in _recordings(company) if release_note_audio(note))
-
-    p = plan(company)
     files = _files(p.collector)
     audit_targets = []
     for model, instances in _instances(p.collector):
@@ -378,7 +421,6 @@ def apply(company, confirm_name: str, run_by: str = "") -> dict:
             **p.counts(),
             "published_seasons": unpublished,
             "audit_entries": deleted_audit,
-            "recordings_released": released,
         }
         DataOperationLog.objects.create(
             operation="close_account",
@@ -387,6 +429,24 @@ def apply(company, confirm_name: str, run_by: str = "") -> dict:
             counts=counts,
             run_by=run_by,
         )
+
+    # After the commit, like the files: a failed delete above must not have destroyed audio that
+    # was never exported (review of #398).
+    from fieldnotes.services.transcribe import delete_media
+
+    released, recordings_failed = 0, []
+    for ref in recording_refs:
+        try:
+            if delete_media(ref):
+                released += 1
+            else:
+                recordings_failed.append(ref)
+        except Exception:  # noqa: BLE001 - reported for a retry, the rows are already gone
+            recordings_failed.append(ref)
+    counts["recordings_released"] = released
+    counts["recordings_not_released"] = len(recordings_failed)
+    if recordings_failed:
+        logger.error("close_account company=%s: %d recording(s) not released", p.company_id, len(recordings_failed))
 
     failed = []
     for storage, name in files:

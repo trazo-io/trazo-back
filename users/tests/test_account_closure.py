@@ -207,13 +207,44 @@ class AccountClosureTests(TestCase):
             list(WorksIn.objects.filter(user=self.shared).values_list("company_id", flat=True)), [self.other.pk]
         )
 
-    def test_pages_come_down_even_when_the_delete_fails(self):
+    def test_pages_come_down_even_when_the_delete_fails_and_recordings_stay(self):
         self._export()
         with patch.object(account_closure.Collector, "delete", side_effect=RuntimeError("boom")):
-            with self.assertRaises(RuntimeError):
-                self._apply()
+            with patch("fieldnotes.services.transcribe.delete_media", return_value=True) as deleted:
+                with self.assertRaises(RuntimeError):
+                    call_command(
+                        "close_account",
+                        company=self.company.pk,
+                        apply=True,
+                        confirm_name="Closing Orchards LLC",
+                        stdout=io.StringIO(),
+                    )
         self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
         self.assertFalse(History.objects.get(pk=self.season.pk).published)
+        # Review of #398: the recording is deleted only after the rows are, never before.
+        deleted.assert_not_called()
+
+    def test_export_refuses_when_a_file_cannot_be_read(self):
+        """Review of #398: an export with a hole must not exist, or apply would delete the hole."""
+        private_records_storage().delete(self.doc_name)
+        with self.assertRaisesMessage(CommandError, "could not be read"):
+            self._export()
+        self.assertIsNone(account_closure.find_export(self.company))
+        call_command(
+            "close_account", company=self.company.pk, export=True, allow_missing_files=True, stdout=io.StringIO()
+        )
+        manifest = account_closure.read_manifest(account_closure.find_export(self.company))
+        self.assertEqual(manifest["files_missing_from_storage"], [self.doc_name])
+        self.assertTrue(manifest["missing_files_accepted"])
+
+    def test_apply_refuses_when_records_changed_after_the_export(self):
+        """Review of #398: a record added between --export and --apply was never exported."""
+        self._export()
+        Parcel.objects.create(name="Block 5, planted after the export", establishment=self.farm, area=1)
+        with self.assertRaisesMessage(CommandError, "changed since the export"):
+            self._apply()
+        self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
+        self.assertTrue(History.objects.get(pk=self.season.pk).published, "refused before anything changed")
 
     def test_exports_are_purged_after_thirty_days(self):
         self._export()

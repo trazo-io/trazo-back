@@ -33,6 +33,11 @@ class Command(BaseCommand):
         mode.add_argument("--apply", action="store_true", help="Delete. Requires an export and --confirm-name.")
         parser.add_argument("--confirm-name", default="", help="The company's exact name, required with --apply.")
         parser.add_argument("--run-by", default="", help="Who ran it, for the operation log.")
+        parser.add_argument(
+            "--allow-missing-files",
+            action="store_true",
+            help="With --export: write it even if some files cannot be read (listed in the manifest).",
+        )
 
     def handle(self, *args, **options):
         try:
@@ -41,7 +46,10 @@ class Command(BaseCommand):
             raise CommandError(f"No company with id {options['company']}.") from exc
 
         if options["export"]:
-            key = account_closure.export(company)
+            try:
+                key = account_closure.export(company, allow_missing_files=options["allow_missing_files"])
+            except account_closure.ClosureRefused as exc:
+                raise CommandError(str(exc)) from exc
             self.stdout.write(self.style.SUCCESS(f"Export written: {key}"))
             self.stdout.write(f"Download link (7 days): {account_closure.export_link(key)}")
             return
@@ -52,8 +60,11 @@ class Command(BaseCommand):
             except account_closure.ClosureRefused as exc:
                 raise CommandError(str(exc)) from exc
             self.stdout.write(json.dumps(counts, indent=1, sort_keys=True, default=str))
-            if counts.get("files_not_deleted"):
-                raise CommandError(f"{len(counts['files_not_deleted'])} file(s) were not deleted from storage.")
+            if counts.get("files_not_deleted") or counts.get("recordings_not_released"):
+                raise CommandError(
+                    f"{len(counts['files_not_deleted'])} file(s) and {counts['recordings_not_released']} "
+                    "recording(s) were not deleted. The rows are gone; retry the files by hand."
+                )
             self.stdout.write(self.style.SUCCESS(f"Company {options['company']} closed."))
             return
 
