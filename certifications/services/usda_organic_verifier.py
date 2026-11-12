@@ -219,10 +219,12 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
             else:
                 same = bool(theirs) and (ours in theirs or theirs in ours)
             if not same:
+                if not op.certifier_name:
+                    return False, "possible_certifier_missing", {"farm_certifier": certifier_name}
                 return (
                     False,
                     "possible_certifier_differs",
-                    {"db_certifier": op.certifier_name or "none", "farm_certifier": certifier_name},
+                    {"db_certifier": op.certifier_name, "farm_certifier": certifier_name},
                 )
         return True, "", {}
 

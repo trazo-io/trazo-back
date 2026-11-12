@@ -23,6 +23,7 @@ SAMPLES = {
     "matched": {"op_name": "Earthbound Farm, LLC", "confidence": 97},
     "possible_name_similar": {"op_name": "Green Valley Vineyards, Inc.", "similarity": 91},
     "possible_name_shared": {"op_name": "Sunrise Orchards", "similarity": 100, "same_name_count": 2},
+    "possible_certifier_missing": {"op_name": "Sunrise Orchards", "similarity": 100, "farm_certifier": "WSDA"},
     "possible_certifier_differs": {
         "op_name": "Sunrise Orchards",
         "similarity": 100,
@@ -85,7 +86,7 @@ class VerifierWritesParseableNotesTests(TestCase):
             verifier.verify("Anyone", "Vermont"),
         ]
         codes = [parse(r.notes)[0] for r in results]
-        self.assertEqual(codes, ["no_match", "matched", "possible_certifier_differs", "no_operations_in_state"])
+        self.assertEqual(codes, ["no_match", "matched", "possible_certifier_missing", "no_operations_in_state"])
 
     def test_the_serializer_serves_code_and_params(self):
         company = Company.objects.create(name="Note Co")
@@ -99,3 +100,14 @@ class VerifierWritesParseableNotesTests(TestCase):
         self.assertEqual(data["verification_note_code"], "no_match")
         self.assertEqual(data["verification_note_params"]["count"], 4)
         self.assertIn("none matched", data["verification_notes"], "the English stays for the PDFs and the admin")
+
+    def test_a_note_stored_with_the_none_sentinel_reads_as_missing(self):
+        """Review of #406: before the code existed the verifier wrote certifier 'none'."""
+        old = (
+            "Possible database entry 'Sunrise Orchards' (100% name similarity); not confirmed: the database "
+            "lists certifier 'none', the farm recorded 'WSDA'. The certification stays self-reported until "
+            "the operator's own entry is confirmed."
+        )
+        code, params = parse(old)
+        self.assertEqual(code, "possible_certifier_missing")
+        self.assertNotIn("db_certifier", params)

@@ -39,6 +39,12 @@ TEMPLATES: Dict[str, str] = {
         "not confirmed: the database lists certifier '{db_certifier}', the farm recorded '{farm_certifier}'."
         + _SELF_REPORTED_TAIL
     ),
+    # Review of #406: the database row has no certifier. Its own code, so no English sentinel
+    # ("none") travels as a parameter into a translated sentence.
+    "possible_certifier_missing": (
+        "Possible database entry '{op_name}' ({similarity}% name similarity); "
+        "not confirmed: the database lists no certifier, the farm recorded '{farm_certifier}'." + _SELF_REPORTED_TAIL
+    ),
 }
 
 _NUMERIC = {"count", "threshold", "confidence", "similarity", "same_name_count"}
@@ -78,5 +84,9 @@ def parse(text: Optional[str]) -> Tuple[Optional[str], dict]:
         m = pattern.match(text)
         if m:
             params = {k: int(v) if k in _NUMERIC else v for k, v in m.groupdict().items()}
+            # Notes written before `possible_certifier_missing` existed said certifier 'none'.
+            if code == "possible_certifier_differs" and params.get("db_certifier") == "none":
+                params.pop("db_certifier")
+                return "possible_certifier_missing", params
             return code, params
     return None, {}
