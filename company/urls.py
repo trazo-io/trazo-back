@@ -23,7 +23,7 @@ from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet, Reco
 from product.views import ParcelPlannedCropViewSet, ParcelViewSet, ProductsViewSet
 from reviews.views import ReviewsViewSet
 
-from .views import CompanyViewSet, EstablishmentViewSet
+from .views import ApplicatorViewSet, CompanyViewSet, EstablishmentViewSet
 
 router = routers.DefaultRouter()
 
@@ -36,6 +36,10 @@ router.register(r"companies", CompanyViewSet, basename="companies")
 # Company routes
 company_router = routers.NestedDefaultRouter(router, r"companies", lookup="company")
 company_router.register(r"establishments", EstablishmentViewSet, basename="company-establishments")
+# The people a spray names as applicator (WAC 16-228-1320(1)(l)), company-wide because one licensed
+# applicator usually sprays every farm the company runs. The spray form copies their details onto
+# each record; the record never links back here.
+company_router.register(r"applicators", ApplicatorViewSet, basename="company-applicators")
 
 
 # Establishment routes

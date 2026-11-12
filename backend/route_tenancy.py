@@ -279,6 +279,18 @@ ROUTE_TENANCY = {
             f"{_EST}.test_query_params_cannot_probe_another_companys_ids",
         ),
     ),
+    "company.views.ApplicatorViewSet": Route(
+        COMPANY,
+        "nested; queryset filter(company=self.company), so another company's id is a plain 404; the "
+        "serializer has no company field, the view sets the URL's on create; members read, CA/FM "
+        "write; DELETE deactivates",
+        outsider_tests=(
+            "company.tests.test_applicators.ApplicatorTenancyTests.test_another_company_reaches_nothing",
+            "company.tests.test_applicators.ApplicatorTenancyTests"
+            ".test_another_companys_applicator_is_the_same_404_as_a_missing_one",
+            "company.tests.test_applicators.ApplicatorTenancyTests.test_company_in_the_body_is_ignored",
+        ),
+    ),
     "product.views.ParcelCropHistoryViewSet": Route(
         COMPANY,
         "queryset scoped to the caller's companies; the parcel FK accepts only the caller's parcels",

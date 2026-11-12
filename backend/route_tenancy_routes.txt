@@ -4,6 +4,10 @@ api/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticate
 api/^	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/^<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/^^companies/$	company.views.CompanyViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/applicators/$	company.views.ApplicatorViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
+api/^^companies/(?P<company_pk>[^/.]+)/applicators/(?P<pk>[^/.]+)/$	company.views.ApplicatorViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/applicators/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	company.views.ApplicatorViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
+api/^^companies/(?P<company_pk>[^/.]+)/applicators\.(?P<format>[a-z0-9]+)/?$	company.views.ApplicatorViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/adjoining-land/$	certifications.views.AdjoiningLandAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/adjoining-land/(?P<pk>[^/.]+)/$	certifications.views.AdjoiningLandAffidavitViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
