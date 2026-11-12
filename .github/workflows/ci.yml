@@ -725,6 +725,10 @@ jobs:
       # migration-fit.yml on every push to main) fails an open PR whose new migrations build on an
       # older migration than main's latest: the 0256 pair replayed, the 0248 merge, and the shapes
       # it must not flag. It reads only this repo (scripts/, history/migrations/).
+      # 2026-11-11: history.tests.test_equipment_event_create_closed joins. The events API refuses a
+      # new EquipmentEvent (type 4, merged into Production as Equipment maintenance), single or
+      # multi-parcel, while existing rows stay readable and editable. It does not read the sibling
+      # repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -791,6 +795,7 @@ jobs:
             history.tests.test_models \
             history.tests.test_event_tenancy \
             history.tests.test_event_detail_requires_type \
+            history.tests.test_equipment_event_create_closed \
             history.tests.test_season_plan_not_records.StartProductionWritesNoRecords \
             history.tests.test_season_plan_not_records.APlanItemCarriesNoValues \
             history.tests.test_season_plan_not_records.WindowParsing \

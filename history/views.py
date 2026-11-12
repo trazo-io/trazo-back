@@ -3421,8 +3421,35 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    #: Retired as a CREATE target on 2026-11-11. Equipment work is logged as a Production activity
+    #: (subtype EM, "Equipment maintenance") since the wizard merged the two; the Equipment tile
+    #: was removed (NewEvent.jsx) and the V2 template seeder marks type 4 deprecated, but this API
+    #: still wrote a new EquipmentEvent for any client that sent `event_type=4`. Existing rows stay
+    #: readable and editable: 15 of production's 21 sit on sealed seasons, and the v1 seal hash
+    #: names "EquipmentEvent" and their ids. Guard: history/tests/test_equipment_event_create_closed.py.
+    RETIRED_CREATE_EVENT_TYPES = {
+        EQUIPMENT_EVENT_TYPE: "Log equipment work as a Production activity (Equipment maintenance)."
+    }
+
+    def _refuse_a_retired_event_type(self, request):
+        data = request.data if hasattr(request.data, "get") else {}  # a JSON array or scalar body
+        raw = data.get("event_type", request.query_params.get("event_type"))
+        try:
+            event_type = int(raw)
+        except (TypeError, ValueError):
+            return
+        if event_type in self.RETIRED_CREATE_EVENT_TYPES:
+            raise ValidationError(
+                {
+                    "event_type": [
+                        f"New records of this type are not accepted. {self.RETIRED_CREATE_EVENT_TYPES[event_type]}"
+                    ]
+                }
+            )
+
     def create(self, request, *args, **kwargs):
-        if "targets" in request.data:
+        self._refuse_a_retired_event_type(request)
+        if hasattr(request.data, "get") and "targets" in request.data:  # a scalar body has no `in`
             return self._create_multi_target(request)
         response = super().create(request, *args, **kwargs)
         self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
@@ -3479,7 +3506,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         else:
             event_type = (
                 self.request.data.get("event_type")
-                if "event_type" in self.request.data
+                if hasattr(self.request.data, "get") and "event_type" in self.request.data
                 else self.request.query_params.get("event_type", None)
             )
 
@@ -3518,7 +3545,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         else:
             event_type = (
                 self.request.data.get("event_type")
-                if "event_type" in self.request.data
+                if hasattr(self.request.data, "get") and "event_type" in self.request.data
                 else self.request.query_params.get("event_type", None)
             )
 
