@@ -1,4 +1,4 @@
-"""The recording is kept only while the note is waiting.
+"""The recording is kept only while the note is waiting, and never more than 30 days unreviewed.
 
 A QUEUE, NOT AN ARCHIVE. The audio exists so a supervisor can check a transcript against what was
 actually said, because ASR dropping a negation is undetectable by anyone who was not the speaker and
