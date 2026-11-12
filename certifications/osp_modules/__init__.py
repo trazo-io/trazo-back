@@ -346,7 +346,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.12.05: orchard columns on the parcel crop table. Each row may also state its block name, rootstock, year
 #   planted and bearing status (overall review 2026-11, OV-FJ-C06); the parcel PDF prints them when any row on the
 #   parcel states one. Optional.
-CONTENT_VERSION = "2026.12.05"
+# 2026.12.06: container parcels. The parcel application asks what a container parcel's containers stand on
+#   (CCOF ORGB49 F3; only impermeable flooring skips the land history) and, on page F, the signed container
+#   statement's contents: planting date, materials since, and contamination removal on sealed flooring (§G).
+CONTENT_VERSION = "2026.12.06"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

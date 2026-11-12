@@ -11,8 +11,8 @@ Checks (each returns a missing-key when unsatisfied):
   buffers       buffer_zones rows exist OR the no-adjoining attestation is set
   map           polygon drawn OR a map upload is attested in answers
   land_history  >= 3 distinct ParcelCropHistory years OR a landowner affidavit
-                exists for the parcel (container production skips this check —
-                container media is not land)
+                exists for the parcel (container production on impermeable
+                flooring skips this check; containers on land do not, CCOF F3)
   certification_status
                 `currently_certified` answered (yes / no / previously). Added
                 2026-09-09: CCOF F2, OTCO C2 2.1-7 and WSDA AGR 2264 ref 6 all
@@ -80,7 +80,10 @@ def parcel_application_status(parcel, osp=None) -> dict:
     # exactly one of them.
 
     crop_rows = []
-    if parcel.container_production:
+    # CCOF ORGB49 F3: only containers on permanent, solid, impermeable flooring skip the land history;
+    # containers on soil or another permeable surface still need it. An unstated surface keeps the reading
+    # from before the question existed (skipped), and the parcel page says the surface is not stated.
+    if parcel.container_production and answers.get("container_surface") != "on_land":
         has_history = True
     else:
         # `.all()` reads the prefetch cache when the caller loaded `crop_history` /

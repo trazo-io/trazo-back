@@ -105,6 +105,20 @@ def parcel_answer_lines(osp, question_key: str, value, answers: dict, parcel) ->
     """Lines under one answered parcel-application question."""
     if question_key == "location_same_as_operation" and value == "yes":
         return _operation_address_lines(parcel)
+    if question_key == "container_production" and value is True and not answer_value(answers, "container_surface"):
+        lines = [
+            "[REVIEW] What the containers stand on is not stated: the land history is needed unless they stand on "
+            "permanent, solid, impermeable flooring."
+        ]
+        if osp is not None:
+            lines.append(
+                module_pointer(
+                    osp,
+                    "g3_1_container_greenhouse",
+                    "Container and greenhouse production (containers, growing media, structures and their materials)",
+                )
+            )
+        return lines
     if question_key == "container_production" and value is True and osp is not None:
         return [
             module_pointer(

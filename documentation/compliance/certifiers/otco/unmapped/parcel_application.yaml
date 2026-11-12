@@ -92,3 +92,15 @@ questions:
   parcel_application.operation_export_answer: >-
     Prints the operation's G8.0 export answer on the parcel page for WSDA AGR 2264 ref 9, which asks it
     per site.
+  parcel_application.container_surface: >-
+    Asked by CCOF ORGB49 F3 (containers on land vs on impermeable flooring decides whether land history
+    applies). C2 does not ask what containers stand on.
+  parcel_application.container_planting_date: >-
+    Asked by CCOF ORGB49 §G for a container parcel's signed statement. C2 has no container statement.
+  parcel_application.container_materials: >-
+    Asked by CCOF ORGB49 §G (full names of every material since planting, growing media included). C2
+    has no container statement.
+  parcel_application.contamination_removal: >-
+    Asked by CCOF ORGB49 §G for containers on impermeable flooring. C2 has no container statement.
+  parcel_application.container_statement: >-
+    The signed copy of CCOF ORGB49 §G's container statement. C2 asks for none.
