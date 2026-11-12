@@ -74,6 +74,26 @@ PARCEL_EMBED_STATES = {
     ),
 }
 
+#: The role each register row about the operation's people asks for, by (form document id, row ref). Kept beside the
+#: register's own citations so a row added there and not here falls back to "primary and legally responsible".
+CONTACT_ROLE_ROWS = {
+    ("O1", "B-2"): ("is_legally_responsible",),
+    ("O1", "B-3"): ("is_primary_contact",),
+    ("O1", "B-4"): ("is_billing_contact",),
+    ("O1", "B-5"): ("is_authorized_representative",),
+    ("O1", "B-6"): ("is_responsibly_connected",),
+    ("ORGB06", "A4"): ("is_responsibly_connected",),
+    ("ORGB06", "C1"): ("is_primary_contact",),
+    ("ORGB06", "C2"): ("is_authorized_representative",),
+}
+CONTACT_ROLE_WORDS = {
+    "is_legally_responsible": "legally responsible contact",
+    "is_primary_contact": "primary contact",
+    "is_billing_contact": "billing contact",
+    "is_authorized_representative": "person authorized to act for the operation",
+    "is_responsibly_connected": "responsibly connected person",
+}
+
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
 
@@ -447,18 +467,17 @@ class _Answers:
             return "unanswered", "not stated for " + ", ".join(open_items)
         return "answered", ""
 
-    def operation_contacts_state(self) -> tuple[str, str]:
-        """(state, detail) for the people named to the agent: answered once a primary contact and a legally
-        responsible contact are named (OTCO O1 B-2, B-3; CCOF Contract C1)."""
+    def operation_contacts_state(self, document_id: str = "", ref: str = "") -> tuple[str, str]:
+        """(state, detail) for the people named to the agent, judged on the role the asking row is about.
+
+        One panel answers several rows, each about one role (OTCO O1 B-2 to B-6, CCOF Contract A4, C1, C2). Judging
+        them all on "a primary and a legally responsible contact are named" reported the billing, authorized and
+        responsibly connected rows answered with nobody in those roles (review of back PR 407). A row not in
+        `CONTACT_ROLE_ROWS` needs a primary and a legally responsible contact.
+        """
         contacts = list(self.osp.establishment.operation_contacts.all())
-        missing = [
-            words
-            for flag, words in (
-                ("is_primary_contact", "a primary contact"),
-                ("is_legally_responsible", "a legally responsible contact"),
-            )
-            if not any(getattr(c, flag) for c in contacts)
-        ]
+        roles = CONTACT_ROLE_ROWS.get((document_id, ref), ("is_primary_contact", "is_legally_responsible"))
+        missing = [CONTACT_ROLE_WORDS[flag] for flag in roles if not any(getattr(c, flag) for c in contacts)]
         if missing:
             return "unanswered", "no " + " or ".join(missing) + " is named"
         return "answered", ""
@@ -621,7 +640,7 @@ class _Answers:
                     "brand_owners": self.brand_owner_state,
                     "sourced_products": self.sourced_product_state,
                     "equipment_inventory": self.equipment_state,
-                    "operation_contacts": self.operation_contacts_state,
+                    "operation_contacts": lambda: self.operation_contacts_state(document_id, ref),
                 }[question.embed]()
             else:
                 state, detail = self.seedling_supplier_state()

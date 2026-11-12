@@ -161,10 +161,51 @@ class TheModulePagePrintsThem(_Farm):
 
 
 class TheRegisterReadsThem(_Farm):
-    def test_otco_b2_b3_are_open_until_both_roles_are_named(self):
-        self.assertTrue(self.row("otco", "O1", "B-3").is_open)
-        self.person(is_primary_contact=True)
-        self.assertTrue(self.row("otco", "O1", "B-3").is_open)
-        self.person(name="Cal Ortiz", is_legally_responsible=True)
-        self.assertEqual(self.row("otco", "O1", "B-3").state, "answered")
+    """Each row about the operation's people is judged on its own role (review of back PR 407)."""
+
+    def test_each_otco_row_closes_on_its_own_role(self):
+        for ref in ("B-2", "B-3", "B-4", "B-5", "B-6"):
+            self.assertTrue(self.row("otco", "O1", ref).is_open, ref)
+        self.person(is_primary_contact=True, is_legally_responsible=True)
         self.assertEqual(self.row("otco", "O1", "B-2").state, "answered")
+        self.assertEqual(self.row("otco", "O1", "B-3").state, "answered")
+        for ref, words in (
+            ("B-4", "no billing contact is named"),
+            ("B-5", "no person authorized to act for the operation is named"),
+            ("B-6", "no responsibly connected person is named"),
+        ):
+            row = self.row("otco", "O1", ref)
+            self.assertTrue(row.is_open, ref)
+            self.assertIn(words, row.detail)
+        self.person(
+            name="Ben Ruiz", is_billing_contact=True, is_authorized_representative=True, is_responsibly_connected=True
+        )
+        for ref in ("B-4", "B-5", "B-6"):
+            self.assertEqual(self.row("otco", "O1", ref).state, "answered", ref)
+
+    def test_ccof_rows_close_on_their_roles(self):
+        self.osp.certifier_name = "California Certified Organic Farmers (CCOF)"
+        self.osp.save(update_fields=["certifier_name"])
+        self.person(is_primary_contact=True)
+        self.assertEqual(self.row("ccof", "ORGB06", "C1").state, "answered")
+        self.assertTrue(self.row("ccof", "ORGB06", "C2").is_open)
+
+    def test_the_detail_reads_as_a_sentence(self):
+        from certifications.services.packet_answers import _Answers
+
+        state, detail = _Answers(self.osp).operation_contacts_state()
+        self.assertEqual(detail, "no primary contact or legally responsible contact is named")
+
+    def test_every_row_citing_the_panel_names_its_role(self):
+        from certifications.services.certifier_register import load_forms
+        from certifications.services.packet_answers import CONTACT_ROLE_ROWS
+
+        citing = {
+            (form.document_id, item.ref)
+            for agent in ("ccof", "otco", "wsda")
+            for form in load_forms(agent)
+            for item in form.items
+            if "certification_contract.operation_contacts" in item.questions
+        }
+        self.assertTrue(citing)
+        self.assertEqual(citing - set(CONTACT_ROLE_ROWS), set())
