@@ -768,6 +768,26 @@ def _validate_not_on_source_record(serializer, data):
     return data
 
 
+def _validate_carrier_volume(serializer, data):
+    """A carrier volume and its unit: both halves or neither (`application_conditions`).
+
+    Read from the request when it carries the field and from the stored record otherwise, so a
+    partial update that clears one half cannot leave the other standing alone.
+    """
+    from history.services.application_conditions import carrier_conflicts
+
+    instance = getattr(serializer, "instance", None)
+
+    def effective(key):
+        if key in data:
+            return data[key]
+        return getattr(instance, key, None) if instance is not None else None
+
+    errors = carrier_conflicts(effective("carrier_volume"), effective("carrier_volume_unit"))
+    if errors:
+        raise serializers.ValidationError(errors)
+
+
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     _receipt_event_type = CHEMICAL_EVENT_TYPE
     # The record's receipt field OR a file filed on the record from Documents (record_receipts):
@@ -884,6 +904,17 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "applied_by_pcb",
             "pcb_name",
             "tank_mix_partners",
+            # State application facts (OV-FJ-C11; WAC 16-228-1320(1)(e)(h)(k)(l)(n)). Operator-typed;
+            # the applicator's address and phone are copies on the record, never a link.
+            "wind_from",
+            "wind_speed_mph",
+            "air_temperature_f",
+            "carrier_volume",
+            "carrier_volume_unit",
+            "apparatus_license_plate",
+            "applicator_address",
+            "applicator_phone",
+            "commercial_firm_address",
             # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
             "authorizer_name",
             "reviewed",
@@ -1208,6 +1239,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         if phi_days is not None and phi_days < 0:
             raise serializers.ValidationError({"phi_days": "Pre-Harvest Interval (PHI) cannot be negative"})
 
+        _validate_carrier_volume(self, data)
         data = _validate_not_on_source_record(self, data)
         return _record_national_list_basis(self, data)
 
@@ -1369,6 +1401,17 @@ class ChemicalEventSerializer(EventSerializer):
             "applied_by_pcb",
             "pcb_name",
             "tank_mix_partners",
+            # State application facts (OV-FJ-C11; WAC 16-228-1320(1)(e)(h)(k)(l)(n)). Operator-typed;
+            # the applicator's address and phone are copies on the record, never a link.
+            "wind_from",
+            "wind_speed_mph",
+            "air_temperature_f",
+            "carrier_volume",
+            "carrier_volume_unit",
+            "apparatus_license_plate",
+            "applicator_address",
+            "applicator_phone",
+            "commercial_firm_address",
             # F21 — supervisor review (FSMA 112.161(b)) + GG authorizer (FV-GFS 32.02.01 #10)
             "authorizer_name",
             "reviewed",
@@ -3803,6 +3846,29 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # Who applied it is certifier data, exactly like the applicator's name above.
         "applied_by_pcb",
         "pcb_name",
+        # State application facts (2026-11-12, OV-FJ-C11; WAC 16-228-1320(1)). None of these is
+        # in get_events' field-by-field dict, so the anonymous payload never carried them; they
+        # are listed so a future addition there is stripped, and so the frontend mirror keeps
+        # them out of the producer's "how shoppers will see this" preview.
+        # - Personal data of a named person: the applicator's home or business address and phone
+        #   number. Same class as `applicator_name`, and more identifying than it.
+        "applicator_address",
+        "applicator_phone",
+        # - The firm's address identifies a trading partner of record, like `pcb_name`.
+        "commercial_firm_address",
+        # - A vehicle plate identifies the farm's equipment and, through it, a person; it tells a
+        #   shopper nothing about the food.
+        "apparatus_license_plate",
+        # - Drift-management readings, the same class as `buffer_zone_meters`: a regulator reads
+        #   "from NW at 9 mph, 88 °F" against a label's drift limits; a shopper without the label
+        #   reads it as a hazard in whichever direction it points.
+        "wind_from",
+        "wind_speed_mph",
+        "air_temperature_f",
+        # - The carrier volume is an application rate, the class of `application_rate` below: a
+        #   shopper cannot tell a high one from a low one without the label beside it.
+        "carrier_volume",
+        "carrier_volume_unit",
         "concentration",
         # The operator's "not on the source record" for a spray's clock time (OV-FJ-C12). Read
         # by the producer's season timeline; no shopper surface prints an event's time.

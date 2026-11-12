@@ -27,6 +27,9 @@ trazo-app), so the two sides cannot disagree about which field is per parcel:
 * REFUSED fields have no honest per-parcel value in a multi-parcel save: season summary totals,
   tank-mix partner volumes, a soil reading taken in one place. They are refused rather than
   copied. Fuel and machine hours are per parcel, never split or copied.
+* REFUSED VALUES: a shared key that is honest for some values and not others. A carrier volume
+  in gallons per acre is the same on every parcel the tank covered; a carrier volume as a total
+  for the tank would be copied onto every record as if each parcel got all of it.
 
 A per-target field sent in the SHARED body is refused too. Copying it to every record is the
 exact defect this module exists to prevent, and a silent copy is what a client that forgot to
@@ -65,6 +68,8 @@ class MultiTargetSpec:
     subtypes: frozenset = None
     per_target_by_subtype: dict = field(default_factory=dict)
     either: frozenset = frozenset()
+    # {key: frozenset(values)}: the shared key is refused only when it holds one of these values.
+    refused_values: dict = field(default_factory=dict)
 
     def per_target_for(self, subtype) -> frozenset:
         return self.per_target | self.per_target_by_subtype.get(subtype, frozenset())
@@ -89,6 +94,7 @@ def _load_specs(path=SPEC_PATH) -> dict:
             subtypes=None if subtypes is None else frozenset(subtypes),
             per_target_by_subtype={k: frozenset(v) for k, v in entry.get("per_target_by_subtype", {}).items()},
             either=frozenset(entry.get("either", [])),
+            refused_values={k: frozenset(v) for k, v in entry.get("refused_values", {}).items()},
         )
     return specs
 
@@ -175,6 +181,16 @@ def check_envelope(data, event_type):
     )
     if refused:
         errors["refused"] = [f"Not accepted when one activity covers several parcels: {', '.join(refused)}."]
+    refused_values = sorted(
+        f"{key}={shared.get(key)}"
+        for key, values in spec.refused_values.items()
+        if isinstance(shared.get(key), str) and shared.get(key) in values
+    )
+    if refused_values:
+        errors.setdefault("refused", []).append(
+            "Not accepted when one activity covers several parcels, because it would be copied onto "
+            f"every parcel: {', '.join(refused_values)}. Send it as an amount per area instead."
+        )
     twice = sorted(
         key
         for key in spec.either

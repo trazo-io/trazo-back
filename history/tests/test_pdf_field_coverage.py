@@ -91,6 +91,44 @@ class PdfFieldCoverageTests(TestCase):
         self.assertIn("Ana Torres", text)
         self.assertIn("Application Context", text)
 
+    def test_state_application_facts_reach_the_conditions_table(self):
+        """WAC 16-228-1320(1) items (e), (h), (k), (l), (n): typed on the spray form, so printed.
+
+        2026-11-12 (OV-FJ-C11). Wind, temperature, carrier volume, apparatus plate and the
+        applicator's and firm's contact details each have a column on ChemicalEvent and an input
+        on the spray form; a packet that dropped any of them would hand an inspector a blank the
+        grower had filled.
+        """
+        ChemicalEvent.objects.create(
+            history=self.history,
+            type="FU",
+            date=self.now,
+            description="Copper before rain",
+            commercial_name="Cueva",
+            wind_from="SW",
+            wind_speed_mph=3,
+            air_temperature_f=55,
+            carrier_volume=150,
+            carrier_volume_unit="gal_per_acre",
+            apparatus_license_plate="8F12345",
+            applicator_address="3 Ridge Road, Hood River, OR 97031",
+            applicator_phone="541-555-0110",
+            applied_by_pcb=True,
+            pcb_name="Gorge Spray Co",
+            commercial_firm_address="9 Mill Street, The Dalles, OR 97058",
+        )
+        text = flowable_text(self._service()._build_chemical_log())
+        for expected in (
+            "from SW at 3 mph",
+            "55 °F",
+            "150 gal/acre",
+            "8F12345",
+            "3 Ridge Road, Hood River, OR 97031",
+            "541-555-0110",
+            "9 Mill Street, The Dalles, OR 97058",
+        ):
+            self.assertIn(expected, text, f"{expected!r} never reached the certifier packet")
+
     def test_contamination_incident_note_reaches_the_packet(self):
         """The operator's own account of an incident, in the section that holds the incident.
 
