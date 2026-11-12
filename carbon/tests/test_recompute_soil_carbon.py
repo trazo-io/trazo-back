@@ -8,6 +8,7 @@ an apply that refuses a record changed since the plan, a restore file that rever
 Each test below pins one line of that contract.
 """
 
+import hashlib
 import io
 import json
 import os
@@ -486,6 +487,32 @@ class Restore(RecomputeSoilCarbonBase):
         self.assertEqual(_all_carbon_rows(self.history), before, "the restore was not exact")
         self.assertTrue(CarbonEntry.objects.filter(pk=self.stale_lab.pk).exists())
         self.assertEqual(DataOperationLog.objects.filter(action="restore").count(), 1)
+
+    def test_the_restore_outlives_the_file_through_the_log_row(self):
+        """Production runs in a container whose disk is gone after the next deploy (2026-11-11)."""
+        before = _all_carbon_rows(self.history)
+        self.dry_run()
+        out = self.apply()
+        from carbon.management.commands.recompute_soil_carbon import OPERATION
+
+        log = DataOperationLog.objects.get(operation=OPERATION, action="apply")
+        self.assertIn(f"--restore log:{log.pk}", out)
+        restore_text = Path(self.path("restore.json")).read_text()
+        self.assertEqual(log.report, restore_text)
+        self.assertEqual(log.report_sha256, hashlib.sha256(restore_text.encode("utf-8")).hexdigest())
+        Path(self.path("restore.json")).unlink()
+
+        out = self.run_cmd("--restore", f"log:{log.pk}")
+
+        self.assertIn("Restored 2 record(s)", out)
+        self.assertEqual(_all_carbon_rows(self.history), before, "the restore from the log row was not exact")
+
+    def test_a_log_row_of_another_operation_is_refused(self):
+        other = DataOperationLog.objects.create(
+            operation="clear_impact_summaries", action="apply", report_sha256="x", report='{"records": []}'
+        )
+        with self.assertRaisesMessage(CommandError, "with a stored restore. Nothing was restored."):
+            self.run_cmd("--restore", f"log:{other.pk}")
 
     def test_a_restore_does_not_overwrite_an_entry_saved_after_the_apply(self):
         self.dry_run()

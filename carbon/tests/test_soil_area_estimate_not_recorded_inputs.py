@@ -69,9 +69,14 @@ class AreaOnlySoilFiguresAreAreaEstimates(SimpleTestCase):
         self.assertEqual(result["breakdown"]["fuel_emissions"], 0)
         self.assertAreaEstimate(result)
 
-    def test_cover_crop_with_no_fuel_is_an_area_estimate(self):
-        # A negative per-hectare default is still a default, not a recorded input.
-        self.assertAreaEstimate(_calc(_soil("CC")))
+    def test_cover_crop_with_nothing_recorded_has_no_figure(self):
+        # Until 2026-11-11 this was a -0.8 kg/ha soil-carbon credit labelled an area estimate. The
+        # soil table carries no credit now (test_soil_carbon_boundary.NoSoilCarbonCredit), so with
+        # no fuel and no amendment there is nothing to count: no figure, and never a stored zero.
+        result = _calc(_soil("CC"))
+        self.assertEqual(result["co2e"], 0)
+        self.assertFalse(result["usda_factors_based"])
+        self.assertEqual(result["verification_status"], "no_factor_applied")
 
 
 class LabAnalysisCarriesNoPerHectareEstimate(SimpleTestCase):

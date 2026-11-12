@@ -204,3 +204,48 @@ class RecordedFuelReplacesTheOperationDefault(SimpleTestCase):
         )
         self.assertAlmostEqual(result["breakdown"]["area_emissions"], 2.0, places=3)
         self.assertAlmostEqual(result["co2e"], result["breakdown"]["fuel_emissions"] + 2.0, places=3)
+
+
+class NoSoilCarbonCredit(SimpleTestCase):
+    """No per-hectare soil-carbon credit (2026-11-11).
+
+    The soil table carried no_till -0.5, cover_crops -0.8, composting -1.0 and organic_matter -0.6
+    kg CO2e/ha, impact_type "carbon_sequestration", each sourced to a "USDA-ARS ... Research 2025"
+    study no one could find. With fuel or amendment nitrogen also recorded, the credit was netted
+    into a figure labelled "from recorded inputs" (24 production rows on 2026-11-11). Soil-carbon
+    stock change is excluded until a stock-accounting method exists, the rule the tillage flux
+    removal above applied to the positive side.
+    """
+
+    def test_no_soil_factor_is_a_credit(self):
+        for key, factor in EmissionFactorsRegistry.SOIL_MANAGEMENT_FACTORS.items():
+            if not (isinstance(factor, dict) and "value" in factor):
+                continue
+            with self.subTest(key=key):
+                self.assertGreaterEqual(factor["value"], 0)
+                self.assertNotEqual(factor.get("impact_type"), "carbon_sequestration")
+                if factor["value"] == 0:  # a zero cites the methodology, not a study that was never found
+                    self.assertNotIn("USDA-ARS", factor["source"])
+
+    def test_cover_crop_composting_and_organic_matter_count_only_the_fuel(self):
+        for subtype in ("CC", "CO", "OM"):
+            with self.subTest(subtype=subtype):
+                result = _calc(
+                    _soil(
+                        subtype,
+                        area_covered=Decimal("10"),
+                        area_unit="hectares",
+                        fuel_consumed=Decimal("10"),
+                        fuel_unit="gal",
+                        fuel_type="diesel",
+                    )
+                )
+                self.assertAlmostEqual(result["breakdown"]["fuel_emissions"], 102.1, places=1)
+                self.assertEqual(result["breakdown"]["area_emissions"], 0)
+                self.assertAlmostEqual(result["co2e"], result["breakdown"]["fuel_emissions"], places=3)
+
+    def test_with_nothing_recorded_a_cover_crop_has_no_figure(self):
+        """An area alone is not an input: no estimate, and never a stored negative."""
+        result = _calc(_soil("CC", area_covered=Decimal("10"), area_unit="hectares"))
+        self.assertEqual(result["co2e"], 0)
+        self.assertEqual(result["verification_status"], "no_factor_applied")
