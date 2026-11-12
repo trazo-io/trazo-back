@@ -41,8 +41,12 @@ DEFAULT_DAYS = 14
 # A note WAITING for review keeps its recording, because listening is how the farm checks the
 # transcript. But not forever (Oscar, 2026-11-12, from review of landing #45): a crew member was told
 # the recording is deleted after review, and a note nobody opens would otherwise sit at Twilio with
-# no end. Thirty days is past any plausible review, and the privacy policy (section 6) says so.
-UNREVIEWED_DAYS = 30
+# no end. The privacy policy (2.7, 6) and the inbox promise "never more than 30 days".
+# 29, not 30: the sweep runs once a day, so a recording becomes eligible up to a day before the run
+# that deletes it. Releasing at 29 days keeps the 30-day promise literal (review of landing #46),
+# the same reasoning that makes the policy state a 7-day backup rotation as "within 8 days".
+PROMISED_MAX_DAYS = 30
+UNREVIEWED_DAYS = PROMISED_MAX_DAYS - 1
 
 
 class Command(BaseCommand):

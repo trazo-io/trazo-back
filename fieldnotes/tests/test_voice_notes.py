@@ -701,8 +701,8 @@ class StaleAudioSweepTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Sweep Co")
 
-    def note(self, *, status, days_old=0, media=MEDIA, deleted=None):
-        received = timezone.now() - timezone.timedelta(days=days_old)
+    def note(self, *, status, days_old=0, media=MEDIA, deleted=None, hours_extra=0):
+        received = timezone.now() - timezone.timedelta(days=days_old, hours=hours_extra)
         note = FieldNote.objects.create(
             company=self.company,
             sender_phone="+14155551234",
@@ -761,9 +761,9 @@ class StaleAudioSweepTests(TestCase):
         stuck.refresh_from_db()
         self.assertIsNotNone(stuck.audio_deleted_at)
 
-    def test_a_waiting_note_keeps_its_recording_for_thirty_days(self):
+    def test_a_waiting_note_keeps_its_recording_while_it_can_still_be_reviewed(self):
         """Somebody still has to review it, and listening is how they check the transcript."""
-        waiting = self.note(status=FieldNote.PENDING, days_old=29)
+        waiting = self.note(status=FieldNote.PENDING, days_old=28)
         with patch("fieldnotes.services.transcribe.requests.delete") as deleted:
             self.sweep("--days", "14")
 
@@ -771,10 +771,13 @@ class StaleAudioSweepTests(TestCase):
         waiting.refresh_from_db()
         self.assertIsNone(waiting.audio_deleted_at)
 
-    def test_a_note_nobody_reviews_loses_its_recording_after_thirty_days(self):
+    def test_a_note_nobody_reviews_loses_its_recording_before_thirty_days(self):
         """Oscar, 2026-11-12: the crew member was told the recording is deleted after review, so a
-        note nobody opens must not keep it at Twilio forever. The note itself stays in the queue."""
-        forgotten = self.note(status=FieldNote.PENDING, days_old=31)
+        note nobody opens must not keep it at Twilio forever. The note itself stays in the queue.
+
+        Released by the run on day 29 or later: with one run a day, that is the latest cutoff that
+        still keeps the published "never more than 30 days" true (review of landing #46)."""
+        forgotten = self.note(status=FieldNote.PENDING, days_old=29, hours_extra=1)
         with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 204)):
             self.sweep("--days", "14")
 
@@ -807,3 +810,11 @@ class StaleAudioSweepTests(TestCase):
             self.sweep("--days", "14")
 
         self.assertEqual(deleted.call_count, 1, "an already-released note was released again")
+
+    def test_the_cutoff_keeps_the_published_thirty_day_promise(self):
+        """A daily sweep acting at N days lets a recording live up to N+1. N+1 must not exceed what
+        the policy and the inbox say (review of landing #46)."""
+        from fieldnotes.management.commands import release_stale_field_note_audio as sweep
+
+        self.assertEqual(sweep.PROMISED_MAX_DAYS, 30)
+        self.assertLessEqual(sweep.UNREVIEWED_DAYS + 1, sweep.PROMISED_MAX_DAYS)
