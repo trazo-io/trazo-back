@@ -3432,7 +3432,8 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     }
 
     def _refuse_a_retired_event_type(self, request):
-        raw = request.data.get("event_type", request.query_params.get("event_type"))
+        data = request.data if hasattr(request.data, "get") else {}  # a JSON array or scalar body
+        raw = data.get("event_type", request.query_params.get("event_type"))
         try:
             event_type = int(raw)
         except (TypeError, ValueError):
@@ -3448,7 +3449,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         self._refuse_a_retired_event_type(request)
-        if "targets" in request.data:
+        if hasattr(request.data, "get") and "targets" in request.data:  # a scalar body has no `in`
             return self._create_multi_target(request)
         response = super().create(request, *args, **kwargs)
         self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
@@ -3505,7 +3506,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         else:
             event_type = (
                 self.request.data.get("event_type")
-                if "event_type" in self.request.data
+                if hasattr(self.request.data, "get") and "event_type" in self.request.data
                 else self.request.query_params.get("event_type", None)
             )
 
@@ -3544,7 +3545,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         else:
             event_type = (
                 self.request.data.get("event_type")
-                if "event_type" in self.request.data
+                if hasattr(self.request.data, "get") and "event_type" in self.request.data
                 else self.request.query_params.get("event_type", None)
             )
 

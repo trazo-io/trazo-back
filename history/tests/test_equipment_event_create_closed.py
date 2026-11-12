@@ -68,6 +68,13 @@ class EquipmentEventCreateClosedTests(APITestCase):
         body = self._body(targets=[{"parcel": self.parcel.pk}, {"parcel": self.other_parcel.pk}])
         self._assert_refused(self.client.post(reverse("events-list"), body, format="json"))
 
+    def test_a_body_that_is_not_an_object_is_a_400_not_a_500(self):
+        """Review of #405: the guard read `request.data.get`, which a JSON array body does not have."""
+        for body in ([], 5):
+            with self.subTest(body=body):
+                res = self.client.post(reverse("events-list"), body, format="json")
+                self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+
     def test_another_type_is_still_created(self):
         """The guard reads the type: it does not refuse every create."""
         body = {
