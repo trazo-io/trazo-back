@@ -16,6 +16,7 @@ import logging
 import re
 from typing import List, Optional
 
+from certifications.verification_notes import percent, render
 from common.us_states import US_STATE_ABBREVS, US_STATE_NAMES
 
 from .base_verifier import BaseCertificationVerifier, VerificationResult
@@ -96,7 +97,7 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
             return VerificationResult(
                 found=False,
                 status="self_reported",
-                notes="Automatic check against the USDA Organic Integrity Database is not available yet.",
+                notes=render("not_loaded"),
             )
 
         # Normalize the state — USDA uses full names ("California" not "CA")
@@ -114,7 +115,7 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
             return VerificationResult(
                 found=False,
                 status="not_found",
-                notes=f"No organic operations found in state '{state_full}'",
+                notes=render("no_operations_in_state", state=state_full),
             )
 
         # Fuzzy match against the normalized name
@@ -172,10 +173,12 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
             return VerificationResult(
                 found=False,
                 status="not_found",
-                notes=(
-                    f"Found {candidates.count()} organic operations in {state_full} "
-                    f"but none matched '{operation_name}' above "
-                    f"{FUZZY_MATCH_THRESHOLD:.0%} confidence"
+                notes=render(
+                    "no_match",
+                    count=candidates.count(),
+                    state=state_full,
+                    name=operation_name,
+                    threshold=percent(FUZZY_MATCH_THRESHOLD),
                 ),
             )
 
@@ -186,24 +189,22 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
         # agent are the whole of what can be confirmed. Anything weaker is a possible match.
         result = self._build_result(best_match, best_confidence)
         if result.status == "verified":
-            confirmed, reason = self._confirmed(candidates, best_match, normalized_search, kwargs.get("certifier_name"))
+            confirmed, code, params = self._confirmed(
+                candidates, best_match, normalized_search, kwargs.get("certifier_name")
+            )
             if not confirmed:
                 result.status = "possible_match"
-                result.notes = (
-                    f"Possible database entry '{best_match.op_name}' ({best_confidence:.0%} name similarity); "
-                    f"not confirmed: {reason}. The certification stays self-reported until the "
-                    "operator's own entry is confirmed."
-                )
+                result.notes = render(code, op_name=best_match.op_name, similarity=percent(best_confidence), **params)
         return result
 
     @staticmethod
     def _confirmed(candidates, op, normalized_search, certifier_name):
-        """Whether `op` is confirmed as this farm's entry. Returns (bool, reason when not)."""
+        """Whether `op` is confirmed as this farm's entry: (bool, note code, its params when not)."""
         if not normalized_search or op.op_name_normalized != normalized_search:
-            return False, "the names are similar, not the same"
+            return False, "possible_name_similar", {}
         same_name = candidates.filter(op_name_normalized=normalized_search).count()
         if same_name != 1:
-            return False, f"{same_name} operations in the state carry this name"
+            return False, "possible_name_shared", {"same_name_count": same_name}
         if certifier_name:
             # Review of back #119: "WSDA" and "Washington State Department of Agriculture" are
             # the same agent. Resolve both through the exact crosswalk first; fall back to the
@@ -218,11 +219,12 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
             else:
                 same = bool(theirs) and (ours in theirs or theirs in ours)
             if not same:
-                return False, (
-                    f"the database lists certifier '{op.certifier_name or 'none'}', "
-                    f"the farm recorded '{certifier_name}'"
+                return (
+                    False,
+                    "possible_certifier_differs",
+                    {"db_certifier": op.certifier_name or "none", "farm_certifier": certifier_name},
                 )
-        return True, ""
+        return True, "", {}
 
     def health_check(self) -> bool:
         """Check if we have USDA data loaded."""
@@ -285,7 +287,7 @@ class USDAOrganicVerifier(BaseCertificationVerifier):
                 "snapshot_date": str(op.data_snapshot_date),
             },
             confidence_score=confidence,
-            notes=f"Matched '{op.op_name}' with {confidence:.0%} confidence",
+            notes=render("matched", op_name=op.op_name, confidence=percent(confidence)),
         )
 
     @staticmethod

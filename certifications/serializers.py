@@ -858,6 +858,11 @@ class CertificationSerializer(serializers.ModelSerializer):
     specimen = serializers.SerializerMethodField()
     certification_type_display = serializers.CharField(source="get_certification_type_display", read_only=True)
     verification_status_display = serializers.CharField(source="get_verification_status_display", read_only=True)
+    # The verifier's note as a code the app words in the reader's language (settings audit,
+    # 2026-11-12). Read back from the stored English by `certifications.verification_notes`, so
+    # notes stored before the codes existed get one too. Null for text no template wrote.
+    verification_note_code = serializers.SerializerMethodField()
+    verification_note_params = serializers.SerializerMethodField()
 
     class Meta:
         model = Certification
@@ -878,6 +883,8 @@ class CertificationSerializer(serializers.ModelSerializer):
             "verification_source",
             "verification_source_url",
             "verification_notes",
+            "verification_note_code",
+            "verification_note_params",
             "usda_operation_name",
             "notes",
             "document_url",
@@ -900,6 +907,16 @@ class CertificationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_verification_note_code(self, obj):
+        from certifications.verification_notes import parse
+
+        return parse(obj.verification_notes)[0]
+
+    def get_verification_note_params(self, obj):
+        from certifications.verification_notes import parse
+
+        return parse(obj.verification_notes)[1]
 
     def get_specimen(self, obj):
         """True when this certificate belongs to a FABRICATED operation (`Establishment.is_demo`)."""
