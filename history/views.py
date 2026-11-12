@@ -3421,7 +3421,33 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    #: Retired as a CREATE target on 2026-11-11. Equipment work is logged as a Production activity
+    #: (subtype EM, "Equipment maintenance") since the wizard merged the two; the Equipment tile
+    #: was removed (NewEvent.jsx) and the V2 template seeder marks type 4 deprecated, but this API
+    #: still wrote a new EquipmentEvent for any client that sent `event_type=4`. Existing rows stay
+    #: readable and editable: 15 of production's 21 sit on sealed seasons, and the v1 seal hash
+    #: names "EquipmentEvent" and their ids. Guard: history/tests/test_equipment_event_create_closed.py.
+    RETIRED_CREATE_EVENT_TYPES = {
+        EQUIPMENT_EVENT_TYPE: "Log equipment work as a Production activity (Equipment maintenance)."
+    }
+
+    def _refuse_a_retired_event_type(self, request):
+        raw = request.data.get("event_type", request.query_params.get("event_type"))
+        try:
+            event_type = int(raw)
+        except (TypeError, ValueError):
+            return
+        if event_type in self.RETIRED_CREATE_EVENT_TYPES:
+            raise ValidationError(
+                {
+                    "event_type": [
+                        f"New records of this type are not accepted. {self.RETIRED_CREATE_EVENT_TYPES[event_type]}"
+                    ]
+                }
+            )
+
     def create(self, request, *args, **kwargs):
+        self._refuse_a_retired_event_type(request)
         if "targets" in request.data:
             return self._create_multi_target(request)
         response = super().create(request, *args, **kwargs)

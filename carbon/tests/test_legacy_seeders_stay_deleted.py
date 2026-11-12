@@ -28,6 +28,10 @@ DELETED_SEEDERS = {
     "seed_consumer_data": '"Saves approximately $500 per acre annually"',
     "seed_2025_data": '"Reduced water usage by 30% compared to industry average"',
     "create_crop_templates": '"Convert to organic practices (premium pricing 15-30%)"',
+    # 2026-11-11: unreferenced; created EquipmentEvent rows (a type closed for creation that day,
+    # history/views.py RETIRED_CREATE_EVENT_TYPES) and a user oscar+test@trazo.io with a password
+    # hard-coded in the source.
+    "seed_realistic_data": 'EquipmentEvent rows and user.set_password("<hard-coded>")',
 }
 
 
