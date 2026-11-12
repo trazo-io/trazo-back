@@ -145,8 +145,8 @@ def _method_from_description(description: str) -> str:
 
 
 def _entry_state(entry) -> Dict[str, Any]:
-    """What the entry says about its figure. The id is deliberately absent: a recalculation
-    replaces the row, and 'already at the new value' must not depend on the row's id."""
+    """What the entry says about its figure. The id is deliberately absent: 'already at the new
+    value' must not depend on the row's id (a record that gains or loses its entry has none)."""
     breakdown = entry.baseline_data if isinstance(entry.baseline_data, dict) else {}
     return {
         "co2e": round(float(entry.co2e_amount or 0.0), 6),
@@ -334,18 +334,71 @@ def _stamp_system_recalculation(new_entry, prior_states, prior_ids, created_by_i
     USDAComplianceRecord.objects.filter(carbon_entry_id=new_entry.pk).update(validated_by=None)
 
 
+def _pks_by_model(rows: List) -> Dict[str, List[int]]:
+    out: Dict[str, List[int]] = OrderedDict()
+    for obj in rows:
+        out.setdefault(obj._meta.label, []).append(obj.pk)
+    return {label: sorted(pks) for label, pks in out.items()}
+
+
+def _rekey(created: List, old_pks: Dict[str, List[int]]) -> None:
+    """Give the rebuilt rows the primary keys of the rows they replace.
+
+    Until 2026-11-11 a recalculation deleted the entry and its dependents and the calculator
+    created new ones with new ids, so a census compare read every recomputed row as MISSING and
+    every replacement as added (24 entries, 23 audit and 23 compliance rows on the 2026-11-12 soil
+    run, proven recoverable only by reading DataOperationLog #12 by hand). The figure changes; the
+    row is the same row. So each rebuilt row takes the id of an old row of the same model, paired in
+    id order, and the foreign keys among the rebuilt rows follow. A model with more new rows than
+    old keeps the extra ones' new ids (added); one with fewer has its extra old rows gone (removed,
+    and in the restore).
+
+    Runs inside the record's transaction. Django creates foreign keys DEFERRABLE INITIALLY
+    DEFERRED, so the rows may point at a moving id until the commit checks them.
+    """
+    remap: Dict[str, Dict[int, int]] = {}
+    by_model: Dict[Any, List] = OrderedDict()
+    for obj in created:
+        by_model.setdefault(obj._meta.model, []).append(obj)
+    for model, objs in by_model.items():
+        pairs = list(zip(sorted(o.pk for o in objs), old_pks.get(model._meta.label, [])))
+        moved = {new: old for new, old in pairs if new != old}
+        if not moved:
+            continue
+        # Two passes through a free range so a swap (new 5 -> 7 while new 7 -> 5) cannot collide.
+        parking = {new: -(i + 1) for i, new in enumerate(moved)}
+        manager, pk_column = model._base_manager, model._meta.pk.attname  # update() needs the column name
+        for new, park in parking.items():
+            manager.filter(pk=new).update(**{pk_column: park})
+        for new, old in moved.items():
+            manager.filter(pk=parking[new]).update(**{pk_column: old})
+        remap[model._meta.label] = moved
+    if not remap:
+        return
+    for model, objs in by_model.items():
+        final_pks = [remap.get(model._meta.label, {}).get(o.pk, o.pk) for o in objs]
+        for field in model._meta.concrete_fields:
+            target = getattr(field, "related_model", None)
+            if not field.is_relation or target is None or target._meta.label not in remap:
+                continue
+            for new, old in remap[target._meta.label].items():
+                model._base_manager.filter(pk__in=final_pks, **{field.attname: new}).update(**{field.attname: old})
+
+
 def write_event_carbon(event, result: Dict[str, Any], calculator) -> List:
-    """Replace the event's stored entries with what a re-save would store.
+    """Store what a re-save would store, on the rows the event already has.
 
     Deletes the entries (the compliance and audit rows go with them), then, only when the figure
     is above zero, rebuilds one through the calculator's own `create_carbon_entry_from_event`, so
-    the stored row is what the signal would have written. Returns the entries created.
+    the stored row is what the signal would have written, and gives it and its dependents the ids
+    of the rows they replace (`_rekey`). Returns the entries now stored.
     """
     from carbon.models import CarbonEntry
 
     old = list(_entries_for(event))
     prior_states = _states(old)
     prior_ids = [e.pk for e in old]
+    old_pks = _pks_by_model(_cascade_rows(old))
     created_by_id = next((e.created_by_id for e in old if e.created_by_id), None)
     if old:
         CarbonEntry.objects.filter(pk__in=prior_ids).delete()
@@ -354,6 +407,9 @@ def write_event_carbon(event, result: Dict[str, Any], calculator) -> List:
     entry = calculator.create_carbon_entry_from_event(event, result)
     if entry is None:
         raise Abort("the calculator did not create the entry")
+    created = _cascade_rows([entry])
+    _rekey(created, old_pks)
+    entry = CarbonEntry.objects.get(pk=old_pks.get(CarbonEntry._meta.label, [entry.pk])[0])
     _stamp_system_recalculation(entry, prior_states, prior_ids, created_by_id)
     entry.refresh_from_db()
     return [entry]

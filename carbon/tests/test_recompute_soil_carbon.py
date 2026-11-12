@@ -22,7 +22,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
 from django.forms.models import model_to_dict
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -30,6 +30,7 @@ from carbon.models import CarbonEntry, USDACalculationAudit, USDAComplianceRecor
 from carbon.services.calculator_service import CarbonCalculatorService
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from common.models import DataOperationLog
+from common.services import census
 from company.models import Company, Establishment
 from history.models import EventAmendment, History, SoilManagementEvent
 from product.models import Parcel, Product
@@ -63,8 +64,12 @@ def _all_carbon_rows(history):
     return json.loads(serializers.serialize("json", rows))
 
 
-class RecomputeSoilCarbonBase(TestCase):
+class _RecomputeFixture:
+    """The farm, season and stale entries every test starts from, for TestCase and
+    TransactionTestCase alike (the census needs its own read-only transaction)."""
+
     def setUp(self):
+        super().setUp()
         self.user = User.objects.create_user(email="soilrecompute@test.com", password="x")
         company = Company.objects.create(name="Orchard Co")
         self.establishment = Establishment.objects.create(name="Home Orchard", company=company, state="OR")
@@ -172,6 +177,10 @@ class RecomputeSoilCarbonBase(TestCase):
     @staticmethod
     def record(plan, event):
         return next(r for r in plan["records"] if r["event_id"] == event.pk)
+
+
+class RecomputeSoilCarbonBase(_RecomputeFixture, TestCase):
+    pass
 
 
 class DryRunReport(RecomputeSoilCarbonBase):
@@ -310,7 +319,7 @@ class Apply(RecomputeSoilCarbonBase):
         out = self.apply()
 
         (tillage_entry,) = self._entries(self.tillage)
-        self.assertNotEqual(tillage_entry.pk, self.stale_tillage.pk)
+        self.assertEqual(tillage_entry.pk, self.stale_tillage.pk, "a recomputed entry keeps its id")
         self.assertAlmostEqual(tillage_entry.co2e_amount, TILLAGE_ONE_ACRE, places=3)
         self.assertEqual(tillage_entry.verification_status, "area_estimate")
         self.assertFalse(tillage_entry.usda_factors_based)
@@ -322,6 +331,36 @@ class Apply(RecomputeSoilCarbonBase):
         self.assertEqual(self._entries(self.fueled).get().pk, fueled_entry.pk)
         self.assertIn("applied                      2", out)
         self.assertEqual(DataOperationLog.objects.filter(action="apply").count(), 1)
+
+    def test_a_recomputed_entry_and_its_dependents_keep_their_ids(self):
+        """A census compare matches rows by id: a recomputed row must read as CHANGED, never as
+        missing plus added (the 2026-11-12 soil run, before this, reported 24 + 23 + 23 rows
+        missing that were only re-created under new ids)."""
+        compliance = list(
+            USDAComplianceRecord.objects.filter(carbon_entry=self.stale_tillage).values_list("pk", flat=True)
+        )
+        audits = list(USDACalculationAudit.objects.filter(carbon_entry=self.stale_tillage).values_list("pk", flat=True))
+        self.assertTrue(compliance and audits)  # the fixture has both: the check reads something
+        old_figure = self.stale_tillage.co2e_amount
+        self.dry_run()
+        self.apply()
+
+        entry = CarbonEntry.objects.get(pk=self.stale_tillage.pk)
+        self.assertNotAlmostEqual(entry.co2e_amount, old_figure, places=3)  # the figure did change
+        self.assertEqual(
+            sorted(USDAComplianceRecord.objects.filter(carbon_entry=entry).values_list("pk", flat=True)), compliance
+        )
+        self.assertEqual(
+            sorted(USDACalculationAudit.objects.filter(carbon_entry=entry).values_list("pk", flat=True)), audits
+        )
+        self.assertEqual(entry.calculation_details["system_recalculation"]["replaces_entry_ids"], [entry.pk])
+
+    def test_a_restore_after_an_in_place_apply_is_exact(self):
+        before = _all_carbon_rows(self.history)
+        self.dry_run()
+        self.apply()
+        self.run_cmd("--restore", self.path("restore.json"))
+        self.assertEqual(_all_carbon_rows(self.history), before)
 
     def test_the_totals_after_the_apply_are_the_totals_the_plan_showed(self):
         plan, _ = self.dry_run()
@@ -353,12 +392,12 @@ class Apply(RecomputeSoilCarbonBase):
             self.assertIsNone(record.validated_by_id)
         self.assertFalse(EventAmendment.objects.exists(), "a correction/amendment record was created")
 
-    def test_a_replaced_entry_keeps_the_author_it_already_had(self):
+    def test_a_recomputed_entry_keeps_the_author_it_already_had(self):
         entry = self._stale(self.tillage, 61.0, OLD_STATUS, True, "usda_area_scaled_soil_factors", created_by=self.user)
         self.dry_run()
         self.apply()
         self.assertEqual(self._entries(self.tillage).get().created_by_id, self.user.pk)
-        self.assertNotEqual(self._entries(self.tillage).get().pk, entry.pk)
+        self.assertEqual(self._entries(self.tillage).get().pk, entry.pk)  # the same row, since 2026-11-11
 
     def test_the_event_rows_and_the_season_are_untouched(self):
         events = [self.tillage, self.lab, self.fueled]
@@ -545,3 +584,30 @@ class SamplePrinted(RecomputeSoilCarbonBase):
         if os.environ.get("SOIL_RECOMPUTE_PRINT"):
             print("\n" + dry + "\n\n" + applied + "\n" + restored + "\n")
         self.assertTrue(dry and applied and restored)
+
+
+class CensusSeesARecomputeAsAChange(_RecomputeFixture, TransactionTestCase):
+    """The 2026-11-12 production soil run replaced rows under new ids, and the census compare
+    reported 24 entries, 23 audit and 23 compliance rows MISSING (`ok: false`); only reading the
+    restore on DataOperationLog #12 by hand showed they were recoverable. A recompute is a change
+    to a row, and the census must read it as one."""
+
+    def test_the_census_compare_is_ok_and_lists_the_recomputed_entry_as_changed(self):
+        before = census.take_census(label="before-recompute")
+        self.dry_run()
+        self.apply()
+        after = census.take_census(label="after-recompute")
+
+        result = census.compare(before, after)
+
+        # The tillage entry was recomputed: a change, never a loss. The lab entry is a real removal
+        # (a sampling record counts no emission), so it, and only it, is missing, with its rows in
+        # the restore.
+        self.assertEqual(
+            [loss for loss in result["losses"] if loss.startswith("carbon.CarbonEntry:")],
+            [f"carbon.CarbonEntry: 1 rows missing, e.g. ['{self.stale_lab.pk}']"],
+        )
+        self.assertIn("carbon.CarbonEntry", result["changed"])  # the compare read the recomputed row
+        self.assertNotIn("carbon.CarbonEntry", result["added"])
+        for loss in result["losses"]:
+            self.assertIn("1 rows missing", loss)  # the lab entry's own audit and compliance rows
