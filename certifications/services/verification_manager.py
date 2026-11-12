@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from ..constants import VERIFIER_REGISTRY
 from ..models import Certification, CertificationVerificationLog
+from ..verification_notes import render
 from .base_verifier import BaseCertificationVerifier, VerificationResult
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ class VerificationManager:
             # No verifier available — mark as self-reported
             if certification.verification_status == "pending":
                 certification.verification_status = "self_reported"
-                certification.verification_notes = "No automated verification available for this certification type"
+                certification.verification_notes = render("no_automated_check")
                 certification.save(update_fields=["verification_status", "verification_notes", "updated_at"])
 
             CertificationVerificationLog.objects.create(

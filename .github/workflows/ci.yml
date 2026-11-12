@@ -658,6 +658,10 @@ jobs:
       # the old one; a password change, reset or email change ends every session (access tokens by
       # issue time, refresh tokens blacklisted). It does not read the sibling repo.
       #
+      # 2026-11-12: certifications.tests.test_verification_notes joins. Every certificate note the
+      # Organic Integrity Database check writes reads back as a code plus parameters, so the app words
+      # it in the reader's language; notes stored before the codes still parse. No sibling repo read.
+      #
       # 2026-11-11: users.tests.test_account_closure and backend.tests.test_sentry_scrub join (overall
       # review 2026-11, OV-CLM-C06, OV-SEC-C17). Closing an account exports first, then deletes rows,
       # files, albums, crew recordings and audit entries, never another company's; Sentry gets no
@@ -1027,6 +1031,7 @@ jobs:
             backend.security.tests.test_client_ip \
             backend.security.tests.test_throttle_cache \
             users.tests.test_account_closure \
+            certifications.tests.test_verification_notes \
             backend.tests.test_sentry_scrub \
             backend.security.tests.test_checks \
             users.tests.test_signup_alerts_and_terms \

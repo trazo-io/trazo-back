@@ -10,11 +10,12 @@ to put the old text back.
 
 from django.core.management.base import BaseCommand, CommandError
 
+from certifications.verification_notes import render
 from common.services import data_operations as ops
 
 OPERATION = "clear_developer_verification_note"
 OLD_NOTE = "USDA Organic Integrity Database not loaded. Run: python manage.py import_usda_organic_data"
-NEW_NOTE = "Automatic check against the USDA Organic Integrity Database is not available yet."
+NEW_NOTE = render("not_loaded")
 
 
 def plan():
