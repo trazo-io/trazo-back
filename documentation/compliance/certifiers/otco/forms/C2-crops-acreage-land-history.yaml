@@ -325,32 +325,28 @@ items:
     that has had management of the parcel during the past 36 months is required to sign; a separate narrative
     affirmation may be submitted. In order for the land to qualify for organic status, every day for the past
     36 months must be accounted for in this section.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.affidavit_card
     - parcel_application.date_began_managing
     - parcel_application.dlpm_none_within_tenure
     models:
-    - certifications.models.LandownerAffidavit (management_period_start/end, signed_document)
+    - certifications.models.LandownerAffidavit.management_period_start
+    - certifications.models.LandownerAffidavit.management_period_end
+    - certifications.models.LandownerAffidavit.signed_document
+    - certifications.models.LandownerAffidavit.signer_role
     - product.Parcel.date_began_managing
-    prints: parcels/parcel-application-<name>.pdf §F — the manager table with the current manager first, the
-      36-month accounting naming any uncovered dates, and each prior manager's signed affidavit in the ZIP
-      under parcels/affidavits/
-  gap: 'Closed 2026-09-09 for every PRIOR party: name, period, last prohibited date and signed document, plus
-    `coverage()` stating whether the periods and `date_began_managing` account for every day of the window.
-    Remaining: OTCO requires the CURRENT manager to sign as well; the operator''s `dlpm_none_within_tenure`
-    declaration prints, but is not a signed affirmation. (2.5-7) Same as CCOF Affidavit C / WSDA AGR 2262 Signature:
-    a prior manager''s name, signed date and scanned signature are captured, but the stored `attestation_text`
-    is MOFGA''s wording ("no prohibited materials … since the date provided above") rather than OTCO''s "complete
-    and accurate to the best of my knowledge", and there is no signature block for the CURRENT manager on the
-    parcel page at all. OTCO accepts a separate narrative affirmation, so the wording is not disqualifying
-    by itself.'
-  fix: Allow a `signer_role = operator` affidavit (the CCOF G (affidavit) fix) so the current manager's affirmation
-    is signed and shipped like the others. Store an `attestation_template = 'otco'` variant carrying C2's wording
-    when the certifier is OTCO, and print a current-manager attestation line with the operation name and plan
-    date.
+    prints: >-
+      parcels/parcel-application-<name>.pdf §F — the manager table with the current manager first, the
+      36-month accounting naming any uncovered dates, and every signed affirmation in the ZIP under
+      parcels/affidavits/
+  note: >-
+    Previous parties since 2026-09-09. Since 2026-11-11 the current landowner/manager signs as well: an
+    affidavit with `signer_role = this_operation` carries the signed C2 affirmation (or a separate
+    narrative affirmation, which OTCO accepts), uploaded. Its signed date and attachment print on the
+    current manager's row, and a missing one is stated. Trazo stores and ships the signed copy; it does
+    not sign on the operator's behalf.
 - ref: 2.5 (retroactive recognition, Mexico LPO)
   asks: 'Retroactive Recognition of Conversion for operations requesting Mexico LPO Organic Certification:
     by checking this box you request retroactive recognition for this parcel per LOOAA Article 214. AGREE.'

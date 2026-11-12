@@ -478,6 +478,10 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-11: certifications.tests.test_operation_affidavit joins. The operation's own signed affidavit for its
+      # own period (OTCO C2 2.5, CCOF ORGB49 §G): never a prior party, on the current manager's row, a statement for
+      # the 36-month accounting only once the signed copy is on file. Builds its own farm; no sibling repo.
+      #
       # 2026-11-11: certifications.tests.test_affidavit_signer_fields joins. What a previous manager states on their
       # affidavit (CCOF ORGB49 Affidavit B-D; WSDA AGR 2262 1, 5a, 5b, 6, 6a, 7, 8, attestation): the API, its row
       # validation, and the signer block and materials table on the parcel page. Builds its own farm; no sibling repo.
@@ -838,6 +842,7 @@ jobs:
             product.tests.test_parcel_crop_names \
             product.tests.test_land_history_periods \
             certifications.tests.test_affidavit_signer_fields \
+            certifications.tests.test_operation_affidavit \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
