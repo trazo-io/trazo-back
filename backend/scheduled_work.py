@@ -204,7 +204,7 @@ PERIODIC_WORK = {
             "The crew consent notice tells a worker their recording is deleted once the note is "
             "reviewed. Confirm and discard both call the provider's delete inline, so the common "
             "path holds. This command covers what those two miss: a refused note, a note stuck "
-            "being read, and a release the provider rejected. Twilio keeps media until it is "
+            "being read, a note nobody reviews within 30 days, and a release the provider rejected. Twilio keeps media until it is "
             "deleted through the API, so for those rows the promise is unenforced. NEVER: schedule "
             "it or soften the notice before a crew number is handed to a farm."
         ),

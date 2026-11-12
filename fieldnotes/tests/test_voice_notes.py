@@ -761,15 +761,26 @@ class StaleAudioSweepTests(TestCase):
         stuck.refresh_from_db()
         self.assertIsNotNone(stuck.audio_deleted_at)
 
-    def test_a_waiting_note_is_never_touched_however_old(self):
-        """The one status that must survive any sweep: somebody still has to review it."""
-        waiting = self.note(status=FieldNote.PENDING, days_old=400)
+    def test_a_waiting_note_keeps_its_recording_for_thirty_days(self):
+        """Somebody still has to review it, and listening is how they check the transcript."""
+        waiting = self.note(status=FieldNote.PENDING, days_old=29)
         with patch("fieldnotes.services.transcribe.requests.delete") as deleted:
             self.sweep("--days", "14")
 
         deleted.assert_not_called()
         waiting.refresh_from_db()
         self.assertIsNone(waiting.audio_deleted_at)
+
+    def test_a_note_nobody_reviews_loses_its_recording_after_thirty_days(self):
+        """Oscar, 2026-11-12: the crew member was told the recording is deleted after review, so a
+        note nobody opens must not keep it at Twilio forever. The note itself stays in the queue."""
+        forgotten = self.note(status=FieldNote.PENDING, days_old=31)
+        with patch("fieldnotes.services.transcribe.requests.delete", return_value=ok_response({}, 204)):
+            self.sweep("--days", "14")
+
+        forgotten.refresh_from_db()
+        self.assertIsNotNone(forgotten.audio_deleted_at, "an unreviewed note kept its recording forever")
+        self.assertEqual(forgotten.status, FieldNote.PENDING, "releasing the audio must not close the note")
 
     def test_a_dry_run_changes_nothing(self):
         old = self.note(status=FieldNote.REFUSED, days_old=30)

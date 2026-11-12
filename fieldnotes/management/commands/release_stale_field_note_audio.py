@@ -38,6 +38,12 @@ from fieldnotes.services.retention import release_note_audio
 # enough for a supervisor to come back from a weekend and still hear it.
 DEFAULT_DAYS = 14
 
+# A note WAITING for review keeps its recording, because listening is how the farm checks the
+# transcript. But not forever (Oscar, 2026-11-12, from review of landing #45): a crew member was told
+# the recording is deleted after review, and a note nobody opens would otherwise sit at Twilio with
+# no end. Thirty days is past any plausible review, and the privacy policy (section 6) says so.
+UNREVIEWED_DAYS = 30
+
 
 class Command(BaseCommand):
     help = "Delete provider audio for field notes that no longer need it."
@@ -50,6 +56,13 @@ class Command(BaseCommand):
             help=f"How old a refused or stuck note must be before its audio is released (default {DEFAULT_DAYS}).",
         )
         parser.add_argument(
+            "--unreviewed-days",
+            type=int,
+            default=UNREVIEWED_DAYS,
+            help=f"How old a note still waiting for review must be before its audio is released "
+            f"(default {UNREVIEWED_DAYS}).",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Report what would be released and change nothing.",
@@ -59,6 +72,7 @@ class Command(BaseCommand):
         days = options["days"]
         dry_run = options["dry_run"]
         cutoff = timezone.now() - timedelta(days=days)
+        unreviewed_cutoff = timezone.now() - timedelta(days=options["unreviewed_days"])
 
         stale = FieldNote.objects.filter(
             kind=FieldNote.VOICE,
@@ -72,9 +86,12 @@ class Command(BaseCommand):
         #     reason to wait before retrying something that should already be done.
         #   * COOLED OFF: refused, or stuck being read, past the cutoff. These are still playable, so
         #     the window is what makes "kept while it is useful" different from "kept forever".
+        #   * NEVER REVIEWED: still waiting after UNREVIEWED_DAYS. The note stays in the queue with its
+        #     transcript; only the recording goes.
         candidates = stale.filter(
             Q(status__in=[FieldNote.CONFIRMED, FieldNote.DISCARDED, FieldNote.ACKNOWLEDGED])
             | Q(status__in=[FieldNote.REFUSED, FieldNote.TRANSCRIBING], received_at__lt=cutoff)
+            | Q(status=FieldNote.PENDING, received_at__lt=unreviewed_cutoff)
         ).order_by("received_at")
 
         total = candidates.count()
