@@ -173,93 +173,95 @@ items:
   asks: >-
     Legally Responsible Contact (CEO, COO, Executive Director, Managing Director, or Registered
     Agent): name, title, phone, email(s).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - certification_contract.contract_notes
+    - certification_contract.operation_contacts
     models:
-    - company.Company.contact_email
-    - company.Company.contact_phone
-    prints: modules/operation_profile.pdf §A (prose only)
-  gap: >-
-    Reused from the CCOF Contract A4 (P2). There is no owners/officers list — the legally responsible
-    officer and title live only as prose in `contract_notes` (the pilot's "Oregon LLC, member-manager"
-    is an example); `Company.contact_email` / `contact_phone` are a company contact with no name or
-    title attached.
-  fix: >-
-    Reuse A4 — a repeatable `owners_officers` {name, title, role} field on the contract module, with
-    one flagged as the legally responsible contact.
+    - certifications.models.OperationContact.is_legally_responsible
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. The legally responsible contact is the row so marked
+    (one per farm); none named prints a [REVIEW] line.
 - ref: B-3
   asks: >-
     Primary Contact — designate one person to be Oregon Tilth's primary contact: an authorized
     representative with a working knowledge of the operation, the OSP and the standards. Name,
     title, phone, email(s).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: '00-cover.pdf: Responsible person, Phone, Email'
+    questions:
+    - certification_contract.operation_contacts
     models:
-    - company.Establishment.contact_person
-    - company.Establishment.contact_phone
-    - company.Establishment.contact_email
-    prints: 00-cover.pdf ("Responsible person", "Phone" — no email line)
-  gap: >-
-    Reused from the CCOF Contract C1 (P2). `contact_person` / `contact_phone` print on the cover as
-    the § 205.401(b) responsible person (falling back to the plan author, labelled as such); there is
-    no `contact_title`, and `contact_email` is captured but the cover prints no email line.
-  fix: >-
-    Reuse C1 — add `contact_title` and print it, and print the contact email, on the cover.
+    - certifications.models.OperationContact.is_primary_contact
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. The primary contact is the row so marked (one per farm),
+    with title and email; none named prints a [REVIEW] line.
 - ref: B-4
   asks: >-
     Billing Contact — the contact person/department to contact if there are payment questions or
     issues: name/title, phone, email.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: "—"
-  gap: >-
-    Reused from the CCOF Contract A7 (P3) — the same absence as B-1b; no billing-contact field
-    exists.
-  fix: Reuse A7 — part of the same optional billing block; low priority.
+    questions:
+    - certification_contract.operation_contacts
+    models:
+    - certifications.models.OperationContact.is_billing_contact
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. The billing contact is the row marked so. The billing
+    ADDRESS is B-1 (billing).
 - ref: B-5
   asks: >-
     Additional Contacts — list all people at your operation who are authorized to participate in
     inspections, meet with inspectors, modify the OSP, or otherwise act on behalf of the company:
     name/title, phone, email (attach a page if necessary). Oregon Tilth will not conduct business
     with any individual whose name does not appear on this list.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    questions:
+    - certification_contract.operation_contacts
     models:
-    - users.WorksIn
-    prints: "—"
-  gap: >-
-    Reused from the CCOF Contract C2 (P2). `WorksIn` roles (Company Admin / Farm Manager / Viewer)
-    exist but carry no title, phone, or "authorized to meet inspectors / modify the OSP" flag, and
-    the member list is never printed in the packet — so the one list OTCO says it will refuse to
-    work outside of is not produced.
-  fix: >-
-    Reuse C2 — `authorized_for_certifier` flag on `WorksIn` (or a contract-module contacts list)
-    and print the authorized members with role and title.
+    - certifications.models.OperationContact.is_authorized_representative
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. Everyone authorized to take part in inspections, meet
+    inspectors, modify the OSP or act for the operation is marked so and listed; the list is what OTCO
+    will do business with.
 - ref: B-6
   asks: 'Responsibly Connected — the NOP defines "responsibly connected" as any person who is a partner, officer,
     director, holder, manager, or owner of 10 percent or more of the voting stock of an applicant or a recipient
     of certification. List all people responsibly connected to your operation: name/title, phone, email, connection
     (attach a page if necessary).'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - certification_contract.contract_notes
-    prints: modules/operation_profile.pdf §A (prose only)
-  gap: Reused from the CCOF Contract A4 (P2), whose "name of owners or officers and their titles" is the same
-    list under CCOF's wording. Trazo has no owners/officers or responsibly-connected list; the names can appear
-    only as prose in `contract_notes`, with no connection type or contact. Since rev. 2026/03/25 this list
-    also defines whose certification history section D asks for, so without it D cannot be answered for those
-    persons.
-  fix: Reuse A4 — the repeatable `owners_officers` field, with a `connection` choice (partner / officer / director
-    / manager / ≥10% owner) so it prints as OTCO's table.
+    - certification_contract.operation_contacts
+    models:
+    - certifications.models.OperationContact.is_responsibly_connected
+    - certifications.models.OperationContact.connection
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. Each responsibly connected person (7 CFR 205.2) is
+    marked so, with the connection (partner, officer, director, holder, manager, owner of 10 percent or
+    more, or other described); none named prints a [REVIEW] line. Section D's history questions are
+    asked of the operation and these people.
 - ref: B-7
   asks: >-
     Public Contact Information — OTCO is required to share public contact information; list which

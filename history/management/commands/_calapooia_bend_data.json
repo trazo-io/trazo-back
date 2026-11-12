@@ -25044,5 +25044,33 @@
    "expected_harvest": "2026-08-17",
    "acres": "14.0"
   }
+ ],
+ "operation_contacts": [
+  {
+   "name": "Laurel Brandt",
+   "title": "Member-manager",
+   "phone": "(541) 555-0142",
+   "email": "laurel@calapooiabend.example",
+   "is_legally_responsible": true,
+   "is_primary_contact": true,
+   "is_billing_contact": true,
+   "is_authorized_representative": true,
+   "is_responsibly_connected": true,
+   "connection": "manager",
+   "connection_other": ""
+  },
+  {
+   "name": "Tomas Ruiz",
+   "title": "Field manager",
+   "phone": "(541) 555-0187",
+   "email": "tomas@calapooiabend.example",
+   "is_legally_responsible": false,
+   "is_primary_contact": false,
+   "is_billing_contact": false,
+   "is_authorized_representative": true,
+   "is_responsibly_connected": false,
+   "connection": "",
+   "connection_other": ""
+  }
  ]
 }

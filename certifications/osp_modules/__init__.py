@@ -349,7 +349,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.12.06: container parcels. The parcel application asks what a container parcel's containers stand on
 #   (CCOF ORGB49 F3; only impermeable flooring skips the land history) and, on page F, the signed container
 #   statement's contents: planting date, materials since, and contamination removal on sealed flooring (§G).
-CONTENT_VERSION = "2026.12.06"
+# 2026.12.07: operation contacts. The Operation module's page A shows the people the operation names to its agent, each
+#   with name, title, phone, email and roles: legally responsible, primary, billing, authorized to act, responsibly
+#   connected with the connection (OTCO O1 B-2 to B-6; CCOF Contract A4, C1, C2). Rows on `OperationContact`.
+CONTENT_VERSION = "2026.12.07"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

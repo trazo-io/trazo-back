@@ -56,7 +56,14 @@ from dataclasses import dataclass
 #: Folded away like any other panel, the supplier panel would leave CCOF G3.0 A2 answered by the
 #: seedling description alone, with no certificate on file (supplier register in the plan, 2026-11).
 EVIDENCED_EMBEDS = frozenset(
-    {"seedling_suppliers", "brand_owners", "sourced_products", "equipment_inventory", "crop_table"}
+    {
+        "seedling_suppliers",
+        "brand_owners",
+        "sourced_products",
+        "equipment_inventory",
+        "crop_table",
+        "operation_contacts",
+    }
 )
 
 #: Parcel panels answered by rows the operator typed, judged per parcel from the count `_Answers.parcels`
@@ -65,6 +72,26 @@ PARCEL_EMBED_STATES = {
     "crop_table": lambda values: (
         ("answered", "") if values.get("crop_table") else ("unanswered", "no crop is listed for this parcel")
     ),
+}
+
+#: The role each register row about the operation's people asks for, by (form document id, row ref). Kept beside the
+#: register's own citations so a row added there and not here falls back to "primary and legally responsible".
+CONTACT_ROLE_ROWS = {
+    ("O1", "B-2"): ("is_legally_responsible",),
+    ("O1", "B-3"): ("is_primary_contact",),
+    ("O1", "B-4"): ("is_billing_contact",),
+    ("O1", "B-5"): ("is_authorized_representative",),
+    ("O1", "B-6"): ("is_responsibly_connected",),
+    ("ORGB06", "A4"): ("is_responsibly_connected",),
+    ("ORGB06", "C1"): ("is_primary_contact",),
+    ("ORGB06", "C2"): ("is_authorized_representative",),
+}
+CONTACT_ROLE_WORDS = {
+    "is_legally_responsible": "legally responsible contact",
+    "is_primary_contact": "primary contact",
+    "is_billing_contact": "billing contact",
+    "is_authorized_representative": "person authorized to act for the operation",
+    "is_responsibly_connected": "responsibly connected person",
 }
 
 #: States that close a register row. Anything else is listed as open on the coverage page.
@@ -440,6 +467,21 @@ class _Answers:
             return "unanswered", "not stated for " + ", ".join(open_items)
         return "answered", ""
 
+    def operation_contacts_state(self, document_id: str = "", ref: str = "") -> tuple[str, str]:
+        """(state, detail) for the people named to the agent, judged on the role the asking row is about.
+
+        One panel answers several rows, each about one role (OTCO O1 B-2 to B-6, CCOF Contract A4, C1, C2). Judging
+        them all on "a primary and a legally responsible contact are named" reported the billing, authorized and
+        responsibly connected rows answered with nobody in those roles (review of back PR 407). A row not in
+        `CONTACT_ROLE_ROWS` needs a primary and a legally responsible contact.
+        """
+        contacts = list(self.osp.establishment.operation_contacts.all())
+        roles = CONTACT_ROLE_ROWS.get((document_id, ref), ("is_primary_contact", "is_legally_responsible"))
+        missing = [CONTACT_ROLE_WORDS[flag] for flag in roles if not any(getattr(c, flag) for c in contacts)]
+        if missing:
+            return "unanswered", "no " + " or ".join(missing) + " is named"
+        return "answered", ""
+
     def brand_owner_state(self) -> tuple[str, str]:
         """(state, detail) for G7.0's brand-owner panel: answered only when every brand owner has the
         copy it owes (certificate or agreement) and, in a packet build, that copy is in the ZIP."""
@@ -588,7 +630,7 @@ class _Answers:
             and question.embed in EVIDENCED_EMBEDS
             and not (na_attested and module.allows_not_applicable)
         ):
-            if question.embed in ("brand_owners", "sourced_products", "equipment_inventory"):
+            if question.embed in ("brand_owners", "sourced_products", "equipment_inventory", "operation_contacts"):
                 # A gated page: hidden by an answered trigger it does not apply, hidden by an unanswered
                 # one it is unresolved. Only a page that shows is judged on the register.
                 hidden = hidden_state(module, _page, question, entry.get("answers") or {})
@@ -598,6 +640,7 @@ class _Answers:
                     "brand_owners": self.brand_owner_state,
                     "sourced_products": self.sourced_product_state,
                     "equipment_inventory": self.equipment_state,
+                    "operation_contacts": lambda: self.operation_contacts_state(document_id, ref),
                 }[question.embed]()
             else:
                 state, detail = self.seedling_supplier_state()

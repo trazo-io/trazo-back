@@ -37,6 +37,7 @@ from .models import (
     LandownerAffidavit,
     NationalListSubstance,
     OMRIProduct,
+    OperationContact,
     OrganicSystemPlan,
     OSPAnnualUpdate,
     OSPChangeNotification,
@@ -57,6 +58,7 @@ from .serializers import (
     CertifierNoticeSerializer,
     FacilityProductSerializer,
     LandownerAffidavitSerializer,
+    OperationContactSerializer,
     OrganicSystemPlanListSerializer,
     OrganicSystemPlanSerializer,
     OSPAnnualUpdateSerializer,
@@ -526,6 +528,31 @@ class BrandOwnerViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             .select_related("certificate_document", "agreement_document")
             .order_by("name", "pk")
         )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            establishment_id=self.kwargs["establishment_pk"],
+            created_by=self.request.user if self.request.user.is_authenticated else None,
+        )
+
+
+class OperationContactViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
+    """The people the operation names to its certifying agent (OTCO O1 §B; CCOF Contract A4, C1, C2). Admins and
+    farm managers only, like the other registers: names, phones and emails of the people behind the operation."""
+
+    serializer_class = OperationContactSerializer
+    permission_classes = [IsSuperUser | (IsCompanyAdminOrManager & AuthPermission)]
+
+    def get_queryset(self):
+        return OperationContact.objects.filter(
+            establishment_id=self.kwargs.get("establishment_pk"),
+            establishment__company=self.company,
+        ).order_by("pk")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["establishment_id"] = self.kwargs.get("establishment_pk")
+        return context
 
     def perform_create(self, serializer):
         serializer.save(

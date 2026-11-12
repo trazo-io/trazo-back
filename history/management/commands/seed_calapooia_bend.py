@@ -1013,6 +1013,12 @@ class Command(BaseCommand):
         for row in data.get("production_equipment", []):
             Equipment.objects.create(establishment=est, created_by=owner, **self._scalar_fields(row))
 
+        # The people the operation names to its agent (OTCO O1 section B; CCOF Contract A4, C1, C2). Fictional, like
+        # every name in the specimen.
+        OperationContact = apps.get_model("certifications", "OperationContact")
+        for row in data.get("operation_contacts", []):
+            OperationContact.objects.create(establishment=est, created_by=owner, **self._scalar_fields(row))
+
     @staticmethod
     def _sale_lines(row) -> list[str]:
         labels = (

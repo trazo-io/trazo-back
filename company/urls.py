@@ -11,6 +11,7 @@ from certifications.views import (
     CertifierNoticeViewSet,
     FacilityProductViewSet,
     LandownerAffidavitViewSet,
+    OperationContactViewSet,
     OrganicSystemPlanViewSet,
     OSPAnnualUpdateViewSet,
     PostHarvestFacilityViewSet,
@@ -85,6 +86,12 @@ establishment_router.register(
     r"brand-owners",
     BrandOwnerViewSet,
     basename="establishment-brand-owners",
+)
+# The people the operation names to its certifying agent (OTCO O1 section B; CCOF Contract A4, C1, C2).
+establishment_router.register(
+    r"operation-contacts",
+    OperationContactViewSet,
+    basename="establishment-operation-contacts",
 )
 # The farm's own record of its certifier's inspections and the items the agent sent (§ 205.662),
 # with the operation's responses (WSDA AGR 2262 5a(i); CCOF contract D6; OTCO O1 D-1E, D-7).

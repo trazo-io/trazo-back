@@ -24,6 +24,7 @@ from .models import (
     CertifierNotice,
     FacilityProduct,
     LandownerAffidavit,
+    OperationContact,
     OrganicSystemPlan,
     OSPAnnualUpdate,
     OSPChangeNotification,
@@ -215,6 +216,71 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             # again rather than reviving values nobody re-affirmed (review of back #340).
             if "category" in attrs and getattr(self.instance, "category", "") == "facility_pest":
                 attrs.update({"facility_material_type": "", "where_used": "", "applied_by_fumigation": None})
+        return attrs
+
+
+class OperationContactSerializer(serializers.ModelSerializer):
+    """A person named to the certifying agent, with roles (OTCO O1 §B; CCOF Contract A4, C1, C2). The farm is the
+    URL's; one primary contact and one legally responsible contact per farm."""
+
+    role_labels = serializers.ListField(child=serializers.CharField(), read_only=True)
+    connection_display = serializers.CharField(source="get_connection_display", read_only=True)
+
+    class Meta:
+        model = OperationContact
+        fields = [
+            "id",
+            "public_id",
+            "name",
+            "title",
+            "phone",
+            "email",
+            "is_legally_responsible",
+            "is_primary_contact",
+            "is_billing_contact",
+            "is_authorized_representative",
+            "is_responsibly_connected",
+            "connection",
+            "connection_display",
+            "connection_other",
+            "role_labels",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "public_id", "created_at", "updated_at"]
+
+    def validate_name(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Name the person.")
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+        establishment_id = self.context.get("establishment_id") or getattr(instance, "establishment_id", None)
+
+        def current(key):
+            return attrs[key] if key in attrs else getattr(instance, key, None)
+
+        # One of each: two "primary contacts" would leave the agent to guess which one it writes to.
+        for flag, words in (
+            ("is_primary_contact", "primary contact"),
+            ("is_legally_responsible", "legally responsible contact"),
+        ):
+            if current(flag) and establishment_id:
+                others = OperationContact.objects.filter(establishment_id=establishment_id, **{flag: True})
+                if instance is not None:
+                    others = others.exclude(pk=instance.pk)
+                other = others.first()
+                if other is not None:
+                    # A plain message: the app shows it as written, without the field's code name.
+                    raise serializers.ValidationError(f"{other.name} is already the {words}. Clear it there first.")
+        # A connection kept on a person no longer marked responsibly connected would print beside nothing.
+        if not current("is_responsibly_connected"):
+            attrs["connection"] = ""
+            attrs["connection_other"] = ""
+        elif current("connection") != "other":
+            attrs["connection_other"] = ""
         return attrs
 
 
