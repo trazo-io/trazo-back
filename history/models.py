@@ -1948,6 +1948,53 @@ class ChemicalEvent(CommonEvent):
     )
 
     # ------------------------------------------------------------------
+    # Tank mix (overall review 2026-11, OV-RK-C04 / OV-FJ-C10). Several products sprayed from
+    # ONE tank are written as one FULL record per product (and per parcel or block), never as a
+    # header with product lines: every reader (packet, CA PUR, National List, drift, purchases,
+    # receipts, corrections, Activity) already works one product per record. These three columns
+    # say which records shared a tank, and in which order the products were listed.
+    #
+    # NOT `application_group`. That one means "one product over several parcels": the purchase
+    # table counts a group's purchase once and a receipt is shared across a group, so a tank on
+    # it would drop every product's purchase but one. Each line keeps its own `application_group`
+    # across parcels, derived from the tank id and the line number (`history/services/tank_mix.py`).
+    #
+    # A single product is not a tank: all three stay empty. Old records keep `tank_mix_partners`
+    # exactly as they print today; nothing splits them into records (that would add rows and
+    # carbon entries to sealed seasons and invent values nobody recorded).
+    #
+    # `editable=False` on all three: they are written once, by the tank write path, and a
+    # correction can never move a record into or out of a tank, or reorder it.
+    # ------------------------------------------------------------------
+    TANK_MIX_ROLE_PRODUCT = "product"
+    TANK_MIX_ROLE_ADJUVANT = "adjuvant"
+    TANK_MIX_ROLE_CHOICES = [
+        (TANK_MIX_ROLE_PRODUCT, "Product"),
+        (TANK_MIX_ROLE_ADJUVANT, "Adjuvant / spreader-sticker"),
+    ]
+    tank_mix_group = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        db_index=True,
+        help_text="Shared by the records of the products sprayed from one tank (client-minted; idempotency key).",
+    )
+    tank_mix_line = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="This product's line in its tank, 1..N, in the order the operator listed them.",
+    )
+    tank_mix_role = models.CharField(
+        max_length=10,
+        choices=TANK_MIX_ROLE_CHOICES,
+        blank=True,
+        default="",
+        editable=False,
+        help_text="What this line is in its tank: a product, or an adjuvant / spreader-sticker. Blank outside a tank.",
+    )
+
+    # ------------------------------------------------------------------
     # State application facts (overall review 2026-11, OV-FJ-C11 / OV-RK-C03).
     # WAC 16-228-1320(1) (WSR 25-22-065, effective 2026-01-01) asks every person applying
     # pesticides to more than one acre of agricultural land in Washington to record, among

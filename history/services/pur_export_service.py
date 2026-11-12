@@ -690,6 +690,12 @@ class PURExportService:
         if getattr(event, "time_not_recorded", False):
             notes.append(_time_not_recorded_note(event))
             flags.append({"code": "time_not_on_source_record"})
+        # A tank mix (OV-RK-C04) is one record per product, so each product, adjuvants included,
+        # is already its own DPR-PML-017C line (boxes 23/24). The note ties the lines of one tank.
+        if getattr(event, "tank_mix_group", None):
+            from history.services.tank_mix import tank_cell_text
+
+            notes.append(f"Tank mix {tank_cell_text(event)}. Each product of the tank is its own PUR line.")
         # Distinguish "no county logged" from "county logged but not a CA county" —
         # the latter can't map to a CAC code and box 10 was blanked above.
         if county_name and not county_code:

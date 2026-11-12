@@ -249,6 +249,22 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
     except DjangoValidationError as exc:
         raise AmendmentError({field_name: " ".join(exc.messages)})
 
+    # A tank's one pass burns its fuel once, on the line that carries the pass (tank_mix.py): fuel
+    # corrected onto another line would be counted nowhere, so it is refused and pointed there.
+    if field_name == "application_fuel_consumed" and coerced is not None:
+        from history.services.tank_mix import pass_counted_on_line
+
+        carrier = pass_counted_on_line(event)
+        if carrier is not None:
+            raise AmendmentError(
+                {
+                    field_name: (
+                        f"This spray shared a tank, and the pass's fuel is recorded on line {carrier} of it. "
+                        "Correct the fuel there."
+                    )
+                }
+            )
+
     # A spray's "not on the source record" mark and the value it stands in for change together.
     paired = _paired_changes(event, field_name, coerced, raw=new_value)
     coerced = paired.pop("__primary__", coerced)

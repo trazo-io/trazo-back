@@ -56,6 +56,71 @@
           "gal_total"
         ]
       },
+      "tank_mix": {
+        "_about": "Several products from one tank: one record per product line and per target, tied by tank_mix_group (history/services/tank_mix.py). 'per_line' keys belong to one product and are refused in the shared body; 'per_line_default_from_shared' may also be sent once in the shared body as every line's default. 'per_line_per_target' is the amount of one product on one target: inside each target's 'products' list, or on the line when there is one target. 'first_line_only' is the one pass's fuel: written to line 1 only. The target pest is per line: a tank of Kocide for fire blight and Entrust for codling moth names a different pest on each record. Every other key the serializer accepts is SHARED: date and times, method, conditions, carrier, apparatus, applicator, notes.",
+        "min_lines": 2,
+        "max_lines": 10,
+        "roles": [
+          "product",
+          "adjuvant"
+        ],
+        "per_line": [
+          "type",
+          "chemical_subtype",
+          "commercial_name",
+          "manufacturer",
+          "epa_registration_number",
+          "active_ingredient",
+          "concentration",
+          "concentration_not_recorded",
+          "volume_unit",
+          "application_rate",
+          "application_rate_unit",
+          "rei_hours",
+          "phi_days",
+          "restricted_use_pesticide",
+          "organic_approved",
+          "omri_product",
+          "wsda_material",
+          "national_list_substance",
+          "target_pest_disease",
+          "application_purpose",
+          "nitrogen_percentage",
+          "phosphorus_percentage",
+          "potassium_percentage",
+          "nitrogen_source",
+          "micronutrient_type",
+          "micronutrient_rate",
+          "micronutrient_rate_unit",
+          "supplier_name",
+          "purchase_date",
+          "purchase_invoice",
+          "receipt_document",
+          "quantity_purchased",
+          "quantity_purchased_unit",
+          "chemical_lot_number",
+          "ca_dpr_permit_number",
+          "ca_dpr_permit_county",
+          "ca_dpr_permit_expires"
+        ],
+        "per_line_default_from_shared": [
+          "type"
+        ],
+        "per_line_per_target": [
+          "volume_applied",
+          "volume",
+          "volume_numeric"
+        ],
+        "first_line_only": [
+          "application_fuel_type",
+          "application_fuel_consumed",
+          "application_fuel_unit"
+        ],
+        "refused": [
+          "tank_mix_partners",
+          "application_group"
+        ]
+      },
       "ui": {
         "area_key": "area_treated",
         "scope_keys": [

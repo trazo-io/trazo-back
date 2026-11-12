@@ -1069,6 +1069,14 @@ class EventCarbonCalculator:
 
             chemical_mass_kg = chemical_data.get("chemical_mass_kg")
 
+            # Tank mix (OV-RK-C04): one pass, several product records. Only the record of the
+            # tank's lowest-numbered line on this target carries the pass's application emissions;
+            # the others keep their own manufacturing (history/services/tank_mix.py). A preview's
+            # unsaved stand-in event has no tank and always carries its own pass.
+            from history.services.tank_mix import pass_counted_on_line
+
+            application_pass_counted_on_line = pass_counted_on_line(event)
+
             calculation_result = VerifiedEmissionFactors.calculate_chemical_application_emissions(
                 chemical_type=chemical_type,
                 volume_liters=volume_liters,
@@ -1083,6 +1091,7 @@ class EventCarbonCalculator:
                 concentration=concentration,
                 is_fertigation=is_fertigation,
                 chemical_mass_kg=chemical_mass_kg,
+                application_pass_counted_on_line=application_pass_counted_on_line,
             )
 
             base_emissions = calculation_result["co2e_kg"]

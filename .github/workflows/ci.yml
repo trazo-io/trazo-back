@@ -355,6 +355,13 @@ jobs:
       # the buyer page, shared across parcels with a tank total refused, and a correction. It does
       # not read the sibling repo.
       #
+      # 2026-11-12 (OV-RK-C04 / OV-FJ-C10): test_spray_tank_mix joins. Several products from one
+      # tank are one full record per product and per target, all or none, tied by tank_mix_group:
+      # an idempotent replay, a per-line application_group, purchases and receipts per product,
+      # one application pass per target and its hand-off, the air_blast fuel estimate, the
+      # National List per line, the packet's "one tank with", a PUR row per line, a sealed season
+      # across migration 0262. It does not read the sibling repo.
+      #
       # 2026-11-12: company.tests.test_applicators joins. Saved applicators under
       # /api/companies/<id>/applicators/: members read, CA/FM write, another company's applicator
       # answers like a missing one, the company comes from the URL and never the body, DELETE
@@ -795,6 +802,7 @@ jobs:
             history.tests.test_pheromone_dispensers \
             history.tests.test_spray_not_on_source_record \
             history.tests.test_spray_state_application_fields \
+            history.tests.test_spray_tank_mix \
             company.tests.test_applicators \
             history.tests.test_manure_interval_is_a_floor \
             history.tests.test_sales_disclosure_precedence \
