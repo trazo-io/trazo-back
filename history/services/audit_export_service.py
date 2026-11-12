@@ -53,6 +53,12 @@ from common.specimen import (
 )
 from common.us_states import resolve_establishment_state
 from history.services import supplier_certificates
+from history.services.application_conditions import (
+    air_temperature_text,
+    application_conditions,
+    carrier_text,
+    wind_text,
+)
 from history.services.not_on_source_record import concentration_text
 from history.services.record_receipts import has_receipt, receipt_files, shared_from
 from history.services.records_export import (
@@ -7014,6 +7020,7 @@ class AuditExportService:
                 )
 
         elements.extend(self._build_application_context_subtable(events))
+        elements.extend(self._build_application_conditions_subtable(events))
         elements.extend(self._build_micronutrient_subtable(events))
 
         # --- Application Notes (mirrors the Production Event Notes pattern) ---
@@ -7231,6 +7238,86 @@ class AuditExportService:
             [[self._hdr(h) for h in ("Date", "Product", "Crop Stage", "Fertigated", "Treated Scope", "Authorised By")]]
             + rows,
             colWidths=[0.7 * inch, 1.6 * inch, 1.05 * inch, 0.6 * inch, 1.9 * inch, 1.15 * inch],
+            repeatRows=1,
+        )
+        table.setStyle(self._base_table_style())
+        elements.append(table)
+        return elements
+
+    def _build_application_conditions_subtable(self, events):
+        """Wind, temperature, carrier, apparatus and the applicator's contact for each application.
+
+        WAC 16-228-1320(1) items (e), (h), (k), (l) and (n), recorded as the operator typed them
+        (overall review 2026-11, OV-FJ-C11). A table of its own for the reason the context table
+        has one: Table 1 and Table 2 are at the 7.0" budget. A row appears when the record holds
+        any of these facts, or when its method is one for which wind and temperature are not
+        asked, so the packet says "Not applicable (method)" instead of leaving a blank. The
+        wording is `application_conditions`, shared with the audit CSV.
+        """
+        rows = []
+        for ev in events:
+            wind = wind_text(ev, _method_label)
+            temperature = air_temperature_text(ev, _method_label)
+            carrier = carrier_text(ev)
+            plate = (ev.apparatus_license_plate or "").strip() or None
+            contact = " · ".join(
+                part for part in ((ev.applicator_address or "").strip(), (ev.applicator_phone or "").strip()) if part
+            )
+            firm_address = (ev.commercial_firm_address or "").strip() or None
+            if not (wind or temperature or carrier or plate or contact or firm_address):
+                continue
+            rows.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(ev.commercial_name),
+                    self._cell(wind),
+                    self._cell(temperature),
+                    self._cell(carrier),
+                    self._cell(plate),
+                    self._cell(contact or None),
+                    self._cell(firm_address),
+                ]
+            )
+
+        if not rows:
+            return []
+
+        elements = [
+            Spacer(1, 10),
+            Paragraph(
+                "<b>Application Conditions, Apparatus &amp; Applicator Contact</b>",
+                self._sub_header_style(),
+            ),
+        ]
+        # Eight columns, 7.00". Date fits "2026-04-20"; Plate fits a 7-8 character plate on one
+        # line; the two address columns are free text and are given width to wrap in.
+        table = Table(
+            [
+                [
+                    self._hdr(h)
+                    for h in (
+                        "Date",
+                        "Product",
+                        "Wind",
+                        "Air Temp",
+                        "Carrier",
+                        "Apparatus Plate",
+                        "Applicator Address / Phone",
+                        "Firm Address",
+                    )
+                ]
+            ]
+            + rows,
+            colWidths=[
+                0.7 * inch,
+                1.1 * inch,
+                0.95 * inch,
+                0.6 * inch,
+                0.75 * inch,
+                0.7 * inch,
+                1.25 * inch,
+                0.95 * inch,
+            ],
             repeatRows=1,
         )
         table.setStyle(self._base_table_style())
@@ -18382,6 +18469,9 @@ class AuditExportService:
             # cell because that cell is prose already.
             if _amount_reconciles_with_rate(ev) is False:
                 chem_note_parts.append(f"Amount {amount} {unit}".strip() + " does not reconcile to the recorded rate")
+            # The packet's conditions table (wind, temperature, carrier, apparatus, applicator and
+            # firm contact), in Notes for the reason Treated scope is: a stable header.
+            chem_note_parts.extend(f"{label}: {text}" for label, text in application_conditions(ev, _method_label))
             if self._event_transcription_text(ev):
                 chem_note_parts.append(self._event_transcription_text(ev))
             chem_notes = _val(" | ".join(chem_note_parts))

@@ -1947,6 +1947,112 @@ class ChemicalEvent(CommonEvent):
         ),
     )
 
+    # ------------------------------------------------------------------
+    # State application facts (overall review 2026-11, OV-FJ-C11 / OV-RK-C03).
+    # WAC 16-228-1320(1) (WSR 25-22-065, effective 2026-01-01) asks every person applying
+    # pesticides to more than one acre of agricultural land in Washington to record, among
+    # others: (e) the wind direction and estimated speed in mph and the temperature in degrees
+    # Fahrenheit at the time of application, (h) the concentration, which "may be recorded as"
+    # gallons per acre of output volume, (k) the apparatus license plate number, (l) the
+    # licensed applicator's address and telephone number, and (n) for a commercial application,
+    # the firm's address. Wind and temperature matter for drift in every state, so the form asks
+    # them everywhere. All optional and typed by the operator: nothing here is derived.
+    # Printing lives in `history/services/application_conditions.py`.
+    # ------------------------------------------------------------------
+    WIND_FROM_CHOICES = [
+        ("N", "N"),
+        ("NE", "NE"),
+        ("E", "E"),
+        ("SE", "SE"),
+        ("S", "S"),
+        ("SW", "SW"),
+        ("W", "W"),
+        ("NW", "NW"),
+        ("calm", "Calm"),
+    ]
+    wind_from = models.CharField(
+        max_length=4,
+        choices=WIND_FROM_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Wind blowing from",
+        help_text="The compass point the wind was blowing FROM at the time of application, or calm.",
+    )
+    wind_speed_mph = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(150)],
+        verbose_name="Wind speed (mph)",
+        help_text="Estimated wind speed in miles per hour at the time of application.",
+    )
+    air_temperature_f = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-40), MaxValueValidator(140)],
+        verbose_name="Air temperature (°F)",
+        help_text="Air temperature in degrees Fahrenheit at the time of application.",
+    )
+    # The carrier (usually water) the product went out in. Not a product amount: `volume_numeric`
+    # is the product, `concentration` the label strength, and before this column a spray had no
+    # place to say "100 gallons of water per acre".
+    CARRIER_VOLUME_UNIT_CHOICES = [
+        ("gal_per_acre", "gal/acre"),
+        ("gal_total", "gal total"),
+        ("l_per_ha", "L/ha"),
+    ]
+    carrier_volume = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(decimal.Decimal("0.01"), message="The carrier volume must be greater than zero.")
+        ],
+        verbose_name="Carrier (water) volume",
+        help_text="Volume of carrier (usually water) in the spray, in carrier_volume_unit.",
+    )
+    carrier_volume_unit = models.CharField(
+        max_length=12,
+        choices=CARRIER_VOLUME_UNIT_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Carrier volume unit",
+    )
+    apparatus_license_plate = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        verbose_name="Apparatus license plate",
+        help_text="License plate number of the application apparatus, when it has one.",
+    )
+    # COPIES, not a link. The applicator's address and phone are typed (or, later, copied from a
+    # profile) onto THIS record at save, so editing a profile can never rewrite a past record.
+    applicator_address = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Applicator address",
+        help_text="The licensed applicator's complete address, as it was when this application was made.",
+    )
+    applicator_phone = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        verbose_name="Applicator phone",
+        help_text="The licensed applicator's telephone number, as it was when this application was made.",
+    )
+    commercial_firm_address = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Commercial firm address",
+        help_text="Complete address of the pest control business, for an application made for hire.",
+    )
+
     def clean(self):
         """
         Model-level validation for NPK percentages, EPA compliance, and business logic
@@ -2043,6 +2149,11 @@ class ChemicalEvent(CommonEvent):
                 application_end=self.application_end,
             )
         )
+
+        # A carrier volume and its unit: both halves or neither.
+        from history.services.application_conditions import carrier_conflicts
+
+        errors.update(carrier_conflicts(self.carrier_volume, self.carrier_volume_unit))
 
         if errors:
             raise ValidationError(errors)

@@ -348,6 +348,13 @@ jobs:
       # 17-18 blank and says why; a correction moves the flag and the value together. It does not
       # read the sibling repo.
       #
+      # 2026-11-12 (OV-FJ-C11): test_spray_state_application_fields joins. A spray holds the wind
+      # direction and speed, air temperature, carrier volume, apparatus plate and the applicator's
+      # and firm's contact details WAC 16-228-1320(1) asks for: their ranges, the round trip,
+      # "Not applicable" for drip and subsurface, the packet table and the CSV, certifier-only on
+      # the buyer page, shared across parcels with a tank total refused, and a correction. It does
+      # not read the sibling repo.
+      #
       # 2026-10-17: test_osp_sections_with_text joins. It holds the one count of § 205.201(a)
       # narratives with text that the submit gate, the OSP page and the onboarding checklist all
       # show; the checklist used to tick "text in all six sections" on one character per section.
@@ -760,6 +767,7 @@ jobs:
             history.tests.test_rehearsal_quantities \
             history.tests.test_pheromone_dispensers \
             history.tests.test_spray_not_on_source_record \
+            history.tests.test_spray_state_application_fields \
             history.tests.test_manure_interval_is_a_floor \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
