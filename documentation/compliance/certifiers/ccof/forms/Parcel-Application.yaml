@@ -359,20 +359,21 @@ items:
   asks: Is all production at this parcel in containers AND on permanent, solid, impermeable flooring?
     Yes → skip to §G. No, in-ground → complete this section. No, containers on land or a permeable surface
     → complete this section.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.container_production
+    - parcel_application.container_surface
     models:
     - product.Parcel.container_production
-    - product.services.parcel_application_status.py
-    prints: parcels/parcel-application-<name>.pdf §A (as container_production)
-  gap: Only the single `container_production` boolean exists, and the status service skips the land-history
-    check for ANY container parcel — including one built on bare land, which CCOF still requires land
-    history for, treating it the same as one on sealed concrete.
-  fix: Replace with a `production_system` radio {in_ground, containers_on_land_or_permeable, containers_on_impermeable_flooring};
-    only the last value skips land history. Keep `container_production` derived for existing readers.
+    - product.Parcel.application_answers
+    prints: >-
+      parcels/parcel-application-<name>.pdf §A
+  note: >-
+    Since 2026-11-12 a container parcel says what the containers stand on: soil or another permeable
+    surface, or permanent, solid, impermeable flooring. Only the last skips the land history in the
+    completion checks; containers on land need it, as F3 says. A container parcel that has not said
+    keeps the earlier reading and §A prints a [REVIEW] line naming the missing answer.
 - ref: F4
   asks: >-
     Date of the Last Prohibited Material application (DLPM) — the most recent application of any
@@ -527,24 +528,27 @@ items:
     signed statement covering the planting date and full names of all materials used (including growing
     media); container systems on impermeable flooring must additionally describe the removal of contamination
     sources before transition.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - parcel_application.container_production
+    - parcel_application.container_planting_date
+    - parcel_application.container_materials
+    - parcel_application.contamination_removal
+    - parcel_application.container_statement
     models:
     - product.Parcel.container_production
+    - product.Parcel.application_answers
+    - documents.GeneratedDocument (linked_section parcel_application_container_statement)
     prints: >-
-      parcels/parcel-application-<name>.pdf §A (the container answer)
-  gap: >-
-    The 'all crops are grown in ground' half is the operator's own `container_production` = No, which
-    prints in §A as the answer to 'Is this parcel container or greenhouse production?', not in §G's
-    checkbox wording. For a parcel that IS container production, none of the planting-date, materials or
-    contamination-removal statements are captured. Re-judged 2026-11-10: A9 cites the same question as
-    covered, and the No does print.
-  fix: >-
-    When the production system is not in-ground (see F3), add `container_planting_date`, a materials
-    statement (textarea or upload), and a contamination-removal description; print under §G.
+      parcels/parcel-application-<name>.pdf §A (the container answer) and §F (the statement); the signed
+      copy under parcels/container-statements/
+  note: >-
+    'All crops are grown in ground' is the container answer No, printed in §A. A container parcel is
+    asked the planting date of its current crops, the full names of every material used since (growing
+    media included), and, on impermeable flooring, how contamination sources were removed; the signed
+    statement uploads against the parcel and ships in the packet. A container parcel with no signed
+    statement prints a [REVIEW] line.
 - ref: Affidavit A
   asks: 'This affidavit pertains to the following parcel: name; block/lot; acreage; street address; city/county/state/country;
     and geographic coordinates or APN/Section-Township-Range.'

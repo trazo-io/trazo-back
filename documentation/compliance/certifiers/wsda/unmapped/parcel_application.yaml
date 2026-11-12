@@ -69,3 +69,16 @@ questions:
   parcel_application.expected_first_organic_harvest: >-
     Asked by CCOF ORGB49 A6 and OTCO C2 2.1 8) as one date per parcel. AGR 2264 ref 8 asks an estimated
     harvest date per crop, which the crop table carries.
+  parcel_application.container_surface: >-
+    Asked by CCOF ORGB49 F3 (containers on land vs on impermeable flooring decides whether land history
+    applies). AGR 2264 does not ask what containers stand on.
+  parcel_application.container_planting_date: >-
+    Asked by CCOF ORGB49 §G for a container parcel's signed statement. AGR 2264 has no container
+    statement.
+  parcel_application.container_materials: >-
+    Asked by CCOF ORGB49 §G (full names of every material since planting, growing media included). AGR
+    2264 has no container statement.
+  parcel_application.contamination_removal: >-
+    Asked by CCOF ORGB49 §G for containers on impermeable flooring. AGR 2264 has no container statement.
+  parcel_application.container_statement: >-
+    The signed copy of CCOF ORGB49 §G's container statement. AGR 2264 asks for none.

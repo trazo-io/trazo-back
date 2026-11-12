@@ -240,6 +240,41 @@ PARCEL_APPLICATION = Module(
                     nop_cite="§ 205.2",
                 ),
                 Question(
+                    # CCOF ORGB49 F3: containers on land or a permeable surface still need the land history;
+                    # only containers on permanent, solid, impermeable flooring skip it. Unanswered keeps the
+                    # earlier reading (land history not asked) and the page says the surface is not stated.
+                    key="container_surface",
+                    kind="radio",
+                    label=text(
+                        "What do the containers stand on?",
+                        "¿Sobre qué están los contenedores?",
+                    ),
+                    options=(
+                        Option(
+                            value="on_land",
+                            label=text(
+                                "Soil or another permeable surface",
+                                "Suelo u otra superficie permeable",
+                            ),
+                        ),
+                        Option(
+                            value="impermeable",
+                            label=text(
+                                "Permanent, solid, impermeable flooring",
+                                "Un piso permanente, sólido e impermeable",
+                            ),
+                        ),
+                    ),
+                    coaching=text(
+                        "Containers on land still need the parcel's land history; containers on sealed flooring "
+                        "do not.",
+                        "Los contenedores sobre suelo siguen necesitando el historial de la parcela; los que están "
+                        "sobre un piso sellado no.",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="container_production", op="truthy"),),
+                ),
+                Question(
                     key="treated_lumber_present",
                     kind="boolean",
                     label=text(
@@ -766,6 +801,62 @@ PARCEL_APPLICATION = Module(
                     embed="crop_history",
                     required=False,
                     nop_cite="§ 205.202(b)",
+                ),
+                Question(
+                    # CCOF ORGB49 §G "For container systems": a statement signed and dated by an authorized
+                    # representative listing the planting date of the current container crops and the full names
+                    # of every material used since (growing media included); on impermeable flooring, also how
+                    # contamination sources were removed before transition. Asked of a container parcel only.
+                    key="container_planting_date",
+                    kind="date",
+                    label=text(
+                        "When were the current container crops planted?",
+                        "¿Cuándo se plantaron los cultivos actuales en contenedores?",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="container_production", op="truthy"),),
+                ),
+                Question(
+                    key="container_materials",
+                    kind="textarea",
+                    label=text(
+                        "Full names of every material used or applied since that date, growing media included",
+                        "Nombre completo de cada material usado o aplicado desde esa fecha, incluido el sustrato",
+                    ),
+                    coaching=text(
+                        "Growing media or substrate, fertility inputs, pest control materials and anything else, by "
+                        "full product name.",
+                        "Sustrato, insumos de fertilidad, materiales de control de plagas y cualquier otro, con el "
+                        "nombre completo del producto.",
+                    ),
+                    required=False,
+                    visible_when=(Condition(question="container_production", op="truthy"),),
+                ),
+                Question(
+                    key="contamination_removal",
+                    kind="textarea",
+                    label=text(
+                        "How were potential contamination sources removed before the transition to organic?",
+                        "¿Cómo se retiraron las posibles fuentes de contaminación antes de la transición a orgánico?",
+                    ),
+                    required=False,
+                    visible_when=(
+                        Condition(question="container_production", op="truthy"),
+                        Condition(question="container_surface", op="eq", value="impermeable"),
+                    ),
+                ),
+                Question(
+                    # The signed copy of that statement, uploaded against this parcel (`CONTAINER_STATEMENT_SECTION`)
+                    # and shipped under parcels/container-statements/.
+                    key="container_statement",
+                    kind="info",
+                    label=text(
+                        "Signed container statement",
+                        "Declaración firmada sobre la producción en contenedores",
+                    ),
+                    embed="container_statement",
+                    required=False,
+                    visible_when=(Condition(question="container_production", op="truthy"),),
                 ),
                 Question(
                     # 2026-09-09 — read "certified organic by another certifier", which steered an

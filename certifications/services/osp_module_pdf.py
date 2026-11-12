@@ -1407,6 +1407,18 @@ def _unmatched_logged_flowables(osp, styles, list_is_empty: bool = False) -> lis
 #: carries a `parcel` FK, so the map needs no new storage — only a section key that says what the
 #: file IS, so the packet can ship it and the Parcel Application can name it.
 PARCEL_MAP_SECTION = "parcel_application_map"
+#: The signed statement a container parcel files (CCOF ORGB49 §G "For container systems"), uploaded against the
+#: parcel and shipped under parcels/container-statements/.
+CONTAINER_STATEMENT_SECTION = "parcel_application_container_statement"
+
+
+def container_statement_documents(parcel):
+    """Signed container statements for one parcel, newest first."""
+    try:
+        return list(parcel.documents.filter(linked_section=CONTAINER_STATEMENT_SECTION).order_by("-created_at"))
+    except Exception:  # noqa: BLE001 — a document lookup must never take the packet down
+        logger.exception("Could not load container statements for parcel %s", getattr(parcel, "pk", None))
+        return []
 
 
 def parcel_map_documents(parcel):
@@ -1606,6 +1618,21 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             out.append(Spacer(1, 4))
         for line in planned_crop_lines(parcel, parcel_application_values(parcel)):
             out.append(Paragraph(_escape(line), styles["meta" if line.startswith("[REVIEW]") else "body"]))
+
+    elif embed == "container_statement":
+        # CCOF ORGB49 §G: the signed statement itself. Named by its packet path inside a packet build; outside one
+        # nothing ships, so the line says whether one is on file.
+        from certifications.services.certified_parcel_branch import document_path
+        from certifications.services.packet_attachments import current_manifest
+
+        docs = container_statement_documents(parcel)
+        if not docs:
+            text = "[REVIEW] No signed container statement is on file for this parcel."
+        elif current_manifest() is not None:
+            text = f"Signed container statement attached: {document_path(docs[0], 'container-statements')}."
+        else:
+            text = f"Signed container statement on file: {docs[0].title}."
+        out.append(Paragraph(_escape(text), styles["meta" if text.startswith("[REVIEW]") else "body"]))
 
     elif embed == "operation_export_answer":
         from certifications.services.parcel_application_lines import operation_export_lines
@@ -2237,7 +2264,7 @@ def _question_label(module, page, question, styles):
 
 #: Embeds printed under their question's label, so the question index can point at them. The older parcel
 #: embeds print their own headings and keep them.
-_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer", "crop_table"}
+_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer", "crop_table", "container_statement"}
 
 
 #: Optional "kept elsewhere, say where" questions that stand in for a file. The certified-parcel card

@@ -47,7 +47,7 @@ _current: contextvars.ContextVar = contextvars.ContextVar("packet_attachments", 
 
 @dataclass
 class Attachment:
-    kind: str  # parcel_map | affidavit | handler_certificate | facility_layout | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document | inspection_document
+    kind: str  # parcel_map | container_statement | affidavit | handler_certificate | facility_layout | supplier_certificate | supplier_affidavit | brand_owner_document | receipt | requirement | sale_source | lot_tag | label_photo | material_label | notice_document | annual_update_document | inspection_document
     label: str
     zip_path: str
     state: str = ATTACHED
@@ -172,6 +172,25 @@ def _candidates(osp):
     est = osp.establishment
     out = []
     for parcel in est.parcels.order_by("id"):
+        # CCOF ORGB49 §G: a container parcel's signed statement, the newest, which its page names.
+        if parcel.container_production:
+            from certifications.services.certified_parcel_branch import document_path
+            from certifications.services.osp_module_pdf import container_statement_documents
+
+            for doc in container_statement_documents(parcel)[:1]:
+                out.append(
+                    (
+                        Attachment(
+                            "container_statement",
+                            f"Signed container statement for {parcel.name}",
+                            document_path(doc, "container-statements"),
+                            parcel_id=parcel.pk,
+                            parcel=parcel.name,
+                            source_id=f"doc:{doc.pk}",
+                        ),
+                        lambda doc=doc: doc.file.open("rb"),
+                    )
+                )
         maps = parcel_map_documents(parcel)
         if maps:
             doc = maps[0]  # the newest map is the one the Parcel Application names
