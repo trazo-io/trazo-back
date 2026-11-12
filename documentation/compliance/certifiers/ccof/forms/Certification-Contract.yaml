@@ -93,17 +93,21 @@ items:
   trazo:
     questions:
     - certification_contract.contract_notes
+    - certification_contract.operation_contacts
     models:
     - company.Company.fiscal_id
     - company.Company.legal_structure
-    prints: modules/operation_profile.pdf §A (prose only)
-  gap: '`Company.fiscal_id` exists but correctly never prints in a packet that is also shared with buyers
-    (Tax ID is PII); `Company.legal_structure` is free text with no fixed choices, there is no state-of-incorporation
-    field, and there is no owners/officers list — the pilot''s ''Oregon LLC, Laurel Brandt member-manager''
-    lives only as prose in `contract_notes`.'
-  fix: Give `legal_structure` CCOF's four choices (sole proprietorship / partnership / corporation / LLC),
-    add `state_of_incorporation`, and add a repeatable `owners_officers` {name, title} field; print the
-    Tax ID only on a certifier-only contract page, never in a shared export.
+    - certifications.models.OperationContact
+    prints: >-
+      modules/operation_profile.pdf §A
+  gap: >-
+    The owners or officers with their titles are the people table since 2026-11-12 (responsibly
+    connected, with the connection). Remaining: `Company.legal_structure` is free text with no fixed
+    choices and no state of incorporation; `Company.fiscal_id` exists but correctly never prints in a
+    packet that is also shared with buyers (Tax ID is PII).
+  fix: >-
+    Give `legal_structure` CCOF's choices (sole proprietorship / partnership / corporation / LLC) and
+    add `state_of_incorporation`; print the Tax ID only on a certifier-only page.
 - ref: A5
   asks: Physical Location of Your Operation (required if different from your registered legal business
     address) — where organic production occurs or records are kept; checkbox for 'identical to registered
@@ -187,35 +191,37 @@ items:
   asks: 'Primary Contact: name, title, phone, email — the person listed in CCOF''s online directory and
     the NOP Organic Integrity Database, knowledgeable about the operation and the OSP, and authorized
     to act on its behalf. All CCOF communication is sent to this contact.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: '00-cover.pdf: Responsible person, Phone, Email'
+    questions:
+    - certification_contract.operation_contacts
     models:
-    - company.Establishment.contact_person
-    - company.Establishment.contact_phone
-    - company.Establishment.contact_email
-    prints: 00-cover.pdf (Responsible person, phone, email)
-  gap: '`contact_person`/`contact_phone`/`contact_email` print as ''Responsible person'' on the cover,
-    but there is no `contact_title` field, so the title CCOF''s directory and OID listing require is never
-    captured.'
-  fix: Add `contact_title` to Establishment (or the contract module) and print it alongside the responsible
-    person.
+    - certifications.models.OperationContact.is_primary_contact
+    - company.models.Establishment.contact_person
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. The primary contact is the row so marked, with title,
+    phone and email. The cover's responsible person line is unchanged.
 - ref: C2
   asks: 'Additional Contacts: list everyone at your operation authorized to conduct inspections, meet
     with inspectors, modify the OSP, or otherwise act on behalf of the operation — name/title, phone,
     email — with a CC checkbox for those who should receive all communication along with the primary contact.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    questions:
+    - certification_contract.operation_contacts
     models:
-    - users.WorksIn
-    prints: —
-  gap: '`WorksIn` roles (Company Admin / Farm Manager / Viewer) exist but carry no title, phone, ''authorized
-    to meet inspectors'' flag, or CC-communication flag, and the list is never printed anywhere in the
-    packet.'
-  fix: Add `authorized_for_certifier` and `cc_certifier` flags to `WorksIn` (or a contract-module contacts
-    list); print company members with role in the contract section.
+    - certifications.models.OperationContact.is_authorized_representative
+    prints: >-
+      modules/operation_profile.pdf §A (the people table)
+  note: >-
+    Since 2026-11-12 the Operation module's page A lists the people the operation names to its agent
+    (`OperationContact`), each with name, title, phone and email and the roles they hold; the table
+    prints in §A, a blank cell as 'Not stated'. Everyone authorized to conduct inspections, meet
+    inspectors, modify the OSP or act for the operation is listed with that role.
 - ref: D1
   asks: What types of products does this operation grow, produce, process, handle, or sell? Both organic
     and nonorganic product(s) / Organic product(s) only / Organic and transitional product(s).

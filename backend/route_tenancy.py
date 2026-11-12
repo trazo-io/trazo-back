@@ -191,6 +191,16 @@ ROUTE_TENANCY = {
             ".test_another_farms_document_fails_like_a_missing_one",
         ),
     ),
+    "certifications.views.OperationContactViewSet": Route(
+        COMPANY,
+        "nested; admins and managers only; the farm is the URL's, never the body's",
+        outsider_tests=(
+            "certifications.tests.test_operation_contacts.OperationContactTenancyTests"
+            ".test_another_company_reaches_nothing",
+            "certifications.tests.test_operation_contacts.OperationContactTenancyTests"
+            ".test_a_viewer_reads_nothing_and_writes_nothing",
+        ),
+    ),
     "certifications.views.CertifierInspectionViewSet": Route(
         COMPANY,
         "nested; admins and managers only; the report must be the URL's farm",

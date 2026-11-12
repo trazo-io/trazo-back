@@ -1999,6 +1999,28 @@ CERTIFICATION_CONTRACT = Module(
                     compiles_to=CompileRule(template="Legal identity and naming: {answer}."),
                 ),
                 Question(
+                    # OTCO O1 §B (B-2 to B-6) and CCOF Contract A4, C1, C2: the people the operation names to its
+                    # agent, each with roles. Rows on `OperationContact`, judged by the register as answered once a
+                    # primary contact and a legally responsible contact are named.
+                    key="operation_contacts",
+                    kind="info",
+                    label=text(
+                        "The people you name to your certifier, and their roles",
+                        "Las personas que nombras ante tu certificador, y sus funciones",
+                    ),
+                    coaching=text(
+                        "Include the legally responsible person, the primary contact, everyone authorized to meet "
+                        "inspectors or change the plan, and every partner, officer, director, manager or owner of 10 "
+                        "percent or more. One person can hold several roles.",
+                        "Incluye a la persona legalmente responsable, al contacto principal, a cada persona autorizada "
+                        "para reunirse con inspectores o cambiar el plan, y a cada socio, directivo, gerente o dueño "
+                        "del 10 por ciento o más. Una misma persona puede tener varias funciones.",
+                    ),
+                    embed="operation_contacts",
+                    required=False,
+                    nop_cite="§ 205.2",
+                ),
+                Question(
                     key="contract_scopes",
                     kind="checkbox_group",
                     label=text(

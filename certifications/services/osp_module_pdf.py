@@ -898,6 +898,61 @@ def _equipment_flowables(osp, styles) -> list:
     return out
 
 
+#: OTCO O1 §B's columns for each person: name and title, phone, email, and (for the responsibly connected) the
+#: connection. The roles column says which of O1's lists the person belongs to.
+OPERATION_CONTACT_COLUMNS = ("Name and title", "Roles", "Phone", "Email", "Connection")
+
+
+def operation_contact_lines(establishment) -> tuple[list, list]:
+    """(table rows, lines under the table) for the operation's named people. Every blank cell is "Not stated";
+    a missing primary contact, legally responsible contact or responsibly connected person is a review line."""
+    contacts = list(establishment.operation_contacts.all().order_by("pk"))
+    rows = []
+    for c in contacts:
+        connection = ""
+        if c.is_responsibly_connected:
+            connection = (
+                (c.connection_other or "Other, not described")
+                if c.connection == "other"
+                else (c.get_connection_display() if c.connection else "Not stated")
+            )
+        rows.append(
+            (
+                [
+                    [c.name + (f", {c.title}" if c.title else "")],
+                    ["; ".join(c.role_labels()) or "No role marked"],
+                    [c.phone or "Not stated"],
+                    [c.email or "Not stated"],
+                    [connection or "—"],
+                ],
+                [],
+            )
+        )
+    lines = []
+    if not contacts:
+        lines.append("[REVIEW] No person is named to the certifying agent.")
+        return rows, lines
+    for flag, words in (
+        ("is_legally_responsible", "legally responsible contact"),
+        ("is_primary_contact", "primary contact"),
+        ("is_responsibly_connected", "responsibly connected person (7 CFR 205.2)"),
+    ):
+        if not any(getattr(c, flag) for c in contacts):
+            lines.append(f"[REVIEW] No {words} is named.")
+    return rows, lines
+
+
+def _operation_contact_flowables(osp, styles) -> list:
+    rows, lines = operation_contact_lines(osp.establishment)
+    out = []
+    if rows:
+        out.append(_register_table(OPERATION_CONTACT_COLUMNS, (1.6, 1.6, 1.0, 1.6, 1.0), rows, styles))
+        out.append(Spacer(1, 4))
+    for line in lines:
+        out.append(Paragraph(_escape(line), _style(styles, "meta")))
+    return out
+
+
 def _brand_owner_flowables(osp, styles) -> list:
     """The companies whose brands the operation packs into: CCOF G7.0 C, OTCO C8 8.3, WSDA N 6-7.
 
@@ -2272,7 +2327,13 @@ def _question_label(module, page, question, styles):
 
 #: Embeds printed under their question's label, so the question index can point at them. The older parcel
 #: embeds print their own headings and keep them.
-_LABELLED_EMBEDS = {"location_coordinates", "operation_export_answer", "crop_table", "container_statement"}
+_LABELLED_EMBEDS = {
+    "location_coordinates",
+    "operation_export_answer",
+    "crop_table",
+    "container_statement",
+    "operation_contacts",
+}
 
 
 #: Optional "kept elsewhere, say where" questions that stand in for a file. The certified-parcel card
@@ -2600,6 +2661,8 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _own_facility_flowables(osp, styles)
                 elif question.embed == "seedling_suppliers":
                     rendered = _seedling_supplier_flowables(osp, styles)
+                elif question.embed == "operation_contacts":
+                    rendered = _operation_contact_flowables(osp, styles)
                 elif question.embed == "brand_owners":
                     rendered = _brand_owner_flowables(osp, styles)
                 elif question.embed == "sourced_products":

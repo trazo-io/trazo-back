@@ -642,6 +642,87 @@ class SupplierCertificate(models.Model):
         return f"{self.supplier} certificate issued {self.issued_on}"
 
 
+class OperationContact(models.Model):
+    """A person the operation names to its certifying agent, with the roles that person holds.
+
+    OTCO O1 §B asks the Legally Responsible Contact, the Primary Contact, the Billing Contact, the Additional
+    Contacts authorized to act on the operation's behalf ("Oregon Tilth will not conduct business with any
+    individual whose name does not appear on this list") and every person Responsibly Connected (7 CFR 205.2:
+    a partner, officer, director, holder, manager, or owner of 10 percent or more of the voting stock), each with
+    name, title, phone and email. CCOF's Certification Contract asks the owners or officers with their titles
+    (A4), the Primary Contact (C1) and the Additional Contacts (C2). One person may hold several roles, so the
+    roles are flags on one row, never one row per role.
+    """
+
+    CONNECTION_CHOICES = [
+        ("partner", "Partner"),
+        ("officer", "Officer"),
+        ("director", "Director"),
+        ("holder", "Holder"),
+        ("manager", "Manager"),
+        ("owner_10_percent", "Owner of 10 percent or more of the voting stock"),
+        ("other", "Other"),
+    ]
+
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    establishment = models.ForeignKey(
+        "company.Establishment",
+        on_delete=models.CASCADE,
+        related_name="operation_contacts",
+        help_text="The operation this person is named for",
+    )
+    name = models.CharField(max_length=200)
+    title = models.CharField(max_length=120, blank=True, default="")
+    phone = models.CharField(max_length=40, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    is_legally_responsible = models.BooleanField(
+        default=False, help_text="CEO, COO, executive or managing director, or registered agent (OTCO O1 B-2)"
+    )
+    is_primary_contact = models.BooleanField(
+        default=False, help_text="The certifier's primary contact (O1 B-3, CCOF C1)"
+    )
+    is_billing_contact = models.BooleanField(default=False, help_text="Contact for payment questions (O1 B-4)")
+    is_authorized_representative = models.BooleanField(
+        default=False,
+        help_text="Authorized to take part in inspections, meet inspectors, modify the OSP or act for the operation "
+        "(O1 B-5, CCOF C2)",
+    )
+    is_responsibly_connected = models.BooleanField(
+        default=False, help_text="7 CFR 205.2 responsibly connected (O1 B-6)"
+    )
+    connection = models.CharField(max_length=20, choices=CONNECTION_CHOICES, blank=True, default="")
+    connection_other = models.CharField(max_length=200, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_operation_contacts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["establishment_id", "pk"]
+
+    def __str__(self):
+        return f"{self.name} ({self.establishment_id})"
+
+    def role_labels(self) -> list:
+        """The roles this person holds, in the order the forms list them."""
+        out = []
+        for flag, label in (
+            ("is_legally_responsible", "Legally responsible"),
+            ("is_primary_contact", "Primary contact"),
+            ("is_billing_contact", "Billing contact"),
+            ("is_authorized_representative", "Authorized to act for the operation"),
+            ("is_responsibly_connected", "Responsibly connected"),
+        ):
+            if getattr(self, flag):
+                out.append(label)
+        return out
+
+
 class BrandOwner(models.Model):
     """A company whose brand or label this farm packs its own organic crop into.
 
