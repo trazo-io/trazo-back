@@ -1318,6 +1318,24 @@ class ChemicalEvent(CommonEvent):
     commercial_name = models.CharField(max_length=60, blank=True, null=True)
     volume = models.CharField(max_length=60, blank=True, null=True)
     concentration = models.CharField(max_length=60, blank=True, null=True)
+    # The operator's statement that the source record does not show a fact, instead of a value
+    # nobody observed (overall review 2026-11, OV-FJ-C12). The flag or the value, never both;
+    # the rule and the printed wording live in `history/services/not_on_source_record.py`.
+    # A record with `time_not_recorded` keeps its date, stored at noon UTC like an imported
+    # day-only row, and no reader prints that noon.
+    concentration_not_recorded = models.BooleanField(
+        default=False,
+        verbose_name="Concentration not on the source record",
+        help_text="The operator stated the source record does not show the product concentration.",
+    )
+    time_not_recorded = models.BooleanField(
+        default=False,
+        verbose_name="Time not on the source record",
+        help_text=(
+            "The operator stated the source record does not show the clock time of the application. "
+            "The date is kept, stored at noon UTC (the importer's encoding for a day without a time)."
+        ),
+    )
     area = models.CharField(max_length=60, blank=True, null=True)
     way_of_application = models.CharField(max_length=60, blank=True, null=True)
     time_period = models.CharField(max_length=60, blank=True, null=True)
@@ -2010,6 +2028,21 @@ class ChemicalEvent(CommonEvent):
             errors["phi_days"] = (
                 f"PHI of {self.phi_days} days seems unusually high. " "Please verify against product label."
             )
+
+        # Not on the source record: the flag or the value, never both. The stored date is not
+        # checked here: whoever sets the flag (the serializer, a correction) moves it to the noon
+        # placeholder, and every reader keys on the flag rather than on the clock.
+        from history.services.not_on_source_record import conflicts
+
+        errors.update(
+            conflicts(
+                concentration_not_recorded=self.concentration_not_recorded,
+                concentration=self.concentration,
+                time_not_recorded=self.time_not_recorded,
+                application_start=self.application_start,
+                application_end=self.application_end,
+            )
+        )
 
         if errors:
             raise ValidationError(errors)

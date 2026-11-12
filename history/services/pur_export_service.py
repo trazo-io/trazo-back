@@ -392,6 +392,15 @@ def _s(value):
     return "" if value is None else str(value).strip()
 
 
+def _time_not_recorded_note(event):
+    """The gaps-column note for an application whose clock time is not on the source record."""
+    day = event.date.date().isoformat() if getattr(event, "date", None) else ""
+    return (f"Applied on {day}. " if day else "") + (
+        "The start and completion times are not on the source record; boxes 17 and 18 need them "
+        "(3 CCR 6624(c)(2)) and are left blank rather than filled with a time nobody recorded."
+    )
+
+
 def _fmt_rei(hours):
     """Format box 25 ("25. Days Reentry") from ChemicalEvent.rei_hours.
 
@@ -673,6 +682,14 @@ class PURExportService:
                 "of a schoolsite, this row needs a method code (3 CCR 6691)."
             )
             flags.append({"code": "schoolsite_proximity_unknown"})
+        # The operator stated the source record shows the day but no clock time. Boxes 17-18 are
+        # REQUIRED date/time boxes in 24-hour form ("write 7:00 a.m. as 0700 hours"), and the form
+        # offers no "time unknown" entry, so they stay blank and the row stays incomplete: a time
+        # nobody wrote down must never be filed with a county (3 CCR 6624(c)(2)). The day is real,
+        # so the note carries it; a blank box 17 otherwise leaves the CSV row with no date at all.
+        if getattr(event, "time_not_recorded", False):
+            notes.append(_time_not_recorded_note(event))
+            flags.append({"code": "time_not_on_source_record"})
         # Distinguish "no county logged" from "county logged but not a CA county" —
         # the latter can't map to a CAC code and box 10 was blanked above.
         if county_name and not county_code:
@@ -815,6 +832,9 @@ class PURExportService:
                 headers = {k: h for k, h, _r in PUR_COLUMNS}
                 notes.append("Missing required: " + ", ".join(headers.get(m, m) for m in missing))
             notes.append(f"Tank-mix adjuvant applied with {primary_name} — separate PUR line per 3 CCR 6624.")
+            # Same application, same blank boxes 17-18: the line says why, like its primary does.
+            if getattr(event, "time_not_recorded", False):
+                notes.append(_time_not_recorded_note(event))
             row["notes"] = " | ".join(notes)
             self._attach_preview_fields(
                 row,

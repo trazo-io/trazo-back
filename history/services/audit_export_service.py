@@ -53,6 +53,7 @@ from common.specimen import (
 )
 from common.us_states import resolve_establishment_state
 from history.services import supplier_certificates
+from history.services.not_on_source_record import concentration_text
 from history.services.record_receipts import has_receipt, receipt_files, shared_from
 from history.services.records_export import (
     FACTOR_BASIS,
@@ -6457,7 +6458,8 @@ class AuditExportService:
                 # (7 CFR 205.103(b)). The default 120-char cap stays as a runaway guard.
                 self._cell(ev.commercial_name),
                 self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
-                self._cell(ev.concentration),
+                # The phrase, not a blank, when the operator said the source record does not show it.
+                self._cell(concentration_text(ev)),
                 self._cell(amount or None),
                 self._cell(area or None),
                 self._cell(method),
@@ -18399,7 +18401,7 @@ class AuditExportService:
                         _val(ev.supplier_name),
                         _fmt_date(ev.purchase_date) if ev.purchase_date else "",
                         _val(ev.purchase_invoice),
-                        _val(ev.concentration),
+                        _val(concentration_text(ev)),
                         # Display label, not the raw enum. The PDF renders this field via
                         # get_organic_approved_display() (see _build_chemical_events), and the
                         # SOIL rows of this same CSV already use the display form — so a raw

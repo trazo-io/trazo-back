@@ -119,6 +119,87 @@ def _render(value):
     return str(value)
 
 
+#: What a person types into the correction box for a yes/no field. Django's BooleanField accepts
+#: only "t"/"True"/"1" and "f"/"False"/"0", so "true" (the very text the form shows as the current
+#: value) and "yes" were refused with a message about Python literals. Spanish answers included.
+_BOOLEAN_WORDS = {
+    "true": True,
+    "yes": True,
+    "y": True,
+    "si": True,
+    "sí": True,
+    "false": False,
+    "no": False,
+    "n": False,
+}
+
+
+def _boolean_word(field, value):
+    if field.get_internal_type() == "BooleanField" and isinstance(value, str):
+        return _BOOLEAN_WORDS.get(value.strip().lower(), value)
+    return value
+
+
+def _paired_changes(event, field_name, coerced, raw=None):
+    """Fields that must change WITH this correction so a spray never holds a flag and its value.
+
+    `concentration_not_recorded` / `time_not_recorded` are the operator's statement that the
+    source record does not show the fact; the value is the fact. They are one fact in two columns,
+    so correcting one is not a guess about the other (unlike amount / area / rate, where which
+    number is wrong is the operator's to say). Each paired change gets its own trail row with the
+    same reason, so nothing changes quietly. Raises AmendmentError where no pairing is honest.
+
+    `raw` is the value as typed. A date's "day with no time" is judged by its SHAPE (a bare
+    `YYYY-MM-DD`), never by the clock it parses to, so a real 12:00 or 00:00 UTC application can
+    still be corrected to its time.
+    """
+    from history.models import ChemicalEvent
+    from history.services.not_on_source_record import UNMARK_NEEDS_A_TIME, day_without_time, is_day_only
+
+    if not isinstance(event, ChemicalEvent):
+        return {}
+    paired = {}
+    if field_name == "concentration_not_recorded" and coerced:
+        if (event.concentration or "").strip():
+            paired["concentration"] = None
+    elif field_name == "concentration" and (coerced or "").strip() and event.concentration_not_recorded:
+        paired["concentration_not_recorded"] = False
+    elif field_name == "time_not_recorded" and coerced:
+        for key in ("application_start", "application_end"):
+            if getattr(event, key) is not None:
+                paired[key] = None
+        if event.date is not None and event.date != day_without_time(event.date):
+            paired["date"] = day_without_time(event.date)
+    elif field_name == "time_not_recorded" and not coerced and event.time_not_recorded:
+        # Clearing the mark alone would leave the noon placeholder reading as the time sprayed.
+        raise AmendmentError({field_name: UNMARK_NEEDS_A_TIME})
+    elif field_name == "date" and event.time_not_recorded and coerced is not None:
+        if is_day_only(raw):
+            # Still a day with no time: kept at the placeholder, never at a midnight it was not.
+            return {"__primary__": day_without_time(coerced)}
+        paired["time_not_recorded"] = False
+    elif field_name in ("application_start", "application_end") and coerced is not None and event.time_not_recorded:
+        raise AmendmentError(
+            {
+                field_name: (
+                    "This record says the time is not on the source record. Correct the date to the date and "
+                    "time on the source record first."
+                )
+            }
+        )
+    return paired
+
+
+def _trail_text(event, field_name, value, time_flagged):
+    """A date on a record whose time is not on the source record prints as the day and the phrase,
+    never as the noon it is stored at."""
+    from history.services.not_on_source_record import date_text
+
+    if field_name == "date" and time_flagged and value is not None:
+        return date_text(value)
+    return _render(value)
+
+
 def _actor_name(user):
     """A human name for the trail, never blank while a user exists.
 
@@ -164,18 +245,28 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
     # Coerce through the field itself so "2000" becomes the right type for a numeric
     # column and an unparseable value is refused BEFORE anything is written.
     try:
-        coerced = field.to_python(new_value)
+        coerced = field.to_python(_boolean_word(field, new_value))
     except DjangoValidationError as exc:
         raise AmendmentError({field_name: " ".join(exc.messages)})
+
+    # A spray's "not on the source record" mark and the value it stands in for change together.
+    paired = _paired_changes(event, field_name, coerced, raw=new_value)
+    coerced = paired.pop("__primary__", coerced)
 
     # Compare the typed values first, then their rendered forms. Decimal("200.00") and
     # Decimal("200") are equal as numbers but render as different strings, so a rendered
     # comparison alone would accept "200" over a stored 200.00 and write a correction
     # line reading "200.00 -> 200" — noise in a document an inspector reads closely.
-    if coerced == original or _render(coerced) == _render(original):
+    # A paired change is a correction even when this field's stored value does not move: a stated
+    # 12:00 on a record kept at the noon placeholder still turns "no time" into a time.
+    if not paired and (coerced == original or _render(coerced) == _render(original)):
         raise AmendmentError({field_name: "That is the value already on the record — nothing to correct."})
 
-    setattr(event, field_name, coerced)
+    flagged_before = bool(getattr(event, "time_not_recorded", False))
+    changes = {field_name: coerced, **paired}
+    originals = {name: getattr(event, name) for name in changes}
+    for name, value in changes.items():
+        setattr(event, name, value)
     try:
         # `clean_fields`, NOT `full_clean`. full_clean(exclude=...) skips the excluded
         # FIELDS but still runs the model's own `clean()`, and 8 of these event models
@@ -186,29 +277,37 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
         # The corrected field still gets its full field-level validation (type, choices,
         # max_length, validators), which is what bounds the value being written.
         event.clean_fields(
-            exclude=[f.name for f in model._meta.get_fields() if getattr(f, "concrete", False) and f.name != field_name]
+            exclude=[
+                f.name for f in model._meta.get_fields() if getattr(f, "concrete", False) and f.name not in changes
+            ]
         )
     except DjangoValidationError as exc:
         # Put the event back the way it was. The DB is protected by the atomic block,
         # but the caller is holding this instance and a rejected correction must not
         # leave a bad value sitting on it.
-        setattr(event, field_name, original)
+        for name, value in originals.items():
+            setattr(event, name, value)
         raise AmendmentError(exc.message_dict if hasattr(exc, "message_dict") else {field_name: str(exc)})
 
-    event.save(update_fields=[field_name])
+    event.save(update_fields=list(changes))
 
-    return EventAmendment.objects.create(
-        event_type=event_type,
-        event_id=event.id,
-        history=event.history,
-        field_name=field_name,
-        field_label=history_field_label(field_name),
-        original_value=_render(original),
-        corrected_value=_render(coerced),
-        reason=reason,
-        amended_by=user if getattr(user, "is_authenticated", False) else None,
-        amended_by_name=_actor_name(user),
-    )
+    flagged_after = bool(getattr(event, "time_not_recorded", False))
+    rows = [
+        EventAmendment.objects.create(
+            event_type=event_type,
+            event_id=event.id,
+            history=event.history,
+            field_name=name,
+            field_label=history_field_label(name),
+            original_value=_trail_text(event, name, originals[name], flagged_before),
+            corrected_value=_trail_text(event, name, value, flagged_after),
+            reason=reason,
+            amended_by=user if getattr(user, "is_authenticated", False) else None,
+            amended_by_name=_actor_name(user),
+        )
+        for name, value in changes.items()
+    ]
+    return rows[0]
 
 
 # --------------------------------------------------------------------------------------

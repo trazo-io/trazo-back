@@ -724,6 +724,50 @@ def _record_national_list_basis(serializer, data):
     return data
 
 
+def _validate_not_on_source_record(serializer, data):
+    """The flag or the value, never both (`history/services/not_on_source_record.py`).
+
+    Reads each fact from the request when it carries it and from the stored record otherwise, so a
+    partial update cannot pair a new flag with an old value. "A day with no time" is judged by the
+    SHAPE of the date as sent (`initial_data`), never by the clock it parses to: under the time
+    mark a bare `YYYY-MM-DD` is stored at the noon placeholder and anything with a time part is
+    refused. Clearing a stored mark needs a stated time in the same request, exactly as a
+    correction does, or the placeholder would read as the time sprayed.
+    """
+    from history.services import not_on_source_record as rule
+
+    instance = getattr(serializer, "instance", None)
+
+    def effective(key):
+        if key in data:
+            return data[key]
+        return getattr(instance, key, None) if instance is not None else None
+
+    date_sent = "date" in data
+    raw = getattr(serializer, "initial_data", None)
+    date_input = raw.get("date") if date_sent and hasattr(raw, "get") else None
+    if date_sent and date_input is None:
+        date_input = data["date"]
+    time_flag = bool(effective("time_not_recorded"))
+    errors = rule.conflicts(
+        concentration_not_recorded=bool(effective("concentration_not_recorded")),
+        concentration=effective("concentration"),
+        time_not_recorded=time_flag,
+        application_start=effective("application_start"),
+        application_end=effective("application_end"),
+        date_input=date_input if date_sent else None,
+    )
+    if instance is not None and getattr(instance, "time_not_recorded", False) and not time_flag:
+        if not date_sent or rule.is_day_only(date_input):
+            errors["time_not_recorded"] = rule.UNMARK_NEEDS_A_TIME
+    if errors:
+        raise serializers.ValidationError(errors)
+    when = effective("date")
+    if time_flag and when is not None:
+        data["date"] = rule.day_without_time(when)
+    return data
+
+
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     _receipt_event_type = CHEMICAL_EVENT_TYPE
     # The record's receipt field OR a file filed on the record from Documents (record_receipts):
@@ -762,6 +806,9 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "commercial_name",
             "volume",
             "concentration",
+            # Not on the source record (OV-FJ-C12): the operator's statement, never a value.
+            "concentration_not_recorded",
+            "time_not_recorded",
             "area",
             "way_of_application",
             "time_period",
@@ -1161,6 +1208,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         if phi_days is not None and phi_days < 0:
             raise serializers.ValidationError({"phi_days": "Pre-Harvest Interval (PHI) cannot be negative"})
 
+        data = _validate_not_on_source_record(self, data)
         return _record_national_list_basis(self, data)
 
     def to_representation(self, instance):
@@ -1247,6 +1295,8 @@ class ChemicalEventSerializer(EventSerializer):
             "commercial_name",
             "volume",
             "concentration",
+            "concentration_not_recorded",
+            "time_not_recorded",
             "area",
             "way_of_application",
             "time_period",
@@ -3754,6 +3804,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         "applied_by_pcb",
         "pcb_name",
         "concentration",
+        # The operator's "not on the source record" for a spray's clock time (OV-FJ-C12). Read
+        # by the producer's season timeline; no shopper surface prints an event's time.
+        "time_not_recorded",
         "volume",
         "volume_unit",
         "nitrogen_percentage",
@@ -4977,6 +5030,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                         # takes exactly this value as `?event_type=`.
                         "event_type": 2,
                         "date": event.date.isoformat() if event.date else None,
+                        # Owner-only (see _CERTIFIER_ONLY_EVENT_FIELDS): the season timeline
+                        # prints the phrase, never the noon placeholder `date` is stored at.
+                        "time_not_recorded": bool(getattr(event, "time_not_recorded", False)),
                         "description": _public_event_label(event, "Chemical Application", viewer_is_owner),
                         "observation": _public_event_text(getattr(event, "observation", ""), event),
                         "private_note": getattr(event, "private_note", "") or "",
