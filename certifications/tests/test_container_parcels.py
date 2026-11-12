@@ -138,3 +138,32 @@ class RegisterRows(_Parcel):
         self.assertIn("parcel_application.container_statement", rows["G (container)"].questions)
         self.assertEqual((rows["F3"].status, rows["G (container)"].status), ("covered", "covered"))
         self.assertTrue(date.today())
+
+
+class ReviewFindingsOn402(_Parcel):
+    def test_the_statement_is_spent_last_so_it_never_pushes_out_a_file_that_rode_before(self):
+        doc = self.statement()
+        GeneratedDocument.objects.create(
+            establishment=self.est,
+            parcel=self.parcel,
+            title="House 2 map",
+            linked_section="parcel_application_map",
+            source="upload",
+            file=ContentFile(b"%PDF-1.4 map", name="map.pdf"),
+        )
+        entries = [a for a, _open in _candidates(self.osp)]
+        self.assertEqual(entries[-1].source_id, f"doc:{doc.pk}")
+        self.assertLess(
+            next(i for i, a in enumerate(entries) if a.kind == "parcel_map"),
+            next(i for i, a in enumerate(entries) if a.kind == "container_statement"),
+        )
+
+    def test_a_statement_held_outside_the_packet_is_not_called_attached(self):
+        from certifications.services.packet_attachments import build_manifest, building
+
+        self.statement()
+        manifest = build_manifest(self.osp, budget=1)
+        with building(manifest):
+            page = self.page()
+        self.assertNotIn("Signed container statement attached", page)
+        self.assertIn("[REVIEW] The signed container statement is uploaded to Trazo but not in this packet", page)

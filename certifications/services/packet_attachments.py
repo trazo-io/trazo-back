@@ -172,25 +172,6 @@ def _candidates(osp):
     est = osp.establishment
     out = []
     for parcel in est.parcels.order_by("id"):
-        # CCOF ORGB49 §G: a container parcel's signed statement, the newest, which its page names.
-        if parcel.container_production:
-            from certifications.services.certified_parcel_branch import document_path
-            from certifications.services.osp_module_pdf import container_statement_documents
-
-            for doc in container_statement_documents(parcel)[:1]:
-                out.append(
-                    (
-                        Attachment(
-                            "container_statement",
-                            f"Signed container statement for {parcel.name}",
-                            document_path(doc, "container-statements"),
-                            parcel_id=parcel.pk,
-                            parcel=parcel.name,
-                            source_id=f"doc:{doc.pk}",
-                        ),
-                        lambda doc=doc: doc.file.open("rb"),
-                    )
-                )
         maps = parcel_map_documents(parcel)
         if maps:
             doc = maps[0]  # the newest map is the one the Parcel Application names
@@ -552,6 +533,27 @@ def _candidates(osp):
         out.extend(_inspection_candidates(osp))
     except Exception:  # noqa: BLE001
         logger.exception("Inspection-record attachments could not be listed for OSP %s", getattr(osp, "pk", None))
+    # CCOF ORGB49 §G: a container parcel's signed statement, the newest, which its page names. LAST: the budget is
+    # spent in list order, and a kind added later must never push out a file that already rode (review of back
+    # PR 402: placed before the parcel map, it took the map's place on a packet near the budget).
+    from certifications.services.certified_parcel_branch import document_path
+    from certifications.services.osp_module_pdf import container_statement_documents
+
+    for parcel in est.parcels.filter(container_production=True).order_by("id"):
+        for doc in container_statement_documents(parcel)[:1]:
+            out.append(
+                (
+                    Attachment(
+                        "container_statement",
+                        f"Signed container statement for {parcel.name}",
+                        document_path(doc, "container-statements"),
+                        parcel_id=parcel.pk,
+                        parcel=parcel.name,
+                        source_id=f"doc:{doc.pk}",
+                    ),
+                    lambda doc=doc: doc.file.open("rb"),
+                )
+            )
     return out
 
 

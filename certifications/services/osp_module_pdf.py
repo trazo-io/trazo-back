@@ -1622,16 +1622,24 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
     elif embed == "container_statement":
         # CCOF ORGB49 §G: the signed statement itself. Named by its packet path inside a packet build; outside one
         # nothing ships, so the line says whether one is on file.
-        from certifications.services.certified_parcel_branch import document_path
+        from certifications.services.certified_parcel_branch import ATTACHED as PACKET_ATTACHED
+        from certifications.services.certified_parcel_branch import _file_state
         from certifications.services.packet_attachments import current_manifest
 
         docs = container_statement_documents(parcel)
         if not docs:
             text = "[REVIEW] No signed container statement is on file for this parcel."
-        elif current_manifest() is not None:
-            text = f"Signed container statement attached: {document_path(docs[0], 'container-statements')}."
-        else:
+        elif current_manifest() is None:
             text = f"Signed container statement on file: {docs[0].title}."
+        else:
+            # The manifest decides: a file it could not read or held outside the budget is not "attached"
+            # (review of back PR 402; the map embed's own T19 rule).
+            state, path, detail = _file_state(docs[0], "container-statements")
+            text = (
+                f"Signed container statement attached: {path}."
+                if state == PACKET_ATTACHED
+                else f"[REVIEW] The signed container statement is uploaded to Trazo but not in this packet ({detail})."
+            )
         out.append(Paragraph(_escape(text), styles["meta" if text.startswith("[REVIEW]") else "body"]))
 
     elif embed == "operation_export_answer":
