@@ -2720,6 +2720,83 @@
        "history_withdrew_outstanding": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": false
+       },
+       "legally_registered": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
+       },
+       "legal_structure": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "llc"
+       },
+       "state_of_incorporation": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "Oregon"
+       },
+       "uses_dba": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
+       },
+       "dba_names": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "Calapooia Bend Farm"
+       },
+       "dba_registration": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": [
+         "state"
+        ]
+       },
+       "dba_use": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "all"
+       },
+       "legal_address_is": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "physical"
+       },
+       "mailing_address_is": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "other"
+       },
+       "mailing_address_street": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "PO Box 412"
+       },
+       "mailing_address_city": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "Tangent"
+       },
+       "mailing_address_state": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "OR"
+       },
+       "mailing_address_zip": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "97389"
+       },
+       "mailing_address_country": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "United States"
+       },
+       "billing_address_is": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "mailing"
+       },
+       "public_contact_shared": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": [
+         "phone",
+         "email"
+        ]
+       },
+       "public_phone": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "(541) 555-0142"
+       },
+       "public_email": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "farm@calapooiabend.example"
        }
       },
       "completed_at": "2026-08-21T11:42:20.378188+00:00",

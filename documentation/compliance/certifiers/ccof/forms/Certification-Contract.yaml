@@ -35,79 +35,84 @@ items:
   asks: Registered Legal Business Name; Legal 'Doing Business As' (DBA), if applicable; Phone; Website
     (optional); Public-Facing Email (optional) — displayed on the Organic Integrity Database and NOP certificate
     only, and does not receive CCOF communication.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: '00-cover.pdf: Legal name, Trade name (DBA), Phone'
+    questions:
+    - certification_contract.legally_registered
+    - certification_contract.uses_dba
+    - certification_contract.dba_names
+    - certification_contract.public_contact_shared
+    - certification_contract.public_phone
+    - certification_contract.public_email
+    - certification_contract.public_website
     models:
     - company.Company.name
     - company.Company.tradename
     - company.Establishment.phone
-    - company.Company.website
-    - company.Company.contact_email
-    - company.Establishment.email
-    prints: 00-cover.pdf (legal name, "Trade name (DBA)" when recorded, phone); website and public email never
-      print
-  gap: '`Company.name` prints as ''Legal name'' and, since 2026-10-23, `Company.tradename` as "Trade name (DBA)"
-    on the cover. `Company.website` and `Company.contact_email`/`Establishment.email` exist on the model and
-    are still printed nowhere in the packet; only the audit dossier prints contact email.'
-  fix: Print website and public email on the contract module / packet cover; relabel `Company.name`'s help
-    text to 'Registered legal business name' for semantic clarity.
+    prints: >-
+      00-cover.pdf (legal name, "Trade name (DBA)", phone); modules/operation_profile.pdf §D (DBAs, and
+      the phone, email and website the operation lets the agent publish)
+  note: >-
+    Closed 2026-11-13. The public-facing email CCOF lists on the OID and the certificate is asked as a
+    choice of what may be published, then the value, so a blank reads as private, not missing.
 - ref: A2
   asks: 'Registered Legal Business Address: address, city, state/province, zip/postal code, country.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: '00-cover.pdf: Address (the physical location; no mailing address prints)'
+    questions:
+    - certification_contract.legal_address_is
+    - certification_contract.legal_address_street
+    - certification_contract.legal_address_city
+    - certification_contract.legal_address_state
+    - certification_contract.legal_address_zip
+    - certification_contract.legal_address_country
     models:
-    - company.Company.address
-    - company.Company.city
-    - company.Company.state
-    - company.Company.country
-    - company.Company.zip_code
-    prints: — (only the Establishment's physical address prints on the cover)
-  gap: '`Company.address/city/state/country/zip_code` exist, but the packet cover prints only the ESTABLISHMENT''s
-    physical address — the registered legal business address, which can differ (e.g. an LLC registered
-    out of state), never prints.'
-  fix: Print both 'Registered legal address' (Company) and 'Physical location' (Establishment) on the
-    cover, collapsing to one line when they are identical.
+    - company.Establishment.address
+    prints: >-
+      modules/operation_profile.pdf §D ("The farm's physical address", or the address as five fields);
+      00-cover.pdf prints the physical address
+  note: >-
+    Closed 2026-11-13. Asked as "same as the physical address" first, then street, city, state, ZIP and
+    country in the form's own boxes.
 - ref: A3
   asks: Explain whether the DBA listed above appears in your audit trail records and under what circumstances
     (e.g., only for certain products or markets, or for all); describe whether the DBA is registered at
     the state or local level.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - certification_contract.contract_notes
-    prints: modules/operation_profile.pdf §A
-  gap: Captured only as free prose inside the general `contract_notes` textarea, with no structured field
-    for where the DBA is used or whether it is registered.
-  fix: Add structured `dba_used_on` {all, some, none} and `dba_registered` {state, local, no} fields to
-    the contract module.
+    - certification_contract.uses_dba
+    - certification_contract.dba_names
+    - certification_contract.dba_registration
+    - certification_contract.dba_use
+    - certification_contract.dba_use_detail
+    prints: >-
+      modules/operation_profile.pdf §D
+  note: >-
+    Closed 2026-11-13. Where each DBA is registered (state, county or city, not registered) and whether
+    it appears in the records for all products and markets, some (which), or none.
 - ref: A4
   asks: Federal Tax ID#; legal structure — Sole Proprietorship (owner's name) / Partnership (owners' names)
     / Corporation or LLC (state of incorporation); name of owners or officers and their titles.
   status: partial
-  severity: P2
+  severity: P3
   trazo:
     questions:
-    - certification_contract.contract_notes
+    - certification_contract.legal_structure
+    - certification_contract.legal_structure_other
+    - certification_contract.state_of_incorporation
     - certification_contract.operation_contacts
     models:
     - company.Company.fiscal_id
-    - company.Company.legal_structure
     - certifications.models.OperationContact
     prints: >-
-      modules/operation_profile.pdf §A
+      modules/operation_profile.pdf §D (structure, state of incorporation); §A (owners and officers)
   gap: >-
-    The owners or officers with their titles are the people table since 2026-11-12 (responsibly
-    connected, with the connection). Remaining: `Company.legal_structure` is free text with no fixed
-    choices and no state of incorporation; `Company.fiscal_id` exists but correctly never prints in a
-    packet that is also shared with buyers (Tax ID is PII).
+    Only the Federal Tax ID remains. `Company.fiscal_id` exists and, as before, never prints: it is PII with no
+    inspection use, kept out of a packet that also leaves the certifier's hands.
   fix: >-
-    Give `legal_structure` CCOF's choices (sole proprietorship / partnership / corporation / LLC) and
-    add `state_of_incorporation`; print the Tax ID only on a certifier-only page.
+    Leave the Tax ID to the agent's own signed form; reopen only if CCOF reviewers ask for it in the
+    packet.
 - ref: A5
   asks: Physical Location of Your Operation (required if different from your registered legal business
     address) — where organic production occurs or records are kept; checkbox for 'identical to registered
@@ -124,34 +129,43 @@ items:
 - ref: A6
   asks: 'Mailing Address (required if different from your registered legal business address or physical
     address): address, city, state/province, zip/postal code, country.'
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No mailing-address field distinct from the establishment/company address exists anywhere in the
-    schema.
-  fix: Add optional `mailing_address` fields to the contract module; low priority — a one-time application
-    detail CCOF collects directly.
+    questions:
+    - certification_contract.mailing_address_is
+    - certification_contract.mailing_address_street
+    - certification_contract.mailing_address_city
+    - certification_contract.mailing_address_state
+    - certification_contract.mailing_address_zip
+    - certification_contract.mailing_address_country
+    prints: >-
+      modules/operation_profile.pdf §D
+  note: >-
+    Closed 2026-11-13. Same as the legal address, same as the physical address, or its own five fields:
+    CCOF's two "identical to" boxes plus the address.
 - ref: A7
   asks: 'Billing Address (optional): address, city, state/province, zip/postal code, country.'
   optional: true
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: No billing-address field exists anywhere in the schema.
-  fix: Add optional `billing_address` fields to the contract module, or leave it to CCOF's own application
-    intake; low priority.
+    questions:
+    - certification_contract.billing_address_is
+    - certification_contract.billing_address_street
+    - certification_contract.billing_address_city
+    - certification_contract.billing_address_state
+    - certification_contract.billing_address_zip
+    - certification_contract.billing_address_country
+    prints: >-
+      modules/operation_profile.pdf §D
+  note: >-
+    Closed 2026-11-13. Same as the mailing address, or its own five fields.
 - ref: A8
   asks: 'Preferred language: English or Español.'
-  status: not_covered
-  severity: P3
-  trazo:
-    prints: —
-  gap: Only a client-side `localStorage.trazo_locale` UI preference exists; there is no `Company` or `Establishment`
-    model field, so the operation's preferred language for CCOF correspondence is not captured anywhere
-    durable.
-  fix: Add `Company.preferred_language`.
+  status: out_of_scope
+  scope_basis: agent_administration
+  reason: >-
+    Sets the language CCOF itself writes in, like A9 (how it writes) and OTCO O1 A-4: a CCOF account setting, not a
+    fact about the operation's organic system that a packet or a certifier review needs.
 - ref: A9
   asks: 'Preferred method of written communication: Email or Postal Mail.'
   status: out_of_scope

@@ -67,23 +67,17 @@ items:
     system, and never filled by a renewing operation.
 - ref: A-1
   asks: Is the Operation Name listed above a legally registered business? Yes / No.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
-    - certification_contract.contract_notes
-    models:
-    - company.Company.name
-    - company.Company.legal_structure
-    prints: modules/operation_profile.pdf §A (prose); 00-cover.pdf ("Legal name")
-  gap: >-
-    Reused from the CCOF Contract A4 (P2). `Company.name` prints as the legal name on the cover
-    and `contract_notes` asks for legal name and business structure as prose, but whether the
-    operation name is a REGISTERED legal entity has no field: `Company.legal_structure` is free
-    text with no fixed choices and no state of registration.
-  fix: >-
-    Reuse A4 — give `legal_structure` fixed choices and a `state_of_incorporation`; add a
-    `legally_registered` boolean beside them.
+    - certification_contract.legally_registered
+    - certification_contract.legal_structure
+    - certification_contract.legal_structure_other
+    - certification_contract.state_of_incorporation
+    prints: >-
+      modules/operation_profile.pdf §D
+  note: >-
+    Closed 2026-11-13 with the CCOF Contract A4 structure.
 - ref: A-2
   asks: >-
     The Operation Name listed above produces or handles: Both organic and nonorganic product(s) /
@@ -105,21 +99,22 @@ items:
     DBA will appear on the organic certificate; each certified operation must have its own
     certificate, and the DBA(s) must be a legal part of the same operation listed under Operation
     Name.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - certification_contract.contract_notes
+    - certification_contract.uses_dba
+    - certification_contract.dba_names
+    - certification_contract.dba_registration
+    - certification_contract.dba_use
+    - certification_contract.dba_use_detail
     models:
     - company.Company.tradename
-    prints: 00-cover.pdf "Trade name (DBA)" (one DBA, when recorded); modules/operation_profile.pdf §A (prose)
-  gap: >-
-    Reused from the CCOF Contract A1/A3 (P2). Since 2026-10-23 the cover prints `Company.tradename`, a single
-    DBA. More than one DBA, and whether each is registered, can still be stated only as prose in
-    `contract_notes`.
-  fix: >-
-    Reuse A1/A3 — add structured `dba_used_on` / `dba_registered` fields (repeatable) to the contract
-    module.
+    prints: >-
+      00-cover.pdf "Trade name (DBA)"; modules/operation_profile.pdf §D (every DBA, where each is
+      registered and used)
+  note: >-
+    Closed 2026-11-13 with the CCOF Contract A1 and A3.
 - ref: A-4
   asks: >-
     Oregon Tilth primarily communicates and sends notifications via email to the primary contact.
@@ -135,28 +130,40 @@ items:
 - ref: B-1 (mailing)
   asks: 'Operation Mailing Address — where all certification communications will be sent: address, city, state,
     zip, country.'
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    models:
-    - company.Company.address
-    prints: —
-  gap: Reused from the CCOF Contract A6 (P3). No mailing-address field distinct from the company/establishment
-    address exists anywhere in the schema; `Company.address` is the registered business address, which need
-    not be where mail goes.
-  fix: Reuse A6 — optional `mailing_address` fields on the contract module; low priority, a one-time intake
-    detail OTCO collects directly.
+    questions:
+    - certification_contract.mailing_address_is
+    - certification_contract.mailing_address_street
+    - certification_contract.mailing_address_city
+    - certification_contract.mailing_address_state
+    - certification_contract.mailing_address_zip
+    - certification_contract.mailing_address_country
+    prints: >-
+      modules/operation_profile.pdf §D
+  note: >-
+    Closed 2026-11-13 with the CCOF Contract A6. OTCO's mailing address has no "same as" box; Trazo's
+    "same as the legal or physical address" names the address it means, printed above it.
 - ref: B-1 (billing)
   asks: 'Operation Billing Address (or "same as mailing address"): address, city, state, zip, country, Billing
     Contact Name, Billing Email Address.'
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: Reused from the CCOF Contract A7 (P3). No billing-address field, and no billing-contact name or email,
-    exists anywhere in the schema.
-  fix: Reuse A7 — optional `billing_address` and `billing_contact` fields on the contract module, or leave
-    it to OTCO's own intake; low priority.
+    questions:
+    - certification_contract.billing_address_is
+    - certification_contract.billing_address_street
+    - certification_contract.billing_address_city
+    - certification_contract.billing_address_state
+    - certification_contract.billing_address_zip
+    - certification_contract.billing_address_country
+    - certification_contract.operation_contacts
+    models:
+    - certifications.models.OperationContact
+    prints: >-
+      modules/operation_profile.pdf §D (address); §A (the billing contact's name and email)
+  note: >-
+    Closed 2026-11-13 with the CCOF Contract A7. The billing contact name and email are the person
+    marked billing contact on page A.
 - ref: B-1 (inspected location)
   asks: 'Operation Primary Location to be inspected (or "same as mailing address"): address, city, state, zip,
     country. If multiple locations will be inspected, complete the applicable C2 or H2 form for each location.'
@@ -266,23 +273,17 @@ items:
   asks: >-
     Public Contact Information — OTCO is required to share public contact information; list which
     can be shared publicly: public phone, public email, public website.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: '00-cover.pdf: Phone (no website or public email prints)'
-    models:
-    - company.Company.website
-    - company.Company.contact_email
-    - company.Establishment.email
-    - company.Establishment.phone
-    prints: 00-cover.pdf ("Phone") — website and public email never print
-  gap: >-
-    Reused from the CCOF Contract A1 (P2). `Company.website`, `Company.contact_email` and
-    `Establishment.email` exist and are printed nowhere in the packet (only the audit dossier prints
-    a contact email); nothing marks which of them the operation consents to have shared publicly.
-  fix: >-
-    Reuse A1 — print website and public email on the cover, with a `public_contact` flag on each so
-    the consent OTCO asks for is stated.
+    questions:
+    - certification_contract.public_contact_shared
+    - certification_contract.public_phone
+    - certification_contract.public_email
+    - certification_contract.public_website
+    prints: >-
+      modules/operation_profile.pdf §D
+  note: >-
+    Closed 2026-11-13 with the CCOF Contract A1.
 - ref: C-1
   asks: >-
     Indicate all scopes of certification you are applying for (described in the OTCO Certification

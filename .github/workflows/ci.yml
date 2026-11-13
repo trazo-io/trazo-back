@@ -498,6 +498,11 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-13: certifications.tests.test_operation_legal_entity joins. The Operation module's page D (CCOF Contract
+      # A1 to A4, A6, A7; OTCO O1 A-1, A-3, B-1, B-7): every question optional, the answers on the module PDF, the
+      # "same as" addresses hiding their boxes, and the register rows judged on them. Builds its own farm; no sibling
+      # repo.
+      #
       # 2026-11-12: certifications.tests.test_operation_contacts joins. The people the operation names to its agent
       # (OTCO O1 B-2 to B-6; CCOF Contract A4, C1, C2): the route's tenancy (admins and managers only), one primary and
       # one legally responsible contact per farm, the Operation module's table and review lines, and the register.
@@ -890,6 +895,7 @@ jobs:
             certifications.tests.test_operation_affidavit \
             certifications.tests.test_container_parcels \
             certifications.tests.test_operation_contacts \
+            certifications.tests.test_operation_legal_entity \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

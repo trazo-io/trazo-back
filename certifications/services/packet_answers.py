@@ -82,6 +82,7 @@ CONTACT_ROLE_ROWS = {
     ("O1", "B-4"): ("is_billing_contact",),
     ("O1", "B-5"): ("is_authorized_representative",),
     ("O1", "B-6"): ("is_responsibly_connected",),
+    ("O1", "B-1 (billing)"): ("is_billing_contact",),
     ("ORGB06", "A4"): ("is_responsibly_connected",),
     ("ORGB06", "C1"): ("is_primary_contact",),
     ("ORGB06", "C2"): ("is_authorized_representative",),

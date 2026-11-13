@@ -1947,6 +1947,21 @@ G6_5_SALES_SOE = Module(
 )
 
 
+def _address_questions(prefix: str, shown_when: tuple) -> tuple:
+    """Street, city, state, ZIP and country as five boxes, the way CCOF's Contract and OTCO's O1 lay out every address,
+    so each copies straight into the agent's own form. Shown only when the address is not "same as" another."""
+    return tuple(
+        Question(key=f"{prefix}_{part}", kind="text", label=label, required=False, visible_when=shown_when)
+        for part, label in (
+            ("street", text("Street address", "Dirección")),
+            ("city", text("City", "Ciudad")),
+            ("state", text("State or province", "Estado o provincia")),
+            ("zip", text("ZIP or postal code", "Código postal")),
+            ("country", text("Country", "País")),
+        )
+    )
+
+
 CERTIFICATION_CONTRACT = Module(
     key="certification_contract",
     code="",
@@ -2279,6 +2294,226 @@ CERTIFICATION_CONTRACT = Module(
                         "Afirmo que ningún producto se vendió, etiquetó ni presentó como orgánico desde la fecha "
                         "de la revocación.",
                     ),
+                ),
+            ),
+        ),
+        # 2026-11-13: CCOF Certification Contract A1 to A4, A6, A7 and OTCO O1 A-1, A-3, B-1, B-7. Who the
+        # operation is in law, the names it trades under, where mail and invoices go, and what may be published.
+        # The farm's physical address stays on its profile (it prints on the packet cover); every address here is
+        # asked as "same as" first, so nobody types one twice.
+        #
+        # Optional, every question, for the same reason as page B: making them required would turn every completed
+        # Operation profile back to incomplete on plans already in use.
+        ModulePage(
+            key="d_legal_entity",
+            title=text("D. Legal entity and addresses", "D. Entidad legal y direcciones"),
+            education=(
+                text(
+                    "Certifiers ask who the operation is in law, which names it trades under, where to send mail and "
+                    "invoices, and which contact details they may publish. The business name and the farm's "
+                    "physical address come from the farm profile and print on the packet cover.",
+                    "Los certificadores preguntan quién es la operación ante la ley, con qué nombres comercia, a "
+                    "dónde enviar el correo y las facturas, y qué datos de contacto pueden publicar. La razón social "
+                    "y la dirección física de la finca salen del perfil de la finca y se imprimen en la portada del "
+                    "paquete.",
+                ),
+            ),
+            questions=(
+                Question(
+                    key="legally_registered",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is the operation's business name a legally registered business?",
+                        "¿La razón social de la operación es un negocio registrado legalmente?",
+                    ),
+                    coaching=text(
+                        "Each certified operation must be its own legal entity, with its own certificate.",
+                        "Cada operación certificada debe ser su propia entidad legal, con su propio certificado.",
+                    ),
+                ),
+                Question(
+                    key="legal_structure",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "What is the operation's business structure?", "¿Cuál es la estructura legal del negocio?"
+                    ),
+                    coaching=text(
+                        "The owners, partners and officers go in the people list on page A, marked responsibly "
+                        "connected.",
+                        "Los dueños, socios y directivos van en la lista de personas de la página A, marcados con "
+                        "vínculo responsable.",
+                    ),
+                    options=(
+                        Option("sole_proprietorship", text("Sole proprietorship", "Empresa individual")),
+                        Option("partnership", text("Partnership", "Sociedad de personas (partnership)")),
+                        Option("corporation", text("Corporation", "Corporación")),
+                        Option(
+                            "llc", text("Limited liability company (LLC)", "Sociedad de responsabilidad limitada (LLC)")
+                        ),
+                        Option("other", text("Other", "Otra")),
+                    ),
+                ),
+                Question(
+                    key="legal_structure_other",
+                    kind="text",
+                    required=False,
+                    visible_when=(Condition("legal_structure", "eq", "other"),),
+                    label=text("Which structure?", "¿Qué estructura?"),
+                ),
+                Question(
+                    key="state_of_incorporation",
+                    kind="text",
+                    required=False,
+                    visible_when=(Condition("legal_structure", "one_of", ["corporation", "llc"]),),
+                    label=text("State of incorporation or registration", "Estado donde se constituyó o registró"),
+                ),
+                Question(
+                    key="uses_dba",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Does the operation trade under any name other than its business name (a DBA)?",
+                        "¿La operación comercia con algún nombre distinto de su razón social (un DBA)?",
+                    ),
+                    coaching=text(
+                        "A DBA goes on the organic certificate only when it is this same legal business under another "
+                        "name, not a separate operation.",
+                        "Un DBA va en el certificado orgánico solo si es este mismo negocio legal con otro nombre, no "
+                        "una operación aparte.",
+                    ),
+                ),
+                Question(
+                    key="dba_names",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("uses_dba", "truthy"),),
+                    label=text("List each DBA, one per line.", "Escribe cada DBA, uno por línea."),
+                ),
+                Question(
+                    key="dba_registration",
+                    kind="checkbox_group",
+                    required=False,
+                    visible_when=(Condition("uses_dba", "truthy"),),
+                    label=text("Where is it registered?", "¿Dónde está registrado?"),
+                    options=(
+                        Option("state", text("With the state", "Ante el estado")),
+                        Option("local", text("With the county or city", "Ante el condado o la ciudad")),
+                        Option("not_registered", text("Not registered", "Sin registrar"), exclusive=True),
+                    ),
+                ),
+                Question(
+                    key="dba_use",
+                    kind="radio",
+                    required=False,
+                    visible_when=(Condition("uses_dba", "truthy"),),
+                    label=text(
+                        "Where does the DBA appear in your records (invoices, bills of lading, labels)?",
+                        "¿Dónde aparece el DBA en tus registros (facturas, conocimientos de embarque, etiquetas)?",
+                    ),
+                    options=(
+                        Option("all", text("For all products and markets", "En todos los productos y mercados")),
+                        Option(
+                            "some",
+                            text("Only for some products or markets", "Solo en algunos productos o mercados"),
+                        ),
+                        Option("none", text("It does not appear in the records", "No aparece en los registros")),
+                    ),
+                ),
+                Question(
+                    key="dba_use_detail",
+                    kind="textarea",
+                    required=False,
+                    visible_when=(Condition("dba_use", "eq", "some"),),
+                    label=text("Which products or markets?", "¿Qué productos o mercados?"),
+                ),
+                Question(
+                    key="legal_address_is",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "What is the registered legal business address?",
+                        "¿Cuál es la dirección legal registrada del negocio?",
+                    ),
+                    options=(
+                        Option("physical", text("The farm's physical address", "La dirección física de la finca")),
+                        Option("other", text("A different address", "Otra dirección")),
+                    ),
+                ),
+                *_address_questions("legal_address", (Condition("legal_address_is", "eq", "other"),)),
+                Question(
+                    key="mailing_address_is",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "Where should certification mail go?", "¿A dónde debe llegar el correo postal de certificación?"
+                    ),
+                    options=(
+                        Option("legal", text("The registered legal address", "La dirección legal registrada")),
+                        Option("physical", text("The farm's physical address", "La dirección física de la finca")),
+                        Option("other", text("A different address", "Otra dirección")),
+                    ),
+                ),
+                *_address_questions("mailing_address", (Condition("mailing_address_is", "eq", "other"),)),
+                Question(
+                    key="billing_address_is",
+                    kind="radio",
+                    required=False,
+                    label=text("Where should invoices go?", "¿A dónde deben ir las facturas?"),
+                    coaching=text(
+                        "The billing contact's name and email are in the people list on page A.",
+                        "El nombre y el correo del contacto de facturación están en la lista de personas de la "
+                        "página A.",
+                    ),
+                    options=(
+                        Option("mailing", text("The mailing address", "La dirección postal")),
+                        Option("other", text("A different address", "Otra dirección")),
+                    ),
+                ),
+                *_address_questions("billing_address", (Condition("billing_address_is", "eq", "other"),)),
+                Question(
+                    key="public_contact_shared",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which contact details may your certifier publish?",
+                        "¿Qué datos de contacto puede publicar tu certificador?",
+                    ),
+                    coaching=text(
+                        "Certifiers list these in the USDA Organic Integrity Database and on the certificate. A "
+                        "public email is listed only; your certifier writes to the primary contact.",
+                        "Los certificadores los publican en la base de datos Organic Integrity del USDA y en el "
+                        "certificado. Un correo público solo se publica; tu certificador escribe al contacto "
+                        "principal.",
+                    ),
+                    options=(
+                        Option("phone", text("A phone number", "Un teléfono")),
+                        Option("email", text("An email address", "Un correo electrónico")),
+                        Option("website", text("A website", "Un sitio web")),
+                        Option("none", text("None of them", "Ninguno"), exclusive=True),
+                    ),
+                ),
+                Question(
+                    key="public_phone",
+                    kind="text",
+                    required=False,
+                    visible_when=(Condition("public_contact_shared", "includes", "phone"),),
+                    label=text("Public phone", "Teléfono público"),
+                ),
+                Question(
+                    key="public_email",
+                    kind="text",
+                    required=False,
+                    visible_when=(Condition("public_contact_shared", "includes", "email"),),
+                    label=text("Public email", "Correo electrónico público"),
+                ),
+                Question(
+                    key="public_website",
+                    kind="text",
+                    required=False,
+                    visible_when=(Condition("public_contact_shared", "includes", "website"),),
+                    label=text("Public website", "Sitio web público"),
                 ),
             ),
         ),
