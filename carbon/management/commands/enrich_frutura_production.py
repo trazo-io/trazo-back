@@ -507,7 +507,6 @@ class Command(BaseCommand):
             fuel_consumed=Decimal("5.0"),
             fuel_unit="L",
             fuel_type="diesel",
-            carbon_sequestration_potential=Decimal("1.2"),
             extra_data={
                 "species": "Lolium multiflorum (Annual Ryegrass)",
                 "seeding_rate_kg_ha": 25,
