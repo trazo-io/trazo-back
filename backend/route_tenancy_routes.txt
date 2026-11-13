@@ -372,8 +372,6 @@ api/^parcels\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser 
 api/^products/$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
 api/^products\.(?P<format>[a-z0-9]+)/?$	product.views.ProductsViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list
 api/^public_scans/$	history.views.PublicHistoryScanViewSet	AllowAny	post=create
-api/^public_scans/(?P<pk>[^/.]+)/comment/$	history.views.PublicHistoryScanViewSet	AllowAny	post=comment
-api/^public_scans/(?P<pk>[^/.]+)/comment\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	AllowAny	post=comment
 api/^public_scans/analytics_insights/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=analytics_insights
 api/^public_scans/analytics_insights\.(?P<format>[a-z0-9]+)/?$	history.views.PublicHistoryScanViewSet	IsAuthenticated	get=analytics_insights
 api/^public_scans/claim/$	history.views.PublicHistoryScanViewSet	IsAuthenticated	post=claim_scans
@@ -579,10 +577,6 @@ api/schema/	drf_spectacular.views.SpectacularAPIView	AllowAny	-
 api/schema/redoc/	drf_spectacular.views.SpectacularRedocView	AllowAny	-
 api/schema/swagger-ui/	drf_spectacular.views.SpectacularSwaggerView	AllowAny	-
 api/search/global/	common.views.global_search	IsAuthenticated	-
-api/security/health/	backend.security.views.QRSecurityHealthCheck	NON-DRF	-
-api/security/metrics/	backend.security.views.security_metrics	AllowAny	-
-api/security/qr-info/	backend.security.views.qr_security_info	AllowAny	-
-api/security/validate-production/	backend.security.views.validate_production_access	AllowAny	-
 api/security/verify-qr/	backend.security.views.verify_qr_code	AllowAny	-
 api/subscriptions/	rest_framework.routers.APIRootView	IsAuthenticated	-
 api/subscriptions/<drf_format_suffix:format>	rest_framework.routers.APIRootView	IsAuthenticated	-

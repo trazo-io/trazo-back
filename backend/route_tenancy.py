@@ -391,11 +391,10 @@ ROUTE_TENANCY = {
     "history.views.PublicHistoryScanViewSet": Route(
         ANONYMOUS,
         "shopper scans; a GenericViewSet, so only create and the declared actions are routed; "
-        "create needs a published season; consent and comment need the scan's claim_token",
+        "create needs a published season; consent needs the scan's claim_token",
         outsider_tests=(
             f"{_PUBSCANS}.test_stranger_cannot_delete_read_or_edit_a_scan",
-            f"{_PUBSCANS}.test_comment_without_the_claim_token_is_refused",
-            f"{_PUBSCANS}.test_comment_with_another_scans_token_is_refused",
+            f"{_PUBSCANS}.test_nobody_can_write_a_comment_onto_a_scan",
         ),
     ),
     "history.views.RecordsExportViewSet": Route(COMPANY, "nested only; any member role may export"),
@@ -536,15 +535,10 @@ ROUTE_TENANCY = {
     # ---------------------------------------------------------------------------------------------
     # platform: security utilities, health, schema, router root
     # ---------------------------------------------------------------------------------------------
-    "backend.security.views.QRSecurityHealthCheck": Route(
-        ANONYMOUS,
-        "security health probe",
-        finding="calls Secrets Manager per request and returns str(e) to anonymous callers; check "
-        "whether the error text carries the IAM ARN or account id",
-    ),
-    "backend.security.views.qr_security_info": Route(ANONYMOUS, "static QR format help"),
-    "backend.security.views.security_metrics": Route(ANONYMOUS, "aggregate counters"),
-    "backend.security.views.validate_production_access": Route(ANONYMOUS, "published productions only"),
+    # QRSecurityHealthCheck, qr_security_info, security_metrics and validate_production_access were
+    # REMOVED on 2026-11-13: anonymous, no caller anywhere. The health probe's finding (Secrets
+    # Manager per request, str(e) to anonymous callers, and whether the QR signing key was the
+    # fallback) closed with it.
     "backend.security.views.verify_qr_code": Route(ANONYMOUS, "HMAC-checked, published productions only"),
     "backend.urls.get_csrf_token": Route(ANONYMOUS, "issues the CSRF cookie"),
     "backend.urls.simple_test": Route(DEAD, "static ok at /test/, not gated by DEBUG"),
@@ -561,4 +555,4 @@ ROUTE_TENANCY = {
 UNPROVEN_CEILING = 48
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 17
+OPEN_FINDINGS_CEILING = 16

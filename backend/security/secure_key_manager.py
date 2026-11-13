@@ -35,7 +35,7 @@ SECRETS_CLIENT_CONFIG = Config(
 
 #: After a connection timeout, how long lookups skip Secrets Manager and use the environment. A
 #: window, not a permanent switch (review of back #288): `SecureKeyManager` is a process-lifetime
-#: singleton that also serves request-time lookups and `/api/security/health/`, so a flag that
+#: singleton that also serves request-time lookups and `health_check()`, so a flag that
 #: never reset would turn one network blip into a worker that never asks again.
 UNREACHABLE_BACKOFF_SECONDS = 60
 

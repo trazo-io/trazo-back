@@ -42,7 +42,7 @@ class SecretsClientIsBoundedTests(SimpleTestCase):
     @override_settings(ENVIRONMENT="production")
     def test_after_a_timeout_lookups_skip_aws_for_a_window_then_retry(self):
         """Review of back #288: a permanent switch would latch a long-lived worker (and its
-        /api/security/health/ answer) on one blip. It is a window, then AWS is asked again."""
+        health_check() answer) on one blip. It is a window, then AWS is asked again."""
         from botocore.exceptions import ConnectTimeoutError
 
         fake = mock.Mock()

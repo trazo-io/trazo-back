@@ -76,7 +76,8 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     # route that does not exist.
     "PublicHistoryScanViewSet.create::AllowAny": "shopper scan tally; consent gating in PrivacyService",
     "PublicHistoryScanViewSet.upgrade_consent::AllowAny": "claim_token authorises it (256-bit, unique)",
-    "PublicHistoryScanViewSet.comment::AllowAny": "authorised by claim_token, as consent is; one comment per scan",
+    # `PublicHistoryScanViewSet.comment` was REMOVED on 2026-11-13: no surface has a comment input
+    # and the app's two writers (zero call sites) went in trazo-app #383.
     # --- Certifier review links. Bearer-token in the URL is the credential. ---
     "certifier_review_metadata::AllowAny": "opaque review token",
     "certifier_review_readiness::AllowAny": "opaque review token",
@@ -129,15 +130,15 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     "SpectacularSwaggerView::AllowAny": "API docs UI",
     "SpectacularRedocView::AllowAny": "API docs UI",
     # --- Security utilities. Must not echo farm data; see backend/security/views.py. ---
-    "qr_security_info::AllowAny": "QR format help, no farm data",
     "verify_qr_code::AllowAny": "QR signature check",
-    "validate_production_access::AllowAny": "public-visibility check for a production",
-    "security_metrics::AllowAny": "aggregate counters only",
+    # qr-info, validate-production and metrics were REMOVED on 2026-11-13 with no caller anywhere.
+    # `metrics` gave any stranger the platform's count of published seasons.
     # --- Plain Django views: no DRF permission layer at all. Module-qualified so a new view
     #     cannot inherit one of these approvals by sharing a decorator wrapper's name. ---
     "backend.urls.get_csrf_token::NON-DRF": "issues the CSRF cookie; must be reachable pre-auth",
     "common.views.health_check::NON-DRF": "liveness probe",
-    "backend.security.views.view::NON-DRF": "security health probe (decorator-wrapped)",
+    # `backend.security.views.view` (the QR security health probe) was REMOVED on 2026-11-13. It
+    # told anonymous callers whether the QR signing key was the fallback, and echoed str(e).
     "subscriptions.views.stripe_webhook::NON-DRF": "Stripe calls it; signature-authenticated, not session",
     "fieldnotes.views.inbound_message_webhook::NON-DRF": (
         "WhatsApp inbound messages. Signature-authenticated per provider (Twilio HMAC-SHA1 over the "

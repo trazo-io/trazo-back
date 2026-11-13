@@ -1,4 +1,3 @@
-import hmac
 import json
 import logging
 import threading
@@ -3091,76 +3090,6 @@ class PublicHistoryScanViewSet(viewsets.GenericViewSet):
 
             logger = logging.getLogger(__name__)
             logger.error(f"Error creating scan notification: {e}", exc_info=True)
-
-    @action(detail=True, methods=["post"], permission_classes=[AllowAny])
-    def comment(self, request, pk=None):
-        """
-        Enhanced comment endpoint with validation and bot protection
-        """
-        # Before the try: its `except Exception` turns a 404 into a 500.
-        history_scan = get_object_or_404(HistoryScan, pk=pk)
-
-        # Authorised by the scan's claim_token, as `consent` is: only the browser that made the scan
-        # received it. Until 2026-10-21 any stranger could write onto any farm's scan by id.
-        claim_token = request.data.get("claim_token")
-        # Compared as bytes: compare_digest raises TypeError on a non-ASCII str, which was an
-        # anonymous 500 that only existing scans produced (an existence oracle).
-        if not isinstance(claim_token, str) or not hmac.compare_digest(
-            claim_token.encode(), (history_scan.claim_token or "").encode()
-        ):
-            raise Http404
-
-        try:
-            # Bot detection for comment updates
-            should_block, block_reason = self.bot_detection_service.should_block_request(request, request.data)
-
-            if should_block:
-                return Response(
-                    {"error": "Request rejected", "reason": block_reason}, status=status.HTTP_429_TOO_MANY_REQUESTS
-                )
-
-            comment = request.data.get("comment", None)
-            if comment is None:
-                return Response({"error": "Comment is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # SECURITY: Prevent overwriting existing comments (IDOR protection)
-            # Anonymous consumers can only set a comment once per scan
-            if history_scan.comment and history_scan.comment.strip():
-                return Response(
-                    {"error": "Comment already exists for this scan"},
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            # Validate comment
-            if len(comment) > 1000:
-                return Response({"error": "Comment too long (max 1000 characters)"}, status=status.HTTP_400_BAD_REQUEST)
-
-            if self._contains_suspicious_content(comment):
-                return Response({"error": "Comment contains inappropriate content"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Update comment and recalculate engagement score
-            history_scan.comment = comment
-
-            # Recalculate engagement based on comment
-            if comment and len(comment.strip()) > 0:
-                if len(comment) > 50:
-                    history_scan.engagement_score = max(history_scan.engagement_score, 0.4)
-                elif len(comment) > 20:
-                    history_scan.engagement_score = max(history_scan.engagement_score, 0.3)
-                else:
-                    history_scan.engagement_score = max(history_scan.engagement_score, 0.2)
-
-            history_scan.save()
-
-            return Response({"message": "Comment updated successfully"}, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Comment update failed: {str(e)}", exc_info=True)
-
-            return Response({"error": "Failed to update comment"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=["post"], url_path="claim", permission_classes=[IsAuthenticated])
     def claim_scans(self, request):
