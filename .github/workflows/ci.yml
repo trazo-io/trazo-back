@@ -684,6 +684,11 @@ jobs:
       # the old one; a password change, reset or email change ends every session (access tokens by
       # issue time, refresh tokens blacklisted). It does not read the sibling repo.
       #
+      # 2026-11-13: certifications.tests.test_refresh_usda_organic_mirror joins. The daily refresh
+      # imports a newer USDA Organic Integrity export only when one exists, stamps it with USDA's
+      # month, re-verifies after, and fails the run only when the mirror is over a month behind. The
+      # download and both commands are faked. No sibling repo read.
+      #
       # 2026-11-13: common.tests.test_backup_database_offsite joins (OV-ST-C13). The daily off-platform
       # dump uploads only with the put-only user, encrypted, after pg_restore can read it, and fails
       # the run when unconfigured. pg_dump and S3 are faked. No sibling repo read.
@@ -1077,6 +1082,7 @@ jobs:
             users.tests.test_account_closure \
             certifications.tests.test_verification_notes \
             common.tests.test_backup_database_offsite \
+            certifications.tests.test_refresh_usda_organic_mirror \
             backend.tests.test_sentry_scrub \
             backend.security.tests.test_checks \
             users.tests.test_signup_alerts_and_terms \
