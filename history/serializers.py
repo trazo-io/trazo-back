@@ -4728,6 +4728,9 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # `test_consumer_extra_data_claim_shapes.py` fails the build if any of these ever
         # reaches an anonymous payload again.
         "score",
+        # A soil-carbon SEQUESTRATION figure (2026-11-13): a credit the methodology excludes,
+        # whatever key a seed or template files it under.
+        "sequestr",
         "_reduction",
         "reduction_",
         "_improvement",
@@ -5899,11 +5902,12 @@ class PublicHistorySerializer(serializers.ModelSerializer):
                             if isinstance(getattr(event, "test_results", None), dict)
                             else None
                         ),
-                        "carbon_sequestration_potential": (
-                            float(event.carbon_sequestration_potential)
-                            if getattr(event, "carbon_sequestration_potential", None) is not None
-                            else None
-                        ),
+                        # NEVER `carbon_sequestration_potential` here. Until 2026-11-13 this
+                        # anonymous payload carried it: a "sequestration" figure in kg CO2e,
+                        # a modelled estimate with no form behind it, published to anyone with
+                        # the QR. Soil-carbon stock change is excluded from Trazo's carbon
+                        # (carbon-methodology.md, 2026-10-28; the calculator's own credits left
+                        # in #397). Guard: test_no_public_sequestration_figure.py.
                         # Raw values only - no fallbacks
                         "area_covered": getattr(event, "area_covered", None),  # Numeric area covered
                         "area_unit": getattr(event, "area_unit", None),  # ha, acres, m2, km2 (raw)
@@ -6848,7 +6852,10 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "reviewer_name",
             "review_date",
         ]
-        read_only_fields = ["id"]
+        # `carbon_sequestration_potential` is still SHOWN to the producer (records that already
+        # carry one) but no longer written: no form ever had the input, and the figure is the
+        # soil-carbon term the methodology excludes (2026-11-13).
+        read_only_fields = ["id", "carbon_sequestration_potential"]
 
     def to_internal_value(self, data):
         """

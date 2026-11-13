@@ -744,11 +744,19 @@ jobs:
       # new EquipmentEvent (type 4, merged into Production as Equipment maintenance), single or
       # multi-parcel, while existing rows stay readable and editable. It does not read the sibling
       # repo.
+      # 2026-11-13: history.tests.test_no_public_sequestration_figure joins. No soil-carbon
+      # sequestration figure reaches the anonymous QR payload: not the named field, not an
+      # extra_data key shaped like one (even if allow-listed), and the update API no longer writes
+      # it. history.tests.test_consumer_extra_data_claim_shapes joins with it: the shape guard for
+      # claim-shaped extra_data keys (2026-08-03) was never in this list. Neither reads the sibling
+      # repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
             history.tests.test_anonymous_endpoint_inventory \
             history.tests.test_consumer_qr_privacy_regression \
+            history.tests.test_consumer_extra_data_claim_shapes \
+            history.tests.test_no_public_sequestration_figure \
             history.tests.test_pest_identifier_is_farm_reported \
             history.tests.test_unpublished_lot_hidden_from_owner_public_view \
             history.tests.test_cross_surface_claim_safety \
