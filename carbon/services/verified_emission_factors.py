@@ -3147,6 +3147,7 @@ class VerifiedEmissionFactors:
         organic_approved: str = "",
         is_fertigation: bool = False,
         chemical_mass_kg: float = None,
+        application_pass_counted_on_line: int = None,
     ) -> Dict[str, Any]:
         """
         Calculate chemical application emissions using EPA/USDA verified emission factors.
@@ -3188,6 +3189,10 @@ class VerifiedEmissionFactors:
             application_fuel_unit: Unit of application_fuel_consumed (L, gal, kg, kWh)
             concentration: Active ingredient concentration as percentage (e.g., 2.5 for 2.5%).
                           Used to calculate actual active ingredient mass for pesticides/herbicides/fungicides.
+            application_pass_counted_on_line: For a product sprayed from a tank with others, the tank
+                          line whose record carries the one pass's application fuel (None when this
+                          record carries it). Like fertigation, the application emissions are then
+                          skipped here so one pass is not counted once per product.
         """
 
         has_volume = volume_liters > 0 or (chemical_mass_kg is not None and chemical_mass_kg > 0)
@@ -3473,6 +3478,18 @@ class VerifiedEmissionFactors:
             calculation_basis = "fertigation_no_application_fuel"
             calculation_method_note = "Fertigation — application fuel skipped (counted in irrigation event)"
 
+        # Tank mix (OV-RK-C04): several products, one pass. The same skip as fertigation: the pass's
+        # fuel is counted once per target, on the record of the tank's lowest-numbered line there
+        # (history/services/tank_mix.py), and this product keeps only its own manufacturing.
+        elif application_pass_counted_on_line is not None:
+            application_emissions = 0.0
+            total_fuel_liters = 0.0
+            total_fuel_gallons = 0.0
+            calculation_basis = "tank_mix_pass_counted_on_another_line"
+            calculation_method_note = (
+                f"Tank mix: the application pass is counted once, on line {application_pass_counted_on_line}"
+            )
+
         # Check if actual fuel consumption is provided
         elif application_fuel_consumed is not None and application_fuel_consumed > 0 and application_fuel_type:
             # Use actual application fuel data
@@ -3579,11 +3596,20 @@ class VerifiedEmissionFactors:
                 # - Hand sprayer (small scale): 0.8-1.2 L diesel/ha
                 # CALIBRATED: For pesticides/herbicides/fungicides - much lower fuel than fertilizers
                 fuel_consumption_per_ha = 0.8  # L diesel/ha (CALIBRATED for chemical efficiency)
-            elif application_method.lower() in ["airblast", "airblast_sprayer", "orchard_spray", "tree_spray"]:
+            elif application_method.lower() in [
+                "airblast",
+                "air_blast",
+                "airblast_sprayer",
+                "orchard_spray",
+                "tree_spray",
+            ]:
                 # Orchard airblast sprayers - high fuel consumption for air movement
                 # Real-world range: 3.0-5.0 L diesel/ha depending on tree density
+                # `air_blast` is the code the app and APPLICATION_METHOD store (2026-11-12): until it
+                # was listed here every orchard air-blast spray fell to the 2.0 L/ha default.
                 fuel_consumption_per_ha = 4.0  # L diesel/ha (apple orchards typical)
-            elif application_method.lower() in ["injection", "incorporation"]:
+            elif application_method.lower() in ["injection", "incorporation", "soil_incorporation"]:
+                # `soil_incorporation` is the stored code for the same method (APPLICATION_METHOD).
                 # Soil injection requires more power for penetration
                 # Real-world: 2.5-4.0 L diesel/ha for injection equipment
                 fuel_consumption_per_ha = 3.0  # L diesel/ha (2x previous estimate)
@@ -3659,6 +3685,10 @@ class VerifiedEmissionFactors:
         # emissions are unaffected. Lets the UI/audit show "enter concentration for an
         # accurate manufacturing estimate" instead of a silently-invented number.
         breakdown["active_ingredient_concentration_provided"] = not ai_concentration_missing
+        if application_pass_counted_on_line is not None:
+            # Says where the pass went, so a zero application figure is never read as "no fuel".
+            breakdown["application_pass_counted_on_line"] = application_pass_counted_on_line
+            breakdown["application_pass_note"] = calculation_method_note
         if ai_concentration_missing:
             breakdown["manufacturing_emissions_omitted"] = True
             breakdown["manufacturing_omitted_reason"] = (

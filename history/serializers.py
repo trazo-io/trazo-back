@@ -788,6 +788,53 @@ def _validate_carrier_volume(serializer, data):
         raise serializers.ValidationError(errors)
 
 
+def _validate_tank_line_fuel(serializer, data):
+    """One tank, one pass, one fuel figure: only the line that carries the pass takes it.
+
+    The pass's application emissions are counted on the tank's lowest-numbered line on the target
+    (`history/services/tank_mix.py`). Fuel typed on another line would be stored and then counted
+    nowhere, so an edit that sets it there is refused and says where it goes. A value the record
+    already holds round-trips untouched.
+    """
+    instance = getattr(serializer, "instance", None)
+    fuel = data.get("application_fuel_consumed")
+    if instance is None or fuel in (None, "") or fuel == instance.application_fuel_consumed:
+        return
+    from history.services.tank_mix import pass_counted_on_line
+
+    carrier = pass_counted_on_line(instance)
+    if carrier is not None:
+        raise serializers.ValidationError(
+            {
+                "application_fuel_consumed": (
+                    f"This spray shared a tank, and the pass's fuel is recorded on line {carrier} of it. "
+                    "Enter the fuel there."
+                )
+            }
+        )
+
+
+def _validate_tank_line_move(serializer, data):
+    """A product holding its tank pass's measured fuel moves off its block last (`tank_mix`).
+
+    A season or block change on the record that carries the fuel, while other products of the tank
+    stay on the block, is refused with the way forward; clearing the fuel in the same edit lets it go.
+    """
+    instance = getattr(serializer, "instance", None)
+    if instance is None or not getattr(instance, "tank_mix_group", None):
+        return
+    if "block_id" not in data and "history" not in data:
+        return
+    if "application_fuel_consumed" in data and data["application_fuel_consumed"] in (None, "", 0):
+        return
+    from history.services.tank_mix import carrier_move_refusal
+
+    history = data.get("history", instance.history)
+    message = carrier_move_refusal(instance, getattr(history, "pk", history), data.get("block_id", instance.block_id))
+    if message:
+        raise serializers.ValidationError({"block_id": message})
+
+
 class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     _receipt_event_type = CHEMICAL_EVENT_TYPE
     # The record's receipt field OR a file filed on the record from Documents (record_receipts):
@@ -904,6 +951,11 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "applied_by_pcb",
             "pcb_name",
             "tank_mix_partners",
+            # Tank mix (OV-RK-C04): which records shared a tank, in which order, as what. Read only:
+            # written once by the tank write path (history/services/tank_mix.py).
+            "tank_mix_group",
+            "tank_mix_line",
+            "tank_mix_role",
             # State application facts (OV-FJ-C11; WAC 16-228-1320(1)(e)(h)(k)(l)(n)). Operator-typed;
             # the applicator's address and phone are copies on the record, never a link.
             "wind_from",
@@ -927,7 +979,14 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             "national_list_basis",
             "national_list_suggestion",
         ]
-        read_only_fields = ["id", "national_list_basis", "national_list_suggestion"]
+        read_only_fields = [
+            "id",
+            "national_list_basis",
+            "national_list_suggestion",
+            "tank_mix_group",
+            "tank_mix_line",
+            "tank_mix_role",
+        ]
         # Allow both old and new field names by making old fields optional
         extra_kwargs = {
             "volume": {"required": False, "allow_blank": True, "allow_null": True},
@@ -1240,6 +1299,8 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             raise serializers.ValidationError({"phi_days": "Pre-Harvest Interval (PHI) cannot be negative"})
 
         _validate_carrier_volume(self, data)
+        _validate_tank_line_fuel(self, data)
+        _validate_tank_line_move(self, data)
         data = _validate_not_on_source_record(self, data)
         return _record_national_list_basis(self, data)
 
@@ -1401,6 +1462,11 @@ class ChemicalEventSerializer(EventSerializer):
             "applied_by_pcb",
             "pcb_name",
             "tank_mix_partners",
+            # Tank mix (OV-RK-C04): which records shared a tank, in which order, as what. Read only:
+            # written once by the tank write path (history/services/tank_mix.py).
+            "tank_mix_group",
+            "tank_mix_line",
+            "tank_mix_role",
             # State application facts (OV-FJ-C11; WAC 16-228-1320(1)(e)(h)(k)(l)(n)). Operator-typed;
             # the applicator's address and phone are copies on the record, never a link.
             "wind_from",
@@ -1433,6 +1499,9 @@ class ChemicalEventSerializer(EventSerializer):
             "drift_warning",
             "national_list_basis",
             "national_list_suggestion",
+            "tank_mix_group",
+            "tank_mix_line",
+            "tank_mix_role",
         ]
 
     def validate(self, data):

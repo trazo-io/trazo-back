@@ -252,31 +252,107 @@ def calculate_chemical_event_carbon(sender, instance, created, **kwargs):
     """
     # Always calculate carbon for both create AND update operations
     try:
-        calculator = _get_calculator()
-
-        # For updates, delete the existing CarbonEntry first to avoid duplicates
-        if not created:
-            # By the activity link (carbon/event_link.py), after linking any unlinked row the
-            # writer's text ties to this event. The text alone matched a user's forged entry.
-            existing_entries = entries_for_event(instance)
-            deleted_count = existing_entries.count()
-
-            if deleted_count > 0:
-                existing_entries.delete()
-                print(f"🔄 Deleted {deleted_count} existing carbon entries for ChemicalEvent {instance.id} (update)")
-
-        calculation_result = calculator.calculate_chemical_event_impact(instance)
-
-        # Create carbon entry as the authoritative source - single source of truth
-        co2e_value = calculation_result.get("co2e", 0)
-        if abs(co2e_value) > 0:
-            carbon_entry = calculator.create_carbon_entry_from_event(instance, calculation_result)
-
-        action = "created" if created else "updated"
-        print(f"✅ Carbon calculation {action} for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e")
-
+        _recalculate_chemical_carbon(instance, created)
     except Exception as e:
         logger.error("Error calculating carbon for Chemical Event %s: %s", instance.id, e, exc_info=True)
+        return
+
+    # A tank line that moved to another target (its season or block was edited) changes which
+    # line carries the pass on both targets: recompute the other lines there.
+    if not created and getattr(instance, "tank_mix_group", None):
+        before = getattr(instance, "_tank_target_before", None)
+        targets = {(instance.history_id, instance.block_id)}
+        if before is not None:
+            targets.add(before)
+        if len(targets) > 1:
+            _recompute_tank_lines(instance, targets)
+
+
+def _recalculate_chemical_carbon(instance, created=False):
+    """Replace a chemical record's carbon entry with a fresh calculation (the post_save body)."""
+    calculator = _get_calculator()
+
+    # For updates, delete the existing CarbonEntry first to avoid duplicates
+    if not created:
+        # By the activity link (carbon/event_link.py), after linking any unlinked row the
+        # writer's text ties to this event. The text alone matched a user's forged entry.
+        existing_entries = entries_for_event(instance)
+        deleted_count = existing_entries.count()
+
+        if deleted_count > 0:
+            existing_entries.delete()
+            print(f"🔄 Deleted {deleted_count} existing carbon entries for ChemicalEvent {instance.id} (update)")
+
+    calculation_result = calculator.calculate_chemical_event_impact(instance)
+
+    # Create carbon entry as the authoritative source - single source of truth
+    co2e_value = calculation_result.get("co2e", 0)
+    if abs(co2e_value) > 0:
+        calculator.create_carbon_entry_from_event(instance, calculation_result)
+
+    action = "created" if created else "updated"
+    print(f"✅ Carbon calculation {action} for Chemical Event {instance.id}: {calculation_result['co2e']} kg CO2e")
+
+
+def _recompute_tank_lines(instance, targets):
+    """Recompute the carbon of the OTHER lines of `instance`'s tank on these (season, block) targets.
+
+    Which line carries a tank's one application pass is a fact about its target, not about one
+    record (`history/services/tank_mix.py`): when a line leaves a target, or a new one arrives, the
+    records that stay there may start or stop carrying it.
+    """
+    from history.models import ChemicalEvent
+
+    for history_id, block_id in targets:
+        if history_id is None:
+            continue
+        siblings = ChemicalEvent.objects.filter(
+            tank_mix_group=instance.tank_mix_group, history_id=history_id, block_id=block_id
+        ).exclude(pk=instance.pk)
+        for sibling in siblings:
+            try:
+                _recalculate_chemical_carbon(sibling, created=False)
+            except Exception as e:
+                logger.error("Error recalculating carbon for tank line %s: %s", sibling.id, e, exc_info=True)
+
+
+@receiver(pre_save, sender=ChemicalEvent, dispatch_uid="tank_mix_target_before")
+def remember_tank_line_target(sender, instance, **kwargs):
+    """Where a tank line was before this save, so post_save can tell whether it moved."""
+    instance._tank_target_before = None
+    if instance.pk is None or not getattr(instance, "tank_mix_group", None):
+        return
+    instance._tank_target_before = (
+        ChemicalEvent.objects.filter(pk=instance.pk).values_list("history_id", "block_id").first()
+    )
+
+
+@receiver(post_delete, sender=ChemicalEvent, dispatch_uid="tank_mix_pass_hand_off")
+def hand_off_tank_mix_pass(sender, instance, **kwargs):
+    """Deleting the line that carried a tank's pass hands the pass to the next line on its target.
+
+    The application emissions of one pass are counted on ONE record of the tank on that target
+    (`history/services/tank_mix.py`, `carrier_of`). Without this, deleting it would leave the pass
+    counted nowhere until someone happened to edit another line. When the deleted record held the
+    pass's MEASURED fuel, the new carrier gets that fuel (`hand_off_fuel`, through its own save, so
+    its audit trail shows it): otherwise the pass would quietly turn into an area estimate.
+    """
+    try:
+        if not getattr(instance, "tank_mix_group", None) or instance.history_id is None:
+            return
+        from history.models import History
+        from history.services.tank_mix import hand_off_fuel
+
+        # A cascade from the season or the parcel: everything on the target is going too.
+        if not History.objects.filter(pk=instance.history_id).exists():
+            return
+        remaining = ChemicalEvent.objects.filter(
+            tank_mix_group=instance.tank_mix_group, history_id=instance.history_id, block_id=instance.block_id
+        ).exclude(pk=instance.pk)
+        hand_off_fuel(instance, remaining)
+        _recompute_tank_lines(instance, {(instance.history_id, instance.block_id)})
+    except Exception as e:
+        logger.error("Error handing off the tank pass of ChemicalEvent %s: %s", instance.id, e, exc_info=True)
 
 
 @receiver(post_save, sender=ProductionEvent)

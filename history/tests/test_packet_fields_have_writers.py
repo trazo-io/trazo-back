@@ -74,6 +74,13 @@ SERVER_ASSIGNED = {
     # Added 2026-11-02: one application logged on several parcels shares this id. `editable=False`
     # on the model, assigned by history/services/multi_target.py, never typed.
     "application_group": "server-assigned by multi-parcel logging (history/services/multi_target.py)",
+    # Added 2026-11-12 (OV-RK-C04): which records shared a tank, and as what. `editable=False` on
+    # the model, written by the tank write path from the request envelope
+    # (history/services/tank_mix.py): the tank id is client-minted, the line is the order of the
+    # products, the role is the "What it is" select of each tank line (TankMixLines.tsx).
+    "tank_mix_group": "server-assigned by the tank-mix write path (history/services/tank_mix.py)",
+    "tank_mix_line": "server-assigned by the tank-mix write path, the order of the products",
+    "tank_mix_role": "server-assigned from each tank line's role (history/services/tank_mix.py)",
 }
 
 #: Model fields whose packet cell is fed by a DIFFERENT writable field. The packet reads the

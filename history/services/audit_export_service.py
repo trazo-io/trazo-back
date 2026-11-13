@@ -6463,7 +6463,11 @@ class AuditExportService:
                 # in the document whose purpose is to fully identify what was applied
                 # (7 CFR 205.103(b)). The default 120-char cap stays as a runaway guard.
                 self._cell(ev.commercial_name),
-                self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                # A tank's adjuvant line reads "Adjuvant", as a legacy tank-mix partner row does
+                # below: it is recorded under the tank's spray type, and is not a pesticide of it.
+                self._cell(
+                    "Adjuvant" if ev.tank_mix_role == "adjuvant" else CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))
+                ),
                 # The phrase, not a blank, when the operator said the source record does not show it.
                 self._cell(concentration_text(ev)),
                 self._cell(amount or None),
@@ -7201,17 +7205,28 @@ class AuditExportService:
           * Authorised by — GLOBALG.A.P. FV-GFS 32.02.01 #10 asks for the
             technically-responsible person who approved the application, who is often not
             the operator who made it.
+          * Tank (OV-RK-C04): several products sprayed from one tank are one record each, every
+            one a full row of Table 1. The Product cell here says which records shared the tank
+            ("line 1 of 3. One tank with: Kocide 3000-O, Dyne-Amic (adjuvant)"), so an inspector
+            can trace the three rows back to one pass.
         """
+        from history.services.tank_mix import tank_cell_text
+
         rows = []
         for ev in events:
             stage = ev.get_growth_stage_display() if ev.growth_stage else None
             scope = self._applied_scope_display(ev)
-            if not (stage or ev.is_fertigation or ev.authorizer_name or scope):
+            tank = tank_cell_text(ev)
+            if not (stage or ev.is_fertigation or ev.authorizer_name or scope or tank):
                 continue
+            product = ev.commercial_name or ""
+            if tank:
+                product = f"{product} ({tank})" if product else tank
             rows.append(
                 [
                     self._cell(_fmt_date(ev.date)),
-                    self._cell(ev.commercial_name),
+                    # The tank sentence names every product of the tank: never cut it short.
+                    self._cell(product or None, max_len=1000),
                     self._cell(stage),
                     self._cell("Yes" if ev.is_fertigation else "No"),
                     self._cell(scope),
@@ -18472,6 +18487,12 @@ class AuditExportService:
             # The packet's conditions table (wind, temperature, carrier, apparatus, applicator and
             # firm contact), in Notes for the reason Treated scope is: a stable header.
             chem_note_parts.extend(f"{label}: {text}" for label, text in application_conditions(ev, _method_label))
+            # Which records shared a tank (OV-RK-C04). The CSV has no id columns to add a tank id
+            # and line beside, so they go in Notes, like the conditions above: the header stays.
+            if ev.tank_mix_group:
+                from history.services.tank_mix import tank_cell_text
+
+                chem_note_parts.append(f"Tank {ev.tank_mix_group}, {tank_cell_text(ev)}")
             if self._event_transcription_text(ev):
                 chem_note_parts.append(self._event_transcription_text(ev))
             chem_notes = _val(" | ".join(chem_note_parts))
@@ -18481,7 +18502,12 @@ class AuditExportService:
                     [
                         _fmt_date(ev.date),
                         "Chemical",
-                        CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type)),
+                        # Same label as the packet's Table 1 for a tank's adjuvant line.
+                        (
+                            "Adjuvant"
+                            if ev.tank_mix_role == "adjuvant"
+                            else CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))
+                        ),
                         _val(ev.description),
                         _val(ev.commercial_name),
                         amount,

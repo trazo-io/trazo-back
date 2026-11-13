@@ -3449,7 +3449,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         self._refuse_a_retired_event_type(request)
-        if hasattr(request.data, "get") and "targets" in request.data:  # a scalar body has no `in`
+        is_object = hasattr(request.data, "get")  # a JSON array or scalar body has no `in`
+        # A tank mix also carries `targets`, so it is routed first (history/services/tank_mix.py).
+        if is_object and "products" in request.data:
+            return self._create_tank_mix(request)
+        if is_object and "targets" in request.data:
             return self._create_multi_target(request)
         response = super().create(request, *args, **kwargs)
         self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
@@ -3709,11 +3713,50 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 serializer_class = UpdateGeneralEventSerializer
 
             serializer = serializer_class(instance)
-            return Response(self._with_application_group(serializer.data, instance))
+            return Response(self._with_tank_mix(self._with_application_group(serializer.data, instance), instance))
 
         # Default behavior
         serializer = self.get_serializer(instance)
-        return Response(self._with_application_group(serializer.data, instance))
+        return Response(self._with_tank_mix(self._with_application_group(serializer.data, instance), instance))
+
+    @staticmethod
+    def _with_tank_mix(data, instance):
+        """The other products of the tank this record was sprayed from, on the record's detail.
+
+        Each product of a tank is its own record (`history/services/tank_mix.py`), edited and
+        corrected on its own. Without this a grower opening one could not tell it shared a tank,
+        nor that the pass's fuel is counted on another line. `tank_mix` is None outside a tank.
+        Lists the lines on this record's own target (season and block), the ones an inspector
+        traces together.
+        """
+        from .services import tank_mix
+
+        data = dict(data)
+        if not getattr(instance, "tank_mix_group", None):
+            data["tank_mix"] = None
+            return data
+        others = tank_mix.other_lines(instance)
+        # ONE record carries the pass, decided by (line, pk): two records left with one line
+        # number would otherwise both say they carry it.
+        carrier = tank_mix.pass_carrier(instance)
+        data["tank_mix"] = {
+            "group": str(instance.tank_mix_group),
+            "line": instance.tank_mix_line,
+            "role": instance.tank_mix_role,
+            "carries_pass": carrier is None or carrier.pk == instance.pk,
+            "pass_line": carrier.tank_mix_line if carrier is not None else None,
+            "pass_record": carrier.pk if carrier is not None else None,
+            "lines": [
+                {
+                    "id": other.id,
+                    "line": other.tank_mix_line,
+                    "role": other.tank_mix_role,
+                    "commercial_name": other.commercial_name or "",
+                }
+                for other in others
+            ],
+        }
+        return data
 
     @staticmethod
     def _with_application_group(data, instance):
@@ -4189,8 +4232,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
         return open_seasons[0]
 
-    def _multi_target_body(self, events, group):
-        """201/200 body: the first record in today's single-record shape, plus every record."""
+    def _multi_target_body(self, events, group=None, tank=None):
+        """201/200 body: the first record in today's single-record shape, plus every record.
+
+        `group` is the multi-parcel `application_group`; `tank` the tank id of a tank mix, whose
+        records also name their line, role and block.
+        """
         from .services.record_completeness import completeness_gap_keys, has_registry
 
         def _gaps(event):
@@ -4207,6 +4254,15 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         phi_conflicts = None
         for event in events:
             record = {"id": event.id, "parcel": event.history.parcel_id, "history": event.history_id}
+            if tank is not None:
+                record.update(
+                    {
+                        "block_id": event.block_id,
+                        "tank_mix_line": event.tank_mix_line,
+                        "tank_mix_role": event.tank_mix_role,
+                        "application_group": str(event.application_group) if event.application_group else None,
+                    }
+                )
             gaps = _gaps(event)
             if gaps is not None:
                 record["completeness_gaps"] = gaps
@@ -4220,22 +4276,111 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if phi_conflicts is not None:
             body["phi_conflicts"] = phi_conflicts
         body["records"] = records
-        body["application_group"] = str(group)
+        if group is not None:
+            body["application_group"] = str(group)
+        if tank is not None:
+            body["tank_mix_group"] = str(tank)
         return body
 
-    def _replay_multi_target(self, event_model, group):
-        """The records an earlier request with this group already wrote, or None.
+    def _replay_multi_target(self, event_model, group, field="application_group"):
+        """The records an earlier request with this group (or tank) already wrote, or None.
 
         A retry after a lost response must not write the parcels again. A group the caller does
         not own is refused with the same body whether or not it exists elsewhere.
         """
-        existing = event_model.objects.filter(application_group=group)
+        existing = event_model.objects.filter(**{field: group})
         if not existing.exists():
             return None
         mine = list(self._scope_to_caller(existing).select_related("history").order_by("id"))
         if len(mine) != existing.count():
-            raise ValidationError({"application_group": ["This id is already used. Start a new activity."]})
+            raise ValidationError({field: ["This id is already used. Start a new activity."]})
         return mine
+
+    def _parcels_for_targets(self, targets):
+        """{parcel id: parcel} for every target, inside the caller's companies and on ONE farm.
+
+        Tenancy: every target must resolve inside the caller's companies. Any miss refuses the
+        whole request with the single path's generic body, so the answer never says whether a
+        foreign parcel exists. Dropping the foreign half (what the single path does with a mixed
+        `parcels` list) would tell the grower the activity covered a parcel it did not. A parcel may
+        appear on several targets (one per block), so ids are compared as a set.
+        """
+        parcel_ids = {target["parcel"] for target in targets}
+        parcels = {
+            parcel.id: parcel for parcel in self._scope_parcels_to_caller(Parcel.objects.filter(id__in=parcel_ids))
+        }
+        if len(parcels) != len(parcel_ids):
+            raise ValidationError({"parcels": ["No matching parcel found."]})
+        farms = {parcel.establishment_id for parcel in parcels.values()}
+        url_farm = getattr(self, "establishment", None)
+        if len(farms) > 1 or (url_farm is not None and farms != {url_farm.id}):
+            # One farm, and the farm the request was posted to when the route names one: the
+            # packet, the OSP drift check and the certificate are all per farm.
+            raise ValidationError({"targets": ["All parcels must belong to the same farm."]})
+        return parcels
+
+    def _write_resolved(self, event_model, resolved, replay):
+        """Write every resolved record in one transaction, or return what a replay already wrote.
+
+        `resolved` is a list of `(target key, history, validated data, extra create kwargs)`, in
+        the order the records are written. `replay` looks for an earlier write under the lock.
+        Returns `(records, created)`.
+        """
+        images = self._prepare_album_images()
+
+        with transaction.atomic():
+            # Lock the seasons in id order: `index` is count-then-insert, and two saves onto the
+            # same season must not take the same number. The lock also serialises a retry that
+            # raced its own original past the replay check above, so look again under it.
+            locked = {
+                history.id: history
+                for history in History.objects.select_for_update()
+                .filter(id__in=sorted({history.id for _, history, _, _ in resolved}))
+                .order_by("id")
+            }
+            existing = replay()
+            if existing is not None:
+                return existing, False
+
+            # The season may have been finished between the check above and the lock. Re-check on
+            # the locked rows, so a record is never written inside a season that closed meanwhile.
+            closed = {}
+            for key, history, validated, _ in resolved:
+                try:
+                    self._refuse_inside_closed_season(locked[history.id], validated.get("date"))
+                except PermissionDenied as exc:
+                    closed[key] = [exc.detail]
+            if closed:
+                raise ValidationError({"targets": closed})
+
+            created = []
+            for _, history, validated, extra in resolved:
+                history = locked[history.id]
+                data = dict(validated)
+                data.pop("history", None)
+                data.pop("created_by", None)
+                # A validate()-time note for the response, not a column.
+                data.pop("_validation_warning", None)
+                event = event_model.objects.create(
+                    history=history,
+                    index=self._next_event_index(history),
+                    created_by=self.request.user,
+                    **extra,
+                    **data,
+                )
+                album = self._album_from_prepared(images)
+                if album is not None:
+                    event.album = album
+                event.save()
+                try:
+                    # A savepoint: a swallowed database error here must not poison the
+                    # transaction that holds the sibling records.
+                    with transaction.atomic():
+                        history.update_trust_metrics()
+                except Exception:
+                    pass  # Non-fatal: score will update on next calculation
+                created.append(event)
+        return created, True
 
     def _create_multi_target(self, request):
         """One activity on several parcels: one record per parcel, all written or none.
@@ -4260,29 +4405,14 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if replay is not None:
             return Response(self._multi_target_body(replay, group), status=status.HTTP_200_OK)
 
-        # Tenancy: every target must resolve inside the caller's companies. Any miss refuses the
-        # whole request with the single path's generic body, so the answer never says whether a
-        # foreign parcel exists. Dropping the foreign half (what the single path does with a mixed
-        # `parcels` list) would tell the grower the activity covered a parcel it did not.
-        parcel_ids = [target["parcel"] for target in targets]
-        parcels = {
-            parcel.id: parcel for parcel in self._scope_parcels_to_caller(Parcel.objects.filter(id__in=parcel_ids))
-        }
-        if len(parcels) != len(parcel_ids):
-            raise ValidationError({"parcels": ["No matching parcel found."]})
-        farms = {parcel.establishment_id for parcel in parcels.values()}
-        url_farm = getattr(self, "establishment", None)
-        if len(farms) > 1 or (url_farm is not None and farms != {url_farm.id}):
-            # One farm, and the farm the request was posted to when the route names one: the
-            # packet, the OSP drift check and the certificate are all per farm.
-            raise ValidationError({"targets": ["All parcels must belong to the same farm."]})
+        parcels = self._parcels_for_targets(targets)
 
         serializer_class = self.get_serializer_class()
         context = self.get_serializer_context()
         errors, resolved = {}, []
-        for target in targets:
+        for target, key in zip(targets, multi_target.target_keys(targets)):
             parcel = parcels[target["parcel"]]
-            fields = {key: value for key, value in target.items() if key not in multi_target.TARGET_ADDRESS_KEYS}
+            fields = {k: value for k, value in target.items() if k not in multi_target.TARGET_ADDRESS_KEYS}
             try:
                 history = self._history_for_target(parcel, target.get("history"))
                 serializer = serializer_class(data={**shared, **fields, "history": history.pk}, context=context)
@@ -4290,68 +4420,95 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 self._validate_structured_fields(event_type, serializer.validated_data)
                 self._refuse_inside_closed_season(history, serializer.validated_data.get("date"))
             except (ValidationError, PermissionDenied) as exc:
-                errors[str(parcel.id)] = exc.detail
+                errors[key] = exc.detail
                 continue
-            resolved.append((parcel.id, history, serializer.validated_data))
+            resolved.append((key, history, serializer.validated_data, {"application_group": group}))
         if errors:
             raise ValidationError({"targets": errors})
 
-        images = self._prepare_album_images()
+        records, created = self._write_resolved(
+            event_model, resolved, lambda: self._replay_multi_target(event_model, group)
+        )
+        return Response(
+            self._multi_target_body(records, group),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
-        with transaction.atomic():
-            # Lock the seasons in id order: `index` is count-then-insert, and two saves onto the
-            # same season must not take the same number. The lock also serialises a retry that
-            # raced its own original past the replay check above, so look again under it.
-            locked = {
-                history.id: history
-                for history in History.objects.select_for_update()
-                .filter(id__in=sorted({history.id for _, history, _ in resolved}))
-                .order_by("id")
+    def _create_tank_mix(self, request):
+        """Several products from one tank, on one or more targets: one FULL record per product and
+        per target, all written or none, tied by `tank_mix_group`.
+
+        Contract, the per-line split and the pass: `history/services/tank_mix.py`.
+        """
+        from .services import tank_mix
+
+        try:
+            event_type = int(request.data.get("event_type"))
+        except (TypeError, ValueError):
+            raise ValidationError({"event_type": ["Event type is required."]})
+        tank = tank_mix.check_tank_envelope(request.data, event_type)
+
+        event_model = EVENT_TYPE_TO_MODEL[event_type]
+
+        def replay():
+            return self._replay_multi_target(event_model, tank.tank_id, field="tank_mix_group")
+
+        existing = replay()
+        if existing is not None:
+            return Response(self._multi_target_body(existing, tank=tank.tank_id), status=status.HTTP_200_OK)
+
+        parcels = self._parcels_for_targets(tank.targets)
+
+        # The season of each target first: a parcel with no open season is that target's error,
+        # said once, not once per product.
+        target_errors, histories = {}, {}
+        for index, (target, key) in enumerate(zip(tank.targets, tank.target_keys)):
+            try:
+                histories[index] = self._history_for_target(parcels[target["parcel"]], target.get("history"))
+            except ValidationError as exc:
+                target_errors[key] = exc.detail
+        if target_errors:
+            raise ValidationError({"targets": target_errors})
+
+        several_targets = len(tank.targets) > 1
+        serializer_class = self.get_serializer_class()
+        context = self.get_serializer_context()
+        line_errors, resolved = {}, []
+        for index, line, body in tank_mix.record_bodies(tank):
+            history = histories[index]
+            key = tank.target_keys[index]
+            try:
+                serializer = serializer_class(data={**body, "history": history.pk}, context=context)
+                serializer.is_valid(raise_exception=True)
+                self._validate_structured_fields(event_type, serializer.validated_data)
+                self._refuse_inside_closed_season(history, serializer.validated_data.get("date"))
+            except (ValidationError, PermissionDenied) as exc:
+                line_errors.setdefault(str(line.number), {})[key] = exc.detail
+                continue
+            extra = {
+                "tank_mix_group": tank.tank_id,
+                "tank_mix_line": line.number,
+                "tank_mix_role": line.role,
             }
-            replay = self._replay_multi_target(event_model, group)
-            if replay is not None:
-                return Response(self._multi_target_body(replay, group), status=status.HTTP_200_OK)
+            if several_targets:
+                # "This product over several parcels": what the purchase table counts once and a
+                # receipt is shared across. Per line, never the tank.
+                extra["application_group"] = tank_mix.line_application_group(tank.tank_id, line.number)
+            resolved.append((key, history, serializer.validated_data, extra))
+        if line_errors:
+            # A fault of the line itself reads the same on every target: say it once.
+            collapsed = {}
+            for number, by_target in line_errors.items():
+                details = list(by_target.values())
+                same = len(by_target) == len(tank.targets) and all(d == details[0] for d in details)
+                collapsed[number] = details[0] if same else by_target
+            raise ValidationError({"products": collapsed})
 
-            # The season may have been finished between the check above and the lock. Re-check on
-            # the locked rows, so a record is never written inside a season that closed meanwhile.
-            closed = {}
-            for parcel_id, history, validated in resolved:
-                try:
-                    self._refuse_inside_closed_season(locked[history.id], validated.get("date"))
-                except PermissionDenied as exc:
-                    closed[str(parcel_id)] = [exc.detail]
-            if closed:
-                raise ValidationError({"targets": closed})
-
-            created = []
-            for _, history, validated in resolved:
-                history = locked[history.id]
-                data = dict(validated)
-                data.pop("history", None)
-                data.pop("created_by", None)
-                # A validate()-time note for the response, not a column.
-                data.pop("_validation_warning", None)
-                event = event_model.objects.create(
-                    history=history,
-                    index=self._next_event_index(history),
-                    created_by=request.user,
-                    application_group=group,
-                    **data,
-                )
-                album = self._album_from_prepared(images)
-                if album is not None:
-                    event.album = album
-                event.save()
-                try:
-                    # A savepoint: a swallowed database error here must not poison the
-                    # transaction that holds the sibling records.
-                    with transaction.atomic():
-                        history.update_trust_metrics()
-                except Exception:
-                    pass  # Non-fatal: score will update on next calculation
-                created.append(event)
-
-        return Response(self._multi_target_body(created, group), status=status.HTTP_201_CREATED)
+        records, created = self._write_resolved(event_model, resolved, replay)
+        return Response(
+            self._multi_target_body(records, tank=tank.tank_id),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
     def _fulfil_plan_item(self, event, event_type):
         """Mark the season-plan item this record answers, when the caller named one.
