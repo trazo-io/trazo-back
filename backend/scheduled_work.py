@@ -209,6 +209,20 @@ PERIODIC_WORK = {
             "it or soften the notice before a crew number is handed to a farm."
         ),
     },
+    "backup_database_offsite": {
+        "source": JOB,
+        "cadence": "daily",
+        "command": "backup_database_offsite",
+        "runner": NOTHING,
+        "kind": PROMISE,
+        "note": (
+            "A daily pg_dump of the database to an S3 bucket outside DigitalOcean, uploaded by a "
+            "put-only IAM user (OV-ST-C13, 2026-11-13). Every DigitalOcean backup sits in the same "
+            "account as the database; this is the copy that survives losing the account. The restore "
+            "runbook (documentation/deployment/DATABASE-RESTORE-RUNBOOK.md) promises it. Unconfigured "
+            "fails the run, so the heartbeat reports a missing backup instead of hiding it."
+        ),
+    },
     "purge_closure_exports": {
         "source": JOB,
         "cadence": "daily",
