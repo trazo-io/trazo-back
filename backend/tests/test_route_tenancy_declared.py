@@ -229,6 +229,8 @@ class RouteTenancyDeclaredTests(SimpleTestCase):
             if not route.startswith("api/") or declared is None or declared.scope != ANONYMOUS:
                 continue
             name, permissions = _view_identity(pattern)
+            if name is None:
+                continue  # every method on this route is outside the viewset's http_method_names
             if not _is_anonymous(permissions):
                 continue  # a signed-in action on a mostly public view
             anonymous_routes.setdefault(key, []).append(route)
