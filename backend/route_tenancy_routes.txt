@@ -175,8 +175,6 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/seed-suppliers\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/start-production/$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/start-production\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/validate_qr/$	history.views.HistoryViewSet	AllowAny	post=validate_qr
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/validate_qr\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	post=validate_qr
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/wa-spray-records-export/$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/wa-spray-records-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
@@ -348,8 +346,6 @@ api/^histories/seed-suppliers/$	history.views.HistoryViewSet	(IsSuperUser OR (Re
 api/^histories/seed-suppliers\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
 api/^histories/start-production/$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
 api/^histories/start-production\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
-api/^histories/validate_qr/$	history.views.HistoryViewSet	AllowAny	post=validate_qr
-api/^histories/validate_qr\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	post=validate_qr
 api/^histories/wa-spray-records-export/$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
 api/^histories/wa-spray-records-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
 api/^histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
