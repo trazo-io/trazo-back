@@ -85,6 +85,9 @@ def _model_csv(queryset, specimen: bool = False, exclude: tuple = (), extra: tup
     model = queryset.model
     concrete = [f for f in model._meta.concrete_fields if f.name not in exclude]
     fields = [f.name if not f.is_relation else f.attname for f in concrete]
+    # The computed columns read the WHOLE row, excluded columns included: `factor_basis` is a
+    # reading of `verification_status`, which leaves the file but not the computation.
+    every = [f.attname for f in model._meta.concrete_fields]
     # `extra` adds computed columns: (name, function of the row dict) pairs, written after the
     # concrete ones. Used for a carbon row's factor basis, which is a reading of its status
     # rather than a stored field (recordkeeping review F-10, 2026-10-07).
@@ -94,9 +97,9 @@ def _model_csv(queryset, specimen: bool = False, exclude: tuple = (), extra: tup
         writer.writerow([SPECIMEN_LINE])
     writer.writerow(fields + [name for name, _fn in extra])
     attnames = [f.attname if hasattr(f, "attname") else f for f in concrete]
-    for row in queryset.values_list(*attnames):
-        record = dict(zip(attnames, row))
-        writer.writerow([_cell(v) for v in row] + [_cell(fn(record)) for _name, fn in extra])
+    for row in queryset.values_list(*every):
+        record = dict(zip(every, row))
+        writer.writerow([_cell(record[a]) for a in attnames] + [_cell(fn(record)) for _name, fn in extra])
     return out.getvalue()
 
 
@@ -171,6 +174,11 @@ def export_establishment_records_zip(establishment) -> bytes:
                 # export. (`explanation_text`, the third, left the model in carbon migration 0048.)
                 "methodology_template",
                 "permanence_plan",
+                # 2026-11-13: the raw status ("usda_verified", "epa_usda_verified_aggregate",
+                # "factors_verified") went out next to `factor_basis`, which is the plain reading of
+                # the same value. The slug is the vocabulary compliance.md retired; the reading is
+                # what a person can use. `factor_basis` is still computed from it.
+                "verification_status",
             ),
             (("factor_basis", lambda record: _factor_basis(record.get("verification_status"))),),
         ),
