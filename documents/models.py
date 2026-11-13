@@ -64,6 +64,9 @@ class GeneratedDocument(models.Model):
         # filed by `annual_update_filing.file_filing` at the moment the operator records the
         # filing. One row per filed revision; a correction files its own.
         ("annual_update", "Annual update filing"),
+        # WAC 16-228-1320 pesticide application records for a Washington farm
+        # (`history/services/wa_spray_record_service.py`), filed on each PDF or CSV download.
+        ("wa_spray_records", "Washington pesticide application records"),
     ]
 
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)

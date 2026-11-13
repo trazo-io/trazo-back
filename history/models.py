@@ -81,8 +81,12 @@ TRAZO_GREEN = (46, 125, 50)
 TRAZO_LEAF_LOGO = os.path.join(settings.BASE_DIR, "static", "img", "trazo-leaf.png")
 
 
-def compute_retention_until(finish_date):
+def compute_retention_until(finish_date, years=5):
     """The § 205.103(b)(4) retention floor: five CALENDAR years past the finish date.
+
+    `years` serves a longer state floor with the same calendar arithmetic: Washington keeps a
+    pesticide application record seven years from the application (WAC 16-228-1320(3)), see
+    `history.retention.state_spray_retention_floor`.
 
     Was `finish + timedelta(days=5 * 365)` = 1825 days, which is 1-2 days short of five
     calendar years because the window always contains at least one leap day. Measured on
@@ -97,11 +101,11 @@ def compute_retention_until(finish_date):
     if hasattr(finish_date, "date"):
         finish_date = finish_date.date()
     try:
-        return finish_date.replace(year=finish_date.year + 5)
+        return finish_date.replace(year=finish_date.year + years)
     except ValueError:
         # 29 February has no counterpart five years later. Round FORWARD to 1 March:
         # a day extra satisfies "not less than", where 28 February would be a day short.
-        return finish_date.replace(year=finish_date.year + 5, month=3, day=1)
+        return finish_date.replace(year=finish_date.year + years, month=3, day=1)
 
 
 # Strings the finish form can send for "do not publish". The value reaches
@@ -451,6 +455,8 @@ class History(models.Model):
         if self.retention_until and self.retention_until > timezone.now().date():
             from django.core.exceptions import ValidationError
 
+            from history.retention import state_retention_sentence
+
             raise ValidationError(
                 f"Cannot delete: NOP requires record retention until {self.retention_until}. "
                 # (b)(4) is the retention clause under the CURRENT rule: the Strengthening
@@ -460,6 +466,7 @@ class History(models.Model):
                 # Pre-SOE texts (and most search results) still show the four-item list —
                 # verify against eCFR before "correcting" this citation.
                 f"Records must be maintained for 5 years per 7 CFR 205.103(b)(4)."
+                + state_retention_sentence(self)
             )
         super().delete(*args, **kwargs)
 

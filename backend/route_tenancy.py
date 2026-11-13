@@ -57,6 +57,7 @@ _REVIEWS = "reviews.tests.test_reviews_scoped.ReviewsScopedTests"
 _PUBSCANS = "history.tests.test_public_scans_scoped.PublicScansScopedTests"
 _SALETRACE = "history.tests.test_sale_traceback"
 _LOTTRACE = "history.tests.test_lot_traceback"
+_WA_EXPORT = "history.tests.test_wa_spray_record_export.DoorTests"
 
 
 ROUTE_TENANCY = {
@@ -381,6 +382,7 @@ ROUTE_TENANCY = {
             f"{_CROSS}.test_season_list_shows_only_own",
             f"{_SCANS}.test_outsider_cannot_read_another_companys_scans",
             f"{_SCANS}.test_naming_own_company_with_a_foreign_farm_returns_nothing",
+            f"{_WA_EXPORT}.test_another_companys_user_is_refused_like_the_pur_export",
         ),
         finding="my_reviews returns the full owner HistorySerializer (events, members, operator) for any season "
         "the caller reviewed; reviews are limited to published seasons since #197, so this over-shares "

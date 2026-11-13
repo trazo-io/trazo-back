@@ -10,13 +10,14 @@ a price list, not a plan. Everything a farm hands to somebody else routes throug
   * the per-production audit export `history.views` audit_export + audit_export_by_uuid
   * the operation-wide dossier      `company.views` operation_audit_export
   * the California PUR export       `history.views` pur_export
+  * the Washington spray records    `history.views` wa_spray_records_export (WAC 16-228-1320)
   * the tokenized certifier link    `certifications.views` CertifierAccessLinkViewSet (CREATE only)
 
-Three of those seven were found only by walking the URLconf, not by reading views — the
+Three of the first seven were found only by walking the URLconf, not by reading views: the
 operation-wide dossier lives in a different app, the module PDFs are the packet's components (so
 gating the ZIP alone left it reassemblable one download at a time), and the workbooks stream from
 a route named "attachments". `subscriptions/tests/test_compliance_export_door_inventory.py` is
-what makes an eighth door fail loudly instead of shipping free.
+what makes the next door fail loudly instead of shipping free.
 
 WHY A FUNCTION AND NOT A DRF PERMISSION CLASS
 ---------------------------------------------
@@ -71,10 +72,10 @@ class ComplianceExportRequired(PermissionDenied):
     # draw: the raw records are free and always were yours; the certifier ARTEFACTS are the paid
     # thing. Refusing a paid artefact while implying the data behind it is hostage was the defect.
     default_detail = (
-        "Certifier documents — the OSP renewal packet and workbooks, the audit exports, the CA "
-        "PUR export and the certifier review link — are part of the Compliance plan. Keep logging "
-        "for free, and export your own records as CSV at any time on any plan; what Compliance "
-        "adds is the certifier-ready paperwork built from them."
+        "Certifier documents (the OSP renewal packet and workbooks, the audit exports, the CA PUR "
+        "export, the Washington spray records and the certifier review link) are part of the "
+        "Compliance plan. Keep logging for free, and export your own records as CSV at any time on "
+        "any plan; what Compliance adds is the certifier-ready paperwork built from them."
     )
     default_code = "compliance_exports_required"
 

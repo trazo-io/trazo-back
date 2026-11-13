@@ -2110,6 +2110,114 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # English sentence as its only rendering of a gap. See _attach_preview_fields.
         return Response(service.summary(), status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=["get"], url_path="wa-spray-records-export", permission_classes=[IsAuthenticated])
+    def wa_spray_records_export(self, request):
+        """
+        Washington pesticide application records (WAC 16-228-1320) for an establishment and period.
+
+        Every item of WAC 16-228-1320(1) is printed with its letter, and an item the record does
+        not hold is named (`history/services/wa_spray_record_service.py`). A Compliance artifact,
+        gated exactly like the CA PUR export; the raw records stay free as CSV on every plan.
+
+        Query parameters:
+          establishment_id  (required)
+          year              a calendar year (default: the current one), or
+          start, end        an inclusive date range, YYYY-MM-DD, instead of `year`
+          export_format     json (default, preview), pdf or csv (download, and a dated copy
+                            filed in the farm's Documents)
+        """
+        from datetime import date as date_type
+
+        from django.http import FileResponse
+
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        from .services.wa_spray_record_service import WASprayRecordService
+
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            establishment = Establishment.objects.select_related("company").get(id=establishment_id)
+        except (Establishment.DoesNotExist, ValueError):
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+        # Same tenancy rule as the PUR export: a company admin or farm manager of the farm's company.
+        if not WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists():
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        # A Washington record. 404 for any other farm, before the plan gate, for the PUR's reason:
+        # "does not apply to you" has to win over "costs money".
+        if resolve_establishment_state(establishment) != "WA":
+            return Response(
+                {
+                    "error": "The Washington pesticide application record export is for a farm in Washington "
+                    "and is not available for this farm."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Plan gate from the ESTABLISHMENT's company (subscriptions/gating.py).
+        require_compliance_exports(establishment.company, user=request.user)
+
+        start_raw, end_raw = request.query_params.get("start"), request.query_params.get("end")
+        if start_raw or end_raw:
+            try:
+                start = date_type.fromisoformat(start_raw or "")
+                end = date_type.fromisoformat(end_raw or "")
+            except ValueError:
+                return Response(
+                    {"error": "start and end are both required, as YYYY-MM-DD"}, status=status.HTTP_400_BAD_REQUEST
+                )
+            if end < start:
+                return Response({"error": "end is before start"}, status=status.HTTP_400_BAD_REQUEST)
+            service = WASprayRecordService(establishment, start, end)
+        else:
+            try:
+                year = int(request.query_params.get("year") or timezone.now().year)
+            except (TypeError, ValueError):
+                return Response({"error": "year must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+            if not (2000 <= year <= 2100):
+                return Response({"error": "year is out of range"}, status=status.HTTP_400_BAD_REQUEST)
+            service = WASprayRecordService.for_year(establishment, year)
+
+        # "export_format" (NOT "format"): DRF reserves ?format= for content negotiation.
+        export_format = request.query_params.get("export_format", "json").lower()
+        if export_format not in {"json", "pdf", "csv"}:
+            return Response(
+                {"error": "Invalid export_format. Use 'json', 'pdf' or 'csv'."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if export_format == "json":
+            return Response(service.summary(), status=status.HTTP_200_OK)
+
+        from io import BytesIO
+
+        from documents.services.filing import file_document
+
+        if export_format == "pdf":
+            data, content_type = service.to_pdf(), "application/pdf"
+        else:
+            data, content_type = service.to_csv(), "text/csv"
+        filename = f"trazo-wa-spray-records-{establishment_id}-{service.period_slug}.{export_format}"
+        # A dated copy on the farm's shelf, as the PUR export files one; only a document with an
+        # application on it (an empty period is not a record of anything).
+        if service.build():
+            file_document(
+                establishment=establishment,
+                source="wa_spray_records",
+                folder="exports",
+                title=f"Washington pesticide application records, {service.period_label}",
+                filename=filename,
+                content=data,
+                content_type=content_type,
+                created_by=request.user,
+            )
+        response = FileResponse(
+            BytesIO(data), content_type=f"{content_type}; charset=utf-8" if export_format == "csv" else content_type
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
     @action(detail=True, methods=["get"], url_path="audit-export", permission_classes=[IsAuthenticated])
     def audit_export(self, request, **kwargs):
         """
