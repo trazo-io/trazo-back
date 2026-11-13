@@ -45,7 +45,15 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     "CustomTokenRefreshView::AllowAny": "refresh from the httpOnly cookie",
     "SocialAuthView::AllowAny": "Google OAuth exchange",
     "OAuthConfigView::AllowAny": "public client id / redirect URI",
-    "UserViewSet::AllowAny": "verify_email, request/confirm_password_reset, resend_verification",
+    # Per action since 2026-11-13: one viewset-wide entry used to cover them all, and
+    # `confirm_email_change` was anonymous without appearing in its reason.
+    "UserViewSet.verify_email::AllowAny": "email verification token from the sign-up mail",
+    "UserViewSet.resend_verification_email::AllowAny": "the user is not signed in until verified",
+    "UserViewSet.request_password_reset::AllowAny": "forgotten password; same response for any address",
+    "UserViewSet.confirm_password_reset::AllowAny": "reset token from the mail is the credential",
+    "UserViewSet.confirm_email_change::AllowAny": (
+        "token sent only to the new address is the credential; the link may open signed out (OV-SEC-C03)"
+    ),
     "signup_with_invitation::AllowAny": "invited user has no account yet",
     "get_invitation_details::AllowAny": "invitation code lookup before sign-up",
     "accept_invitation::AllowAny": "invitation acceptance before sign-up",
@@ -61,11 +69,13 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     # is the EU ECGT 2024/825 label class whether or not a farm's data is attached, so this
     # inventory reviews CLAIM exposure as well as DATA exposure.
     "verify_blockchain::AllowAny": "integrity check for a published production",
-    "HistoryViewSet::AllowAny": "public_history action only — the @action carries AllowAny",
-    "PublicHistoryScanViewSet::AllowAny": (
-        "shopper scan tally; consent gating in PrivacyService. The `consent` action is also "
-        "anonymous but authorised by claim_token (256-bit, unique, never enumerable)"
-    ),
+    "HistoryViewSet.public_history::AllowAny": "the season page; anonymous callers need the UUID",
+    # `HistoryViewSet.validate_qr` was REMOVED on 2026-11-13: anonymous, looked a published season
+    # up by its integer id (or the first number in any string), had no caller, and redirected to a
+    # route that does not exist.
+    "PublicHistoryScanViewSet::AllowAny": "shopper scan tally; consent gating in PrivacyService",
+    "PublicHistoryScanViewSet.upgrade_consent::AllowAny": "claim_token authorises it (256-bit, unique)",
+    "PublicHistoryScanViewSet.comment::AllowAny": "authorised by claim_token, as consent is; one comment per scan",
     # --- Certifier review links. Bearer-token in the URL is the credential. ---
     "certifier_review_metadata::AllowAny": "opaque review token",
     "certifier_review_readiness::AllowAny": "opaque review token",
@@ -185,7 +195,15 @@ def _view_identity(pattern):
     permissions = initkwargs.get("permission_classes", getattr(view_class, "permission_classes", None))
     if permissions is None:
         return f"{view_class.__module__}.{view_class.__name__}", ["NON-DRF"]
-    return view_class.__name__, [_permission_name(p) for p in permissions]
+    name = view_class.__name__
+    if "permission_classes" in initkwargs:
+        # An `@action` that sets its own permissions is reviewed BY ACTION. Keyed by the viewset
+        # alone, one reviewed public action approved every sibling: `HistoryViewSet.validate_qr`
+        # (AllowAny, integer-id lookup, no caller) sat under the entry written for
+        # `public_history` until 2026-11-13.
+        actions = getattr(callback, "actions", None) or {}
+        name = f"{name}.{'/'.join(sorted(set(actions.values())))}"
+    return name, [_permission_name(p) for p in permissions]
 
 
 class AnonymousEndpointInventoryTests(SimpleTestCase):
@@ -251,4 +269,10 @@ class AnonymousEndpointInventoryTests(SimpleTestCase):
             "production_transparency_detail::AllowAny",
             found,
             "The consumer QR endpoint was not discovered — the walk is not seeing real routes.",
+        )
+        self.assertIn(
+            "HistoryViewSet.public_history::AllowAny",
+            found,
+            "An @action with its own permissions must be keyed by action, or one reviewed public "
+            "action approves every sibling on the viewset.",
         )
