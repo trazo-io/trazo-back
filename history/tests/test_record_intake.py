@@ -541,6 +541,18 @@ class SprayColumnsTests(IntakeFarm):
         self.assertEqual(event.application_start, event.date)
         self.assertIsNone(event.application_end)
 
+    def test_an_end_before_the_start_is_refused_and_an_equal_pair_is_not(self):
+        reason = self.refusal(start_time="08:15", end_time="06:30")
+        self.assertIn(
+            "end_time is earlier than start_time. If the application ran past midnight, the sheet does not "
+            "say which day it ended: split it into two rows or leave end_time empty.",
+            reason,
+        )
+        plan = self.spray_one(start_time="06:30", end_time="06:30")
+        self.assertEqual(plan.skipped, [])
+        fields = plan.importable[0].payload["fields"]
+        self.assertEqual(fields["application_start"], fields["application_end"])
+
     def test_a_time_and_the_not_on_record_mark_never_travel_together(self):
         reason = self.refusal(start_time="06:30", time_not_on_record="yes")
         self.assertIn(f"start_time '06:30': {WINDOW_CONFLICT}", reason)
@@ -771,7 +783,7 @@ class SprayTankTests(IntakeFarm):
 
     def test_a_tank_of_one_product_is_refused(self):
         reason = self.reasons(self.tank_plan(self.tank()[:1]))[2]
-        self.assertIn("tank 'T1' has one product on 2026-05-20, Block 2; a tank holds 2 or more", reason)
+        self.assertIn("tank 'T1' has one product in this document; a tank holds 2 or more", reason)
 
     def test_a_tank_of_adjuvants_only_is_refused_by_the_tank_contract(self):
         rows = self.tank()[:2]
@@ -824,13 +836,53 @@ class SprayTankTests(IntakeFarm):
             execute(second, self.farm, self.operator, "cccccccccccc")
         self.assertEqual(ChemicalEvent.objects.count(), 3)
 
-    def test_the_same_label_on_another_day_is_another_tank(self):
+    def test_a_label_names_one_tank_per_document_so_another_day_under_it_disagrees(self):
         later = [dict(row, date="2026-06-02", source_locator=row["source_locator"] + "b") for row in self.tank()]
         plan = self.tank_plan(self.tank() + later)
+        self.assertEqual(plan.importable, [])
+        reason = self.reasons(plan)[2]
+        self.assertIn("date (sheet row 7: '2026-05-20', sheet row 8: '2026-05-20'", reason)
+        self.assertNotIn("start_time", reason, "a different day is said once, as the date")
+        # A second label on the second day is a second tank.
+        relabelled = [dict(row, tank="T2") for row in later]
+        plan = self.tank_plan(self.tank() + relabelled)
         self.assertEqual(self.reasons(plan), {})
-        groups = {row.payload["tank"]["group"] for row in plan.importable}
-        self.assertEqual(len(groups), 2)
+        self.assertEqual(len({row.payload["tank"]["group"] for row in plan.importable}), 2)
         self.assertEqual(plan.importable[3].payload["tank"]["line"], 1)
+
+    def test_a_sibling_refused_for_its_own_parcel_holds_the_whole_tank_until_the_cell_is_fixed(self):
+        rows = self.tank()
+        rows[1]["parcel"] = "Blok 2"
+        plan = self.tank_plan(rows)
+        reasons = self.reasons(plan)
+        self.assertEqual(sorted(reasons), [2, 3, 4])
+        self.assertIn("no parcel named 'Blok 2'", reasons[3])
+        self.assertIn("tank 'T1' is recorded whole or not at all, and these rows of it wait: sheet row 8", reasons[2])
+        self.assertEqual(execute(plan, self.farm, self.operator, BATCH)["created"], 0)
+        self.assertEqual(ChemicalEvent.objects.count(), 0)
+
+        # The cell fixed, the re-run writes the whole tank: nothing half-written stands in its way.
+        rows[1]["parcel"] = "Block 2"
+        plan = self.tank_plan(rows)
+        self.assertEqual(self.reasons(plan), {})
+        execute(plan, self.farm, self.operator, "dddddddddddd")
+        events = list(ChemicalEvent.objects.order_by("tank_mix_line"))
+        self.assertEqual([e.tank_mix_line for e in events], [1, 2, 3])
+        self.assertEqual([e.commercial_name for e in events], ["Entrust SC", "Kocide 3000-O", "Dyne-Amic"])
+        self.assertEqual(len({e.tank_mix_group for e in events}), 1)
+
+    def test_a_sibling_on_its_own_date_or_parcel_holds_the_whole_tank(self):
+        for column, value, said in (
+            ("date", "mid May", "date 'mid May' is not YYYY-MM-DD"),
+            ("date", "2026-05-21", "date (sheet row 7: '2026-05-20', sheet row 8: '2026-05-21'"),
+            ("parcel", "Block 3", "parcel (sheet row 7: 'Block 2', sheet row 8: 'Block 3'"),
+        ):
+            rows = self.tank()
+            rows[1][column] = value
+            plan = self.tank_plan(rows)
+            self.assertEqual(plan.importable, [], (column, value))
+            self.assertIn(said, " | ".join(self.reasons(plan).values()), (column, value))
+        self.assertEqual(ChemicalEvent.objects.count(), 0)
 
     def test_the_tank_id_is_the_same_on_every_run(self):
         first = self.tank_plan(self.tank()).importable[0].payload["tank"]["group"]

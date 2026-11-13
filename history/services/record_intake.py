@@ -73,12 +73,16 @@ clock time for, so the record is marked `time_not_recorded` and kept at the noon
 `time_not_on_record` is `no` and gives no time contradicts itself and waits. A blank
 `concentration` stays blank; it is marked not on the record only when that column says yes.
 
-**A tank.** Rows naming the same `tank` on the same document, date and `parcel` cell are one tank:
-written through `history/services/tank_mix.py` exactly as the API writes one, line order = row
-order. What the pass shares (date and time, method, area, conditions, applicator, notes; the
+**A tank.** Rows naming the same `tank` on the same document are one tank: written through
+`history/services/tank_mix.py` exactly as the API writes one, line order = row order. What the
+pass shares (the date and the parcels, the time, method, area, conditions, applicator, notes; the
 split is the `tank_mix` block of `multi_target_spec.json`) must read the same on every row of the
 tank, or every row of it waits with the disagreeing column named. A tank is written whole or not
-at all, and a tank already recorded takes no new products.
+at all, so one row of it waiting for any reason (its own date or parcel included) holds the rest,
+and a tank already recorded takes no new products. A label names one tank per document.
+
+An `end_time` earlier than the `start_time` waits: both sit on the row's one date, and the sheet
+does not say which day a pass past midnight ended.
 
 ## Provenance
 
@@ -555,6 +559,13 @@ def _spray_values(row, day, column_of, problems) -> Optional[dict]:
         problems.append(
             f"end_time {row['end_time']!r} has no start_time; the record's time is when the application "
             "started, so give the start the sheet shows, or leave both empty"
+        )
+    elif start is not None and end is not None and end < start:
+        # Both clocks sit on the row's one date, so an end before the start would store an inverted
+        # window that prints into PUR boxes 17-18 and the WA record. Which day it ended is not on the row.
+        problems.append(
+            "end_time is earlier than start_time. If the application ran past midnight, the sheet does "
+            "not say which day it ended: split it into two rows or leave end_time empty."
         )
 
     # A day with no clock time is what a day-only source record says: the record is marked so, and
@@ -1146,10 +1157,14 @@ def _default_title(kind: Kind, row) -> str:
 
 
 def _tank_key(row) -> str:
-    """Which rows are one tank: the same label on the same document, date and parcel cell."""
-    names = _parcel_names(row["parcel"]) if row["parcel"] else []
-    where = ALL_PARCELS if names == ALL_PARCELS else sorted({name.casefold() for name in names})
-    return json.dumps([row["source_doc"], row["tank"].casefold(), row["date"], where])
+    """Which rows are one tank: the same label on the same document, and nothing else.
+
+    Never the date or the parcel cell. A row of the tank refused for its own date or parcel (a
+    "Blok 2" typo) must hold the rest of the tank, not leave it to be written as a complete tank
+    missing that product, which a corrected re-run could then never add to. Date and parcel are
+    shared facts instead, compared across the tank's rows like the others (`_tank_disagreement`).
+    """
+    return json.dumps([row["source_doc"], row["tank"].casefold()])
 
 
 def _refuse(result, row, reason):
@@ -1193,7 +1208,13 @@ def _tank_split(payload, spec, titled):
 
 
 def _tank_disagreement(label, members, spec) -> Optional[str]:
-    """The refusal naming every shared column whose value differs across the tank's rows, or None."""
+    """The refusal naming every shared column whose value differs across the tank's rows, or None.
+
+    The date and the parcels are shared facts like the rest (a tank is one pass, on one day, over
+    one set of parcels). Compared as read: the day, and the parcels the cell resolved to, so `All`
+    and the farm's full list agree. A different day makes the clock fields differ too; those are
+    the date's difference, said once as `date`, not again as `start_time`.
+    """
     first_result, first_row = members[0]
     titled = bool(first_row["title"])
     column_of = _column_of(KINDS[first_result.payload["kind"]])
@@ -1203,12 +1224,20 @@ def _tank_disagreement(label, members, spec) -> Optional[str]:
     for result, row in members[1:]:
         shared, _line, place, _left = _tank_split(result.payload, spec, titled)
         values = {**shared, **place}
+        same_day = result.payload["date"] == first_result.payload["date"]
+        if not same_day:
+            differing.append("date")
+        same_parcels = sorted(result.payload["parcels"]) == sorted(first_result.payload["parcels"])
+        if not same_parcels:
+            differing.append("parcel")
         for key in sorted(set(reference) | set(values)):
+            if not same_day and key in ("date", "application_start", "application_end"):
+                continue
             if reference.get(key) != values.get(key):
                 differing.append(column_of.get(key, key))
         if row["title"] != first_row["title"]:
             differing.append("title")
-        if result.payload["histories"] != first_result.payload["histories"]:
+        if same_parcels and result.payload["histories"] != first_result.payload["histories"]:
             differing.append("production")
     if not differing:
         return None
@@ -1298,11 +1327,9 @@ def _resolve_tanks(tank_rows):
         elif waiting:
             reason = f"tank {label!r} is recorded whole or not at all, and these rows of it wait: {_locators(waiting)}"
         elif len(members) < tank_mix.TANK.min_lines:
-            row = members[0][1]
             reason = (
-                f"tank {label!r} has one product on {row['date']}, {row['parcel']}; a tank holds "
-                f"{tank_mix.TANK.min_lines} or more, and its rows name the same date and parcel. Leave "
-                "tank empty for a single product"
+                f"tank {label!r} has one product in this document; a tank holds {tank_mix.TANK.min_lines} "
+                "or more. Leave tank empty for a single product"
             )
         else:
             reason = _tank_disagreement(label, members, spec)
