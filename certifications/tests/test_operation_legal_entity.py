@@ -160,3 +160,32 @@ class TheRegisterReadsThem(_Plan):
         for ref in ("A2", "A3", "A6", "A7"):
             with self.subTest(ref=ref):
                 self.assertEqual(self.row("ccof", "ORGB06", ref).state, "answered")
+
+
+class SameAsFollowsTheChain(_Plan):
+    """A "same as" answer answers its row only if the address it points to is given (review of back #410)."""
+
+    def test_same_as_an_ungiven_legal_address_keeps_mailing_open(self):
+        self.plan({"mailing_address_is": "legal"})
+        row = self.row("otco", "O1", "B-1 (mailing)")
+        self.assertTrue(row.is_open)
+        self.assertIn("the registered legal address it points to is not given", row.detail)
+
+    def test_billing_same_as_mailing_same_as_an_ungiven_legal_address_stays_open(self):
+        self.plan({"billing_address_is": "mailing", "mailing_address_is": "legal", "legal_address_is": "other"})
+        OperationContact.objects.create(establishment=self.est, name="Ann Vos", is_billing_contact=True)
+        self.assertTrue(self.row("otco", "O1", "B-1 (billing)").is_open)
+
+    def test_same_as_a_complete_physical_address_is_answered(self):
+        self.est.address, self.est.city, self.est.zip_code = "31480 Calapooia Rd", "Tangent", "97389"
+        self.est.save()
+        self.plan({"billing_address_is": "mailing", "mailing_address_is": "legal", "legal_address_is": "physical"})
+        OperationContact.objects.create(establishment=self.est, name="Ann Vos", is_billing_contact=True)
+        self.assertEqual(self.row("otco", "O1", "B-1 (mailing)").state, "answered")
+        self.assertEqual(self.row("otco", "O1", "B-1 (billing)").state, "answered")
+
+    def test_same_as_a_physical_address_missing_from_the_profile_stays_open(self):
+        self.plan({"mailing_address_is": "physical"})
+        row = self.row("otco", "O1", "B-1 (mailing)")
+        self.assertTrue(row.is_open)
+        self.assertIn("physical address is not complete", row.detail)

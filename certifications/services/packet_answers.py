@@ -74,6 +74,19 @@ PARCEL_EMBED_STATES = {
     ),
 }
 
+#: The Operation module's "where is it" answers (page D), each option mapped to the question or the boxes it means.
+#: "physical" is the farm's own address on its profile.
+ADDRESS_POINTERS = {
+    "legal_address_is": {"physical": None, "other": "legal_address"},
+    "mailing_address_is": {"legal": "legal_address_is", "physical": None, "other": "mailing_address"},
+    "billing_address_is": {"mailing": "mailing_address_is", "other": "billing_address"},
+}
+ADDRESS_WORDS = {
+    "legal_address_is": "the registered legal address",
+    "mailing_address_is": "the mailing address",
+    "billing_address_is": "the billing address",
+}
+
 #: The role each register row about the operation's people asks for, by (form document id, row ref). Kept beside the
 #: register's own citations so a row added there and not here falls back to "primary and legally responsible".
 CONTACT_ROLE_ROWS = {
@@ -468,6 +481,35 @@ class _Answers:
             return "unanswered", "not stated for " + ", ".join(open_items)
         return "answered", ""
 
+    def address_state(self, answers: dict, pointer: str, _seen: tuple = ()) -> tuple[str, str]:
+        """(state, detail) of the address an Operation module "where is it" answer points at, followed to its end.
+
+        "other" is its own five boxes, "physical" the farm's address on its profile, and "legal" or "mailing" the
+        answer to that question, followed in turn. Unanswered stays unanswered, for the row's own fold to report.
+        """
+        from certifications.osp_modules.conditions import answer_value
+
+        value = answer_value(answers, pointer)
+        if value in (None, "", []):
+            return "unanswered", ""
+        target = ADDRESS_POINTERS[pointer].get(value)
+        if value == "physical":
+            est = self.osp.establishment
+            if all((getattr(est, field, "") or "").strip() for field in ("address", "city", "state", "zip_code")):
+                return "answered", ""
+            return "unanswered", "the farm's physical address is not complete on its profile"
+        if target in ADDRESS_POINTERS and target not in _seen:
+            state, _detail = self.address_state(answers, target, (*_seen, pointer))
+            if state == "answered":
+                return state, ""
+            return "unanswered", f"{ADDRESS_WORDS[target]} it points to is not given"
+        if target:
+            boxes = [f"{target}_{part}" for part in ("street", "city", "state", "zip", "country")]
+            if all(str(answer_value(answers, box) or "").strip() for box in boxes):
+                return "answered", ""
+            return "unanswered", f"{ADDRESS_WORDS[pointer]} is not given in full"
+        return "unanswered", ""
+
     def operation_contacts_state(self, document_id: str = "", ref: str = "") -> tuple[str, str]:
         """(state, detail) for the people named to the agent, judged on the role the asking row is about.
 
@@ -646,6 +688,12 @@ class _Answers:
             else:
                 state, detail = self.seedling_supplier_state()
             return state, detail, [("", state, detail)]
+        if module_key == "certification_contract" and question_key in ADDRESS_POINTERS:
+            # "Same as the legal address" answers the mailing row only if the legal address is given: the boxes it
+            # hides read not applicable, so the pointer itself must carry the target's state (review of back #410).
+            state, detail = self.address_state(entry.get("answers") or {}, question_key)
+            if state != "answered":
+                return state, detail, [("", state, detail)]
         identified, not_shipped = 0, None
         if question is not None and question.kind == "upload":
             identified, not_shipped = self.attachment(cited_key)
