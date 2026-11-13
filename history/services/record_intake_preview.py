@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from io import BytesIO
+from types import SimpleNamespace
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -26,6 +27,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from common.field_registry import ORGANIC_APPROVED
 from common.specimen import SPECIMEN_LINE, is_specimen, specimen_page_callback
 
 NOTHING_SAVED = "Nothing has been saved. Reply with corrections, or reply ok and these records are loaded as listed."
@@ -105,7 +107,79 @@ def _details(payload) -> list:
     ):
         if fields.get(key):
             lines.append(f"{label}: {fields[key]}")
+    if payload["target"].startswith("ChemicalEvent:"):
+        lines.extend(_spray_lines(payload))
     return lines
+
+
+def _joined(*parts) -> str:
+    return ", ".join(str(p) for p in parts if p not in (None, ""))
+
+
+def _spray_lines(payload) -> list:
+    """The spray record columns, worded the way the packet words them where a wording exists
+    (`application_conditions`, `not_on_source_record`), so the grower approves what will print."""
+    from history.services.application_conditions import application_conditions
+    from history.services.not_on_source_record import NOT_ON_SOURCE_RECORD
+
+    fields = payload["fields"]
+    lines = []
+    if fields.get("concentration_not_recorded"):
+        lines.append(f"concentration: {NOT_ON_SOURCE_RECORD}")
+    if fields.get("time_not_recorded"):
+        lines.append(f"time: {NOT_ON_SOURCE_RECORD.lower()}")
+    elif fields.get("application_start"):
+        start = f"{fields['application_start']:%H:%M}"
+        end = f" to {fields['application_end']:%H:%M}" if fields.get("application_end") else ""
+        lines.append(f"time: {start}{end}")
+    if fields.get("epa_registration_number"):
+        lines.append(f"EPA reg. no.: {fields['epa_registration_number']}")
+    if fields.get("rei_hours") is not None:
+        lines.append(f"REI: {fields['rei_hours']} h")
+    if fields.get("phi_days") is not None:
+        lines.append(f"PHI: {fields['phi_days']} days")
+    if fields.get("restricted_use_pesticide"):
+        lines.append("restricted use: yes")
+    if fields.get("organic_approved"):
+        code = fields["organic_approved"]
+        lines.append(f"organic basis: {dict(ORGANIC_APPROVED).get(code, code)}")
+    applicator = _joined(
+        fields.get("applicator_name"),
+        f"licence {fields['applicator_certification']}" if fields.get("applicator_certification") else None,
+    )
+    if applicator:
+        lines.append(f"applicator: {applicator}")
+    purchase = _joined(
+        fields.get("supplier_name"),
+        fields["purchase_date"].isoformat() if fields.get("purchase_date") else None,
+        f"invoice {fields['purchase_invoice']}" if fields.get("purchase_invoice") else None,
+        f"lot {fields['chemical_lot_number']}" if fields.get("chemical_lot_number") else None,
+        (
+            f"{fields['quantity_purchased']} {fields.get('quantity_purchased_unit') or ''}".strip()
+            if fields.get("quantity_purchased") is not None
+            else None
+        ),
+    )
+    if purchase:
+        lines.append(f"purchase: {purchase}")
+    if fields.get("applied_by_pcb"):
+        lines.append(f"applied for hire by: {fields.get('pcb_name') or 'the firm is not named'}")
+    for label, text in application_conditions(SimpleNamespace(**fields)):
+        lines.append(f"{label.lower()}: {text}")
+    tank = payload.get("tank")
+    if tank:
+        role = ", adjuvant" if tank["role"] == "adjuvant" else ""
+        lines.append(f"tank {tank['label']}: line {tank['line']} of {tank['lines']}{role}")
+    return lines
+
+
+def optional_columns_text(plan) -> str:
+    """The optional spray columns the file carries, each with its header when the file spelled it
+    another way ("wind_speed_mph (as 'Wind speed (mph)')"); "" when it carries none."""
+    columns = getattr(plan, "optional_columns", None) or {}
+    return ", ".join(
+        column if written == column else f"{column} (as {written!r})" for column, written in columns.items()
+    )
 
 
 def _notes(payload) -> str:
@@ -136,6 +210,9 @@ def render_preview_pdf(plan, farm, documents, batch, operator, today=None) -> by
             styles["body"],
         )
     )
+    optional = optional_columns_text(plan)
+    if optional:
+        elements.append(_p(f"Spray record columns read from this file: {optional}.", styles["body"]))
     elements.append(_p(NOTHING_SAVED, styles["body"]))
     elements.append(Spacer(1, 0.1 * inch))
 
