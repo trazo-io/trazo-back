@@ -207,7 +207,12 @@ class ApplicationPass:
     number: int
     events: list
     parcel: object
+    #: The pass's day when every line holds the same one, else None (see `applied_text`).
     applied_on: date | None
+    #: The day as item (c) prints it: one day, or "line 1: ...; line 2: ..." when lines differ.
+    applied_text: str = ""
+    #: Whether this pass's parcel has a map page (`_map_drawing` succeeded).
+    mapped: bool = False
     before: list = field(default_factory=list)  # (a), (b), (c)
     products: list = field(default_factory=list)
     after: list = field(default_factory=list)  # (e), (h) carrier, (j) to (n)
@@ -257,6 +262,42 @@ def _shared(events, item, label, getter) -> Row:
     statuses = {value[1] for value in values}
     status = next((s for s in (BLANK, NOT_ON_SOURCE) if s in statuses), VALUE)
     return Row(item, label, text, status)
+
+
+#: The size the map page draws at. The predicate that decides whether a parcel HAS a map uses the
+#: same call, so the (b) row, the preview's `parcels_without_map` and the map pages always agree.
+_MAP_SIZE_IN = (7.0, 4.6)
+
+
+def _map_drawing(parcel):
+    """The parcel's map page drawing, or None when the recorded boundary cannot be drawn.
+
+    `parcel_boundary_ring` alone is not the test: a ring can exist and still be degenerate (four
+    copies of one point), which `parcel_map_drawing` refuses."""
+    if parcel is None:
+        return None
+    from reportlab.lib.units import inch
+
+    from certifications.services.parcel_map import parcel_map_drawing
+
+    width, height = _MAP_SIZE_IN
+    return parcel_map_drawing(parcel, width=width * inch, height=height * inch)
+
+
+#: Item (b)'s map row, per format. The CSV has no pages, so it points at the PDF export.
+NO_MAP_TEXT = "Not included: no parcel boundary that can be drawn is recorded in Trazo."
+
+
+def map_text(parcel_name, mapped, file_format="pdf") -> str:
+    if not mapped:
+        return NO_MAP_TEXT
+    where = (
+        "in the PDF export of these records" if file_format == "csv" else "on the map pages at the end of this document"
+    )
+    return (
+        f"Schematic of {parcel_name or 'the parcel'} {where}, drawn from the boundary recorded in Trazo. "
+        "It is not the map on the department's adopted form."
+    )
 
 
 def _day(when) -> date | None:
@@ -394,7 +435,7 @@ class WASprayRecordService:
         rows.append(Row("a", "Address", text, BLANK if missing else VALUE))
         return rows
 
-    def _location_rows(self, events, parcel, mapped_parcel_ids) -> list:
+    def _location_rows(self, events, parcel, mapped) -> list:
         """(b): parcel and block, a location the record holds, and the map."""
         from certifications.services.parcel_map import parcel_boundary_centre
 
@@ -437,29 +478,31 @@ class WASprayRecordService:
             else:
                 rows.append(Row("b", "Section, township and range, or GPS coordinates", NOT_RECORDED, BLANK))
 
-        if parcel is not None and parcel.pk in mapped_parcel_ids:
-            rows.append(
-                Row(
-                    "b",
-                    "Map",
-                    f"Schematic of {parcel_name or 'the parcel'} on the map pages at the end of this document, "
-                    "drawn from the boundary recorded in Trazo. It is not the map on the department's adopted form.",
-                )
-            )
-        else:
-            rows.append(Row("b", "Map", "Not included: no parcel boundary is recorded in Trazo.", BLANK))
+        rows.append(Row("b", "Map", map_text(parcel_name, mapped), VALUE if mapped else BLANK))
         return rows
 
     @staticmethod
-    def _time_rows(events, day) -> list:
+    def _date_row(events) -> Row:
+        """(c)'s day, read from every line like any other shared fact: a tank whose lines were
+        corrected to different days prints each line's day rather than line 1's alone."""
+
+        def getter(event):
+            day = _day(event.date)
+            return (day.isoformat(), VALUE) if day else (NOT_RECORDED, BLANK)
+
+        return _shared(events, "c", "Date", getter)
+
+    @staticmethod
+    def _time_rows(events, date_row) -> list:
         """(c): the day, and the start and stop clock times as typed."""
-        rows = [Row("c", "Date", day.isoformat() if day else NOT_RECORDED, VALUE if day else BLANK)]
+        rows = [date_row]
 
         def _when(attr):
             def getter(event):
                 if getattr(event, "time_not_recorded", False):
                     return f"time {NOT_ON_SOURCE_RECORD.lower()}", NOT_ON_SOURCE
-                return _or_blank(_clock(getattr(event, attr), day))
+                # Each line against its OWN day, so a time on another day says which day.
+                return _or_blank(_clock(getattr(event, attr), _day(event.date)))
 
             return getter
 
@@ -634,13 +677,26 @@ class WASprayRecordService:
         first = events[0]
         history = first.history
         parcel = getattr(history, "parcel", None)
-        day = _day(first.date)
+        days = list(dict.fromkeys(_day(e.date) for e in events))
+        date_row = self._date_row(events)
         area_value = _s(first.area) or _num(getattr(first, "area_numeric", None))
         area_unit = _s(first.area_unit)
+        mapped = parcel is not None and parcel.pk in mapped_parcel_ids
 
-        record = ApplicationPass(number=number, events=events, parcel=parcel, applied_on=day)
-        record.before = list(operator_rows) + self._location_rows(events, parcel, mapped_parcel_ids)
-        record.before += self._time_rows(events, day)
+        record = ApplicationPass(
+            number=number,
+            events=events,
+            parcel=parcel,
+            applied_on=days[0] if len(days) == 1 else None,
+            applied_text=date_row.text,
+            mapped=mapped,
+        )
+        record.before = list(operator_rows) + self._location_rows(events, parcel, mapped)
+        record.before += self._time_rows(events, date_row)
+        if len(days) > 1:
+            record.notes.append(
+                "The lines of this tank are recorded on different days; item (c) prints each line's day."
+            )
 
         for event in events:
             record.products.append(self._product_line(event, area_value, area_unit))
@@ -685,8 +741,6 @@ class WASprayRecordService:
         """The passes of the period, in date order."""
         if self._built is not None:
             return self._built
-        from certifications.services.parcel_map import parcel_boundary_ring
-
         records = self._records()
         groups = self._group(records)
         groups.sort(
@@ -698,7 +752,7 @@ class WASprayRecordService:
             )
         )
         parcels = self.parcels(records)
-        mapped = {p.pk for p in parcels if parcel_boundary_ring(p) is not None}
+        mapped = {p.pk for p in parcels if _map_drawing(p) is not None}
         operator_rows = self._operator_rows()
         entered = self._entered_on(records)
         self._built = [
@@ -720,13 +774,11 @@ class WASprayRecordService:
     # ------------------------------------------------------------------
     def summary(self) -> dict:
         """The preview the app reads: counts and, per pass, which item letters are blank."""
-        from certifications.services.parcel_map import parcel_boundary_ring
-
         passes = self.build()
         parcels = []
         for record in passes:
             if record.parcel is not None and record.parcel not in parcels:
-                parcels.append(record.parcel)
+                parcels.append((record.parcel, record.mapped))
         return {
             "establishment_id": self.establishment.id,
             "establishment_name": self.establishment.name,
@@ -736,7 +788,7 @@ class WASprayRecordService:
             "pass_count": len(passes),
             "product_line_count": sum(len(p.products) for p in passes),
             "passes_with_blank_items": sum(1 for p in passes if p.blank_items()),
-            "parcels_without_map": [p.name for p in parcels if parcel_boundary_ring(p) is None],
+            "parcels_without_map": [parcel.name for parcel, mapped in parcels if not mapped],
             "passes": [
                 {
                     "number": p.number,
@@ -746,7 +798,13 @@ class WASprayRecordService:
                     "parcel_id": getattr(p.parcel, "pk", None),
                     "parcel_name": _s(getattr(p.parcel, "name", None)),
                     "block": _s(p.events[0].block_id),
+                    # One day, or "" when the lines differ; `event_days` then lists each day.
                     "event_date": p.applied_on.isoformat() if p.applied_on else "",
+                    "event_days": (
+                        list(dict.fromkeys(_day(e.date).isoformat() for e in p.events if e.date))
+                        if p.applied_on is None
+                        else []
+                    ),
                     "products": [line.name.text for line in p.products],
                     "blank_items": p.blank_items(),
                 }
@@ -815,7 +873,7 @@ class WASprayRecordService:
                 "a_address": self._by_label(pass_rows, "a", "Address"),
                 "b_parcel": self._by_label(pass_rows, "b", "Parcel and block"),
                 "b_location": location,
-                "b_map": self._by_label(pass_rows, "b", "Map"),
+                "b_map": map_text(_s(getattr(record.parcel, "name", None)), record.mapped, "csv"),
                 "c_date": self._by_label(pass_rows, "c", "Date"),
                 "c_start": self._by_label(pass_rows, "c", "Start time"),
                 "c_stop": self._by_label(pass_rows, "c", "Stop time"),
@@ -883,7 +941,7 @@ class WASprayRecordService:
         from reportlab.lib.utils import simpleSplit
         from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-        from certifications.services.parcel_map import parcel_map_caption, parcel_map_drawing
+        from certifications.services.parcel_map import parcel_map_caption
 
         base = getSampleStyleSheet()
         styles = {
@@ -997,7 +1055,7 @@ class WASprayRecordService:
         for record in passes:
             parcel_name = _s(getattr(record.parcel, "name", None)) or "parcel not recorded"
             block = _s(record.events[0].block_id)
-            heading = f"Application {record.number}: {record.applied_on.isoformat() if record.applied_on else ''}, "
+            heading = f"Application {record.number}: {record.applied_text}, "
             heading += f"{parcel_name}{f', block {block}' if block else ''}"
             if record.is_tank:
                 heading += f". One tank, {len(record.products)} products"
@@ -1009,8 +1067,7 @@ class WASprayRecordService:
                 Spacer(1, 3),
                 item_table(record.after),
                 p(
-                    f"(2) Applied {record.applied_on.isoformat() if record.applied_on else 'on a day not recorded'}; "
-                    f"record entered in Trazo {record.entered} (Pacific time).",
+                    f"(2) Applied {record.applied_text}; " f"record entered in Trazo {record.entered} (Pacific time).",
                     "foot",
                 ),
             ]
@@ -1020,13 +1077,14 @@ class WASprayRecordService:
             story.append(KeepTogether(block_flow))
 
         # Field maps, WAC 16-228-1320(1)(b): one page per parcel whose boundary can be drawn.
+        # The same predicate the (b) rows were written from (`record.mapped`, from `_map_drawing`).
         parcels = []
         for record in passes:
-            if record.parcel is not None and record.parcel not in parcels:
-                parcels.append(record.parcel)
-        drawable = [(parcel, parcel_map_drawing(parcel, width=7.0 * inch, height=4.6 * inch)) for parcel in parcels]
-        unmapped = [parcel.name for parcel, drawing in drawable if drawing is None]
-        for parcel, drawing in drawable:
+            if record.parcel is not None and all(record.parcel != seen for seen, _m in parcels):
+                parcels.append((record.parcel, record.mapped))
+        unmapped = [parcel.name for parcel, mapped in parcels if not mapped]
+        for parcel, mapped in parcels:
+            drawing = _map_drawing(parcel) if mapped else None
             if drawing is None:
                 continue
             story.append(PageBreak())
@@ -1045,7 +1103,8 @@ class WASprayRecordService:
         if unmapped:
             story.append(
                 p(
-                    f"No parcel boundary is recorded in Trazo for: {', '.join(unmapped)}. No map is included for "
+                    f"No parcel boundary that can be drawn is recorded in Trazo for: {', '.join(unmapped)}. "
+                    "No map is included for "
                     f"{'it' if len(unmapped) == 1 else 'them'}.",
                     "body",
                 )

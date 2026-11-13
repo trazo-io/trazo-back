@@ -358,8 +358,70 @@ class CopyTests(_WAFarm):
         self.assertTrue(
             any(page.startswith("Field map: North Orchard") or "Field map: North Orchard" in page for page in pages)
         )
-        self.assertIn("No parcel boundary is recorded in Trazo for: South Block.", " ".join(pages))
+        self.assertIn("No parcel boundary that can be drawn is recorded in Trazo for: South Block.", " ".join(pages))
         self.assertEqual(self.service().summary()["parcels_without_map"], ["South Block"])
+
+
+class ReviewFixTests(_WAFarm):
+    """Review of back #413: a tank's day read like every other shared fact, map wording per
+    format, and one map predicate for the row, the preview and the pages."""
+
+    def test_lines_corrected_to_different_days_print_each_day_everywhere(self):
+        _first, second, _third = self.tank(3)
+        ChemicalEvent.objects.filter(pk=second.pk).update(date=WHEN.replace(day=20))
+        service = self.service()
+        record = service.build()[0]
+        each = "line 1: 2026-06-15; line 2: 2026-06-20; line 3: 2026-06-15"
+        self.assertEqual(len(service.build()), 1)
+        self.assertIsNone(record.applied_on)
+        self.assertEqual(self.row("Date"), ("c", each, "value"))
+        self.assertIn("The lines of this tank are recorded on different days", " ".join(record.notes))
+        text = self.pdf_text()
+        self.assertIn(f"Application 1: {each}, North Orchard", text)
+        self.assertIn(f"(2) Applied {each};", text)
+        summary_pass = service.summary()["passes"][0]
+        self.assertEqual(summary_pass["event_date"], "")
+        self.assertEqual(summary_pass["event_days"], ["2026-06-15", "2026-06-20"])
+        self.assertEqual({row["c_date"] for row in service.csv_rows()}, {each})
+
+    def test_a_tank_on_one_day_keeps_one_day(self):
+        self.tank(2)
+        summary_pass = self.service().summary()["passes"][0]
+        self.assertEqual((summary_pass["event_date"], summary_pass["event_days"]), ("2026-06-15", []))
+        self.assertIn("Application 1: 2026-06-15, North Orchard", self.pdf_text())
+
+    def test_the_csv_points_at_the_pdf_for_the_map_never_at_its_own_pages(self):
+        self.spray()
+        service = self.service()
+        cell = service.csv_rows()[0]["b_map"]
+        self.assertIn("in the PDF export of these records", cell)
+        self.assertNotIn("pages", cell)
+        self.assertNotIn("this document", cell)
+        self.assertNotIn("map pages at the end of this document", service.to_csv().decode("utf-8-sig"))
+        self.assertIn("on the map pages at the end of this document", self.row("Map")[1])
+
+    def test_a_boundary_that_cannot_be_drawn_is_no_map_in_every_place(self):
+        """Four copies of one point: a ring exists, the drawing refuses it
+        (certifications/tests/test_parcel_map_in_packet.py, degenerate geometry)."""
+        from certifications.services.parcel_map import parcel_boundary_ring, parcel_map_drawing
+
+        Parcel.objects.filter(pk=self.parcel.pk).update(polygon={"type": "Polygon", "coordinates": [[[1.0, 2.0]] * 4]})
+        self.parcel.refresh_from_db()
+        self.assertIsNotNone(parcel_boundary_ring(self.parcel))
+        self.assertIsNone(parcel_map_drawing(self.parcel))
+        self.spray()
+        service = self.service()
+        self.assertEqual(
+            self.row("Map"),
+            ("b", "Not included: no parcel boundary that can be drawn is recorded in Trazo.", "not_recorded"),
+        )
+        self.assertIn("b", service.build()[0].blank_items())
+        self.assertEqual(service.summary()["parcels_without_map"], ["North Orchard"])
+        self.assertTrue(service.csv_rows()[0]["b_map"].startswith("Not included"))
+        text = self.pdf_text()
+        self.assertNotIn("Field map:", text)
+        self.assertNotIn("map pages at the end", text)
+        self.assertIn("No parcel boundary that can be drawn is recorded in Trazo for: North Orchard.", text)
 
 
 class CsvTests(_WAFarm):
