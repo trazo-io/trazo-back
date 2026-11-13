@@ -25,8 +25,9 @@ added a public surface without saying so.
 WHAT IT DOES NOT COVER
 ----------------------
 Only the permission CLASS is inspected. A view that keeps `AllowAny` and narrows inside
-`get_permissions()` (RegistrationViewSet: `create` open, everything else authenticated) is still
-listed here — the entry documents the real rule. That direction is the safe one to be wrong in.
+`get_permissions()` is still listed here, and the entry documents the real rule. That direction is
+the safe one to be wrong in. Viewset routes are keyed per reachable action: methods outside the
+viewset's `http_method_names` answer 405 and are not counted.
 """
 
 from django.test import SimpleTestCase
@@ -40,12 +41,20 @@ from django.urls.resolvers import URLPattern, URLResolver
 # surface may assert, and `history/services/privacy.py` decides what geodata it may carry.
 REVIEWED_ANONYMOUS_ENDPOINTS = {
     # --- Auth / account lifecycle. Anonymous by necessity: the caller has no session yet. ---
-    "LoginViewSet::AllowAny": "sign-in",
-    "RegistrationViewSet::AllowAny": "sign-up (get_permissions narrows all other actions)",
+    "LoginViewSet.create::AllowAny": "sign-in (POST-only viewset)",
+    "RegistrationViewSet.create::AllowAny": "sign-up (POST-only viewset)",
     "CustomTokenRefreshView::AllowAny": "refresh from the httpOnly cookie",
     "SocialAuthView::AllowAny": "Google OAuth exchange",
     "OAuthConfigView::AllowAny": "public client id / redirect URI",
-    "UserViewSet::AllowAny": "verify_email, request/confirm_password_reset, resend_verification",
+    # Per action since 2026-11-13: one viewset-wide entry used to cover them all, and
+    # `confirm_email_change` was anonymous without appearing in its reason.
+    "UserViewSet.verify_email::AllowAny": "email verification token from the sign-up mail",
+    "UserViewSet.resend_verification_email::AllowAny": "the user is not signed in until verified",
+    "UserViewSet.request_password_reset::AllowAny": "forgotten password; same response for any address",
+    "UserViewSet.confirm_password_reset::AllowAny": "reset token from the mail is the credential",
+    "UserViewSet.confirm_email_change::AllowAny": (
+        "token sent only to the new address is the credential; the link may open signed out (OV-SEC-C03)"
+    ),
     "signup_with_invitation::AllowAny": "invited user has no account yet",
     "get_invitation_details::AllowAny": "invitation code lookup before sign-up",
     "accept_invitation::AllowAny": "invitation acceptance before sign-up",
@@ -61,11 +70,13 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
     # is the EU ECGT 2024/825 label class whether or not a farm's data is attached, so this
     # inventory reviews CLAIM exposure as well as DATA exposure.
     "verify_blockchain::AllowAny": "integrity check for a published production",
-    "HistoryViewSet::AllowAny": "public_history action only — the @action carries AllowAny",
-    "PublicHistoryScanViewSet::AllowAny": (
-        "shopper scan tally; consent gating in PrivacyService. The `consent` action is also "
-        "anonymous but authorised by claim_token (256-bit, unique, never enumerable)"
-    ),
+    "HistoryViewSet.public_history::AllowAny": "the season page; anonymous callers need the UUID",
+    # `HistoryViewSet.validate_qr` was REMOVED on 2026-11-13: anonymous, looked a published season
+    # up by its integer id (or the first number in any string), had no caller, and redirected to a
+    # route that does not exist.
+    "PublicHistoryScanViewSet.create::AllowAny": "shopper scan tally; consent gating in PrivacyService",
+    "PublicHistoryScanViewSet.upgrade_consent::AllowAny": "claim_token authorises it (256-bit, unique)",
+    "PublicHistoryScanViewSet.comment::AllowAny": "authorised by claim_token, as consent is; one comment per scan",
     # --- Certifier review links. Bearer-token in the URL is the credential. ---
     "certifier_review_metadata::AllowAny": "opaque review token",
     "certifier_review_readiness::AllowAny": "opaque review token",
@@ -112,7 +123,8 @@ REVIEWED_ANONYMOUS_ENDPOINTS = {
         "through public_history's claim-safe serializer"
     ),
     # --- Pricing + docs. No farm data. ---
-    "PlanViewSet::AllowAny": "public pricing table",
+    "PlanViewSet.list::AllowAny": "public pricing table",
+    "PlanViewSet.retrieve::AllowAny": "one plan of the public pricing table",
     "SpectacularAPIView::AllowAny": "OpenAPI schema",
     "SpectacularSwaggerView::AllowAny": "API docs UI",
     "SpectacularRedocView::AllowAny": "API docs UI",
@@ -185,7 +197,22 @@ def _view_identity(pattern):
     permissions = initkwargs.get("permission_classes", getattr(view_class, "permission_classes", None))
     if permissions is None:
         return f"{view_class.__module__}.{view_class.__name__}", ["NON-DRF"]
-    return view_class.__name__, [_permission_name(p) for p in permissions]
+    name = view_class.__name__
+    actions = getattr(callback, "actions", None) or {}
+    if actions:
+        # A viewset route is reviewed BY ACTION, whether its permissions come from the class or
+        # from the `@action`. Keyed by the viewset alone, one reviewed public action approved
+        # every sibling: `HistoryViewSet.validate_qr` (AllowAny, integer-id lookup, no caller) sat
+        # under the entry written for `public_history` until 2026-11-13, and a new action on a
+        # class-level AllowAny viewset would have inherited its entry the same way.
+        # Only actions the viewset's `http_method_names` lets through count: the router still
+        # mounts `retrieve`/`update` on a POST-only viewset, and those answer 405 to everyone.
+        allowed = getattr(view_class, "http_method_names", None) or []
+        reachable = sorted({action for method, action in actions.items() if method in allowed})
+        if not reachable:
+            return None, [_permission_name(p) for p in permissions]  # None: nothing reachable here
+        name = f"{name}.{'/'.join(reachable)}"
+    return name, [_permission_name(p) for p in permissions]
 
 
 class AnonymousEndpointInventoryTests(SimpleTestCase):
@@ -197,6 +224,8 @@ class AnonymousEndpointInventoryTests(SimpleTestCase):
             if not route.startswith("api/"):
                 continue  # admin, allauth, static and health probes are not our claim surface
             view_name, permissions = _view_identity(pattern)
+            if view_name is None:
+                continue  # no method on this route is reachable at all
             # Anonymous means: AllowAny, an EMPTY permission list (no checks run at all — how
             # `companies/public/establishments/` shipped its PII), or no DRF layer at all.
             anonymous = not permissions or any("AllowAny" in name for name in permissions) or permissions == ["NON-DRF"]
@@ -251,4 +280,10 @@ class AnonymousEndpointInventoryTests(SimpleTestCase):
             "production_transparency_detail::AllowAny",
             found,
             "The consumer QR endpoint was not discovered — the walk is not seeing real routes.",
+        )
+        self.assertIn(
+            "HistoryViewSet.public_history::AllowAny",
+            found,
+            "An @action with its own permissions must be keyed by action, or one reviewed public "
+            "action approves every sibling on the viewset.",
         )

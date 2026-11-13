@@ -1280,33 +1280,6 @@ class ChemicalEvent(CommonEvent):
         (HERBICIDE, "Herbicide"),
     )
 
-    # Chemical subtype choices - used for accurate carbon emission factor selection
-    # These subtypes have different manufacturing emission factors
-    HERBICIDE_SUBTYPE_CHOICES = [
-        ("synthetic", "Synthetic (Glyphosate, 2,4-D, Atrazine, etc.)"),
-        ("organic", "Organic/Natural (Vinegar, Acetic Acid, Clove Oil, etc.)"),
-    ]
-
-    FUNGICIDE_SUBTYPE_CHOICES = [
-        ("synthetic", "Synthetic (Chlorothalonil, Mancozeb, etc.)"),
-        ("organic", "Organic/Natural (Neem Oil, Potassium Bicarbonate, etc.)"),
-        ("copper", "Copper-Based (Bordeaux Mix, Copper Sulfate, Kocide, etc.)"),
-        ("sulfur", "Sulfur-Based"),
-        ("biological", "Biological (Bacillus, Trichoderma, etc.)"),
-    ]
-
-    PESTICIDE_SUBTYPE_CHOICES = [
-        ("synthetic", "Synthetic (Conventional)"),
-        ("organic", "Organic/Natural (Neem, Pyrethrin, etc.)"),
-        ("biological", "Biological (Bt, Spinosad, etc.)"),
-    ]
-
-    FERTILIZER_SUBTYPE_CHOICES = [
-        ("synthetic", "Synthetic/Chemical (Urea, Ammonium Nitrate, etc.)"),
-        ("organic", "Organic (Compost, Manure, etc.)"),
-        ("slow_release", "Slow-Release/Controlled"),
-    ]
-
     # Combined choices imported from common/field_registry.py (SSOT)
     CHEMICAL_SUBTYPE_CHOICES = CHEMICAL_SUBTYPE
 
