@@ -18,3 +18,18 @@ questions:
   certification_contract.history_this_agent_records: "An info line on page C, not a question: it says the
     current agent's notices already print on 02s with their letters, so the upload is for earlier agencies'
     letters. CCOF D6 is answered by the explanation and the upload."
+  certification_contract.history_keeping_other_certification: >-
+    OTCO O1 D-1B. CCOF's Contract D4 asks whether the operation is certified today, not whether another
+    certification continues.
+  certification_contract.standards_requested: >-
+    OTCO O1 C-2 and the OSP Update Form Step 3. CCOF's Contract asks no list of standards to be assessed
+    to.
+  certification_contract.standards_requested_other: >-
+    OTCO O1 C-2, the other standard named. CCOF's Contract asks no list of standards.
+  certification_contract.regulatory_agencies: >-
+    OTCO O1 C-5. CCOF's Contract asks state registrations (E1, E2), not which regulators inspect the
+    operation.
+  certification_contract.regulatory_negative_report: >-
+    OTCO O1 C-6. CCOF's Contract asks adverse organic certification history only (D5, D6).
+  certification_contract.regulatory_reports_upload: >-
+    OTCO O1 C-6, the reports and responses. CCOF's Contract asks for none.

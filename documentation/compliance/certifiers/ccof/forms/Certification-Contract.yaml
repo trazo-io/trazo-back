@@ -274,18 +274,25 @@ items:
 - ref: D4
   asks: Is this operation currently certified organic? No / Yes — attach certificate and completed Certification
     Transfer Form.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: '00-cover.pdf: Certificate'
+    where: >-
+      modules/operation_profile.pdf: B. Certification history, certified today by another agency;
+      00-cover.pdf: Certificate
+    questions:
+    - certification_contract.history_ever_certified
+    - certification_contract.history_certified_elsewhere_now
+    - certification_contract.history_current_certificate_upload
     models:
     - certifications.Certification
-    prints: 00-cover.pdf (certificate number, certifier, effective/expiry date, scope)
-  gap: The 'currently certified, here is the certificate' path is covered by the existing `Certification`
-    record and prints on the cover; the Certification Transfer Form branch (switching certifying agents)
-    has no equivalent anywhere.
-  fix: Add a `certification_transfer` flag plus upload for operations switching certifiers; low priority
-    until a pilot farm actually needs it.
+    prints: >-
+      modules/operation_profile.pdf §B;
+      attachments/certification_contract/history_current_certificate_upload/; 00-cover.pdf (the
+      certificate of record)
+  note: >-
+    Closed 2026-11-13. An operation switching to CCOF answers yes and attaches the other agency's
+    certificate with CCOF's Certification Transfer Form (CCOF's own form, filled on CCOF's copy); one
+    CCOF already certifies answers no, and its certificate of record prints on the cover.
 - ref: D5
   asks: Has this operation or any responsibly connected person with this operation ever applied for, or been
     granted, organic certification? No, skip to section E / Yes, complete this section and provide the name
@@ -493,21 +500,25 @@ items:
   asks: Signature of the owner or legally authorized corporate representative (name/title, signature, date),
     acknowledging the general requirements above, authorizing the listed persons to act for the company, and
     attesting that all information in the application is true and accurate.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: >-
+      attachments/certification_contract/contract_upload/ (the signed contract);
+      modules/operation_profile.pdf: A. Contract on file, who signed it and when
     questions:
     - certification_contract.contract_upload
+    - certification_contract.contract_signed_by
+    - certification_contract.contract_signed_on
     models:
     - certifications.OSPAnnualUpdate
     - certifications.OSPChangeNotification
-    prints: 02-annual-update.pdf; 03-change-notifications.pdf; attachments/certification_contract/contract_upload/
-      (the signed contract, when uploaded for that question; since 2026-10-01)
-  gap: The signature executes every clause of section G. Trazo holds the signed contract only as `contract_upload`,
-    which rides in the packet since 2026-10-01 when uploaded for that question. The
-    annual update and the drift and change notifications the clauses require (G4a, G4g, G4h) are kept as records
-    and print as documents 02 and 03.
-  fix: 'Name the uploaded contract on the coverage page against section G.'
+    prints: >-
+      attachments/certification_contract/contract_upload/; modules/operation_profile.pdf §A (name and
+      title, date); 02-annual-update.pdf; 03-change-notifications.pdf
+  note: >-
+    Closed 2026-11-13. Trazo signs nothing: the signature is on CCOF's own contract, attached, and the
+    profile prints the signer's name, title and date. The annual update and the change notices the
+    clauses require (G4a, G4g, G4h) print as documents 02 and 03.
 - ref: H
   asks: 'Credit or Debit Card Payment Information: card type, amount, billing address, name on card, card number,
     security number, expiration date, signature. CCOF applies a 3% surcharge to credit card transactions;

@@ -2797,6 +2797,32 @@
        "public_email": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "farm@calapooiabend.example"
+       },
+       "history_certified_elsewhere_now": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": false
+       },
+       "standards_requested": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": [
+         "usda_nop"
+        ]
+       },
+       "regulatory_agencies": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": "Oregon Department of Agriculture, Food Safety Program."
+       },
+       "regulatory_negative_report": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": false
+       },
+       "contract_signed_by": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": "Laurel Brandt, member-manager"
+       },
+       "contract_signed_on": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": "2026-08-21"
        }
       },
       "completed_at": "2026-08-21T11:42:20.378188+00:00",

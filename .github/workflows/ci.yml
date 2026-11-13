@@ -506,6 +506,11 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-13: certifications.tests.test_operation_standards_and_signatory joins. The Operation module's new scopes
+      # (OTCO O1 C-1), page E (standards, regulators, negative reports: C-2, C-5, C-6), certified elsewhere today (D-1A,
+      # D-1B; CCOF Contract D4) and who signed the agency's form (I-B; CCOF G): optional, printed, and the register rows
+      # judged on them, an attachment where the form asks one. Builds its own farm; no sibling repo.
+      #
       # 2026-11-13: certifications.tests.test_operation_legal_entity joins. The Operation module's page D (CCOF Contract
       # A1 to A4, A6, A7; OTCO O1 A-1, A-3, B-1, B-7): every question optional, the answers on the module PDF, the
       # "same as" addresses hiding their boxes, and the register rows judged on them. Builds its own farm; no sibling
@@ -918,6 +923,7 @@ jobs:
             certifications.tests.test_container_parcels \
             certifications.tests.test_operation_contacts \
             certifications.tests.test_operation_legal_entity \
+            certifications.tests.test_operation_standards_and_signatory \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
