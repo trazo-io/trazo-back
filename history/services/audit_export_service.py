@@ -664,7 +664,7 @@ def _retention_detail(scope, retained):
     Run 7 (R7-10): "Until" printed finish + 5 years beside a promise of five years from creation,
     and an open season printed nothing. The stored date is now the floor (`retention_floor`), an
     open season shows its calculated floor, and the text says which seasons Trazo protects."""
-    from history.retention import retention_floor
+    from history.retention import retention_floor, state_retention_sentence
 
     parts = []
     if retained:
@@ -686,6 +686,13 @@ def _retention_detail(scope, retained):
             line += f": calculated date at least {max(floors)} so far"
         line += "; not deletion-protected by Trazo until finished."
         parts.append(line)
+    # The Washington floor, named when a season in scope carries it (WAC 16-228-1320(3)): the dates
+    # above are then not the five-year rule alone.
+    if parts and any(state_retention_sentence(p) for p in scope):
+        parts.append(
+            "For a Washington farm's season holding a pesticide application, the date is also at least "
+            "seven years after its newest application (WAC 16-228-1320(3))."
+        )
     return " ".join(parts) or "No records yet."
 
 

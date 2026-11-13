@@ -66,7 +66,7 @@ def assert_deletable(container_label, **lookup):
                 f"This {container_label} has {count} finished production"
                 f"{'' if count == 1 else 's'} that must be kept until {until} under "
                 f"7 CFR 205.103(b)(4). Deleting the {container_label} would erase "
-                f"{'it' if count == 1 else 'them'}."
+                f"{'it' if count == 1 else 'them'}." + state_retention_sentence(blocking)
             ),
             "retention_until": until,
             "blocking_production_count": count,
@@ -117,6 +117,7 @@ def assert_child_record_deletable(record_label, history, *, correctable=False):
                 f"{f' until {until}' if until else ''} under 7 CFR 205.103(b)(4). "
                 f"The audit trail a certifier follows runs from production to sale, so this "
                 f"row is part of what the plan has to be able to show."
+                + state_retention_sentence(history)
                 + (
                     " If it is wrong, void it instead: the row stays on the record with your "
                     "reason, and stops counting as a sale."
@@ -191,10 +192,79 @@ def latest_covered_record_created(history):
     return max(dates) if dates else None
 
 
+# ---------------------------------------------------------------------------------------------
+# A state floor on top (overall review 2026-11, OV-CMP-C08).
+#
+# WAC 16-228-1320(3): a Washington pesticide application record "shall be kept for a period of
+# seven years from the date of the application". The rule covers "all persons applying pesticides
+# to more than one acre of agricultural land in a calendar year", organic products included, so a
+# Washington season holding a spray keeps seven years from its newest application, when that is
+# later than the five-year organic floor. Kept per SEASON like the rest of this module: the floor
+# is what `retention_until` stores, and a season is what the deletion guard refuses to erase.
+# Applied to every Washington farm's spray, never only above one acre: keeping a record longer
+# than a rule asks costs nothing, and Trazo does not know the farm's yearly sprayed acreage.
+# ---------------------------------------------------------------------------------------------
+
+#: State code -> (years from the application date, the rule that says so).
+STATE_SPRAY_RETENTION = {"WA": (7, "WAC 16-228-1320(3)")}
+
+
+def _state_spray_rule(history):
+    """`(years, citation)` when this season's farm keeps spray records longer than five years."""
+    from common.us_states import resolve_establishment_state
+
+    parcel = getattr(history, "parcel", None)
+    establishment = getattr(parcel, "establishment", None) if parcel is not None else None
+    return STATE_SPRAY_RETENTION.get(resolve_establishment_state(establishment))
+
+
+def state_spray_retention_floor(history):
+    """Seven years after the newest pesticide application of a Washington farm's season, or None.
+
+    None for a farm in any other state, for a season with no pesticide, fungicide or herbicide
+    record, and for an unsaved season."""
+    rule = _state_spray_rule(history)
+    if rule is None or history.pk is None:
+        return None
+    from django.db.models import Max
+
+    from history.models import ChemicalEvent, compute_retention_until
+    from history.services.wa_spray_record_service import WA_RECORD_TYPES
+
+    latest = ChemicalEvent.objects.filter(history=history, type__in=WA_RECORD_TYPES).aggregate(m=Max("date"))["m"]
+    if latest is None:
+        return None
+    return compute_retention_until(latest, years=rule[0])
+
+
+def state_retention_sentence(history) -> str:
+    """The sentence a refusal citing 7 CFR 205.103(b)(4) appends when the season carries the
+    Washington floor, naming WAC 16-228-1320(3) and the date; "" otherwise."""
+    try:
+        floor = state_spray_retention_floor(history)
+    except Exception:  # noqa: BLE001 - a refusal message must never fail on its own wording
+        return ""
+    if floor is None:
+        return ""
+    # Said only when the stored date carries the state floor. A season closed before this floor
+    # existed keeps its five-year date until its next record moves it (`extend_retention`), and a
+    # refusal must not promise a date the guard does not hold.
+    stored = getattr(history, "retention_until", None)
+    if stored is not None and stored < floor:
+        return ""
+    years, citation = _state_spray_rule(history)
+    return (
+        f" This season holds pesticide application records of a Washington farm, which are kept "
+        f"{years} years from the date of the application ({citation}): until at least {floor.isoformat()}."
+    )
+
+
 def retention_floor(history):
     """The earliest date this production's records may be released: never before five years after
-    its finish, nor before five years after its newest record was created. None when the season
-    has neither a finish date nor any record."""
+    its finish, nor before five years after its newest record was created, nor, for a Washington
+    farm's season holding a spray, before seven years after its newest application. The later date
+    wins, so a state floor never brings a date forward. None when the season has neither a finish
+    date nor any record."""
     from history.models import compute_retention_until
 
     candidates = []
@@ -203,6 +273,9 @@ def retention_floor(history):
     latest = latest_covered_record_created(history)
     if latest is not None:
         candidates.append(compute_retention_until(latest))
+    state_floor = state_spray_retention_floor(history)
+    if state_floor is not None:
+        candidates.append(state_floor)
     return max(candidates) if candidates else None
 
 

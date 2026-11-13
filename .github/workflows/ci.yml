@@ -362,6 +362,14 @@ jobs:
       # National List per line, the packet's "one tank with", a PUR row per line, a sealed season
       # across migration 0262. It does not read the sibling repo.
       #
+      # 2026-11-13 (OV-RK-C03 / OV-CMP-C08): test_wa_spray_record_export and
+      # test_wa_spray_retention join. The Washington pesticide application record export
+      # (WAC 16-228-1320): every item (a) to (n) by letter, a tank printed once, blanks named as
+      # not recorded, not on the source record or not applicable, nothing invented, the header copy
+      # and no "satisfies/compliant/approved", the CSV columns, DMS filing, specimen marking, the
+      # Compliance gate and the outsider refusal; and the seven-year retention floor for a
+      # Washington season holding a spray. They do not read the sibling repo.
+      #
       # 2026-11-12: company.tests.test_applicators joins. Saved applicators under
       # /api/companies/<id>/applicators/: members read, CA/FM write, another company's applicator
       # answers like a missing one, the company comes from the URL and never the body, DELETE
@@ -820,6 +828,8 @@ jobs:
             history.tests.test_spray_not_on_source_record \
             history.tests.test_spray_state_application_fields \
             history.tests.test_spray_tank_mix \
+            history.tests.test_wa_spray_record_export \
+            history.tests.test_wa_spray_retention \
             company.tests.test_applicators \
             history.tests.test_manure_interval_is_a_floor \
             history.tests.test_sales_disclosure_precedence \

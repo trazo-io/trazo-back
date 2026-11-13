@@ -228,6 +228,7 @@ class ComplianceExportDoorInventoryTests(SimpleTestCase):
             "company-establishments-operation-audit-export",
             "company-establishments-export-jobs",
             "histories-pur-export",
+            "histories-wa-spray-records-export",
             "histories-audit-export",
             "audit-export-by-uuid",
             "establishment-osps-packet",
