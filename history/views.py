@@ -213,6 +213,21 @@ def _history_event_count_expression():
     return ExpressionWrapper(total, output_field=IntegerField())
 
 
+def _season_type_error(data):
+    """A 400 body when `type` is not a History choice, else None.
+
+    Both create paths pass `type` as a raw model kwarg (no serializer, no full_clean), so
+    Django's `choices` never run. Absent or empty stays unstated (NULL): perennial vs annual
+    decides whether the audit export prints the § 205.204(a)(4) 12-month verdict, so it is
+    never assumed (2026-11-13).
+    """
+    value = data.get("type") if hasattr(data, "get") else None
+    valid = [code for code, _label in History.HISTORY_TYPES]
+    if value in (None, "") or value in valid:
+        return None
+    return {"type": [f'"{value}" is not a valid choice. Valid options: {", ".join(valid)}.']}
+
+
 class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     flat_route_tenancy = CALLER_SCOPED  # see backend/permissions.py
     object_company_path = "parcel__establishment__company"
@@ -614,6 +629,10 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        type_error = _season_type_error(data)
+        if type_error:
+            return Response(type_error, status=status.HTTP_400_BAD_REQUEST)
+
         parcel = get_object_or_404(Parcel, id=data["parcel"])
         # Scope the parcel to the caller's company — the URL is nested, but this method
         # previously trusted the body's parcel id outright.
@@ -647,7 +666,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             parcel=parcel,
             product=obj,
             extra_data=extra_data,
-            type=data.get("type"),
+            type=data.get("type") or None,
         )
         parcel.current_history = history
         parcel.save()
@@ -710,6 +729,10 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+
+            type_error = _season_type_error(data)
+            if type_error:
+                return Response(type_error, status=status.HTTP_400_BAD_REQUEST)
 
             # Get parcel
             try:
@@ -804,7 +827,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     production_method=data.get("production_method", "conventional"),
                     crop_type=crop_type,
                     extra_data=extra_data,
-                    type=data.get("type", "OR"),
+                    type=data.get("type") or None,
                     description=data.get("description", ""),
                     operator=request.user if request.user.is_authenticated else None,
                 )
