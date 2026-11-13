@@ -130,7 +130,7 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
             self.assertEqual(result.get("recorded_emissions"), 150.0, "100 factors_verified + 50 epa_verified")
             self.assertEqual(result.get("excluded_entry_count"), 4)
             _header, rows = self._rows(self._zip(), "carbon_entries.csv")
-            basis = {r["verification_status"]: r["factor_basis"] for r in rows}
+            basis = self._basis_by_status(rows)
             for status in ("epa_verified", "factors_verified"):
                 self.assertNotIn("not stated", basis[status])
                 self.assertIn("nitrogen: EPA + IPCC", basis[status])
@@ -171,6 +171,13 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
 
         return zipfile.ZipFile(io.BytesIO(export_establishment_records_zip(self.establishment)))
 
+    @staticmethod
+    def _basis_by_status(rows):
+        """factor_basis per stored status, joined through the row id (the CSV no longer carries
+        the raw status)."""
+        status_by_id = dict(CarbonEntry.objects.values_list("pk", "verification_status"))
+        return {status_by_id[int(r["id"])]: r["factor_basis"] for r in rows}
+
     def _rows(self, zf, name):
         text = zf.read(name).decode("utf-8")
         rows = list(csv.reader(io.StringIO(text)))
@@ -191,7 +198,11 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
         ):
             self.assertNotIn(gone, header)
         self.assertIn("factor_basis", header)
-        by_status = {r["verification_status"]: r["factor_basis"] for r in rows}
+        # The raw status leaves the file (2026-11-13); factor_basis is its reading.
+        self.assertNotIn("verification_status", header)
+        # The fixture stores "factors_verified": the slug may not appear in any cell.
+        self.assertNotIn("factors_verified", "\n".join(",".join(r.values()) for r in rows))
+        by_status = self._basis_by_status(rows)
         self.assertIn("Estimated from the area recorded", by_status["area_estimate"])
         self.assertEqual(by_status["no_factor_applied"], "No factor applied")
         self.assertIn("Published factor applied; source per input class", by_status["factors_verified"])
