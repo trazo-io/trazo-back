@@ -12,8 +12,10 @@ behind. This runs every day and does nothing until a newer month exists: one com
 no download, on most days.
 
 WHAT IT DOES ON A NEW MONTH. Download, import through `import_usda_organic_data` (which keeps its
-refusal to replace good data with an implausible parse), then `reverify_certifications --all`,
-because the import alone changes no certificate.
+refusal to replace good data with an implausible parse), then re-verify every certification,
+because the import alone changes no certificate. A successful re-verification is recorded per
+snapshot (an `IngestionRun` row), and any run that finds the held snapshot without one re-verifies,
+so a failure after the import is retried the next day instead of hidden by a current mirror.
 
 WHEN IT FAILS THE RUN. Only when the mirror is more than one month behind and no newer export can be
 downloaded, or when the import or re-verification fails. "This month is not published yet, and we
@@ -29,7 +31,22 @@ from django.db.models import Max
 from django.utils import timezone
 
 from certifications.management.commands.import_usda_organic_data import USDA_MONTHLY_URL, download_export
-from certifications.models import USDAOrganicOperation
+from certifications.models import IngestionRun, USDAOrganicOperation
+from certifications.services.verification_manager import VerificationManager
+
+#: IngestionRun message prefix recording a successful re-verification against one snapshot. Reuses
+#: the existing `usda_organic` source rather than adding a choice, which would need a migration.
+REVERIFIED_PREFIX = "reverified against snapshot "
+
+
+def _held_snapshot():
+    return USDAOrganicOperation.objects.aggregate(latest=Max("data_snapshot_date"))["latest"]
+
+
+def _reverified(snapshot) -> bool:
+    return IngestionRun.objects.filter(
+        source="usda_organic", status="ok", message__startswith=f"{REVERIFIED_PREFIX}{snapshot}:"
+    ).exists()
 
 
 def _previous_month(first_of_month: date) -> date:
@@ -42,22 +59,45 @@ class Command(BaseCommand):
     help = "Import the newest USDA Organic Integrity export if it is newer than the mirror, then re-verify."
 
     def handle(self, *args, **options):
-        held = USDAOrganicOperation.objects.aggregate(latest=Max("data_snapshot_date"))["latest"]
+        held = self._import_if_newer(_held_snapshot())
+        if held is None:
+            return
+        if _reverified(held):
+            self.stdout.write(f"Certifications already re-verified against snapshot {held}; nothing to do.")
+            return
+        # NEVER: key this on "did we import today", not on the snapshot. The import commits on its
+        # own; a re-verification that then fails (or a killed job) would leave a current mirror and
+        # stale certificate results, and tomorrow's run would see a current mirror and stop. Keyed
+        # on the snapshot, tomorrow's run finds no record for it and re-verifies (review on #417).
+        result = VerificationManager().reverify_all_active(days_ahead=36500)
+        IngestionRun.objects.create(
+            source="usda_organic",
+            status="ok",
+            rows_updated=result["changed"],
+            message=f"{REVERIFIED_PREFIX}{held}: {result['total']} checked, {result['changed']} changed",
+        )
+        self.stdout.write(
+            f"Re-verified {result['total']} certification(s) against snapshot {held}; "
+            f"{result['changed']} changed status."
+        )
+
+    def _import_if_newer(self, held):
+        """Import a newer export if USDA has one. Returns the snapshot the mirror holds afterwards."""
         this_month = timezone.now().date().replace(day=1)
         last_month = _previous_month(this_month)
 
         if held and held >= this_month:
-            self.stdout.write(f"USDA mirror is current (snapshot {held}); nothing to do.")
-            return
+            self.stdout.write(f"USDA mirror is current (snapshot {held}).")
+            return held
 
         snapshot, path = this_month, self._download(this_month)
         if path is None:
             if held and held >= last_month:
                 self.stdout.write(
                     f"USDA has not published the {this_month:%Y-%m} export yet; the mirror holds {held}, "
-                    "one cycle behind at most. Nothing to do."
+                    "one cycle behind at most."
                 )
-                return
+                return held
             snapshot, path = last_month, self._download(last_month)
         if path is None:
             raise CommandError(
@@ -79,8 +119,7 @@ class Command(BaseCommand):
                 os.remove(path)
             except FileNotFoundError:
                 pass
-
-        call_command("reverify_certifications", all=True, stdout=self.stdout._out, stderr=self.stderr._out)
+        return _held_snapshot()
 
     def _download(self, first_of_month: date):
         url = USDA_MONTHLY_URL.format(date=first_of_month.strftime("%Y%m%d"))
