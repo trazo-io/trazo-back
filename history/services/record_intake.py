@@ -31,6 +31,59 @@ invented number, the failure the COG Pro importer documents at `_map_area_unit`.
 
 A refused row is reported with its reason and its sheet row; nothing is silently dropped.
 
+## Spray record columns (optional)
+
+The 23 columns above are required in every file. A spray row (`fertilizer`, `pesticide`,
+`fungicide`, `herbicide`) may also carry the spray record's own columns (overall review 2026-11,
+OV-RK-C05). Each is optional: a file without it reads every cell of it as empty. Headers are
+matched without regard to case, spaces or punctuation ("EPA Reg. No." is `epa_reg_no`), and the
+aliases in `SPRAY_COLUMNS` are accepted. A filled spray column on a row of another kind refuses
+the row, like any column the kind has no field for.
+
+Column (model field): what it accepts.
+
+* `epa_reg_no` (`epa_registration_number`), `applicator` (`applicator_name`), `applicator_license`
+  (`applicator_certification`), `applicator_address`, `applicator_phone`, `supplier`
+  (`supplier_name`), `purchase_invoice`, `input_lot` (`chemical_lot_number`), `apparatus_plate`
+  (`apparatus_license_plate`): text, as long as the field holds.
+* `rei_hours`, `phi_days`: a number the model accepts (0 to 168 hours, 0 to 365 days).
+* `restricted_use` (`restricted_use_pesticide`): yes or no; yes needs `applicator_license`.
+* `purchase_date`: `YYYY-MM-DD`. `quantity_purchased` + `quantity_purchased_unit`: a pair, the
+  units of `amount_unit` for a spray.
+* `organic_basis` (`organic_approved`): one of the model's codes, in any case. Nothing is mapped:
+  "OMRI" is not `omri_listed`, it is a refused row.
+* `wind_from`: N NE E SE S SW W NW calm. `wind_speed_mph`: 0 to 150. `air_temperature_f`: -40 to 140.
+* `carrier_volume` + `carrier_volume_unit`: both or neither; `gal_per_acre`, `gal_total` (one parcel
+  only), `l_per_ha`.
+* `applied_by_business` (`applied_by_pcb`): yes or no. `firm_name` (`pcb_name`) and `firm_address`
+  (`commercial_firm_address`) need it to be yes, as the app sends them only with the flag on.
+* `concentration_not_on_record`, `time_not_on_record` (`concentration_not_recorded`,
+  `time_not_recorded`): yes or no.
+* `start_time`, `end_time` (`application_start`, `application_end`): `HH:MM`, 24-hour, the farm's
+  wall clock. The start is also the record's time.
+* `tank`: any label. `tank_role` (`tank_mix_role`): `product` (the default) or `adjuvant`.
+
+Every value is checked by the rule the model already holds for its field (`_spray_values`): the
+field's validators and choices, then `ChemicalEvent.clean()` for the rules that span fields. The
+importer restates no range.
+
+**A day without a time.** A spray row with no `start_time` is a day the source record gives no
+clock time for, so the record is marked `time_not_recorded` and kept at the noon placeholder
+(`history/services/not_on_source_record.py`). A row with a `start_time` keeps it. A row that says
+`time_not_on_record` is `no` and gives no time contradicts itself and waits. A blank
+`concentration` stays blank; it is marked not on the record only when that column says yes.
+
+**A tank.** Rows naming the same `tank` on the same document are one tank: written through
+`history/services/tank_mix.py` exactly as the API writes one, line order = row order. What the
+pass shares (the date and the parcels, the time, method, area, conditions, applicator, notes; the
+split is the `tank_mix` block of `multi_target_spec.json`) must read the same on every row of the
+tank, or every row of it waits with the disagreeing column named. A tank is written whole or not
+at all, so one row of it waiting for any reason (its own date or parcel included) holds the rest,
+and a tank already recorded takes no new products. A label names one tank per document.
+
+An `end_time` earlier than the `start_time` waits: both sit on the row's one date, and the sheet
+does not say which day a pass past midnight ended.
+
 ## Provenance
 
 Every record carries `extra_data["source"]` (`record_source.py`): the filed source document, the
@@ -43,12 +96,16 @@ import csv
 import hashlib
 import io
 import json
+import re
 import uuid
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+
+from rest_framework.exceptions import ValidationError as ApiValidationError
 
 from common.field_registry import UNIT_AMENDMENT, UNIT_APPLICATION_RATE, UNIT_AREA, UNIT_VOLUME, UNIT_YIELD
 from documents.models import GeneratedDocument
@@ -59,6 +116,7 @@ from history.constants import (
     SOIL_MANAGEMENT_EVENT_TYPE,
 )
 from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.services import multi_target, tank_mix
 from history.services.cogpro_import import ImportPlan, RowResult, _as_event_datetime
 from history.services.record_source import KIND_TRANSCRIPTION, SOURCE_KEY, source_ref, write_record
 
@@ -92,8 +150,98 @@ COLUMNS = (
     "source_locator",
 )
 
+#: The spray record's optional columns: (column, aliases, the `ChemicalEvent` field it fills).
+#: `tank` fills no field by itself: rows sharing it become one tank (`_resolve_tanks`).
+SPRAY_COLUMNS = (
+    ("epa_reg_no", ("epa_registration_number", "epa_reg", "epa_number", "epa_no"), "epa_registration_number"),
+    ("rei_hours", ("rei",), "rei_hours"),
+    ("phi_days", ("phi",), "phi_days"),
+    ("restricted_use", ("restricted_use_pesticide", "rup"), "restricted_use_pesticide"),
+    ("applicator", ("applicator_name",), "applicator_name"),
+    (
+        "applicator_license",
+        ("applicator_licence", "applicator_certification", "license_number", "licence_number"),
+        "applicator_certification",
+    ),
+    ("applicator_address", (), "applicator_address"),
+    ("applicator_phone", (), "applicator_phone"),
+    ("supplier", ("supplier_name",), "supplier_name"),
+    ("purchase_date", (), "purchase_date"),
+    ("purchase_invoice", ("invoice", "invoice_number"), "purchase_invoice"),
+    ("input_lot", ("lot_number", "chemical_lot_number", "product_lot"), "chemical_lot_number"),
+    ("quantity_purchased", (), "quantity_purchased"),
+    ("quantity_purchased_unit", ("purchased_unit",), "quantity_purchased_unit"),
+    ("organic_basis", ("organic_approved",), "organic_approved"),
+    ("wind_from", ("wind_direction",), "wind_from"),
+    ("wind_speed_mph", ("wind_mph", "wind_speed"), "wind_speed_mph"),
+    ("air_temperature_f", ("temperature_f", "temp_f", "air_temp_f"), "air_temperature_f"),
+    ("carrier_volume", (), "carrier_volume"),
+    ("carrier_volume_unit", ("carrier_unit",), "carrier_volume_unit"),
+    ("apparatus_plate", ("apparatus_license_plate", "license_plate"), "apparatus_license_plate"),
+    ("applied_by_business", ("applied_by_pcb", "for_hire"), "applied_by_pcb"),
+    ("firm_name", ("pcb_name", "business_name"), "pcb_name"),
+    ("firm_address", ("commercial_firm_address", "business_address"), "commercial_firm_address"),
+    ("concentration_not_on_record", ("concentration_not_recorded",), "concentration_not_recorded"),
+    ("time_not_on_record", ("time_not_recorded",), "time_not_recorded"),
+    ("start_time", ("time_started",), "application_start"),
+    ("end_time", ("time_finished", "time_completed"), "application_end"),
+    ("tank", ("tank_id", "tank_mix"), None),
+    ("tank_role", ("tank_mix_role",), "tank_mix_role"),
+)
+OPTIONAL_COLUMNS = tuple(column for column, _aliases, _field in SPRAY_COLUMNS)
+ALL_COLUMNS = COLUMNS + OPTIONAL_COLUMNS
+
+#: Spray column -> its field, and field -> the CSV column the operator typed it in (for a refusal
+#: they can act on).
+_FIELD_OF = {column: model_field for column, _aliases, model_field in SPRAY_COLUMNS}
+_SPRAY_COLUMN_OF = {model_field: column for column, _aliases, model_field in SPRAY_COLUMNS if model_field}
+
+#: Every header spelling the reader accepts, normalised (`_header_key`), -> its column.
+_HEADER_NAMES = {
+    **{column: column for column in COLUMNS},
+    **{column: column for column in OPTIONAL_COLUMNS},
+    **{alias: column for column, aliases, _field in SPRAY_COLUMNS for alias in aliases},
+}
+
+_YES_NO_COLUMNS = ("restricted_use", "applied_by_business", "concentration_not_on_record", "time_not_on_record")
+_YES = frozenset({"yes", "y"})
+_NO = frozenset({"no", "n"})
+#: Text columns: their length is checked by `_overlong`, against the model's max_length.
+_TEXT_COLUMNS = (
+    "epa_reg_no",
+    "applicator",
+    "applicator_license",
+    "applicator_address",
+    "applicator_phone",
+    "supplier",
+    "purchase_invoice",
+    "input_lot",
+    "apparatus_plate",
+    "firm_name",
+    "firm_address",
+)
+#: Columns whose value the model field itself parses and checks (a number, or one of its codes).
+_MODEL_CHECKED_COLUMNS = (
+    "rei_hours",
+    "phi_days",
+    "organic_basis",
+    "wind_from",
+    "wind_speed_mph",
+    "air_temperature_f",
+    "carrier_volume",
+    "carrier_volume_unit",
+)
+
 ALL_PARCELS = "all"
 PARCEL_SEPARATOR = ";"
+
+
+@dataclass
+class IntakePlan(ImportPlan):
+    """An import plan plus what the file's header said: {optional column: the header as written}."""
+
+    optional_columns: dict = field(default_factory=dict)
+
 
 EVENT_MODELS = {
     "ChemicalEvent": (ChemicalEvent, CHEMICAL_EVENT_TYPE),
@@ -237,6 +385,7 @@ def _columns_with_a_home(kind: Kind) -> frozenset:
         cols.add("product")
     if kind.chemical:
         cols |= {"active_ingredient", "concentration"}
+        cols |= set(OPTIONAL_COLUMNS)
     if kind.rate:
         cols |= {"rate", "rate_unit"}
     if kind.amount:
@@ -306,6 +455,182 @@ def _pair(row, number_col, unit_col, vocabulary, problems):
         problems.append(f"{unit_col} {raw_unit!r} is not a unit Trazo stores; one of: {', '.join(sorted(codes))}")
         return None, None
     return number, raw_unit
+
+
+def _chemical_field(name):
+    return ChemicalEvent._meta.get_field(name)
+
+
+def _parse_clock(row, column, problems):
+    """`HH:MM`, 24-hour, the farm's wall clock (stored as UTC, the convention every reader of
+    `application_start` follows: see the note on that field). None when the cell is empty."""
+    text = row[column]
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%H:%M").time()
+    except ValueError:
+        problems.append(f"{column} {text!r} is not HH:MM (24-hour); a time the sheet does not state stays empty")
+        return None
+
+
+def _choice_code(model_field, text):
+    """The model's own code for `text`, matched without regard to case ("nw" is "NW"). Nothing else
+    is mapped: a value that is not one of the codes goes to the field's check as typed, and fails."""
+    for code, _label in model_field.choices or ():
+        if str(code).casefold() == text.casefold():
+            return code
+    return text
+
+
+def _model_problems(exc, row, column_of) -> list:
+    """A model ValidationError as one refusal per field, named by the CSV column, in the model's words."""
+    out = []
+    for name, messages in exc.message_dict.items():
+        column = column_of.get(name, name)
+        text = " ".join(messages)
+        model_field = ChemicalEvent._meta.get_field(name) if name in _SPRAY_COLUMN_OF else None
+        if model_field is not None and model_field.choices:
+            text += f" One of: {', '.join(str(code) for code, _label in model_field.choices)}."
+        raw = row.get(column, "")
+        out.append(f"{column} {raw!r}: {text}" if raw else f"{column}: {text}")
+    return out
+
+
+def _spray_values(row, day, column_of, problems) -> Optional[dict]:
+    """The spray record columns of one row as `ChemicalEvent` values, or None with `problems` filled.
+
+    Every value goes through the rule the model already holds for its field: the field's own
+    parsing, validators and choices (`clean_fields`), then `ChemicalEvent.clean()` for the rules
+    that span fields (a restricted-use product needs the applicator's licence, the REI and PHI
+    ranges, a "not on the source record" flag never beside a value, a carrier volume with its
+    unit). Text length is left to `_overlong`, which reads the same model. Nothing here restates a
+    range, so a rule changed on the model changes here too.
+
+    Returns {"fields": model values, "date": the record's datetime, "tank": label, "tank_role": role}.
+    """
+    found = len(problems)
+    flags = {}
+    for column in _YES_NO_COLUMNS:
+        text = row[column]
+        flags[column] = None
+        if not text:
+            continue
+        if text.casefold() in _YES:
+            flags[column] = True
+        elif text.casefold() in _NO:
+            flags[column] = False
+        else:
+            problems.append(f"{column} {text!r} is not yes or no")
+
+    probe = {}
+    checked = set()
+    for column in _TEXT_COLUMNS:
+        if row[column]:
+            probe[_FIELD_OF[column]] = row[column]
+    for column in _MODEL_CHECKED_COLUMNS:
+        if row[column]:
+            name = _FIELD_OF[column]
+            probe[name] = _choice_code(_chemical_field(name), row[column])
+            checked.add(name)
+
+    if row["purchase_date"]:
+        purchased = _parse_iso_date(row["purchase_date"])
+        if purchased is None:
+            problems.append(f"purchase_date {row['purchase_date']!r} is not YYYY-MM-DD")
+        else:
+            probe["purchase_date"] = purchased
+    quantity, quantity_unit = _pair(
+        row,
+        "quantity_purchased",
+        "quantity_purchased_unit",
+        _chemical_field("quantity_purchased_unit").choices,
+        problems,
+    )
+    if quantity is not None:
+        # The text as typed, so the model field's own digit limits read it rather than a float.
+        probe["quantity_purchased"] = row["quantity_purchased"]
+        probe["quantity_purchased_unit"] = quantity_unit
+        checked.add("quantity_purchased")
+
+    start = _parse_clock(row, "start_time", problems)
+    end = _parse_clock(row, "end_time", problems)
+    if row["end_time"] and not row["start_time"]:
+        problems.append(
+            f"end_time {row['end_time']!r} has no start_time; the record's time is when the application "
+            "started, so give the start the sheet shows, or leave both empty"
+        )
+    elif start is not None and end is not None and end < start:
+        # Both clocks sit on the row's one date, so an end before the start would store an inverted
+        # window that prints into PUR boxes 17-18 and the WA record. Which day it ended is not on the row.
+        problems.append(
+            "end_time is earlier than start_time. If the application ran past midnight, the sheet does "
+            "not say which day it ended: split it into two rows or leave end_time empty."
+        )
+
+    # A day with no clock time is what a day-only source record says: the record is marked so, and
+    # the noon placeholder is never read as the time sprayed (`not_on_source_record`).
+    stated = flags["time_not_on_record"]
+    if row["start_time"]:
+        time_flag = bool(stated)
+    else:
+        time_flag = True
+        if stated is False:
+            problems.append(
+                "time_not_on_record is 'no' but the row gives no start_time; give the time the sheet "
+                "shows, or leave time_not_on_record empty and the record says the time is not on it"
+            )
+
+    if (row["firm_name"] or row["firm_address"]) and not flags["applied_by_business"]:
+        filled = ", ".join(c for c in ("firm_name", "firm_address") if row[c])
+        problems.append(
+            f"{filled} describe(s) an application made for hire; set applied_by_business to yes, or leave "
+            "the firm empty"
+        )
+    role = ""
+    if row["tank_role"]:
+        # The roles the tank contract takes (`multi_target_spec.json`), not the model field's check:
+        # Django skips `validate()` on a non-editable field, and `tank_mix_role` is one.
+        role = _choice_code(_chemical_field("tank_mix_role"), row["tank_role"])
+        if not row["tank"]:
+            problems.append(f"tank_role {row['tank_role']!r} has no tank; a role is a product's place in a tank")
+        elif role not in tank_mix.TANK.roles:
+            problems.append(f"tank_role {row['tank_role']!r} is not one of: {', '.join(sorted(tank_mix.TANK.roles))}")
+
+    def at(clock):
+        return datetime.combine(day, clock, tzinfo=timezone.utc) if (day is not None and clock) else None
+
+    probe.update(
+        concentration=row["concentration"] or None,
+        concentration_not_recorded=bool(flags["concentration_not_on_record"]),
+        time_not_recorded=time_flag,
+        application_start=at(start),
+        application_end=at(end),
+        restricted_use_pesticide=bool(flags["restricted_use"]),
+        applied_by_pcb=bool(flags["applied_by_business"]),
+    )
+    instance = ChemicalEvent(**probe)
+    try:
+        instance.clean_fields(exclude=[f.name for f in ChemicalEvent._meta.fields if f.name not in checked])
+    except DjangoValidationError as exc:
+        problems.extend(_model_problems(exc, row, column_of))
+        return None
+    if len(problems) > found:
+        return None
+    try:
+        instance.clean()
+    except DjangoValidationError as exc:
+        problems.extend(_model_problems(exc, row, column_of))
+        return None
+
+    values = {name: getattr(instance, name) for name in probe}
+    when = values["application_start"] or (_as_event_datetime(day) if day is not None else None)
+    return {
+        "fields": values,
+        "date": when,
+        "tank": row["tank"],
+        "tank_role": (role or tank_mix.ROLE_PRODUCT) if row["tank"] else "",
+    }
 
 
 def _parcel_names(text):
@@ -423,27 +748,49 @@ def _recorded_locators(farm, doc_ids):
     return recorded
 
 
+_HEADER_NOISE = re.compile(r"[^0-9a-z]+")
+
+
+def _header_key(text):
+    """A header as the reader compares it: case, spaces and punctuation ignored, so "EPA Reg. No."
+    and "Wind speed (mph)" read as `epa_reg_no` and `wind_speed_mph`."""
+    return _HEADER_NOISE.sub("_", text.strip().casefold()).strip("_")
+
+
 def _read_rows(file_obj):
+    """(columns by position, the row reader, {optional column: header as written}, error)."""
     raw = file_obj.read()
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8-sig")
     reader = csv.reader(io.StringIO(raw))
     try:
-        headers = [h.strip() for h in next(reader)]
+        written = [h.strip() for h in next(reader)]
     except StopIteration:
-        return None, None, "The file is empty."
-    missing = [c for c in COLUMNS if c not in headers]
-    unknown = [h for h in headers if h and h not in COLUMNS]
-    if len(headers) != len(set(headers)):
-        return None, None, "A column appears twice in the header."
+        return None, None, {}, "The file is empty."
+    headers, unknown, spelled = [], [], {}
+    for text in written:
+        column = _HEADER_NAMES.get(_header_key(text)) if text else None
+        if text and column is None:
+            unknown.append(text)
+        if column is not None:
+            spelled.setdefault(column, []).append(text)
+        headers.append(column)
+    twice = {column: names for column, names in spelled.items() if len(names) > 1}
+    if twice or written.count("") > 1:
+        named = "; ".join(f"{column} ({', '.join(names)})" for column, names in twice.items())
+        return None, None, {}, "A column appears twice in the header" + (f": {named}." if named else ".")
+    missing = [c for c in COLUMNS if c not in spelled]
     if missing or unknown:
         parts = []
         if missing:
             parts.append(f"missing column(s): {', '.join(missing)}")
         if unknown:
-            parts.append(f"unknown column(s): {', '.join(unknown)}")
-        return None, None, "Not the intake schema: " + "; ".join(parts) + "."
-    return headers, reader, ""
+            parts.append(
+                f"unknown column(s): {', '.join(unknown)} (optional spray columns: {', '.join(OPTIONAL_COLUMNS)})"
+            )
+        return None, None, {}, "Not the intake schema: " + "; ".join(parts) + "."
+    optional = {column: spelled[column][0] for column in OPTIONAL_COLUMNS if column in spelled}
+    return headers, reader, optional, ""
 
 
 def build_plan(file_obj, farm) -> ImportPlan:
@@ -452,11 +799,11 @@ def build_plan(file_obj, farm) -> ImportPlan:
     `plan.error` is a file-level refusal (wrong schema). Every row is either importable, with a
     payload `execute` can write, or skipped with every reason the operator needs to fix it.
     """
-    headers, reader, error = _read_rows(file_obj)
+    headers, reader, optional, error = _read_rows(file_obj)
     if error:
-        return ImportPlan(area=None, error=error)
+        return IntakePlan(area=None, error=error)
 
-    plan = ImportPlan(area=None)
+    plan = IntakePlan(area=None, optional_columns=optional)
     parcels = {p.name.casefold(): p for p in farm.parcels.all().order_by("name")}
     docs = {
         str(d.public_id): d
@@ -464,11 +811,16 @@ def build_plan(file_obj, farm) -> ImportPlan:
     }
     recorded = _recorded_locators(farm, list(docs))
     seen_locators = set()
+    # Every row naming a tank, refused or not: a tank is written whole or not at all.
+    tank_rows = []
 
     for line_no, raw in enumerate(reader, start=2):
         if not any((c or "").strip() for c in raw):
             continue
-        row = {h: (raw[i].strip() if i < len(raw) and raw[i] is not None else "") for i, h in enumerate(headers)}
+        row = dict.fromkeys(ALL_COLUMNS, "")
+        row.update(
+            {h: (raw[i].strip() if i < len(raw) and raw[i] is not None else "") for i, h in enumerate(headers) if h}
+        )
         problems = []
 
         kind = KINDS.get(row["kind"].lower())
@@ -501,23 +853,36 @@ def build_plan(file_obj, farm) -> ImportPlan:
                     problems.append(f"source_locator {locator!r} appears twice in this file for the same document")
                 seen_locators.add(key)
                 if key in recorded:
-                    plan.rows.append(
-                        RowResult(
-                            line=line_no,
-                            action="skip",
-                            reason=f"already recorded as {recorded[key]}; nothing to do",
-                            summary=f"{row['date']} · {row['kind']} · {locator}",
-                            payload={"source_locator": locator, "source_doc": row["source_doc"], "row": row},
-                        )
+                    result = RowResult(
+                        line=line_no,
+                        action="skip",
+                        reason=f"already recorded as {recorded[key]}; nothing to do",
+                        summary=f"{row['date']} · {row['kind']} · {locator}",
+                        payload={
+                            "source_locator": locator,
+                            "source_doc": row["source_doc"],
+                            "row": row,
+                            "recorded": True,
+                        },
                     )
+                    plan.rows.append(result)
+                    if row["tank"]:
+                        tank_rows.append((result, row))
                     continue
 
+        column_of = _column_of(kind) if kind is not None else {}
+        spray = None
         if kind is not None:
-            homeless = sorted(c for c in COLUMNS if row[c] and c not in _columns_with_a_home(kind))
+            homeless = sorted(c for c in ALL_COLUMNS if row[c] and c not in _columns_with_a_home(kind))
             if homeless:
-                problems.append(f"kind {kind.key!r} has no field for: {', '.join(homeless)}; put it in observation")
+                hint = " (an input's lot goes in input_lot)" if kind.chemical and "lot" in homeless else ""
+                problems.append(
+                    f"kind {kind.key!r} has no field for: {', '.join(homeless)}; put it in observation{hint}"
+                )
             if kind.product_required and not row["product"]:
                 problems.append(f"kind {kind.key!r} needs a product")
+            if kind.chemical:
+                spray = _spray_values(row, day, column_of, problems)
 
         # Parcels, then the season on each.
         targets = []
@@ -552,12 +917,19 @@ def build_plan(file_obj, farm) -> ImportPlan:
                         )
                 if row["production"]:
                     problems.append("production names one season; a row on several parcels cannot name one")
+                if spray is not None:
+                    # A value honest on one parcel and not on several (a carrier total), read from
+                    # the multi-parcel spec the API checks the same field against.
+                    shared = multi_target.shared_errors(
+                        multi_target.spec_for(event_type), spray["fields"], [{} for _parcel in chosen]
+                    )
+                    problems.extend(message for messages in shared.values() for message in messages)
             for parcel in chosen:
                 season = _season_for(parcel, row["production"] if len(chosen) == 1 else "", problems)
                 if season is not None:
                     targets.append(season)
             if day is not None:
-                when = _as_event_datetime(day)
+                when = spray["date"] if spray is not None else _as_event_datetime(day)
                 for season in targets:
                     closed = _closed_season_reason(season, when)
                     if closed:
@@ -574,24 +946,25 @@ def build_plan(file_obj, farm) -> ImportPlan:
                 rate, rate_unit = _pair(row, "rate", "rate_unit", kind.rate[2], problems)
 
         if problems:
-            plan.rows.append(
-                RowResult(
-                    line=line_no,
-                    action="skip",
-                    reason="; ".join(problems),
-                    summary=f"{row['date'] or '(no date)'} · {row['kind'] or '(no kind)'} · {row['product'] or row['title'] or ''}".strip(
-                        " ·"
-                    ),
-                    payload={"source_locator": locator, "source_doc": row["source_doc"], "row": row},
-                )
+            result = RowResult(
+                line=line_no,
+                action="skip",
+                reason="; ".join(problems),
+                summary=f"{row['date'] or '(no date)'} · {row['kind'] or '(no kind)'} · {row['product'] or row['title'] or ''}".strip(
+                    " ·"
+                ),
+                payload={"source_locator": locator, "source_doc": row["source_doc"], "row": row},
             )
+            plan.rows.append(result)
+            if row["tank"]:
+                tank_rows.append((result, row))
             continue
 
         # From here every value has a home and a unit.
         title = row["title"] or _default_title(kind, row)
         fields = {
             "type": subtype,
-            "date": _as_event_datetime(day),
+            "date": spray["date"] if spray is not None else _as_event_datetime(day),
             "description": title,
             "observation": row["observation"] or None,
             "private_note": row["private_note"],
@@ -631,21 +1004,24 @@ def build_plan(file_obj, farm) -> ImportPlan:
         if kind.rate:
             fields[kind.rate[0]] = rate
             fields[kind.rate[1]] = rate_unit or ""
+        if spray is not None:
+            fields.update(spray["fields"])
 
         # Every text column against its column's limit, BEFORE the row is shown as "will be
         # recorded": `write_record` never calls full_clean(), and an over-length value would
         # surface as a DataError at commit that rolls back the whole batch with no row named.
-        too_long = _overlong(EVENT_MODELS[model_name][0], fields, _column_of(kind))
+        too_long = _overlong(EVENT_MODELS[model_name][0], fields, column_of)
         if too_long:
-            plan.rows.append(
-                RowResult(
-                    line=line_no,
-                    action="skip",
-                    reason="; ".join(too_long),
-                    summary=f"{day.isoformat()} · {kind.label} · {row['product'] or title}",
-                    payload={"source_locator": locator, "source_doc": row["source_doc"], "row": row},
-                )
+            result = RowResult(
+                line=line_no,
+                action="skip",
+                reason="; ".join(too_long),
+                summary=f"{day.isoformat()} · {kind.label} · {row['product'] or title}",
+                payload={"source_locator": locator, "source_doc": row["source_doc"], "row": row},
             )
+            plan.rows.append(result)
+            if row["tank"]:
+                tank_rows.append((result, row))
             continue
 
         classification, warning = "", False
@@ -654,28 +1030,33 @@ def build_plan(file_obj, farm) -> ImportPlan:
 
         group = str(uuid.uuid5(INTAKE_NAMESPACE, f"{row['source_doc']}|{locator}")) if len(targets) > 1 else None
         parcel_names = [t.parcel.name for t in targets]
-        plan.rows.append(
-            RowResult(
-                line=line_no,
-                action="import",
-                summary=f"{day.isoformat()} · {kind.label} · {row['product'] or title} → {', '.join(parcel_names)}",
-                payload={
-                    "kind": kind.key,
-                    "target": kind.target,
-                    "date": day,
-                    "histories": [t.id for t in targets],
-                    "parcels": parcel_names,
-                    "fields": fields,
-                    "extra": extra,
-                    "application_group": group,
-                    "classification": classification,
-                    "warning": warning,
-                    "source_doc": row["source_doc"],
-                    "source_doc_title": doc.title,
-                    "source_locator": locator,
-                },
-            )
+        result = RowResult(
+            line=line_no,
+            action="import",
+            summary=f"{day.isoformat()} · {kind.label} · {row['product'] or title} → {', '.join(parcel_names)}",
+            payload={
+                "kind": kind.key,
+                "target": kind.target,
+                "date": day,
+                "histories": [t.id for t in targets],
+                "parcels": parcel_names,
+                "fields": fields,
+                "extra": extra,
+                "application_group": group,
+                "tank": None,
+                "classification": classification,
+                "warning": warning,
+                "source_doc": row["source_doc"],
+                "source_doc_title": doc.title,
+                "source_locator": locator,
+            },
         )
+        plan.rows.append(result)
+        if row["tank"]:
+            tank_rows.append((result, row))
+            result.payload["tank_role"] = spray["tank_role"]
+            result.payload["parcel_ids"] = [t.parcel_id for t in targets]
+    _resolve_tanks(tank_rows)
     return plan
 
 
@@ -692,6 +1073,26 @@ def _column_of(kind: Kind) -> dict:
         "name": "title",
         "description": "title",
     }
+    if kind.chemical:
+        pairs.update(_SPRAY_COLUMN_OF)
+        pairs.update(
+            {
+                "commercial_name": "product",
+                "type": "kind",
+                "observation": "observation",
+                "private_note": "private_note",
+                "volume": "amount",
+                "volume_numeric": "amount",
+                "volume_unit": "amount_unit",
+                "area_numeric": "area_treated",
+                "area_unit": "area_unit",
+                "application_rate": "rate",
+                "application_rate_unit": "rate_unit",
+                "active_ingredient": "active_ingredient",
+                "date": "start_time",
+                "history": "production",
+            }
+        )
     return {field: column for field, column in pairs.items() if field}
 
 
@@ -735,6 +1136,7 @@ def plan_fingerprint(plan: ImportPlan) -> str:
                 "fields": p.get("fields"),
                 "extra": p.get("extra"),
                 "group": p.get("application_group"),
+                "tank": p.get("tank"),
                 "source": [p.get("source_doc"), p.get("source_locator")],
             }
         )
@@ -749,6 +1151,225 @@ def _default_title(kind: Kind, row) -> str:
     return kind.label
 
 
+# ------------------------------------------------------------------------------------------------
+# Tanks: rows naming one tank become the records the API's tank write path makes
+# ------------------------------------------------------------------------------------------------
+
+
+def _tank_key(row) -> str:
+    """Which rows are one tank: the same label on the same document, and nothing else.
+
+    Never the date or the parcel cell. A row of the tank refused for its own date or parcel (a
+    "Blok 2" typo) must hold the rest of the tank, not leave it to be written as a complete tank
+    missing that product, which a corrected re-run could then never add to. Date and parcel are
+    shared facts instead, compared across the tank's rows like the others (`_tank_disagreement`).
+    """
+    return json.dumps([row["source_doc"], row["tank"].casefold()])
+
+
+def _refuse(result, row, reason):
+    """Turn a row that would have been recorded into one that waits, with the tank's reason."""
+    result.action = "skip"
+    result.reason = reason
+    result.payload = {"source_locator": row["source_locator"], "source_doc": row["source_doc"], "row": row}
+
+
+def _locators(members) -> str:
+    return ", ".join(row["source_locator"] or f"line {result.line}" for result, row in members)
+
+
+def _tank_split(payload, spec, titled):
+    """One row's record split the way the tank contract splits a request (the `tank_mix` block of
+    `multi_target_spec.json`): (what the pass shares, this product's line, the place, left out).
+
+    A blank amount on a tank over several parcels is left out rather than sent: the contract takes
+    an amount only per target there, and the importer never splits one. Without a `title`, each
+    line keeps its own "<Kind>: <product>" title, as the API derives one per product.
+    """
+    shared, line, place, left_out = {}, {}, {}, {}
+    several = len(payload["histories"]) > 1
+    for key, value in payload["fields"].items():
+        if key in ("description", "name") and not titled:
+            continue
+        if key in tank_mix.TANK.per_line_per_target:
+            if several and value in (None, ""):
+                left_out[key] = value
+            else:
+                line[key] = value
+        elif key in tank_mix.TANK.per_line:
+            line[key] = value
+        elif key in spec.per_target_any():
+            place[key] = value
+        else:
+            shared[key] = value
+    if payload["extra"].get("active_ingredient"):
+        line["active_ingredient"] = payload["extra"]["active_ingredient"]
+    return shared, line, place, left_out
+
+
+def _tank_disagreement(label, members, spec) -> Optional[str]:
+    """The refusal naming every shared column whose value differs across the tank's rows, or None.
+
+    The date and the parcels are shared facts like the rest (a tank is one pass, on one day, over
+    one set of parcels). Compared as read: the day, and the parcels the cell resolved to, so `All`
+    and the farm's full list agree. A different day makes the clock fields differ too; those are
+    the date's difference, said once as `date`, not again as `start_time`.
+    """
+    first_result, first_row = members[0]
+    titled = bool(first_row["title"])
+    column_of = _column_of(KINDS[first_result.payload["kind"]])
+    shared, _line, place, _left = _tank_split(first_result.payload, spec, titled)
+    reference = {**shared, **place}
+    differing = []
+    for result, row in members[1:]:
+        shared, _line, place, _left = _tank_split(result.payload, spec, titled)
+        values = {**shared, **place}
+        same_day = result.payload["date"] == first_result.payload["date"]
+        if not same_day:
+            differing.append("date")
+        same_parcels = sorted(result.payload["parcels"]) == sorted(first_result.payload["parcels"])
+        if not same_parcels:
+            differing.append("parcel")
+        for key in sorted(set(reference) | set(values)):
+            if not same_day and key in ("date", "application_start", "application_end"):
+                continue
+            if reference.get(key) != values.get(key):
+                differing.append(column_of.get(key, key))
+        if row["title"] != first_row["title"]:
+            differing.append("title")
+        if same_parcels and result.payload["histories"] != first_result.payload["histories"]:
+            differing.append("production")
+    if not differing:
+        return None
+    parts = []
+    for column in dict.fromkeys(differing):
+        cells = ", ".join(f"{row['source_locator']}: {row.get(column, '')!r}" for _result, row in members)
+        parts.append(f"{column} ({cells})")
+    detail = "; ".join(parts)
+    return (
+        f"tank {label!r} is one pass, so what the pass shares must read the same on every row of it, "
+        f"and these differ: {detail}"
+    )
+
+
+def _api_detail(detail) -> str:
+    if isinstance(detail, dict):
+        return "; ".join(f"{key}: {_api_detail(value)}" for key, value in detail.items())
+    if isinstance(detail, (list, tuple)):
+        return " ".join(_api_detail(item) for item in detail)
+    return str(detail)
+
+
+def _tank_records(tank_id, members, spec):
+    """Every line's record, built by the API's own tank contract: `check_tank_envelope` checks the
+    request (two to ten lines, a product among them, nothing per line sent as shared, no total
+    copied onto several parcels) and `record_bodies` composes each record from it.
+
+    Returns (the tank, {line number: body}, each row's split). Raises the contract's ValidationError.
+    """
+    titled = bool(members[0][1]["title"])
+    first = members[0][0].payload
+    splits = [_tank_split(result.payload, spec, titled) for result, _row in members]
+    shared, _line, place, _left = splits[0]
+    data = {
+        **shared,
+        "event_type": CHEMICAL_EVENT_TYPE,
+        "tank_mix_group": str(tank_id),
+        "products": [
+            {**line, "tank_mix_role": result.payload["tank_role"]}
+            for (result, _row), (_shared, line, _place, _left) in zip(members, splits)
+        ],
+        "targets": [
+            {"parcel": parcel_id, "history": history_id, **place}
+            for parcel_id, history_id in zip(first["parcel_ids"], first["histories"])
+        ],
+    }
+    tank = tank_mix.check_tank_envelope(data, CHEMICAL_EVENT_TYPE)
+    bodies = {}
+    for _index, line, body in tank_mix.record_bodies(tank):
+        # Every target of an imported tank holds the same values (an amount or an area on several
+        # parcels is refused per row), so the first target's body is every target's.
+        bodies.setdefault(line.number, body)
+    return tank, bodies, splits
+
+
+def _resolve_tanks(tank_rows):
+    """Rows naming one tank become one tank, or every row of it waits.
+
+    A tank is written whole or not at all, so one waiting row holds the rest. A tank already
+    recorded (by these rows, or under the same tank id) takes no new products: its records are
+    written once, like the API's tank, and a correction can never add a line to it. The tank id is
+    derived from the tank's key, so a replay derives the same id and finds it.
+    """
+    spec = multi_target.spec_for(CHEMICAL_EVENT_TYPE)
+    groups = {}
+    for result, row in tank_rows:
+        groups.setdefault(_tank_key(row), []).append((result, row))
+
+    for key, group in groups.items():
+        members = [(result, row) for result, row in group if result.action == "import"]
+        if not members:
+            continue
+        label = members[0][1]["tank"]
+        tank_id = uuid.uuid5(INTAKE_NAMESPACE, f"tank|{key}")
+        recorded = [(result, row) for result, row in group if result.payload.get("recorded")]
+        waiting = [
+            (result, row) for result, row in group if result.action == "skip" and not result.payload.get("recorded")
+        ]
+
+        reason = None
+        if recorded or ChemicalEvent.objects.filter(tank_mix_group=tank_id).exists():
+            where = f" from {_locators(recorded)}" if recorded else ""
+            reason = (
+                f"tank {label!r} is already recorded{where}, and a recorded tank takes no new products; "
+                "leave tank empty to record this product on its own"
+            )
+        elif waiting:
+            reason = f"tank {label!r} is recorded whole or not at all, and these rows of it wait: {_locators(waiting)}"
+        elif len(members) < tank_mix.TANK.min_lines:
+            reason = (
+                f"tank {label!r} has one product in this document; a tank holds {tank_mix.TANK.min_lines} "
+                "or more. Leave tank empty for a single product"
+            )
+        else:
+            reason = _tank_disagreement(label, members, spec)
+        if reason is None:
+            try:
+                tank, bodies, splits = _tank_records(tank_id, members, spec)
+            except ApiValidationError as exc:
+                reason = f"tank {label!r}: {_api_detail(exc.detail)}"
+        if reason:
+            for result, row in members:
+                _refuse(result, row, reason)
+            continue
+
+        titled = bool(members[0][1]["title"])
+        several = len(members[0][0].payload["histories"]) > 1
+        for line, (result, _row), (_shared, _line, _place, left_out) in zip(tank.lines, members, splits):
+            p = result.payload
+            body = dict(bodies[line.number])
+            active = body.pop("active_ingredient", None)
+            fields = {**left_out, **body}
+            if not titled:
+                fields["description"] = p["fields"]["description"]
+                fields["name"] = p["fields"]["name"]
+            extra = {k: v for k, v in p["extra"].items() if k != "active_ingredient"}
+            if active:
+                extra["active_ingredient"] = active
+            p["fields"] = fields
+            p["extra"] = extra
+            p["tank"] = {
+                "group": str(tank_id),
+                "label": label,
+                "line": line.number,
+                "lines": len(members),
+                "role": line.role,
+            }
+            # Each line over several parcels is its own "one product, several parcels" group, as
+            # the API derives it; never the tank (the purchase table counts a group's purchase once).
+            p["application_group"] = str(tank_mix.line_application_group(tank_id, line.number)) if several else None
+
+
 def execute(plan: ImportPlan, farm, created_by, batch: str) -> dict:
     """Write every importable row as records on `farm`, all or nothing.
 
@@ -758,12 +1379,24 @@ def execute(plan: ImportPlan, farm, created_by, batch: str) -> dict:
     if plan.error:
         raise ValueError(plan.error)
     created = []
+    tanks = sorted({row.payload["tank"]["group"] for row in plan.importable if row.payload.get("tank")})
     with transaction.atomic():
+        # The API's replay rule for a tank id (`_replay_multi_target`): a tank already written is
+        # never written again. `build_plan` refuses such rows; this holds if the farm changed since.
+        for tank_id in tanks:
+            if ChemicalEvent.objects.filter(tank_mix_group=uuid.UUID(tank_id)).exists():
+                raise ValueError(f"tank {tank_id} is already recorded; build the plan again before committing")
         for row in plan.importable:
             p = row.payload
             model_name, _subtype = p["target"].split(":")
             model, _event_type = EVENT_MODELS[model_name]
             group = uuid.UUID(p["application_group"]) if p["application_group"] else None
+            fields = dict(p["fields"])
+            tank = p.get("tank")
+            if tank:
+                fields.update(
+                    tank_mix_group=uuid.UUID(tank["group"]), tank_mix_line=tank["line"], tank_mix_role=tank["role"]
+                )
             for history_id in p["histories"]:
                 history = History.objects.select_related("parcel__establishment").get(id=history_id)
                 if history.parcel.establishment_id != farm.id:
@@ -780,7 +1413,7 @@ def execute(plan: ImportPlan, farm, created_by, batch: str) -> dict:
                     write_record(
                         model,
                         history=history,
-                        fields=dict(p["fields"]),
+                        fields=dict(fields),
                         extra=extra,
                         created_by=created_by,
                         application_group=group,

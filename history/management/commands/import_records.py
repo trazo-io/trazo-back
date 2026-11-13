@@ -18,6 +18,11 @@ and runs this:
 what is written is byte-for-byte what the grower was shown. A corrected CSV is a new batch and
 needs its own preview; rows already recorded from the same document and row are skipped, so the
 second run writes only the fixes.
+
+Columns: the 23 required ones, plus the optional spray record columns (EPA number, REI, PHI,
+applicator, purchase, organic basis, wind, temperature, carrier, apparatus, firm, "not on the
+source record", start and end time, tank). The full list, the accepted values and the aliases are
+in `history/services/record_intake.py`; the dry run prints which optional columns it read.
 """
 
 import hashlib
@@ -32,8 +37,9 @@ from django.core.management.base import BaseCommand, CommandError
 from company.models import Establishment
 from documents.models import GeneratedDocument
 from documents.services.filing import file_document
-from history.services.record_intake import build_plan, execute, plan_fingerprint
-from history.services.record_intake_preview import render_preview_pdf
+from history.services.record_intake import OPTIONAL_COLUMNS, build_plan, execute, plan_fingerprint
+from history.services.record_intake_preview import optional_columns_text, render_preview_pdf
+from history.services.tank_mix import ROLE_ADJUVANT
 from subscriptions.pilot_operator import is_setup_operator
 from users.models import WorksIn
 
@@ -50,7 +56,8 @@ def plan_tag(fingerprint):
 
 class Command(BaseCommand):
     help = (
-        "Load an intake CSV as records on a farm (dry run unless --commit; --file-preview files the grower's preview)."
+        "Load an intake CSV as records on a farm (dry run unless --commit; --file-preview files the grower's preview). "
+        "Optional spray columns: " + ", ".join(OPTIONAL_COLUMNS) + "."
     )
 
     def add_arguments(self, parser):
@@ -101,11 +108,16 @@ class Command(BaseCommand):
         documents = self._documents(plan, farm)
         for doc in documents:
             self.stdout.write(f"  source: {doc.title} (uploaded {doc.created_at:%Y-%m-%d})")
+        self.stdout.write(f"  optional columns: {optional_columns_text(plan) or 'none'}")
 
         self.stdout.write("")
         for row in plan.importable[: options["limit"]]:
             p = row.payload
             fan = f" ({len(p['parcels'])} records, shared group)" if len(p["parcels"]) > 1 else ""
+            tank = p.get("tank")
+            if tank:
+                role = ", adjuvant" if tank["role"] == ROLE_ADJUVANT else ""
+                fan += f" (tank {tank['label']}, line {tank['line']} of {tank['lines']}{role})"
             self.stdout.write(f"  + {p['source_locator']}: {row.summary}{fan}")
             if p.get("classification"):
                 line = f"      {p['classification']}"

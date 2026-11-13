@@ -13,7 +13,9 @@ from django.core.management.base import CommandError
 from pdfminer.high_level import extract_text
 
 from documents.models import GeneratedDocument
+from history.models import ChemicalEvent
 from history.services import record_intake
+from history.services.record_intake import COLUMNS
 from history.tests.test_record_intake import FIXTURE, IntakeFarm, _all_records, _csv
 
 
@@ -48,6 +50,7 @@ class ImportRecordsCommandTests(IntakeFarm):
         self.assertIn("setup operator: yes", text)
         self.assertIn("- sheet row 9: date 'mid May' is not YYYY-MM-DD", text)
         self.assertIn("- sheet row 14: no parcel named 'fence line N'", text)
+        self.assertIn("optional columns: none", text)
         self.assertEqual(_all_records(self.farm), [])
         self.assertEqual(GeneratedDocument.objects.filter(source="import_preview").count(), 0)
 
@@ -155,3 +158,98 @@ class ImportRecordsCommandTests(IntakeFarm):
         with self.assertRaises(CommandError) as ctx:
             self._run(self._file("Date,Block,What\n3/14/2026,All,dormant spray\n"))
         self.assertIn("Not the intake schema", str(ctx.exception))
+
+
+class SprayColumnsCommandTests(IntakeFarm):
+    """The spray record columns through the command: the dry run and the preview say which optional
+    columns were read and show what each record will hold; the commit writes one tank."""
+
+    _file = ImportRecordsCommandTests._file
+    _run = ImportRecordsCommandTests._run
+
+    #: The spray columns this sheet has, with headers as an operator's spreadsheet spells them.
+    SPELLED = {
+        "epa_reg_no": "EPA Reg. No.",
+        "wind_from": "Wind Direction",
+        "wind_speed_mph": "Wind speed (mph)",
+        "tank": "Tank ID",
+        "tank_role": "tank_role",
+    }
+
+    def _spray_csv(self):
+        columns = list(COLUMNS) + list(self.SPELLED)
+        common = dict(date="2026-05-20", parcel="Block 2", tank="T1", wind_from="NW", wind_speed_mph="4")
+        rows = [
+            self.row(
+                **common,
+                product="Entrust SC",
+                active_ingredient="Spinosad",
+                rate="6",
+                rate_unit="fl_oz_ac",
+                target="codling moth",
+                epa_reg_no="62719-621",
+                source_locator="sheet row 7",
+            ),
+            self.row(
+                **common,
+                kind="fungicide",
+                product="Kocide 3000-O",
+                active_ingredient="Copper hydroxide",
+                rate="2",
+                rate_unit="lb_ac",
+                target="fire blight",
+                source_locator="sheet row 8",
+            ),
+            self.row(
+                **common,
+                product="Dyne-Amic",
+                active_ingredient="",
+                rate="",
+                rate_unit="",
+                target="",
+                tank_role="adjuvant",
+                source_locator="sheet row 9",
+            ),
+        ]
+        body = _csv(*rows, columns=columns).split("\n", 1)[1]
+        return ",".join(self.SPELLED.get(c, c) for c in columns) + "\n" + body
+
+    def test_the_dry_run_and_the_preview_name_the_spray_columns_and_the_tank(self):
+        out_pdf = Path(tempfile.mkdtemp()) / "preview.pdf"
+        text = self._run(self._file(self._spray_csv()), "--preview-out", str(out_pdf))
+        self.assertIn(
+            "optional columns: epa_reg_no (as 'EPA Reg. No.'), wind_from (as 'Wind Direction'), "
+            "wind_speed_mph (as 'Wind speed (mph)'), tank (as 'Tank ID'), tank_role",
+            text,
+        )
+        self.assertIn("+ sheet row 7:", text)
+        self.assertIn("(tank T1, line 1 of 3)", text)
+        self.assertIn("(tank T1, line 3 of 3, adjuvant)", text)
+        self.assertIn("3 rows → 3 records · 0 rows wait", text)
+
+        flat = " ".join(extract_text(io.BytesIO(out_pdf.read_bytes())).split())
+        self.assertIn("Spray record columns read from this file: epa_reg_no", flat)
+        self.assertIn("tank T1: line 3 of 3, adjuvant", flat)
+        self.assertIn("time: not on the source record", flat)
+        self.assertIn("wind: from NW at 4 mph", flat)
+        self.assertIn("EPA reg. no.: 62719-621", flat)
+        self.assertEqual(_all_records(self.farm), [])
+
+    def test_the_commit_writes_one_tank_and_a_second_commit_writes_nothing(self):
+        path = self._file(self._spray_csv())
+        self._run(path, "--file-preview")
+        text = self._run(path, "--commit")
+        self.assertIn("3 records written, 0 rows waiting", text)
+        lines = list(ChemicalEvent.objects.order_by("tank_mix_line"))
+        self.assertEqual([e.tank_mix_line for e in lines], [1, 2, 3])
+        self.assertEqual(len({e.tank_mix_group for e in lines}), 1)
+        self.assertEqual(lines[0].epa_registration_number, "62719-621")
+        self.assertEqual({e.wind_from for e in lines}, {"NW"})
+
+        # Same file again: the rows are already recorded, so the plan differs and needs its preview;
+        # once filed, the commit writes nothing and never a second tank.
+        with self.assertRaises(CommandError):
+            self._run(path, "--commit")
+        self._run(path, "--file-preview")
+        self.assertIn("0 records written, 3 rows waiting", self._run(path, "--commit"))
+        self.assertEqual(ChemicalEvent.objects.count(), 3)
