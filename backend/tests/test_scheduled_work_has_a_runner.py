@@ -422,6 +422,7 @@ class EveryDispatchTargetResolves(SimpleTestCase):
             "release_stale_field_note_audio",
             "purge_closure_exports",
             "backup_database_offsite",
+            "refresh_usda_organic_mirror",
         ):
             with self.subTest(work=key):
                 self.assertTrue(
