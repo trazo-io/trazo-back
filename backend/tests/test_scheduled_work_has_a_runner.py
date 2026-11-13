@@ -421,6 +421,7 @@ class EveryDispatchTargetResolves(SimpleTestCase):
             "gdpr-cleanup-scan-data",
             "release_stale_field_note_audio",
             "purge_closure_exports",
+            "backup_database_offsite",
         ):
             with self.subTest(work=key):
                 self.assertTrue(

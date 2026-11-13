@@ -456,6 +456,17 @@ FIELD_NOTE_RUNNER = config("FIELD_NOTE_RUNNER", default="thread")
 MAINTENANCE_HEARTBEAT_URL_DAILY = config("MAINTENANCE_HEARTBEAT_URL_DAILY", default="")
 MAINTENANCE_HEARTBEAT_URL_MONTHLY = config("MAINTENANCE_HEARTBEAT_URL_MONTHLY", default="")
 
+# Daily database dump to S3, outside DigitalOcean (overall review OV-ST-C13, 2026-11-13). Every
+# DigitalOcean backup lives in the same account as the database, so losing the account loses them.
+# The credentials are a DEDICATED IAM user that may only PutObject under `postgres/` in this bucket:
+# it cannot read, list or delete, so whoever holds the app's environment cannot erase the copies.
+# NEVER reuse the app's AWS_ACCESS_KEY_ID here. Bucket: versioned, AES256, public access blocked,
+# TLS only, 30-day lifecycle. Runbook: documentation/deployment/DATABASE-RESTORE-RUNBOOK.md.
+DB_BACKUP_BUCKET = config("DB_BACKUP_BUCKET", default="")
+DB_BACKUP_AWS_REGION = config("DB_BACKUP_AWS_REGION", default="us-east-2")
+DB_BACKUP_AWS_ACCESS_KEY_ID = config("DB_BACKUP_AWS_ACCESS_KEY_ID", default="")
+DB_BACKUP_AWS_SECRET_ACCESS_KEY = config("DB_BACKUP_AWS_SECRET_ACCESS_KEY", default="")
+
 # EXTRA hosts a voice note's media reference may name, on top of the Twilio set in
 # `fieldnotes/services/transcribe.py`. Comma separated, and empty everywhere unless deliberately set.
 #
