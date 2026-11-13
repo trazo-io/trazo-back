@@ -1,9 +1,12 @@
 # Trazo questions in certification_contract that OTCO's O1 (Operation Information) does not ask.
 #
-# One, an info line. O1 is OTCO's application form and asks all three original questions: legal identity and DBAs (A-1,
-# A-3, B-2, B-6 → `contract_notes`), the scopes applied for (C-1 → `contract_scopes` — the one
+# One, an info line. O1 is OTCO's application form and asks all three original questions: name differences between the
+# certificate and the sales documents (A-3 → `contract_notes`), the scopes applied for (C-1 → `contract_scopes` — the one
 # question the CCOF register left unmapped, because CCOF's Contract selects a forms guide instead
 # of listing scopes), and the signed agreement (I-A, I-B2 → `contract_upload`).
+#
+# Page D (2026-11-13, legal entity and addresses) is cited by A-1, A-3, B-1 and B-7, except the registered legal
+# address below, which O1 does not ask.
 #
 # The certification history pages (2026-11-09) are cited by D-1, D-1D, D-1E and D-2 to D-7, except the info
 # line below, which asks nothing.
@@ -11,3 +14,27 @@ questions:
   certification_contract.history_this_agent_records: "An info line on page C, not a question: it says the
     current agent's notices already print on 02s with their letters, so the upload is for earlier agencies'
     letters. D-7 is answered by the explanation and the upload."
+  certification_contract.legal_address_is: >-
+    O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
+    never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
+    the packet cover.
+  certification_contract.legal_address_street: >-
+    O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
+    never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
+    the packet cover.
+  certification_contract.legal_address_city: >-
+    O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
+    never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
+    the packet cover.
+  certification_contract.legal_address_state: >-
+    O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
+    never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
+    the packet cover.
+  certification_contract.legal_address_zip: >-
+    O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
+    never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
+    the packet cover.
+  certification_contract.legal_address_country: >-
+    O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
+    never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
+    the packet cover.

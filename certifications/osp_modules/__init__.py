@@ -352,7 +352,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.12.07: operation contacts. The Operation module's page A shows the people the operation names to its agent, each
 #   with name, title, phone, email and roles: legally responsible, primary, billing, authorized to act, responsibly
 #   connected with the connection (OTCO O1 B-2 to B-6; CCOF Contract A4, C1, C2). Rows on `OperationContact`.
-CONTENT_VERSION = "2026.12.07"
+# 2026.12.08: legal entity and addresses. The Operation module gains page D: legally registered, business structure and
+#   state of incorporation, DBAs with where each is registered and used, the registered legal, mailing and billing
+#   addresses (each "same as" first), and which contact details may be published (CCOF Contract A1 to A4, A6, A7;
+#   OTCO O1 A-1, A-3, B-1, B-7).
+CONTENT_VERSION = "2026.12.08"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
