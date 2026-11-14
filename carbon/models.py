@@ -463,7 +463,7 @@ class CarbonEntry(models.Model):
         ("offset", "Offset"),
     )
     establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.Production", on_delete=models.CASCADE, null=True, blank=True)
     # The activity this entry was computed from (schema remodel plan, CarbonEntry slice). Before
     # 2026-11 the only link was text in `description`/`registry_verification_id`; see
     # carbon/event_link.py. PROTECT: Activity rows are tombstoned, never deleted, and an entry must
@@ -783,7 +783,7 @@ class CarbonEntry(models.Model):
 
 class CarbonCertification(models.Model):
     establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.Production", on_delete=models.CASCADE, null=True, blank=True)
     certifier = models.CharField(max_length=100, help_text="e.g., USDA Organic", default="Unknown")
     certificate_id = models.CharField(max_length=50, unique=True, default="TEMP_ID")
     issue_date = models.DateField(default=timezone.now)
@@ -911,7 +911,7 @@ class USDAComplianceRecord(models.Model):
     # Related records
     carbon_entry = models.ForeignKey(CarbonEntry, on_delete=models.CASCADE, related_name="usda_compliance_records")
     establishment = models.ForeignKey("company.Establishment", on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey("history.History", on_delete=models.CASCADE, null=True, blank=True)
+    production = models.ForeignKey("history.Production", on_delete=models.CASCADE, null=True, blank=True)
 
     # Compliance details
     compliance_status = models.CharField(max_length=20, choices=COMPLIANCE_STATUS_CHOICES, default="pending_validation")

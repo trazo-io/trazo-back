@@ -222,7 +222,7 @@ class RemovePilotOperatorTests(_PilotFixture):
         self.assertEqual(pilot_operator.authored_records(self.main, self.pilot), {})
         self.assertEqual(
             pilot_operator.authored_records(self.main, self.own),
-            {"history.GeneralEvent.created_by": 1, "history.History.operator": 1},
+            {"history.GeneralEvent.created_by": 1, "history.Production.operator": 1},
         )
 
 
@@ -281,7 +281,7 @@ class AuthorshipClassificationTests(TestCase):
 
         for label in (
             "history.GeneralEvent",
-            "history.History",
+            "history.Production",
             "certifications.OrganicSystemPlan",
             "certifications.OSPAnnualUpdate",
             "documents.GeneratedDocument",

@@ -242,7 +242,7 @@ OSP_EVIDENCE_MAP: dict = {
     ),
     "lot_identification_on_every_load": EvidenceEntry(
         EVIDENCED,
-        source="history.History.lot_id",
+        source="history.Production.lot_id",
         note=(
             "Enforced at the point of printing since 2026-08-10: may_label_container() refuses "
             "to generate a tag without a lot ID rather than printing a placeholder."
@@ -455,7 +455,7 @@ OSP_EVIDENCE_MAP: dict = {
     ),
     "container_markings_tie_to_lot": EvidenceEntry(
         EVIDENCED,
-        source="history.History.lot_id",
+        source="history.Production.lot_id",
         note=(
             "Was NOT_EVIDENCED until 2026-08-10: the tag printed 'LOT —' whenever lot_id was "
             "null, which was 63% of published productions. Now refused at generation time."
@@ -463,7 +463,7 @@ OSP_EVIDENCE_MAP: dict = {
     ),
     "container_lot_linkage_description": EvidenceEntry(
         EVIDENCED,
-        source="history.History.lot_id",
+        source="history.Production.lot_id",
         note=(
             "The operator's description of how a container identifier leads back to the harvest lot. "
             "The lot ID is the season's own, printed on the lot tag and carried onto its sales."
@@ -486,7 +486,7 @@ OSP_EVIDENCE_MAP: dict = {
     # --- G8.0 recordkeeping -----------------------------------------------------
     "records_retention_attestation": EvidenceEntry(
         EVIDENCED,
-        source="history.History.retention_until",
+        source="history.Production.retention_until",
         note=(
             "Computed at finalization and enforced by the deletion guard on History. The "
             "5-calendar-year arithmetic was corrected 2026-08-10 (was 1825 days, 1-2 days short "
@@ -495,12 +495,12 @@ OSP_EVIDENCE_MAP: dict = {
     ),
     "lot_numbering": EvidenceEntry(
         EVIDENCED,
-        source="history.History.lot_id",
+        source="history.Production.lot_id",
     ),
     # OTCO C12 12.2-3, WSDA AGR 2121 §O 8 (2026.11.18).
     "trace_mechanisms": EvidenceEntry(
         EVIDENCED,
-        source="history.History.parcel",
+        source="history.Production.parcel",
         note=(
             "A season's records carry its parcel, and harvest and sale records their dates, so field "
             "names and dates trace in Trazo. A Julian date code or the farm name printed on the "
