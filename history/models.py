@@ -468,14 +468,14 @@ class History(models.Model):
                 f"Records must be maintained for 5 years per 7 CFR 205.103(b)(4)."
                 + state_retention_sentence(self)
             )
-        if self.retention_until is None and self.pk is not None:
+        if self.pk is not None:
             # OV-ST-C02 (2026-11-13): a season still being logged has no retention date, and that
             # used to make it deletable with every activity in it. See history/retention.py.
             from django.core.exceptions import ValidationError
 
-            from history.retention import histories_holding_unretained_records, unfinished_season_refusal
+            from history.retention import unfinished_histories_holding_records, unfinished_season_refusal
 
-            if histories_holding_unretained_records(pk=self.pk).exists():
+            if unfinished_histories_holding_records(pk=self.pk).exists():
                 raise ValidationError(unfinished_season_refusal(self))
         super().delete(*args, **kwargs)
 

@@ -19,9 +19,13 @@ from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
 from history.models import GeneralEvent, History, SalesRecord
-from history.retention import RetentionConflict, assert_deletable
+from history.retention import RetentionConflict, assert_deletable, unfinished_histories_holding_records
 from product.models import Parcel
 from users.models import User, WorksIn
+
+
+def cmd_unfinished(pk):
+    return unfinished_histories_holding_records(pk=pk).exists()
 
 
 class _Tree(TestCase):
@@ -92,6 +96,30 @@ class SeasonDeleteTests(_Tree):
         self.season.delete()
         self.assertFalse(History.objects.filter(pk=self.season.pk).exists())
 
+    def test_a_legacy_finished_season_without_a_date_is_not_sent_to_a_locked_remedy(self):
+        """Review on #422: keyed on a NULL retention date, a finished season from before that column
+        existed was refused with "delete its activities first", and those are locked (423) once a
+        season is finished. The new rule is about seasons not yet finished; this one is unchanged."""
+        self._log()
+        History.objects.filter(pk=self.season.pk).update(
+            finish_date=timezone.now() - timedelta(days=30), retention_until=None
+        )
+        self.season.refresh_from_db()
+        try:
+            assert_deletable("parcel", parcel=self.parcel)
+        except RetentionConflict as exc:
+            self.fail(f"the parcel was refused with the unfinished-season rule: {exc.detail}")
+        try:
+            self.season.delete()
+        except ValidationError as exc:
+            self.fail(f"a finished season was refused with the unfinished-season rule: {exc}")
+
+    def test_a_published_season_is_not_treated_as_open(self):
+        self._log()
+        History.objects.filter(pk=self.season.pk).update(published=True)
+        self.season.refresh_from_db()
+        self.assertFalse(cmd_unfinished(self.season.pk), "a published season's activities are locked; it is not open")
+
 
 class ContainerDeleteTests(_Tree):
     def test_parcel_delete_is_refused_over_an_open_season_with_records(self):
@@ -102,6 +130,7 @@ class ContainerDeleteTests(_Tree):
         self.assertEqual(int(body["record_count"]), 5)  # DRF serialises APIException values as strings
         self.assertEqual(int(body["blocking_production_count"]), 1)
         self.assertIn("parcel", body["detail"])
+        self.assertNotIn("retention_until", body, "an undated season must not answer the string 'None'")
         self.assertTrue(Parcel.objects.filter(pk=self.parcel.pk).exists())
         self.assertEqual(GeneralEvent.objects.filter(history=self.season).count(), 5)
 
