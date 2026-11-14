@@ -663,13 +663,16 @@ def _retention_detail(scope, retained):
 
     Run 7 (R7-10): "Until" printed finish + 5 years beside a promise of five years from creation,
     and an open season printed nothing. The stored date is now the floor (`retention_floor`), an
-    open season shows its calculated floor, and the text says which seasons Trazo protects."""
-    from history.retention import retention_floor, state_retention_sentence
+    open season shows its calculated floor, and the text says which seasons Trazo protects.
+    The dates printed are the ones the deletion guard holds (`effective_retention_dates`), so a
+    Washington season closed before its seven-year spray floor existed prints that floor."""
+    from history.retention import effective_retention_dates, retention_floor, state_retention_sentence
 
     parts = []
-    if retained:
-        earliest = min(p.retention_until for p in retained)
-        latest = max(p.retention_until for p in retained)
+    held = effective_retention_dates(retained)
+    if held:
+        earliest = min(held.values())
+        latest = max(held.values())
         # The earliest date is the one true of every season in scope; enforcement is per season
         # (review of #113).
         text = (

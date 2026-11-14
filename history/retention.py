@@ -35,7 +35,11 @@ class RetentionConflict(APIException):
 
 
 def histories_in_retention(**lookup):
-    """Productions under `lookup` whose retention floor has not yet passed.
+    """`[(season, effective date)]` under `lookup` whose retention has not yet passed, latest first.
+
+    Decided on the effective date (`effective_retention_dates`), so a Washington season whose
+    stored five-year date has passed while its seven-year spray floor has not is still held.
+    Two queries whatever the number of seasons: the rows, and one aggregate for the state floor.
 
     A NULL `retention_until` never blocks: it is written only by `History.finish()`, so a
     draft or abandoned season has none. Blocking those would strand them forever, which
@@ -43,7 +47,14 @@ def histories_in_retention(**lookup):
     """
     from history.models import History
 
-    return History.objects.filter(retention_until__gt=timezone.now().date(), **lookup)
+    today = timezone.now().date()
+    seasons = list(
+        History.objects.filter(retention_until__isnull=False, **lookup).select_related("parcel__establishment")
+    )
+    dates = effective_retention_dates(seasons)
+    held = [(season, dates[season.pk]) for season in seasons if dates[season.pk] > today]
+    held.sort(key=lambda pair: pair[1], reverse=True)
+    return held
 
 
 def assert_deletable(container_label, **lookup):
@@ -53,20 +64,22 @@ def assert_deletable(container_label, **lookup):
     farmer reads why THIS delete failed rather than a generic refusal.
     """
     in_retention = histories_in_retention(**lookup)
-    blocking = in_retention.order_by("-retention_until").first()
-    if blocking is None:
+    if not in_retention:
         return
 
-    count = in_retention.count()
-    until = blocking.retention_until.isoformat()
+    blocking, latest = in_retention[0]
+    count = len(in_retention)
+    until = latest.isoformat()
     raise RetentionConflict(
         {
             "error": "Record retention period active",
             "detail": (
+                # The date first, the five-year rule as its own sentence: when the Washington
+                # floor is the later date, the date is the state's (named by the last sentence).
                 f"This {container_label} has {count} finished production"
-                f"{'' if count == 1 else 's'} that must be kept until {until} under "
-                f"7 CFR 205.103(b)(4). Deleting the {container_label} would erase "
-                f"{'it' if count == 1 else 'them'}." + state_retention_sentence(blocking)
+                f"{'' if count == 1 else 's'} that must be kept until {until}. Deleting the "
+                f"{container_label} would erase {'it' if count == 1 else 'them'}. Records must be "
+                f"maintained for 5 years per 7 CFR 205.103(b)(4)." + state_retention_sentence(blocking)
             ),
             "retention_until": until,
             "blocking_production_count": count,
@@ -102,7 +115,7 @@ def assert_child_record_deletable(record_label, history, *, correctable=False):
     A finished-but-unretained production (legacy rows written before `retention_until` existed)
     is treated as retained: `finish_date` is what makes the season a closed record.
     """
-    retention_until = getattr(history, "retention_until", None)
+    retention_until = effective_retention_until(history)
     finished = history.finish_date is not None or getattr(history, "published", False)
     still_retained = retention_until is not None and retention_until > timezone.now().date()
     if not (finished or still_retained):
@@ -114,7 +127,8 @@ def assert_child_record_deletable(record_label, history, *, correctable=False):
             "error": "Record is locked",
             "detail": (
                 f"This production is finished, so its {record_label} must be kept"
-                f"{f' until {until}' if until else ''} under 7 CFR 205.103(b)(4). "
+                f"{f' until {until}' if until else ''}. Records must be maintained for 5 years per "
+                f"7 CFR 205.103(b)(4). "
                 f"The audit trail a certifier follows runs from production to sale, so this "
                 f"row is part of what the plan has to be able to show."
                 + state_retention_sentence(history)
@@ -218,39 +232,59 @@ def _state_spray_rule(history):
     return STATE_SPRAY_RETENTION.get(resolve_establishment_state(establishment))
 
 
-def state_spray_retention_floor(history):
-    """Seven years after the newest pesticide application of a Washington farm's season, or None.
+def state_spray_retention_floors(histories):
+    """`{season pk: floor}` for the seasons among `histories` that carry a state spray floor.
 
-    None for a farm in any other state, for a season with no pesticide, fungicide or herbicide
-    record, and for an unsaved season."""
-    rule = _state_spray_rule(history)
-    if rule is None or history.pk is None:
-        return None
+    One query for all of them, so a reader over many seasons does not pay one per season. The
+    state is read from each season's farm, so a caller passing many seasons loads them with
+    `select_related("parcel__establishment")`."""
+    rules = {}
+    for history in histories:
+        if history.pk is None:
+            continue
+        rule = _state_spray_rule(history)
+        if rule is not None:
+            rules[history.pk] = rule
+    if not rules:
+        return {}
     from django.db.models import Max
 
     from history.models import ChemicalEvent, compute_retention_until
     from history.services.wa_spray_record_service import WA_RECORD_TYPES
 
-    latest = ChemicalEvent.objects.filter(history=history, type__in=WA_RECORD_TYPES).aggregate(m=Max("date"))["m"]
-    if latest is None:
-        return None
-    return compute_retention_until(latest, years=rule[0])
+    latest = (
+        ChemicalEvent.objects.filter(history_id__in=list(rules), type__in=WA_RECORD_TYPES)
+        .order_by()
+        .values("history_id")
+        .annotate(m=Max("date"))
+        .values_list("history_id", "m")
+    )
+    return {pk: compute_retention_until(m, years=rules[pk][0]) for pk, m in latest if m is not None}
+
+
+def state_spray_retention_floor(history):
+    """Seven years after the newest pesticide application of a Washington farm's season, or None.
+
+    None for a farm in any other state, for a season with no pesticide, fungicide or herbicide
+    record, and for an unsaved season."""
+    return state_spray_retention_floors([history]).get(history.pk)
 
 
 def state_retention_sentence(history) -> str:
-    """The sentence a refusal citing 7 CFR 205.103(b)(4) appends when the season carries the
-    Washington floor, naming WAC 16-228-1320(3) and the date; "" otherwise."""
+    """The sentence a refusal citing 7 CFR 205.103(b)(4) appends when the Washington floor is the
+    date that holds the season, naming WAC 16-228-1320(3) and the date; "" otherwise."""
     try:
         floor = state_spray_retention_floor(history)
     except Exception:  # noqa: BLE001 - a refusal message must never fail on its own wording
         return ""
     if floor is None:
         return ""
-    # Said only when the stored date carries the state floor. A season closed before this floor
-    # existed keeps its five-year date until its next record moves it (`extend_retention`), and a
-    # refusal must not promise a date the guard does not hold.
+    # Said only when the state floor is the binding date. The guards hold the later of the stored
+    # date and this floor (`effective_retention_until`), so a season closed before the floor
+    # existed is held to it too. A stored date later than the floor (a record created years after
+    # the spray) comes from the five-year rule, and the refusal does not credit it to the state.
     stored = getattr(history, "retention_until", None)
-    if stored is not None and stored < floor:
+    if stored is not None and stored > floor:
         return ""
     years, citation = _state_spray_rule(history)
     return (
@@ -277,6 +311,38 @@ def retention_floor(history):
     if state_floor is not None:
         candidates.append(state_floor)
     return max(candidates) if candidates else None
+
+
+# ---------------------------------------------------------------------------------------------
+# The effective date (follow-up to OV-CMP-C08).
+#
+# The state floor reaches the stored `retention_until` only when a season finishes or a record
+# arrives (`extend_retention`). A Washington season that closed before the floor existed keeps
+# its stored five-year date until its next record, which for a closed season may never come.
+# So every reader that decides from the date (a deletion refusal, a record lock, a printed "kept
+# until") reads the later of the stored date and the state floor computed now. The stored column
+# is left as it is: it still moves forward on the next write, and no reader writes it.
+# ---------------------------------------------------------------------------------------------
+
+
+def effective_retention_dates(histories):
+    """`{season pk: effective date}` for the seasons among `histories` that have a stored date.
+
+    The effective date is the later of the stored `retention_until` and the state spray floor,
+    so it is never earlier than the stored date. A season with no stored date (never finished)
+    is left out: whether an open season may be deleted is a separate decision, and the state
+    floor does not start one. One aggregate query for the state floor, whatever the number."""
+    stored = [h for h in histories if getattr(h, "retention_until", None) is not None]
+    floors = state_spray_retention_floors(stored)
+    return {h.pk: max(h.retention_until, floors.get(h.pk, h.retention_until)) for h in stored}
+
+
+def effective_retention_until(history):
+    """The date a deciding reader holds this season to: the later of its stored `retention_until`
+    and its state spray floor computed now. None for no season or no stored date."""
+    if history is None:
+        return None
+    return effective_retention_dates([history]).get(history.pk)
 
 
 def extend_retention(history):

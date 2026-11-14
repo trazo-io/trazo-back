@@ -3203,9 +3203,31 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
         return data
 
 
+class EffectiveRetentionUntilField(serializers.DateField):
+    """`retention_until` as the date the deletion guard holds, read-only.
+
+    The stored column can be short of a Washington season's seven-year spray floor (a season that
+    closed before the floor existed), and the production page prints this value as "Records
+    retained until". It must name the same date the refusal does, so it reads
+    `history.retention.effective_retention_until`. One aggregate query, and only for a
+    Washington season with a stored date.
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.update(source="*", read_only=True, allow_null=True)
+        super().__init__(**kwargs)
+
+    def to_representation(self, history):
+        from history.retention import effective_retention_until
+
+        until = effective_retention_until(history)
+        return None if until is None else super().to_representation(until)
+
+
 class HistoryWriteSerializer(serializers.ModelSerializer):
     """Lean serializer for create/update — no nested events/images/members."""
 
+    retention_until = EffectiveRetentionUntilField()
     product = serializers.SerializerMethodField()
     parcel = serializers.SerializerMethodField()
     crop_type = serializers.SerializerMethodField()
@@ -3398,6 +3420,7 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
 
 
 class HistorySerializer(serializers.ModelSerializer):
+    retention_until = EffectiveRetentionUntilField()
     events = serializers.SerializerMethodField()
     certificate_percentage = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -4096,7 +4119,14 @@ class PublicHistorySerializer(serializers.ModelSerializer):
 
     def to_representation(self, obj):
         data = super().to_representation(obj)
-        if not self._is_owner(obj):
+        if self._is_owner(obj):
+            # The owner's production page prints this as "Records retained until": the date the
+            # deletion guard holds, not the stored column (`EffectiveRetentionUntilField`).
+            # Worked out here, for the owner only, so an anonymous QR scan pays nothing for a
+            # field it never receives.
+            if "retention_until" in data:
+                data["retention_until"] = EffectiveRetentionUntilField().to_representation(obj)
+        else:
             for field in self._OWNER_ONLY_FIELDS:
                 data.pop(field, None)
             # B0/B1 — strip certifier/audit-only and self-graded fields from every event

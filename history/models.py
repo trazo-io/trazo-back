@@ -451,16 +451,22 @@ class History(models.Model):
     )
 
     def delete(self, *args, **kwargs):
-        """Prevent deletion of productions within NOP 5-year retention period."""
+        """Prevent deletion of productions within their retention period: NOP's five years, or a
+        Washington farm's seven for a season holding a spray (`effective_retention_until`)."""
         from django.utils import timezone
 
-        if self.retention_until and self.retention_until > timezone.now().date():
+        from history.retention import effective_retention_until
+
+        until = effective_retention_until(self)
+        if until and until > timezone.now().date():
             from django.core.exceptions import ValidationError
 
             from history.retention import state_retention_sentence
 
             raise ValidationError(
-                f"Cannot delete: NOP requires record retention until {self.retention_until}. "
+                # "Records must be kept", not "NOP requires": when the Washington floor is the
+                # later date, the date is the state's (named by the sentence below), not NOP's.
+                f"Cannot delete: records must be kept until {until}. "
                 # (b)(4) is the retention clause under the CURRENT rule: the Strengthening
                 # Organic Enforcement rule restructured 205.103(b) into five subsections,
                 # inserting audit-trail documentation as (b)(3) and pushing "maintained for
