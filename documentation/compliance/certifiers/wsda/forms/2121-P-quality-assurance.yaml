@@ -43,6 +43,7 @@ items:
     - g2_0_fraud_prevention.employee_evaluation_frequency
     - g2_0_fraud_prevention.ofpp_training_cadence
     - g2_0_fraud_prevention.ofpp_training_cadence_other
+    - g2_0_fraud_prevention.fraud_review_process
     prints: modules/G2_0.pdf §C
   note: 'Closed 2026-11-14. Every way WSDA lists is an option of `osp_implementation_monitoring` (`staff_training`,
     `procedures_in_activity_records`, `dual_signoff`, `record_review`, `employee_evaluations`, `corrective_actions_documented`,

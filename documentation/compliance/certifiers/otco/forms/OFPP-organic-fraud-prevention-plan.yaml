@@ -58,6 +58,7 @@ items:
   trazo:
     questions:
     - g2_0_fraud_prevention.ofpp_team
+    - g2_0_fraud_prevention.osp_accuracy_process
     prints: modules/G2_0.pdf §C
   note: 'Closed 2026-11-14. `ofpp_team` asks each member''s name, job title or role, and phone or email, one person
     per line as the form''s table rows; its coaching names the four duties (approve, implement, train, monitor)
@@ -241,6 +242,8 @@ items:
     questions:
     - g2_0_fraud_prevention.critical_control_points
     - g2_0_fraud_prevention.ccp_other_name
+    - g2_0_fraud_prevention.fraud_risk_areas
+    - g2_0_fraud_prevention.fraud_risk_other
     prints: modules/G2_0.pdf §D
   note: 'Closed 2026-11-14. `critical_control_points` lists the steps where fraud enters a grower''s chain (seed
     and planting stock, inputs, organic product bought in, contracted work, transport including by an uncertified
