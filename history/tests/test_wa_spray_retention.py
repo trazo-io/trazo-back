@@ -353,7 +353,9 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         self.assertFalse(History.objects.filter(pk=history.pk).exists())
 
     def test_an_open_season_still_has_no_date(self):
-        """The floor does not start a deletion rule for a season that never finished."""
+        """The floor does not give a season that never finished a retention date. Whether such a
+        season can be deleted is #422's rule, not the floor's: it holds a record, so it cannot be
+        deleted as a whole (#421 and #422 merged a minute apart, each green alone)."""
         from history.retention import effective_retention_until
 
         self.assertIsNone(effective_retention_until(None))
@@ -362,5 +364,6 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         history.refresh_from_db()
         self.assertIsNone(history.retention_until)
         self.assertIsNone(effective_retention_until(history))
-        history.delete()
-        self.assertFalse(History.objects.filter(pk=history.pk).exists())
+        with self.assertRaises(ValidationError):
+            history.delete()
+        self.assertTrue(History.objects.filter(pk=history.pk).exists())
