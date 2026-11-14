@@ -176,3 +176,110 @@ class TombstoneLinksSurviveResavesTests(_LinkFixture):
         amendment.save()
         amendment.refresh_from_db()
         self.assertIsNone(amendment.activity_id)
+
+
+class ConfirmationLinkTests(_LinkFixture):
+    """Slice B (2026-11-14): FieldNoteConfirmation, the append-only record of a crew note confirmed
+    into a record, gets the identity next to its pair."""
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+
+        from fieldnotes.models import CrewSender, FieldNote
+
+        self.user = get_user_model().objects.create_user(email="confirm@example.com", password="pw-for-tests-only")
+        sender = CrewSender.objects.create(
+            company=self.est.company,
+            establishment=self.est,
+            phone_e164="+14155550199",
+            display_name="Miguel",
+            consent_attested_at=timezone.now(),
+            consent_attested_by=self.user,
+        )
+        self.note = FieldNote.objects.create(
+            company=self.est.company,
+            establishment=self.est,
+            sender=sender,
+            sender_phone=sender.phone_e164,
+            sender_display_name="Miguel",
+            provider=FieldNote.TWILIO,
+            provider_message_id="SM-link",
+            kind=FieldNote.TEXT,
+            body_text="regamos el bloque 4",
+        )
+
+    def _confirm(self, event_type, event):
+        from fieldnotes.services.confirmation import record_confirmation
+
+        return record_confirmation(self.note, event, event_type, self.user, {}, timezone.now())
+
+    def test_a_confirmation_links_the_record_it_confirmed(self):
+        self.assertEqual(self._confirm(2, self.chemical).activity_id, self.chemical.activity_id)
+
+    def test_the_other_table_with_the_same_number_is_never_named(self):
+        if self.general.pk != self.chemical.pk:
+            ChemicalEvent.objects.filter(pk=self.chemical.pk).update(history=self.history)
+        row = self._confirm(3, self.general)
+        self.assertEqual(row.activity_id, self.general.activity_id)
+        self.assertNotEqual(row.activity_id, self.chemical.activity_id)
+
+    def test_a_writer_that_only_holds_the_pair_still_links(self):
+        from fieldnotes.models import FieldNoteConfirmation
+
+        row = FieldNoteConfirmation.objects.create(
+            note=self.note,
+            company=self.est.company,
+            event_type=2,
+            event_id=self.chemical.pk,
+            confirmed_at=timezone.now(),
+        )
+        self.assertEqual(row.activity_id, self.chemical.activity_id)
+
+    def test_voiding_after_the_record_is_deleted_keeps_the_tombstone_link(self):
+        from fieldnotes.services.confirmation import void_confirmations
+
+        row = self._confirm(2, self.chemical)
+        activity_id = row.activity_id
+        ChemicalEvent.objects.filter(pk=self.chemical.pk).delete()
+        self.assertEqual(void_confirmations(2, self.chemical.pk, "record deleted", timezone.now()), 1)
+        row.refresh_from_db()
+        self.assertIsNotNone(row.voided_at)
+        self.assertEqual(row.activity_id, activity_id)
+        self.assertIsNotNone(row.activity.deleted_at)
+
+    def test_the_backfill_writes_only_the_link_on_the_append_only_rows(self):
+        """Run against the migration's own historical models: the live manager refuses `.update()`,
+        which is the guard the backfill must step around without touching any recorded value."""
+        from django.db import connection
+        from django.db.migrations.loader import MigrationLoader
+
+        from fieldnotes.models import FieldNoteConfirmation
+
+        linked = self._confirm(2, self.chemical)
+        orphan = FieldNoteConfirmation.objects.create(
+            note=self.note, company=self.est.company, event_type=2, event_id=999_999, confirmed_at=timezone.now()
+        )
+        before = dict(FieldNoteConfirmation.objects.filter(pk=linked.pk).values("confirmed_values", "source")[0])
+        state_apps = (
+            MigrationLoader(connection).project_state(("fieldnotes", "0009_backfill_confirmation_activity_link")).apps
+        )
+        state_apps.get_model("fieldnotes", "FieldNoteConfirmation").objects.update(activity=None)
+        import_module("fieldnotes.migrations.0009_backfill_confirmation_activity_link").backfill(state_apps, None)
+        linked.refresh_from_db()
+        orphan.refresh_from_db()
+        self.assertEqual(linked.activity_id, self.chemical.activity_id)
+        self.assertIsNone(orphan.activity_id)
+        self.assertEqual(
+            dict(FieldNoteConfirmation.objects.filter(pk=linked.pk).values("confirmed_values", "source")[0]), before
+        )
+
+    def test_the_census_checks_the_confirmation_link(self):
+        from fieldnotes.models import FieldNoteConfirmation
+
+        row = self._confirm(2, self.chemical)
+        facts = census_svc._loose_pair_facts()["fieldnotes.FieldNoteConfirmation"]["activity_link"]
+        self.assertEqual((facts["linked"], facts["live_target_unlinked"]["count"]), (1, 0))
+        FieldNoteConfirmation._base_manager.filter(pk=row.pk).update(activity=None)
+        facts = census_svc._loose_pair_facts()["fieldnotes.FieldNoteConfirmation"]["activity_link"]
+        self.assertEqual(facts["live_target_unlinked"]["ids"], [row.pk])

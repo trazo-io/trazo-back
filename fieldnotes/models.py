@@ -459,6 +459,17 @@ class FieldNoteConfirmation(models.Model):
     company = models.ForeignKey("company.Company", on_delete=models.CASCADE, related_name="field_note_confirmations")
     event_type = models.PositiveSmallIntegerField()
     event_id = models.PositiveIntegerField()
+    #: The confirmed record's identity (history.Activity), written with the pair above when the row
+    #: is created and never after. It survives the record's deletion: the voided row still names the
+    #: tombstone, where the pair names a number nothing answers to.
+    activity = models.ForeignKey(
+        "history.Activity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="field_note_confirmations",
+    )
     confirmed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -487,6 +498,10 @@ class FieldNoteConfirmation(models.Model):
             allowed = set(kwargs.get("update_fields") or ())
             if not allowed or not allowed <= {"voided_at", "void_reason"}:
                 raise ValidationError("A field note confirmation is never edited; void it instead.")
+        elif self.activity_id is None:
+            from history.activity_ref import activity_id_for
+
+            self.activity_id = activity_id_for(self.event_type, self.event_id)
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

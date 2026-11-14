@@ -175,6 +175,7 @@ def record_confirmation(note: FieldNote, event, event_type: int, user, proposal:
         company_id=note.company_id,
         event_type=event_type,
         event_id=event.id,
+        activity_id=getattr(event, "activity_id", None),
         confirmed_by=user,
         confirmed_by_name=name,
         confirmed_at=when,

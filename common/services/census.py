@@ -344,6 +344,7 @@ ACTIVITY_LINKS = {
     "history.ProductionPlanItem": "fulfilled_by_activity_id",
     "documents.GeneratedDocument": "activity_id",
     "fieldnotes.FieldNote": "fulfilled_by_activity_id",
+    "fieldnotes.FieldNoteConfirmation": "activity_id",
 }
 
 
