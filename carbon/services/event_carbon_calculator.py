@@ -12,6 +12,7 @@ from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDACompli
 from .emission_factors import emission_factors
 from .enhanced_emission_factors import EnhancedEmissionFactors
 from .enhanced_usda_factors import EnhancedUSDAFactors
+from .verified_emission_factors import VERIFICATION_STATUS_ESTIMATE, figure_basis, verification_status_for
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +339,40 @@ class EventCarbonCalculator:
         co2e, _factor, _err = VerifiedEmissionFactors.fuel_co2e(fuel_gallons, fuel_type_lower, "gal")
         return co2e
 
+    @staticmethod
+    def _aggregate_basis(product_factors, fuel_total: float, fuel_type: str, omitted_code=None) -> Dict[str, Any]:
+        """Status, sources and basis of a summary record, from the factors it applied (2026-11-13).
+
+        Summaries were stored "epa_usda_verified_aggregate" whatever they rested on, citing
+        "USDA ARS (fertilizer manufacturing)" for factors that are EPA + IPCC (nitrogen) or Trazo
+        estimates (P2O5, K2O, copper, sulfur, organic products). Same rule as a single record: a
+        Trazo estimate factor, a fuel costed as diesel, or a part left out makes it an estimate.
+        A summary has no area estimate: with no fuel total its application pass is not counted.
+        """
+        from .verified_emission_factors import VerifiedEmissionFactors
+
+        factors = list(product_factors)
+        reasons = [omitted_code] if omitted_code else []
+        fuel_type_lower = (fuel_type or "diesel").lower()
+        if fuel_type_lower == "none":
+            pass  # manual application: no fuel burned, nothing left out
+        elif fuel_total > 0:
+            if fuel_type_lower == "electric":
+                factors.append(VerifiedEmissionFactors.get_country_electricity_factor())
+            else:
+                if fuel_type_lower not in VerifiedEmissionFactors.EPA_FUEL_FACTORS:
+                    reasons.append("fuel_costed_as_diesel")
+                factors.append(VerifiedEmissionFactors._get_fuel_factor_for_type(fuel_type_lower)[0])
+        else:
+            reasons.append("application_not_estimated")
+        basis = figure_basis(factors, reasons)
+        return {
+            **basis,
+            "verification_status": verification_status_for(basis, "epa_usda_verified_aggregate"),
+            "data_sources": list(dict.fromkeys(f.source for f in factors)),
+            "factor_provenance": sorted({f.provenance for f in factors}),
+        }
+
     def _calculate_aggregate_fertilizer_impact(self, event, extra_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Calculate carbon impact for aggregate fertilizer events (multiple applications as one summary).
@@ -361,20 +396,28 @@ class EventCarbonCalculator:
             fuel_type = extra_data.get("fuel_type", "diesel") or "diesel"
             fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
 
-            # Calculate manufacturing emissions using EPA/USDA verified factors
-            # From verified_emission_factors.py:
-            # Nitrogen: 10.5 kg CO2/kg N
-            # Phosphorus: 1.19 kg CO2/kg P2O5
-            # Potassium: 0.65 kg CO2/kg K2O
-            n_emissions = n_total_kg * 10.5
-            p_emissions = p_total_kg * 1.19
-            k_emissions = k_total_kg * 0.65
+            # Manufacturing from the registry's factors, each with its own provenance: nitrogen is
+            # published (EPA + IPCC), P2O5 and K2O are Trazo estimates (carbon-methodology.md).
+            # The values were inlined here (10.5, 1.19, 0.65) and the result cited "USDA ARS".
+            factors = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS
+            n_factor = factors["nitrogen_fertilizer"]
+            p_factor = factors["phosphorus_fertilizer"]
+            k_factor = factors["potassium_fertilizer"]
+            n_emissions = n_total_kg * n_factor.value
+            p_emissions = p_total_kg * p_factor.value
+            k_emissions = k_total_kg * k_factor.value
             manufacturing_emissions = n_emissions + p_emissions + k_emissions
 
             # Calculate application fuel emissions using correct fuel type
             application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
 
             total_emissions = manufacturing_emissions + application_emissions
+            basis = self._aggregate_basis(
+                [f for f, kg in ((n_factor, n_total_kg), (p_factor, p_total_kg), (k_factor, k_total_kg)) if kg],
+                fuel_total,
+                fuel_type,
+                omitted_code=None if (n_total_kg or p_total_kg or k_total_kg) else "npk_not_recorded",
+            )
 
             breakdown = {
                 "is_aggregate": True,
@@ -392,17 +435,14 @@ class EventCarbonCalculator:
                 "application_fuel_unit": fuel_unit,
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "confidence_level": 0.92,
+                "figure_basis": basis["figure_basis"],
+                "estimate_reasons": basis["estimate_reasons"],
             }
 
             return {
                 "co2e": round(total_emissions, 3),
                 "calculation_method": "aggregate_fertilizer_epa_usda",
-                "verification_status": "epa_usda_verified_aggregate",
-                "data_sources": [
-                    "EPA 40 CFR Part 98 (fuel combustion)",
-                    "USDA ARS (fertilizer manufacturing)",
-                    "IPCC 2006/2019 (N2O emissions)",
-                ],
+                **basis,
                 "breakdown": breakdown,
                 "limitations": f"Aggregate calculation for {event_count} fertilizer applications",
                 "recommendations": [
@@ -455,30 +495,29 @@ class EventCarbonCalculator:
             fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
 
             # ENHANCED 2025-12-24: Select emission factor based on chemical_subtype
-            # Default to synthetic fungicide if subtype not specified
-            emission_factor = 4.5  # Synthetic fungicide default
+            # Default to synthetic fungicide if subtype not specified. The factor object is kept
+            # (not only its value) so the result states its source and provenance (2026-11-13).
+            chemical_factors = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS
+            product_factor = chemical_factors["fungicide_manufacturing"]  # 4.5, synthetic
             emission_factor_label = "synthetic fungicide"
 
             if chemical_subtype in ["copper_fungicide", "copper"]:
                 # Copper-based fungicides (higher due to copper mining/refining)
-                copper_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
-                emission_factor = copper_factor.value  # 5.5 kg CO2/kg AI
+                product_factor = chemical_factors["copper_fungicide_manufacturing"]
                 emission_factor_label = "copper fungicide"
             elif chemical_subtype in ["sulfur_fungicide", "sulfur"]:
                 # Sulfur-based fungicides (lower as sulfur is often a byproduct)
-                sulfur_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
-                emission_factor = sulfur_factor.value  # 1.8 kg CO2/kg
+                product_factor = chemical_factors["sulfur_fungicide_manufacturing"]
                 emission_factor_label = "sulfur fungicide"
             elif chemical_subtype in ["biological_fungicide", "biological"]:
                 # Biological fungicides (fermentation-based production)
-                biological_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
-                emission_factor = biological_factor.value  # 2.0 kg CO2/kg
+                product_factor = chemical_factors["biological_fungicide_manufacturing"]
                 emission_factor_label = "biological fungicide"
             elif chemical_subtype == "organic_fungicide":
                 # Organic fungicides (neem oil, potassium bicarbonate, essential oils)
-                organic_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
-                emission_factor = organic_factor.value  # 2.5 kg CO2/kg
+                product_factor = chemical_factors["organic_fungicide_manufacturing"]
                 emission_factor_label = "organic fungicide"
+            emission_factor = product_factor.value
 
             # Calculate manufacturing emissions using selected emission factor
             manufacturing_emissions = active_ingredient_kg * emission_factor
@@ -487,6 +526,12 @@ class EventCarbonCalculator:
             application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
 
             total_emissions = manufacturing_emissions + application_emissions
+            basis = self._aggregate_basis(
+                [product_factor] if active_ingredient_kg else [],
+                fuel_total,
+                fuel_type,
+                omitted_code=None if active_ingredient_kg else "amount_not_recorded",
+            )
 
             breakdown = {
                 "is_aggregate": True,
@@ -501,16 +546,14 @@ class EventCarbonCalculator:
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
                 "confidence_level": 0.90,
+                "figure_basis": basis["figure_basis"],
+                "estimate_reasons": basis["estimate_reasons"],
             }
 
             return {
                 "co2e": round(total_emissions, 3),
                 "calculation_method": "aggregate_fungicide_epa_usda",
-                "verification_status": "epa_usda_verified_aggregate",
-                "data_sources": [
-                    "EPA 40 CFR Part 98 (fuel combustion)",
-                    "Lal 2004 / Audsley (fungicide manufacturing LCA)",
-                ],
+                **basis,
                 "breakdown": breakdown,
                 "limitations": f"Aggregate calculation for {event_count} fungicide applications",
                 "recommendations": [
@@ -572,6 +615,12 @@ class EventCarbonCalculator:
             manufacturing_emissions = active_ingredient_kg * emission_factor
             application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
             total_emissions = manufacturing_emissions + application_emissions
+            basis = self._aggregate_basis(
+                [factor] if active_ingredient_kg else [],
+                fuel_total,
+                fuel_type,
+                omitted_code=None if active_ingredient_kg else "amount_not_recorded",
+            )
 
             breakdown = {
                 "is_aggregate": True,
@@ -586,16 +635,14 @@ class EventCarbonCalculator:
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
                 "confidence_level": 0.90,
+                "figure_basis": basis["figure_basis"],
+                "estimate_reasons": basis["estimate_reasons"],
             }
 
             return {
                 "co2e": round(total_emissions, 3),
                 "calculation_method": "aggregate_herbicide_epa_usda",
-                "verification_status": "epa_usda_verified_aggregate",
-                "data_sources": [
-                    "EPA 40 CFR Part 98 (fuel combustion)",
-                    factor.source,
-                ],
+                **basis,
                 "breakdown": breakdown,
                 "limitations": f"Aggregate calculation for {event_count} herbicide applications",
                 "recommendations": [],
@@ -641,20 +688,21 @@ class EventCarbonCalculator:
             fuel_unit = extra_data.get("fuel_unit", "gal") or "gal"
 
             # ENHANCED 2025-12-24: Select emission factor based on chemical_subtype
-            # Default to synthetic pesticide if subtype not specified
-            emission_factor = 8.8  # Synthetic pesticide default
+            # Default to synthetic pesticide if subtype not specified. The factor object is kept
+            # (not only its value) so the result states its source and provenance (2026-11-13).
+            chemical_factors = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS
+            product_factor = chemical_factors["pesticide_manufacturing"]  # 8.8, synthetic
             emission_factor_label = "synthetic pesticide"
 
             if chemical_subtype in ["organic_pesticide", "organic"]:
                 # Organic pesticides (neem, pyrethrin) - naturally-derived
-                organic_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
-                emission_factor = organic_factor.value  # 3.5 kg CO2/kg
+                product_factor = chemical_factors["organic_pesticide_manufacturing"]
                 emission_factor_label = "organic pesticide"
             elif chemical_subtype in ["biological_pesticide", "biological"]:
                 # Biological pesticides (Bt, Spinosad) - microbial-based
-                biological_factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
-                emission_factor = biological_factor.value  # 2.5 kg CO2/kg
+                product_factor = chemical_factors["biological_pesticide_manufacturing"]
                 emission_factor_label = "biological pesticide"
+            emission_factor = product_factor.value
 
             # Calculate manufacturing emissions using selected emission factor
             manufacturing_emissions = active_ingredient_kg * emission_factor
@@ -663,6 +711,12 @@ class EventCarbonCalculator:
             application_emissions = self._calculate_aggregate_fuel_emissions(fuel_total, fuel_type, fuel_unit)
 
             total_emissions = manufacturing_emissions + application_emissions
+            basis = self._aggregate_basis(
+                [product_factor] if active_ingredient_kg else [],
+                fuel_total,
+                fuel_type,
+                omitted_code=None if active_ingredient_kg else "amount_not_recorded",
+            )
 
             breakdown = {
                 "is_aggregate": True,
@@ -677,16 +731,14 @@ class EventCarbonCalculator:
                 "application_emissions_kg_co2e": round(application_emissions, 3),
                 "emission_factor_used": f"{emission_factor} kg CO2/kg AI ({emission_factor_label})",
                 "confidence_level": 0.90,
+                "figure_basis": basis["figure_basis"],
+                "estimate_reasons": basis["estimate_reasons"],
             }
 
             return {
                 "co2e": round(total_emissions, 3),
                 "calculation_method": "aggregate_pesticide_epa_usda",
-                "verification_status": "epa_usda_verified_aggregate",
-                "data_sources": [
-                    "EPA 40 CFR Part 98 (fuel combustion)",
-                    "Lal 2004 / Audsley (pesticide manufacturing LCA)",
-                ],
+                **basis,
                 "breakdown": breakdown,
                 "limitations": f"Aggregate calculation for {event_count} pesticide applications",
                 "recommendations": [
@@ -929,6 +981,26 @@ class EventCarbonCalculator:
             )
             return result
 
+    @staticmethod
+    def _state_chemical_basis(result: Dict[str, Any], status: str, data_sources) -> Dict[str, Any]:
+        """Put back what an input figure rests on after `_add_enhanced_usda_metadata` (2026-11-13).
+
+        That step stamps every US result `factors_verified`, `usda_factors_based: True` and a
+        blanket "USDA Agricultural Research Service" source. For a chemical figure the status
+        follows its basis: an estimate in any part keeps `estimate` and never carries the flag the
+        app badges "From recorded inputs"; the source column names the factors actually applied.
+        """
+        result["verification_status"] = status
+        if status == VERIFICATION_STATUS_ESTIMATE:
+            result["usda_factors_based"] = False
+        result["data_source"] = ("; ".join(data_sources or []) or "No factor applied")[:200]
+        # Same step, same blanket: "USDA emission factors with regional adjustments" and a
+        # `usda_compliance: True` that nothing reads, on a figure built from EPA, IPCC, academic
+        # and Trazo factors.
+        result["methodology"] = "Each input priced with the factor named for it in data_sources"
+        result.pop("usda_compliance", None)
+        return result
+
     def _get_crop_category(self, crop_name: str) -> str:
         """Determine crop category from crop name for efficiency calculations"""
         crop_lower = crop_name.lower()
@@ -968,11 +1040,14 @@ class EventCarbonCalculator:
 
     def calculate_chemical_event_impact(self, event) -> Dict[str, Any]:
         """
-        Calculate carbon impact of chemical application events using EPA/USDA verified emission factors.
-        ENHANCED: Uses only credible, government-sourced data for transparency.
+        Calculate carbon impact of chemical application events, each input with its own factor.
         Includes both manufacturing and application emissions.
 
         Sprint 5: Added support for aggregate events (multiple applications logged as one summary).
+
+        2026-11-13: `verification_status` follows the basis: "factors_verified" (published factors
+        on recorded quantities, nothing left out) or "estimate" (any part estimated or left out),
+        on single records and summaries alike.
         """
         try:
             from .verified_emission_factors import VerifiedEmissionFactors
@@ -1105,19 +1180,33 @@ class EventCarbonCalculator:
             # Generate EPA-based recommendations
             recommendations = self._generate_epa_chemical_recommendations(event, base_emissions, breakdown)
 
+            # The status follows the basis the calculation used (2026-11-13). It was
+            # "epa_usda_verified" for every chemical figure, and the metadata step below then
+            # stamped "factors_verified" and the EPA/USDA flag on it, so an application pass
+            # estimated from the area (or a figure with manufacturing left out) was stored and
+            # badged as resting on published factors.
+            basis = {
+                "figure_basis": calculation_result.get("figure_basis"),
+                "estimate_reasons": calculation_result.get("estimate_reasons") or [],
+            }
+            status = verification_status_for(basis, "factors_verified")
+
             result = {
                 "co2e": round(base_emissions, 3),
                 "calculation_method": calculation_method,
-                "verification_status": "epa_usda_verified",
+                "verification_status": status,
                 "data_sources": data_sources,
                 "factor_provenance": calculation_result.get("factor_provenance"),
+                "figure_basis": basis["figure_basis"],
+                "estimate_reasons": basis["estimate_reasons"],
                 "breakdown": breakdown,
                 "limitations": limitations,
                 "recommendations": recommendations,
                 "confidence_level": confidence_level,
             }
 
-            return self._add_enhanced_usda_metadata(result, event, chemical_data.get("crop_name", "unknown"))
+            enriched = self._add_enhanced_usda_metadata(result, event, chemical_data.get("crop_name", "unknown"))
+            return self._state_chemical_basis(enriched, status, data_sources)
 
         except Exception as e:
             # Return minimal safe calculation on error
@@ -2940,7 +3029,12 @@ class EventCarbonCalculator:
             # Gated on the explicit sentinel rather than on the flag itself, so paths that
             # simply never set `usda_factors_based` keep the upgrade they rely on.
             # An area estimate keeps its own status; the validation upgrade below must not badge it.
-            no_factor_applied = calculation_result.get("verification_status") in ("no_factor_applied", "area_estimate")
+            # Nor an input figure that is an estimate in any part (2026-11-13).
+            no_factor_applied = calculation_result.get("verification_status") in (
+                "no_factor_applied",
+                "area_estimate",
+                VERIFICATION_STATUS_ESTIMATE,
+            )
             if compliance_record and compliance_record.is_epa_factors_based and not no_factor_applied:
                 carbon_entry.usda_factors_based = True
                 carbon_entry.save(update_fields=["usda_factors_based"])
@@ -3481,18 +3575,13 @@ class EventCarbonCalculator:
             if len(numbers) >= 3:
                 return {"N": float(numbers[0]), "P": float(numbers[1]), "K": float(numbers[2])}
 
-            # Default NPK for unknown fertilizers only
-            if chemical_type == "FE":
-                return {"N": 10.0, "P": 10.0, "K": 10.0}
-            else:
-                return {"N": 0.0, "P": 0.0, "K": 0.0}  # Non-fertilizers have no NPK
+            # No three numbers, no analysis: zeros, and the calculator states the N-P-K is missing.
+            # A fertilizer whose text held no analysis ("compost", "approx") was priced as
+            # 10-10-10 here until 2026-11-13, the F03 phantom the blank-text path had already lost.
+            return {"N": 0.0, "P": 0.0, "K": 0.0}
 
-        except:
-            # Even in error cases, respect chemical type
-            if chemical_type in ["PE", "FU", "HE"]:
-                return {"N": 0.0, "P": 0.0, "K": 0.0}
-            else:
-                return {"N": 10.0, "P": 10.0, "K": 10.0}
+        except (TypeError, ValueError):
+            return {"N": 0.0, "P": 0.0, "K": 0.0}
 
     def _extract_numeric_value(self, text, default: float = 0.0) -> float:
         """Extract the first numeric value from a string, or pass a real number through.
@@ -3542,9 +3631,11 @@ class EventCarbonCalculator:
         It carries no amount applied. The volume defaults that stood here (10 to 500 L) were read
         only by `_convert_volume_to_liters`, which no longer assumes an amount (2026-11-12).
         """
+        # No N-P-K here: a default analysis is an invented input (2026-11-13). The crop blends that
+        # stood beside each area (12-6-6 citrus, 46-0-0 corn, 15-15-15 nuts, 20-20-20 vegetables,
+        # 16-16-16 otherwise) were read only by `_get_intelligent_concentration`, removed with them.
         defaults = {
             "area": 1.0,  # hectares
-            "concentration": "10-10-10",  # NPK
             "application_method": "broadcast",
         }
 
@@ -3555,40 +3646,15 @@ class EventCarbonCalculator:
         if hasattr(event, "type"):
             if event.type == "FE":  # Fertilizer
                 if "citrus" in crop_lower or "orange" in crop_lower:
-                    defaults.update(
-                        {
-                            "area": 2.0,  # Typical citrus grove size
-                            "concentration": "12-6-6",  # Citrus-specific NPK
-                        }
-                    )
+                    defaults.update({"area": 2.0})  # Typical citrus grove size
                 elif "corn" in crop_lower:
-                    defaults.update(
-                        {
-                            "area": 1.5,  # Typical corn field
-                            "concentration": "46-0-0",  # Urea for corn
-                        }
-                    )
+                    defaults.update({"area": 1.5})  # Typical corn field
                 elif any(nut in crop_lower for nut in ["almond", "walnut", "pecan"]):
-                    defaults.update(
-                        {
-                            "area": 3.0,  # Larger orchard areas
-                            "concentration": "15-15-15",  # Balanced for nuts
-                        }
-                    )
+                    defaults.update({"area": 3.0})  # Larger orchard areas
                 elif any(veg in crop_lower for veg in ["tomato", "lettuce", "pepper"]):
-                    defaults.update(
-                        {
-                            "area": 0.5,  # Smaller vegetable plots
-                            "concentration": "20-20-20",  # High NPK for vegetables
-                        }
-                    )
+                    defaults.update({"area": 0.5})  # Smaller vegetable plots
                 else:
-                    defaults.update(
-                        {
-                            "area": 1.5,
-                            "concentration": "16-16-16",
-                        }
-                    )
+                    defaults.update({"area": 1.5})
 
             elif event.type in ["PE", "HE", "FU"]:  # Pesticides, Herbicides, Fungicides
                 if "citrus" in crop_lower:
@@ -4009,15 +4075,6 @@ class EventCarbonCalculator:
         )
 
         return water_volume_gallons
-
-    def _get_intelligent_concentration(self, concentration_str: str, event=None, crop_name: str = "default") -> str:
-        """Get intelligent concentration defaults for missing data"""
-        if not concentration_str or concentration_str.lower() in ["unknown", "n/a", "na", "none", "null"]:
-            if event:
-                defaults = self._get_intelligent_defaults(event, crop_name)
-                return defaults["concentration"]
-            return "10-10-10"  # Fallback default
-        return concentration_str
 
     def _get_intelligent_application_method(self, method_str: str, event=None, crop_name: str = "default") -> str:
         """Get intelligent application method defaults for missing data"""

@@ -91,6 +91,79 @@ CHEMICAL_PASS_ESTIMATED_FROM_AREA = (
 )
 CHEMICAL_PASS_NOT_ESTIMATED = "No fuel and no area treated on the record: the application pass is not estimated."
 
+# The same rule for the other inputs a product figure needs (2026-11-13). A fertilizer with no
+# N-P-K was priced as 10-10-10 by the form preview and the legacy preview endpoint, and as
+# 10-10-10 by the save whenever the analysis text held no three numbers; a spray with no
+# concentration still printed a per-subtype default %AI (25 to 99%) in its details.
+CHEMICAL_CONCENTRATION_NOT_RECORDED = (
+    "Active-ingredient concentration not provided: manufacturing emissions omitted rather than "
+    "assuming a default %AI. Enter the product concentration for an estimate."
+)
+CHEMICAL_NPK_NOT_RECORDED = (
+    "No N-P-K analysis on the record: nutrient manufacturing emissions omitted rather than "
+    "assuming a default analysis. Enter the N-P-K for an estimate."
+)
+CHEMICAL_NITROGEN_NOT_RECORDED = (
+    "No N-P-K analysis on the record: field nitrous oxide from the nitrogen applied is not estimated."
+)
+CHEMICAL_PRODUCT_MASS_FROM_DENSITY = (
+    "Product weight worked out from the recorded volume with a typical density for this kind of product."
+)
+CHEMICAL_TRAZO_ESTIMATE_FACTOR = "At least one factor applied is a Trazo estimate, not a published value."
+CHEMICAL_FUEL_COSTED_AS_DIESEL = (
+    "Application fuel costed with the diesel factor, not with a factor for the fuel type on the record."
+)
+# Where the per-hectare application fuel rates come from: Trazo's own choice per application
+# method, not a published table, so an estimate built on one never carries a published label.
+CHEMICAL_PASS_RATE_SOURCE = "Trazo estimate of application fuel per hectare, by application method"
+
+#: Why a chemical figure is an estimate, by code. The details carry the codes
+#: (`breakdown.estimate_reasons`) and the app words each one in the reader's language
+#: (`carbon.estimateReason.<code>`; parity: the app's `chemicalEstimateReasonsHaveCopy` test
+#: reads this dict). An empty list is the only basis that may keep a published-factor label.
+CHEMICAL_ESTIMATE_REASONS = {
+    "application_fuel_estimated_from_area": CHEMICAL_PASS_ESTIMATED_FROM_AREA,
+    "fuel_costed_as_diesel": CHEMICAL_FUEL_COSTED_AS_DIESEL,
+    "trazo_estimate_factor": CHEMICAL_TRAZO_ESTIMATE_FACTOR,
+    "product_mass_from_typical_density": CHEMICAL_PRODUCT_MASS_FROM_DENSITY,
+    "amount_not_recorded": CHEMICAL_AMOUNT_NOT_RECORDED,
+    "concentration_not_recorded": CHEMICAL_CONCENTRATION_NOT_RECORDED,
+    "npk_not_recorded": CHEMICAL_NPK_NOT_RECORDED,
+    "nitrogen_not_recorded": CHEMICAL_NITROGEN_NOT_RECORDED,
+    "application_not_estimated": CHEMICAL_PASS_NOT_ESTIMATED,
+}
+
+#: What a chemical figure rests on, as a whole. `published_factors`: every part was computed from
+#: a recorded quantity with a published factor, and no part was left out. `estimate`: anything
+#: else. The stored and served status follows it (VERIFICATION_STATUS_ESTIMATE).
+FIGURE_BASIS_PUBLISHED = "published_factors"
+FIGURE_BASIS_ESTIMATE = "estimate"
+
+#: `CarbonEntry.verification_status` for a figure that is an estimate in any part. Not in
+#: `CarbonCalculatorService.RECORDED_BASIS_STATUSES`, so no consumer total counts it, and never
+#: badged as published or "from recorded inputs" on any surface.
+VERIFICATION_STATUS_ESTIMATE = "estimate"
+
+
+def figure_basis(factors_applied, reasons) -> Dict[str, Any]:
+    """The basis of a figure from the factors it applied and why any part of it is not recorded.
+
+    A factor whose provenance is not published (a Trazo estimate such as P2O5 or K2O, or an
+    unverified one) makes the figure an estimate on its own; so does every reason passed in.
+    """
+    reasons = list(dict.fromkeys(reasons))
+    if any(f.provenance != PROVENANCE_PUBLISHED for f in factors_applied) and "trazo_estimate_factor" not in reasons:
+        reasons.append("trazo_estimate_factor")
+    return {
+        "figure_basis": FIGURE_BASIS_ESTIMATE if reasons else FIGURE_BASIS_PUBLISHED,
+        "estimate_reasons": reasons,
+    }
+
+
+def verification_status_for(basis: Dict[str, Any], published_status: str) -> str:
+    """The status a figure may carry: its published status only when nothing in it is estimated."""
+    return published_status if basis.get("figure_basis") == FIGURE_BASIS_PUBLISHED else VERIFICATION_STATUS_ESTIMATE
+
 
 @dataclass
 class EmissionFactor:
@@ -3164,10 +3237,15 @@ class VerifiedEmissionFactors:
         application_pass_counted_on_line: int = None,
     ) -> Dict[str, Any]:
         """
-        Calculate chemical application emissions using EPA/USDA verified emission factors.
+        Calculate chemical application emissions, each input with the factor named for it.
 
-        ENHANCED: Uses only credible, government-sourced data for transparency.
-        Includes both manufacturing and application emissions.
+        Factor provenance is per input class (published, Trazo estimate, academic LCA), never a
+        blanket agency source. Includes both manufacturing and application emissions.
+
+        UPDATED 2026-11-13: the result states what it rests on. `breakdown.figure_basis` is
+        "published_factors" only when every part was computed from a recorded quantity with a
+        published factor and nothing was left out; otherwise it is "estimate", with the codes in
+        `breakdown.estimate_reasons`. No default N-P-K or %AI stands in for a blank.
 
         UPDATED 2025-01-21: Added explicit `chemical_subtype` parameter for accurate emission factors.
         Supports specific emission factors for:
@@ -3182,7 +3260,8 @@ class VerifiedEmissionFactors:
 
         UPDATED 2025-12-23: Added concentration parameter for accurate active ingredient calculation.
         - Uses user-entered concentration percentage for pesticides/herbicides/fungicides
-        - Falls back to typical defaults when concentration not provided
+        - Without a concentration, manufacturing is omitted and stated (no default %AI since 2026-06;
+          the defaults left the code on 2026-11-13)
 
         UPDATED 2026-11-12: no part is computed from an input the record does not hold. With no
         amount applied, manufacturing is omitted and the details say so. The application pass
@@ -3334,33 +3413,32 @@ class VerifiedEmissionFactors:
         # EPA-sourced, contradicting the no-phantom policy already applied to fertilizer
         # NPK (F03). When the AI% is unknown we OMIT the manufacturing portion (set 0)
         # and flag it; the application-fuel emissions below are real and still counted.
-        ai_concentration_missing = (
-            chemical_type.lower() in ["pesticide", "pe", "herbicide", "he", "fungicide", "fu"]
-            and user_concentration is None
-        )
+        # 2026-11-13: the defaults themselves are gone. They still stood in each branch below and
+        # reached the details as `active_ingredient_percentage` with `concentration_source:
+        # "default"`, which the form printed as "25% (default)". Each branch now reads the
+        # recorded concentration or None, and the details carry no percentage nobody recorded.
+        is_fertilizer = chemical_type.lower() not in ["pesticide", "pe", "herbicide", "he", "fungicide", "fu"]
+        ai_concentration_missing = not is_fertilizer and user_concentration is None
 
         if chemical_type.lower() in ["pesticide", "pe"]:
             # Check for organic or biological pesticide subtypes
             if is_organic_pesticide:
                 organic_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
-                # Use user concentration if provided, else default for organic pesticides
-                active_ingredient_percentage = user_concentration if user_concentration else 0.25
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * organic_pesticide_factor.value
                 manufacturing_factors.append(organic_pesticide_factor)
             elif is_biological_pesticide:
                 biological_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
-                # Use user concentration if provided, else default for biological pesticides
-                active_ingredient_percentage = user_concentration if user_concentration else 0.30
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * biological_pesticide_factor.value
                 manufacturing_factors.append(biological_pesticide_factor)
             else:
                 # Use standard synthetic pesticide manufacturing emission factor
                 pesticide_factor = cls.EPA_CHEMICAL_FACTORS["pesticide_manufacturing"]
-                # SPRINT 6 FIX: Use user-entered concentration instead of hardcoded 48%
-                active_ingredient_percentage = user_concentration if user_concentration else 0.48
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * pesticide_factor.value
                 manufacturing_factors.append(pesticide_factor)
         elif chemical_type.lower() in ["herbicide", "he"]:
@@ -3368,17 +3446,15 @@ class VerifiedEmissionFactors:
             if is_organic_herbicide:
                 # Use organic herbicide factor (acetic acid production: 0.64-1.2 kg CO2e/kg)
                 organic_herbicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_herbicide_manufacturing"]
-                # Use user concentration if provided, else default for organic herbicides
-                active_ingredient_percentage = user_concentration if user_concentration else 0.25
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * organic_herbicide_factor.value
                 manufacturing_factors.append(organic_herbicide_factor)
             else:
                 # Use standard synthetic herbicide manufacturing emission factor
                 herbicide_factor = cls.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
-                # SPRINT 6 FIX: Use user-entered concentration instead of hardcoded 41%
-                active_ingredient_percentage = user_concentration if user_concentration else 0.41
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * herbicide_factor.value
                 manufacturing_factors.append(herbicide_factor)
         elif chemical_type.lower() in ["fungicide", "fu"]:
@@ -3386,40 +3462,36 @@ class VerifiedEmissionFactors:
             if is_copper_fungicide:
                 # Use copper-specific fungicide factor (higher due to copper mining/refining)
                 copper_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
-                # Use user concentration if provided, else default for copper fungicides
-                active_ingredient_percentage = user_concentration if user_concentration else 0.99
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * copper_fungicide_factor.value
                 manufacturing_factors.append(copper_fungicide_factor)
             elif is_sulfur_fungicide:
                 # Use sulfur-specific fungicide factor (lower due to byproduct nature)
                 sulfur_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
-                # Use user concentration if provided, else default for sulfur fungicides
-                active_ingredient_percentage = user_concentration if user_concentration else 0.90
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * sulfur_fungicide_factor.value
                 manufacturing_factors.append(sulfur_fungicide_factor)
             elif is_biological_fungicide:
                 # Use biological fungicide factor (fermentation-based production)
                 biological_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
-                # Use user concentration if provided, else default for biological fungicides
-                active_ingredient_percentage = user_concentration if user_concentration else 0.30
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * biological_fungicide_factor.value
                 manufacturing_factors.append(biological_fungicide_factor)
             elif is_organic_fungicide:
                 # Use organic fungicide factor (neem oil, potassium bicarbonate, essential oils)
                 organic_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
-                active_ingredient_percentage = user_concentration if user_concentration else 0.25
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * organic_fungicide_factor.value
                 manufacturing_factors.append(organic_fungicide_factor)
             else:
                 # Use generic synthetic fungicide manufacturing emission factor
                 fungicide_factor = cls.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
-                # SPRINT 6 FIX: Use user-entered concentration instead of hardcoded 99%
-                active_ingredient_percentage = user_concentration if user_concentration else 0.45
-                active_ingredient_kg = total_fertilizer_kg * active_ingredient_percentage
+                active_ingredient_percentage = user_concentration
+                active_ingredient_kg = total_fertilizer_kg * (active_ingredient_percentage or 0.0)
                 manufacturing_emissions = active_ingredient_kg * fungicide_factor.value
                 manufacturing_factors.append(fungicide_factor)
         else:
@@ -3438,7 +3510,9 @@ class VerifiedEmissionFactors:
                 n_kg = total_fertilizer_kg * n_percentage
                 field_n2o_factor = cls.EPA_CHEMICAL_FACTORS["nitrogen_field_n2o"]
                 organic_field_n2o_emissions = n_kg * field_n2o_factor.value
-                manufacturing_factors.append(field_n2o_factor)
+                # Cited only when it multiplied a recorded nitrogen amount (2026-11-13).
+                if n_kg:
+                    manufacturing_factors.append(field_n2o_factor)
                 manufacturing_emissions += organic_field_n2o_emissions
             elif is_slow_release_fertilizer:
                 # Slow-release fertilizers have similar manufacturing to synthetic but better efficiency
@@ -3476,6 +3550,15 @@ class VerifiedEmissionFactors:
             manufacturing_emissions = 0.0
             manufacturing_factors = []
 
+        # A fertilizer with no N-P-K on the record has no nutrient to price (2026-11-13). The
+        # NPK terms above already multiplied zeros; what changes is that the details now say the
+        # analysis is missing instead of showing a quiet zero, and no preview path supplies a
+        # 10-10-10 in its place. An organic fertilizer keeps its per-kg processing figure, which
+        # needs only the amount, and loses only the field N2O that needs the nitrogen.
+        npk_recorded = any(float(npk_content.get(k, 0) or 0) > 0 for k in ("N", "P", "K"))
+        npk_missing = is_fertilizer and has_amount and not npk_recorded and not is_organic_fertilizer
+        nitrogen_missing = is_fertilizer and has_amount and not npk_recorded and is_organic_fertilizer
+
         # Application emissions (fuel for equipment)
         # SPRINT 3 EPIC 3.3: Application Fuel Tracking
         # UPDATED 2025-12-11: Support for actual fuel tracking (diesel, electric, etc.)
@@ -3487,6 +3570,10 @@ class VerifiedEmissionFactors:
         # type so the breakdown line stays self-consistent with the emissions total.
         used_fuel_factor_value = fuel_factor.value
         used_fuel_factor_unit = "gal"
+        # Set below when the pass is costed as diesel although the record names another fuel, and
+        # to the per-hectare rate when the pass is an estimate from the area (2026-11-13).
+        fuel_costed_as_diesel = False
+        fuel_consumption_per_ha = None
 
         # Item #14: Fertigation — fertilizer injected through irrigation system.
         # Application fuel is already counted in the irrigation event, so skip it here
@@ -3590,6 +3677,7 @@ class VerifiedEmissionFactors:
                 fuel_factors_used.append(fuel_factor)
                 used_fuel_factor_value = fuel_factor.value
                 calculation_method_note = f"Actual fuel consumption ({application_fuel_type}) - using diesel factor"
+                fuel_costed_as_diesel = True
 
             # For tracking
             total_fuel_liters = fuel_liters
@@ -3667,7 +3755,9 @@ class VerifiedEmissionFactors:
             application_emissions = total_fuel_gallons * fuel_factor.value
             fuel_factors_used.append(fuel_factor)
             # Estimated fallback uses the default diesel fuel_factor — already
-            # initialized above, no override needed.
+            # initialized above, no override needed. A record naming another fuel is still costed
+            # as diesel here, since no per-hectare rate exists for it: the details say so.
+            fuel_costed_as_diesel = (application_fuel_type or "diesel").lower() != "diesel"
 
         # Total emissions
         total_co2e = manufacturing_emissions + application_emissions
@@ -3724,29 +3814,42 @@ class VerifiedEmissionFactors:
             breakdown["application_pass_note"] = calculation_method_note
         elif not has_amount and calculation_basis == "estimated_application_fuel":
             breakdown["application_pass_note"] = CHEMICAL_PASS_ESTIMATED_FROM_AREA
-        if not has_amount:
-            breakdown["manufacturing_emissions_omitted"] = True
-            breakdown["manufacturing_omitted_reason"] = CHEMICAL_AMOUNT_NOT_RECORDED
-        elif ai_concentration_missing:
-            breakdown["manufacturing_emissions_omitted"] = True
-            breakdown["manufacturing_omitted_reason"] = (
-                "Active-ingredient concentration not provided — manufacturing emissions omitted "
-                "rather than assuming a default %AI. Enter the product concentration for an "
-                "accurate estimate."
+        # The part left out for want of an input, with its code; the first missing input wins.
+        omitted_code = (
+            "amount_not_recorded"
+            if not has_amount
+            else (
+                "concentration_not_recorded"
+                if ai_concentration_missing
+                else ("npk_not_recorded" if npk_missing else None)
             )
+        )
+        if omitted_code:
+            breakdown["manufacturing_emissions_omitted"] = True
+            breakdown["manufacturing_omitted_code"] = omitted_code
+            breakdown["manufacturing_omitted_reason"] = CHEMICAL_ESTIMATE_REASONS[omitted_code]
+        if nitrogen_missing:
+            breakdown["field_n2o_omitted_reason"] = CHEMICAL_NITROGEN_NOT_RECORDED
 
-        # Track if user provided concentration vs using default
-        concentration_source = "user_provided" if user_concentration else "default"
+        # The active-ingredient figures, only when the record holds a concentration. With none, no
+        # percentage is printed at all: until 2026-11-13 the details carried the default %AI with
+        # `concentration_source: "default"` although manufacturing was already omitted.
+        ai_fields = (
+            {
+                "active_ingredient_percentage": round(user_concentration * 100, 1),
+                "active_ingredient_kg": round(active_ingredient_kg, 3),
+                "concentration_source": "user_provided",
+            }
+            if user_concentration is not None and not is_fertilizer
+            else {"concentration_source": "not_recorded"}
+        )
 
         if chemical_type.lower() in ["pesticide", "pe"]:
             if is_organic_pesticide:
                 organic_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["organic_pesticide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": organic_pesticide_factor.value,
                         "pesticide_subtype": "organic",
                         "note": "Organic pesticide (neem, pyrethrin) uses lower emission factor than synthetic pesticides",
@@ -3760,10 +3863,7 @@ class VerifiedEmissionFactors:
                 biological_pesticide_factor = cls.EPA_CHEMICAL_FACTORS["biological_pesticide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": biological_pesticide_factor.value,
                         "pesticide_subtype": "biological",
                         "note": "Biological pesticide (Bt, Spinosad) uses lower emission factor due to fermentation-based production",
@@ -3777,10 +3877,7 @@ class VerifiedEmissionFactors:
                 pesticide_factor = cls.EPA_CHEMICAL_FACTORS["pesticide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "epa_pesticide_factor_kg_co2_per_kg": pesticide_factor.value,
                         "pesticide_subtype": "synthetic",
                         "confidence_level": min(pesticide_factor.confidence_level, fuel_factor.confidence_level),
@@ -3791,10 +3888,7 @@ class VerifiedEmissionFactors:
                 organic_herbicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_herbicide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX 2025-12-24: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": organic_herbicide_factor.value,
                         "herbicide_subtype": "organic",
                         "note": "Organic herbicide (acetic acid/vinegar) uses lower emission factor than synthetic herbicides",
@@ -3808,10 +3902,7 @@ class VerifiedEmissionFactors:
                 herbicide_factor = cls.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX 2025-12-24: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": herbicide_factor.value,
                         "herbicide_subtype": "synthetic",
                         "confidence_level": min(herbicide_factor.confidence_level, fuel_factor.confidence_level),
@@ -3822,10 +3913,7 @@ class VerifiedEmissionFactors:
                 copper_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["copper_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX 2025-12-24: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": copper_fungicide_factor.value,
                         "fungicide_subtype": "copper",
                         "note": "Copper-based fungicide uses higher emission factor due to copper mining/refining energy intensity",
@@ -3837,10 +3925,7 @@ class VerifiedEmissionFactors:
                 sulfur_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["sulfur_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX 2025-12-24: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": sulfur_fungicide_factor.value,
                         "fungicide_subtype": "sulfur",
                         "note": "Sulfur-based fungicide uses lower emission factor as sulfur is often a byproduct of oil/gas refining",
@@ -3852,10 +3937,7 @@ class VerifiedEmissionFactors:
                 biological_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["biological_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX 2025-12-24: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": biological_fungicide_factor.value,
                         "fungicide_subtype": "biological",
                         "note": "Biological fungicide (Bacillus, Trichoderma) uses lower emission factor due to fermentation-based production",
@@ -3869,9 +3951,7 @@ class VerifiedEmissionFactors:
                 organic_fungicide_factor = cls.EPA_CHEMICAL_FACTORS["organic_fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": organic_fungicide_factor.value,
                         "fungicide_subtype": "organic",
                         "note": "Organic fungicide (neem oil, potassium bicarbonate) uses lower emission factor due to natural extraction",
@@ -3885,10 +3965,7 @@ class VerifiedEmissionFactors:
                 fungicide_factor = cls.EPA_CHEMICAL_FACTORS["fungicide_manufacturing"]
                 breakdown.update(
                     {
-                        # FIX 2025-12-24: Use actual calculated values
-                        "active_ingredient_percentage": round(active_ingredient_percentage * 100, 1),
-                        "active_ingredient_kg": round(active_ingredient_kg, 3),
-                        "concentration_source": concentration_source,
+                        **ai_fields,
                         "emission_factor_kg_co2_per_kg": fungicide_factor.value,
                         "fungicide_subtype": "synthetic",
                         "confidence_level": min(fungicide_factor.confidence_level, fuel_factor.confidence_level),
@@ -3971,30 +4048,111 @@ class VerifiedEmissionFactors:
                     }
                 )
 
+        # What the figure rests on, part by part (2026-11-13). Until then every chemical figure was
+        # stored "epa_usda_verified" whatever it rested on, so an application pass estimated from
+        # the area carried the same published-factor badge as a pass with recorded fuel.
+        pass_measured = calculation_basis == "actual_application_fuel"
+        if calculation_basis in ("actual_application_fuel", "estimated_application_fuel"):
+            # The same typed shape the production calculators write (`_annotate_fuel_basis`), so
+            # every surface branches on `measured`, never on a source string.
+            applied_fuel = fuel_factors_used[0] if fuel_factors_used else None
+            breakdown["fuel_basis"] = {
+                "measured": pass_measured,
+                "emission_factor": (
+                    {
+                        "value": applied_fuel.value,
+                        "unit": applied_fuel.unit,
+                        "source": applied_fuel.source,
+                        "provenance": applied_fuel.provenance,
+                    }
+                    if applied_fuel
+                    else None
+                ),
+                "assumed_fuel_is_diesel": fuel_costed_as_diesel,
+                "assumed_rate": (
+                    None
+                    if pass_measured
+                    else {
+                        "value": fuel_consumption_per_ha,
+                        "unit": "L/ha",
+                        "source": CHEMICAL_PASS_RATE_SOURCE,
+                        "provenance": PROVENANCE_INTERNAL_ESTIMATE,
+                    }
+                ),
+                "estimated_from": None if pass_measured else "area_and_application_method",
+            }
+
+        estimate_reasons = []
+        if calculation_basis == "estimated_application_fuel":
+            estimate_reasons.append("application_fuel_estimated_from_area")
+        if fuel_costed_as_diesel:
+            estimate_reasons.append("fuel_costed_as_diesel")
+        if density_applied is not None and manufacturing_factors:
+            estimate_reasons.append("product_mass_from_typical_density")
+        if omitted_code:
+            estimate_reasons.append(omitted_code)
+        if nitrogen_missing:
+            estimate_reasons.append("nitrogen_not_recorded")
+        if calculation_basis == "application_not_estimated":
+            estimate_reasons.append("application_not_estimated")
+        basis = figure_basis(manufacturing_factors + fuel_factors_used, estimate_reasons)
+        breakdown.update(basis)
+
+        # One line per factor applied: which input it priced, its source and provenance, and
+        # whether the quantity it multiplied was recorded or estimated.
+        breakdown["component_provenance"] = [
+            {
+                "component": "field_n2o" if f is cls.EPA_CHEMICAL_FACTORS["nitrogen_field_n2o"] else "product",
+                "factor": cls._factor_key(f),
+                "source": f.source,
+                "provenance": f.provenance,
+                "quantity": "recorded_mass" if density_applied is None else "recorded_volume_typical_density",
+            }
+            for f in manufacturing_factors
+        ] + [
+            {
+                "component": "application_fuel",
+                "factor": cls._factor_key(f),
+                "source": f.source,
+                "provenance": f.provenance,
+                "quantity": "recorded_fuel" if pass_measured else "estimated_from_area",
+            }
+            for f in fuel_factors_used
+        ]
+
         limitations = (
             "Each input uses the factor named for it in data_sources; application estimates vary "
             "with equipment and conditions"
         )
-        # A part left out for want of an input is stated here too, not only in the breakdown.
-        not_counted = []
-        if not has_amount:
-            not_counted.append(CHEMICAL_AMOUNT_NOT_RECORDED)
-            if calculation_basis == "estimated_application_fuel":
-                not_counted.append(CHEMICAL_PASS_ESTIMATED_FROM_AREA)
-        if calculation_basis == "application_not_estimated":
-            not_counted.append(CHEMICAL_PASS_NOT_ESTIMATED)
-        if not_counted:
-            limitations = f"{limitations}. {' '.join(not_counted)}"
+        # Every part estimated or left out is stated here too, not only in the breakdown.
+        if basis["estimate_reasons"]:
+            stated = " ".join(CHEMICAL_ESTIMATE_REASONS[code] for code in basis["estimate_reasons"])
+            limitations = f"{limitations}. {stated}"
 
         return {
             "co2e_kg": round(total_co2e, 3),
-            "calculation_method": "verified_epa_usda_factors",
+            # Was "verified_epa_usda_factors", a name every chemical entry's description carried
+            # into the farmer's records export, estimates included (2026-11-13).
+            "calculation_method": "per_input_factors",
             "breakdown": breakdown,
             "data_sources": list(dict.fromkeys(f.source for f in manufacturing_factors + fuel_factors_used)),
             # One provenance per applied factor class: "published", "internal_estimate", ...
             "factor_provenance": sorted({f.provenance for f in manufacturing_factors + fuel_factors_used}),
+            "figure_basis": basis["figure_basis"],
+            "estimate_reasons": basis["estimate_reasons"],
             "limitations": limitations,
         }
+
+    @classmethod
+    def _factor_key(cls, factor) -> Optional[str]:
+        """The registry name of an applied factor ("nitrogen_fertilizer", "diesel", "electricity")."""
+        for table in (cls.EPA_CHEMICAL_FACTORS, cls.EPA_FUEL_FACTORS):
+            for key, candidate in table.items():
+                if candidate is factor:
+                    return key
+        if any(candidate is factor for candidate in cls.COUNTRY_ELECTRICITY_FACTORS.values()):
+            return "electricity"
+        return None
 
     @classmethod
     def _is_organic_herbicide(cls, product_name: str) -> bool:
