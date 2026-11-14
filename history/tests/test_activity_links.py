@@ -40,6 +40,24 @@ class _LinkFixture(TestCase):
             date=timezone.now(),
         )
 
+    def chemical_sharing_the_general_pk(self):
+        """A ChemicalEvent whose pk IS the GeneralEvent's: the collision the identity exists for.
+
+        Made explicitly (review of #424): the per-table sequences only coincide by luck, and the
+        guard this replaces (`update(history=...)`) never changed a pk, so the assertion against
+        the other table could pass without the collision ever existing.
+        """
+        if self.chemical.pk == self.general.pk:
+            return self.chemical
+        return ChemicalEvent.objects.create(
+            pk=self.general.pk,
+            history=self.history,
+            type=ChemicalEvent.FERTILIZER,
+            commercial_name="Fish",
+            description="chemical at the general pk",
+            date=timezone.now(),
+        )
+
 
 class ActivityLinkTests(_LinkFixture):
     def test_the_resolver_answers_the_identity_or_none(self):
@@ -60,13 +78,13 @@ class ActivityLinkTests(_LinkFixture):
 
     def test_same_number_other_table_is_never_confused(self):
         """The bug class the identity exists for: one pk, two tables."""
-        if self.general.pk != self.chemical.pk:
-            ChemicalEvent.objects.filter(pk=self.chemical.pk).update(history=self.history)
+        twin = self.chemical_sharing_the_general_pk()
+        self.assertEqual(twin.pk, self.general.pk)
         amendment = EventAmendment.objects.create(
             history=self.history, event_type=3, event_id=self.general.pk, field_name="x", reason="r"
         )
         self.assertEqual(amendment.activity_id, self.general.activity_id)
-        self.assertNotEqual(amendment.activity_id, self.chemical.activity_id)
+        self.assertNotEqual(amendment.activity_id, twin.activity_id)
 
     def test_a_filed_document_links_its_record_and_follows_a_changed_pair(self):
         doc = file_document(
@@ -218,23 +236,27 @@ class ConfirmationLinkTests(_LinkFixture):
         self.assertEqual(self._confirm(2, self.chemical).activity_id, self.chemical.activity_id)
 
     def test_the_other_table_with_the_same_number_is_never_named(self):
-        if self.general.pk != self.chemical.pk:
-            ChemicalEvent.objects.filter(pk=self.chemical.pk).update(history=self.history)
+        twin = self.chemical_sharing_the_general_pk()
+        self.assertEqual(twin.pk, self.general.pk)
         row = self._confirm(3, self.general)
         self.assertEqual(row.activity_id, self.general.activity_id)
-        self.assertNotEqual(row.activity_id, self.chemical.activity_id)
+        self.assertNotEqual(row.activity_id, twin.activity_id)
 
     def test_a_writer_that_only_holds_the_pair_still_links(self):
+        """save() resolves the pair, so it is the path where the table must decide: the pair names
+        the GeneralEvent while a ChemicalEvent holds the same pk."""
         from fieldnotes.models import FieldNoteConfirmation
 
+        twin = self.chemical_sharing_the_general_pk()
         row = FieldNoteConfirmation.objects.create(
             note=self.note,
             company=self.est.company,
-            event_type=2,
-            event_id=self.chemical.pk,
+            event_type=3,
+            event_id=self.general.pk,
             confirmed_at=timezone.now(),
         )
-        self.assertEqual(row.activity_id, self.chemical.activity_id)
+        self.assertEqual(row.activity_id, self.general.activity_id)
+        self.assertNotEqual(row.activity_id, twin.activity_id)
 
     def test_voiding_after_the_record_is_deleted_keeps_the_tombstone_link(self):
         from fieldnotes.services.confirmation import void_confirmations
