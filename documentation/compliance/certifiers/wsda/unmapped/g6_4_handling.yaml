@@ -57,3 +57,10 @@ questions:
   g6_4_handling.post_harvest_water_positive_test: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
   g6_4_handling.post_harvest_water_positive_explanation: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
   g6_4_handling.post_harvest_water_test_results: "OTCO C7 7.5-1b/c: how non-municipal water is shown potable and whether a test came back positive. WSDA L asks whether water is treated on site and still meets the Safe Drinking Water Act (14, 14a, 14b), registered there."
+  g6_4_handling.process_flow: >-
+    The handling process written out from harvest to shipment. Section L asks handling practices item by
+    item; this was cited on section P 1 as the handling half of written SOPs until P 1 got its own
+    question, `g2_0_fraud_prevention.written_sops_kept`, on 2026-11-14.
+  g6_4_handling.facility_docs: >-
+    A site map, process flow chart or handling SOPs, attached. Same reason as `process_flow`: cited on P 1
+    until P 1 got its own SOP question and upload.

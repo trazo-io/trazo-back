@@ -29,3 +29,100 @@ questions:
   g2_0_fraud_prevention.osp_review_frequency_other: >-
     Free-text elaboration for the `other` option inside `osp_review_frequency`; unmapped with
     its parent.
+  # 2026-11-14: questions added for OTCO's fraud prevention plan and WSDA AGR 2121 section P.
+  g2_0_fraud_prevention.fraud_mitigation_other: >-
+    The other practice of `fraud_mitigation_practices`. WSDA P 4 and 5 read the practices they ask about;
+    it was cited on P 6 until P 6 got its own question, `fraud_reporting_triggers`.
+  g2_0_fraud_prevention.fraud_reporting_channels: >-
+    Where suspected fraud is reported. WSDA P 6 asks the criteria for a report
+    (`fraud_reporting_triggers`) and names WSDA and the NOP as recipients in its own wording; OTCO asks
+    the routes at OFPP 1-2.
+  g2_0_fraud_prevention.fraud_reporting_channels_other: >-
+    The other route of `fraud_reporting_channels`; same reason.
+  g2_0_fraud_prevention.fraud_plan_kept_separately: >-
+    Whether a separate written fraud prevention plan is kept. Section P asks for SOPs (P 1,
+    `written_sops_kept`), not a fraud plan document; OTCO asks it at OFPP 1-4.
+  g2_0_fraud_prevention.fraud_plan_upload: >-
+    The separate fraud prevention plan itself. Cited on P 1 until P 1 got its own SOP question; section P
+    asks for no fraud plan document.
+  g2_0_fraud_prevention.osp_accuracy_process: >-
+    Who keeps the plan accurate and how a change reaches it. WSDA runs a living plan updated by section
+    and section P does not ask it; it was cited on P 3a until P 3a got its own question,
+    `internal_audit_scope`.
+  g2_0_fraud_prevention.ofpp_team: >-
+    The fraud prevention team. Asked by OTCO OFPP 1-1; section P names no team.
+  g2_0_fraud_prevention.supply_chain_shown_as: >-
+    The supply chain as a map, flow chart or description. Asked by OTCO OFPP 2-1; section P does not ask
+    it.
+  g2_0_fraud_prevention.supply_chain_map_upload: >-
+    The supply chain as a map, flow chart or description. Asked by OTCO OFPP 2-1; section P does not ask
+    it.
+  g2_0_fraud_prevention.supply_chain_description: >-
+    The supply chain as a map, flow chart or description. Asked by OTCO OFPP 2-1; section P does not ask
+    it.
+  g2_0_fraud_prevention.critical_control_points: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_other_name: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_seed_stock_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_seed_stock_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_inputs_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_inputs_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_purchased_product_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_purchased_product_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_custom_operators_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_custom_operators_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_transport_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_transport_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_offsite_storage_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_offsite_storage_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_split_handling_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_split_handling_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_sales_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_sales_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_import_export_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_import_export_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_other_strategy: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.
+  g2_0_fraud_prevention.ccp_other_monitoring: >-
+    OTCO OFPP 3-1's vulnerability table. Section P asks the controls by procedure (sampling, supplier
+    approval, reporting criteria), not per critical control point.

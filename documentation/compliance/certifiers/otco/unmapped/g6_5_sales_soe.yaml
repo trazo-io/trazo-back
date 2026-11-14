@@ -26,3 +26,7 @@ questions:
     How bought-in product is kept from commingling in transit. CCOF G6.5 A4 asks it; OTCO does not ask it of sourced product.
   g6_5_sales_soe.sourcing_transport_commingling_other: >-
     The "other" description of that measure; same reason.
+  g6_5_sales_soe.sales_soe_channels: >-
+    The sales channels, described. It stood in for the OFPP's simple supply chain description (2-1) until
+    that row got its own question, `g2_0_fraud_prevention.supply_chain_description`, on 2026-11-14; no
+    other OTCO row asks the channels as prose.

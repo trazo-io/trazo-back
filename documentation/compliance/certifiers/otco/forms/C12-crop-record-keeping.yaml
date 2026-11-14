@@ -250,21 +250,16 @@ items:
 - ref: 12.3-1
   asks: MONITORING — how do you ensure your recordkeeping practices are effective, and how often do you monitor
     the practices?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g2_0_fraud_prevention.osp_implementation_monitoring
+    - g2_0_fraud_prevention.osp_implementation_monitoring_other
+    - g2_0_fraud_prevention.record_review_frequency
     - g2_0_fraud_prevention.fraud_review_process
-    - g2_0_fraud_prevention.osp_review_frequency
-    prints: modules/G2_0.pdf §B–C
-  gap: Reused from CCOF G8.0 D3 / WSDA §P 2 (P2). `record_review` ("Review the operation's records against
-    the plan") and `internal_review` are the monitoring; `osp_review_frequency` gives the plan-review cadence
-    {annually, on_change, before_inspection, other}. None of the monitoring ticks carries its own frequency,
-    and the questions are about the PLAN's implementation generally, not recordkeeping practice specifically
-    — OTCO asks for both the method and how often, for recordkeeping.
-  fix: Per-item frequency on `osp_implementation_monitoring` (the fix WSDA §P 2 already proposes); the recordkeeping-specific
-    reading needs no new field once the frequency is there.
+    prints: modules/G2_0.pdf §B to §C
+  note: Closed 2026-11-14. The method is `osp_implementation_monitoring`; `record_review` there asks how often the
+    records are reviewed (`record_review_frequency`), which is the recordkeeping check and its frequency.
 - ref: 12.4-1
   asks: RECORDKEEPING FOR ORGANIC AND NON-ORGANIC CROP PRODUCTION — do you produce both organic and non-organic
     crops and/or crop products? No, section not applicable / Yes — identify the non-organic crops and/or crop

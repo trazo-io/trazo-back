@@ -71,6 +71,16 @@ GOLDEN_ANSWER_CASES = {
         "unanswered": {},
         "product_testing": {"fraud_mitigation_practices": ["product_testing"]},
         "no_testing": {"fraud_mitigation_practices": ["verify_certificates"]},
+        # The separate plan, the SOPs, the audits, the supply chain and the control points (2026.12.10).
+        "separate_plan_sops_audits": {
+            "fraud_plan_kept_separately": True,
+            "written_sops_kept": True,
+            "internal_audits_conducted": True,
+            "osp_implementation_monitoring": ["record_review", "employee_evaluations"],
+        },
+        "no_plan_no_sops": {"fraud_plan_kept_separately": False, "written_sops_kept": False},
+        "supply_chain_map": {"supply_chain_shown_as": "map", "critical_control_points": ["transport", "other"]},
+        "supply_chain_described": {"supply_chain_shown_as": "described", "critical_control_points": ["sales"]},
     },
     "g4_2_natural_resources": {
         "unanswered": {},

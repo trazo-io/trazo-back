@@ -23,3 +23,24 @@ questions:
   g2_0_fraud_prevention.residue_detection_response: >-
     How the operation responds when its own testing detects a pesticide residue. Asked by WSDA AGR 2121
     P 4b; OTCO's OFPP asks whether SUPPLIERS send residue results and notify the operation in writing of a residue (an option of the supplier-approval list), never the operation's own testing method or response.
+  # 2026-11-14: questions added for OTCO's fraud prevention plan and WSDA AGR 2121 section P.
+  g2_0_fraud_prevention.fraud_reporting_triggers: >-
+    What the operation would report as suspected fraud. Asked by WSDA AGR 2121 P 6; OTCO's OFPP asks where
+    fraud is reported (1-2), not what would trigger a report.
+  g2_0_fraud_prevention.fraud_reporting_triggers_other: >-
+    The other trigger of `fraud_reporting_triggers`; same reason.
+  g2_0_fraud_prevention.employee_evaluation_frequency: >-
+    How often staff are observed or evaluated. Asked by WSDA P 2; OTCO's OFPP 5-1 lists internal audits
+    and records checks, not staff evaluations.
+  g2_0_fraud_prevention.internal_audits_conducted: >-
+    Whether internal audits are conducted, as a yes or no. Asked by WSDA P 3; OTCO's OFPP 5-1 lists
+    internal audits as one tick, read through `osp_implementation_monitoring`.
+  g2_0_fraud_prevention.internal_audit_scope: >-
+    The scope and frequency of internal audits. Asked by WSDA P 3a; OTCO's OFPP does not ask it.
+  g2_0_fraud_prevention.written_sops_kept: >-
+    Whether written SOPs for organic production or handling are kept. Asked by WSDA P 1; OTCO's OFPP does
+    not ask for SOPs.
+  g2_0_fraud_prevention.sop_upload: >-
+    The SOPs themselves, on `written_sops_kept`; same reason.
+  g2_0_fraud_prevention.fraud_additional_notes: >-
+    Optional notes on the section. WSDA P 7's space; OTCO's OFPP has no notes field.

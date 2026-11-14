@@ -189,18 +189,16 @@ items:
   fix: Add an `organic_business_summary` textarea to the certification-contract module, compiling into
     (a)(6) beside the naming answer.
 - ref: B2
-  asks: How frequently do you review your entire Organic System Plan to verify it is effectively implemented
-    and accurately reflects your practices? Annually / Quarterly / Monthly / Other (describe).
-  status: partial
-  severity: P3
+  asks: How frequently do you review your entire Organic System Plan to verify it is effectively implemented and
+    accurately reflects your practices? Annually / Quarterly / Monthly / Other (describe).
+  status: covered
   trazo:
     questions:
     - g2_0_fraud_prevention.osp_review_frequency
     - g2_0_fraud_prevention.osp_review_frequency_other
     prints: modules/G2_0.pdf §C
-  gap: Trazo's options are {annually, on_change, before_inspection, other} — two of CCOF's four choices,
-    quarterly and monthly, are absent.
-  fix: Add `quarterly` and `monthly` options to `osp_review_frequency`.
+  note: 'Closed 2026-11-14. The gap went stale when the monitoring slice (back #256, 2026-11-02) added `quarterly`
+    and `monthly` to `osp_review_frequency`, which now carries all four of CCOF''s choices.'
 - ref: C1
   asks: 'Primary Contact: name, title, phone, email — the person listed in CCOF''s online directory and
     the NOP Organic Integrity Database, knowledgeable about the operation and the OSP, and authorized
