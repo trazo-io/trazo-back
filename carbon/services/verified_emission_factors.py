@@ -77,6 +77,20 @@ PROVENANCE_INTERNAL_ESTIMATE = "internal_estimate"
 # unverified factor must be named in that test's register, with a reason, or the suite fails.
 PROVENANCE_UNVERIFIED = "unverified"
 
+# What a chemical record's calculation says when the record holds no amount applied, or nothing
+# to count its application pass from (2026-11-12, tank-mix review). Unknown is not a number: the
+# part that needs the missing input is left out and the details say so, the same way a missing
+# active-ingredient concentration drops manufacturing.
+CHEMICAL_AMOUNT_NOT_RECORDED = (
+    "No amount applied on the record: manufacturing emissions omitted rather than assuming a "
+    "default amount. Enter the amount applied for an estimate."
+)
+CHEMICAL_PASS_ESTIMATED_FROM_AREA = (
+    "Application pass estimated from the area treated and the application method. The amount "
+    "applied does not enter this estimate."
+)
+CHEMICAL_PASS_NOT_ESTIMATED = "No fuel and no area treated on the record: the application pass is not estimated."
+
 
 @dataclass
 class EmissionFactor:
@@ -3170,6 +3184,11 @@ class VerifiedEmissionFactors:
         - Uses user-entered concentration percentage for pesticides/herbicides/fungicides
         - Falls back to typical defaults when concentration not provided
 
+        UPDATED 2026-11-12: no part is computed from an input the record does not hold. With no
+        amount applied, manufacturing is omitted and the details say so. The application pass
+        counts recorded fuel whatever else is blank; its per-hectare estimate needs the area
+        treated, and with neither fuel nor area the pass is not estimated, also stated.
+
         Args:
             chemical_type: Type of chemical (herbicide, fungicide, pesticide, etc.)
             volume_liters: Volume applied in liters
@@ -3195,15 +3214,12 @@ class VerifiedEmissionFactors:
                           skipped here so one pass is not counted once per product.
         """
 
-        has_volume = volume_liters > 0 or (chemical_mass_kg is not None and chemical_mass_kg > 0)
-        if not has_volume or area_hectares <= 0:
-            return {
-                "co2e_kg": 0.0,
-                "calculation_method": "verified_epa_usda_factors",
-                "breakdown": {"error": "Invalid input parameters"},
-                "data_sources": [],
-                "limitations": "No emissions calculated due to invalid inputs",
-            }
+        # Each part is computed from what it needs and only from that (2026-11-12). Manufacturing
+        # needs the amount applied; the application pass needs its recorded fuel or, for an
+        # estimate, the area treated. A blank amount or a blank area used to void the whole result
+        # here, recorded fuel included, while the stored path filled a blank amount with 50.
+        has_amount = volume_liters > 0 or (chemical_mass_kg is not None and chemical_mass_kg > 0)
+        has_area = area_hectares > 0
 
         # Get EPA emission factors
         nitrogen_factor = cls.EPA_CHEMICAL_FACTORS["nitrogen_fertilizer"]
@@ -3455,6 +3471,10 @@ class VerifiedEmissionFactors:
         if ai_concentration_missing:
             manufacturing_emissions = 0.0
             manufacturing_factors = []  # nothing was applied, so nothing is cited
+        # No amount: the product terms above multiplied nothing, so no factor is cited for them.
+        if not has_amount:
+            manufacturing_emissions = 0.0
+            manufacturing_factors = []
 
         # Application emissions (fuel for equipment)
         # SPRINT 3 EPIC 3.3: Application Fuel Tracking
@@ -3575,6 +3595,14 @@ class VerifiedEmissionFactors:
             total_fuel_liters = fuel_liters
             total_fuel_gallons = fuel_liters / 3.78541 if application_fuel_unit != "kWh" else 0
 
+        # No recorded fuel and no area treated: a per-hectare estimate has nothing to multiply.
+        elif not has_area:
+            application_emissions = 0.0
+            total_fuel_liters = 0.0
+            total_fuel_gallons = 0.0
+            calculation_basis = "application_not_estimated"
+            calculation_method_note = CHEMICAL_PASS_NOT_ESTIMATED
+
         else:
             # FALLBACK: Use estimated fuel consumption based on application method
             calculation_basis = "estimated_application_fuel"
@@ -3685,11 +3713,21 @@ class VerifiedEmissionFactors:
         # emissions are unaffected. Lets the UI/audit show "enter concentration for an
         # accurate manufacturing estimate" instead of a silently-invented number.
         breakdown["active_ingredient_concentration_provided"] = not ai_concentration_missing
+        # What the application figure stands on: recorded fuel, an area estimate, a pass counted
+        # elsewhere (fertigation, another tank line), or nothing to estimate from.
+        breakdown["application_pass_basis"] = calculation_basis
         if application_pass_counted_on_line is not None:
             # Says where the pass went, so a zero application figure is never read as "no fuel".
             breakdown["application_pass_counted_on_line"] = application_pass_counted_on_line
             breakdown["application_pass_note"] = calculation_method_note
-        if ai_concentration_missing:
+        elif calculation_basis == "application_not_estimated":
+            breakdown["application_pass_note"] = calculation_method_note
+        elif not has_amount and calculation_basis == "estimated_application_fuel":
+            breakdown["application_pass_note"] = CHEMICAL_PASS_ESTIMATED_FROM_AREA
+        if not has_amount:
+            breakdown["manufacturing_emissions_omitted"] = True
+            breakdown["manufacturing_omitted_reason"] = CHEMICAL_AMOUNT_NOT_RECORDED
+        elif ai_concentration_missing:
             breakdown["manufacturing_emissions_omitted"] = True
             breakdown["manufacturing_omitted_reason"] = (
                 "Active-ingredient concentration not provided — manufacturing emissions omitted "
@@ -3933,6 +3971,21 @@ class VerifiedEmissionFactors:
                     }
                 )
 
+        limitations = (
+            "Each input uses the factor named for it in data_sources; application estimates vary "
+            "with equipment and conditions"
+        )
+        # A part left out for want of an input is stated here too, not only in the breakdown.
+        not_counted = []
+        if not has_amount:
+            not_counted.append(CHEMICAL_AMOUNT_NOT_RECORDED)
+            if calculation_basis == "estimated_application_fuel":
+                not_counted.append(CHEMICAL_PASS_ESTIMATED_FROM_AREA)
+        if calculation_basis == "application_not_estimated":
+            not_counted.append(CHEMICAL_PASS_NOT_ESTIMATED)
+        if not_counted:
+            limitations = f"{limitations}. {' '.join(not_counted)}"
+
         return {
             "co2e_kg": round(total_co2e, 3),
             "calculation_method": "verified_epa_usda_factors",
@@ -3940,10 +3993,7 @@ class VerifiedEmissionFactors:
             "data_sources": list(dict.fromkeys(f.source for f in manufacturing_factors + fuel_factors_used)),
             # One provenance per applied factor class: "published", "internal_estimate", ...
             "factor_provenance": sorted({f.provenance for f in manufacturing_factors + fuel_factors_used}),
-            "limitations": (
-                "Each input uses the factor named for it in data_sources; application estimates vary "
-                "with equipment and conditions"
-            ),
+            "limitations": limitations,
         }
 
     @classmethod

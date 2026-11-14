@@ -742,26 +742,45 @@ class PassCarrierTests(_Orchard):
 
     # --- 2. the carrier is a record that can count the pass ------------------------------------
 
-    def test_a_line_with_no_amount_does_not_carry_the_pass(self):
+    def test_a_line_with_no_amount_carries_the_pass_from_its_area(self):
+        # 2026-11-12: the pass is estimated from the area treated, never from the product's amount
+        # (a blank amount used to read as 50), so line 1 keeps the pass with its amount blank.
         products = _three_products()
         for line, amount in zip(products, ("", "6", "8")):
             line["volume_applied"] = amount
         products[0].pop("volume_applied")
         records = self._records(self._tank([{"parcel": self.north.id, "area_treated": "4"}], products=products))
-        self.assertEqual(self._breakdown(records[1])["application_pass_counted_on_line"], 2)
-        self.assertGreater(self._breakdown(records[2])["application_emissions_kg_co2e"], 0)
-        self.assertEqual(self._breakdown(records[3])["application_pass_counted_on_line"], 2)
+        line_1 = self._breakdown(records[1])
+        self.assertNotIn("application_pass_counted_on_line", line_1)
+        self.assertGreater(line_1["application_emissions_kg_co2e"], 0)
+        self.assertEqual(line_1["application_pass_basis"], "estimated_application_fuel")
+        self.assertEqual(line_1["manufacturing_emissions_kg_co2e"], 0)
+        self.assertTrue(line_1["manufacturing_emissions_omitted"])
+        self.assertEqual(self._breakdown(records[2])["application_pass_counted_on_line"], 1)
+        self.assertEqual(self._breakdown(records[3])["application_pass_counted_on_line"], 1)
+
+    def test_a_tank_with_no_amount_on_any_line_counts_its_pass_once(self):
+        # Under the amount test this tank had no carrier, so every line counted the same pass.
+        products = _three_products()
+        records = self._records(self._tank([{"parcel": self.north.id, "area_treated": "4"}], products=products))
+        counted = [self._breakdown(r)["application_emissions_kg_co2e"] for r in records.values()]
+        self.assertEqual(sum(1 for kg in counted if kg > 0), 1, counted)
+        self.assertGreater(self._breakdown(records[1])["application_emissions_kg_co2e"], 0)
+        stored = [e for r in records.values() for e in entries_for_event(r, link=False)]
+        self.assertEqual(len(stored), 1, "only the carrier has anything to store")
 
     def test_an_amount_of_zero_on_line_one_does_not_lose_the_pass(self):
         products = _three_products()
         for line, amount in zip(products, ("0", "6", "8")):
             line["volume_applied"] = amount
         records = self._records(self._tank([{"parcel": self.north.id, "area_treated": "4"}], products=products))
-        # An amount of 0 computes nothing at all (no breakdown keys), so it must not be the carrier.
+        # The pass is counted once, from the area treated, whatever line 1's amount says.
         counted = [self._breakdown(r).get("application_emissions_kg_co2e", 0) for r in records.values()]
         self.assertEqual(sum(1 for kg in counted if kg > 0), 1, counted)
 
-    def test_when_no_line_records_an_amount_no_line_skips(self):
+    def test_when_no_line_can_count_the_pass_no_line_skips(self):
+        # No fuel and no area on any line: there is no pass estimate to place, so no line skips
+        # one, and none invents one either.
         records = {
             line: ChemicalEvent.objects.create(
                 history=self.north_season,
@@ -775,7 +794,10 @@ class PassCarrierTests(_Orchard):
             for line in (1, 2)
         }
         for record in records.values():
-            self.assertNotIn("application_pass_counted_on_line", self._breakdown(record))
+            breakdown = self._breakdown(record)
+            self.assertNotIn("application_pass_counted_on_line", breakdown)
+            self.assertEqual(breakdown["application_emissions_kg_co2e"], 0)
+            self.assertEqual(breakdown["application_pass_basis"], "application_not_estimated")
 
     # --- 3. one record, even when two share a line number -----------------------------------------
 

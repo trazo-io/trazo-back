@@ -281,10 +281,16 @@ def _positive(value) -> bool:
 def records_application_figure(record) -> bool:
     """Whether this record holds what its pass's application figure is computed from.
 
-    A recorded amount of the product (never a count of dispensers, which the calculator does not
-    convert), or the pass's recorded fuel. A record with neither cannot carry the pass: given the
-    pass, it would either count nothing (an amount of 0) or count it on a default amount nobody
-    recorded (a blank amount), while every other line skipped it.
+    The pass's recorded fuel, or the area treated that its per-hectare estimate multiplies
+    (`VerifiedEmissionFactors.calculate_chemical_application_emissions`). Never a record whose
+    amount is a count of dispensers: the calculator counts nothing on one, fuel included. A record
+    with neither cannot carry the pass: given it, the pass would be counted nowhere while every
+    other line skipped it.
+
+    The product's amount does not decide it (2026-11-12). The calculator no longer needs an amount
+    to estimate the pass, nor fills a blank one with 50, so a line with no amount counts the pass
+    from its area like any other. Under the old amount test a tank whose lines all left the amount
+    blank had no carrier, and every line then counted the same pass.
     """
     from common.field_registry import is_count_unit
 
@@ -292,7 +298,7 @@ def records_application_figure(record) -> bool:
         return False
     if _positive(getattr(record, "application_fuel_consumed", None)):
         return True
-    return _positive(getattr(record, "volume_numeric", None)) or _positive(getattr(record, "volume", None))
+    return _positive(getattr(record, "area_numeric", None)) or _positive(getattr(record, "area", None))
 
 
 def _line_order(record):
