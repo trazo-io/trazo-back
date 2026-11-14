@@ -2834,6 +2834,33 @@
      },
      "g2_0_fraud_prevention": {
       "answers": {
+       "ccp_inputs_monitoring": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Laurel checks each delivery the day it lands, and the whole materials list each August."
+       },
+       "ccp_inputs_strategy": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Input labels and invoices are checked against the materials list when a delivery lands, and a certified supplier's certificate is checked in the USDA Organic Integrity Database."
+       },
+       "ccp_sales_monitoring": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Laurel checks the paperwork for every load before the reefer leaves, and the buyers' certificates once a season."
+       },
+       "ccp_sales_strategy": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Each invoice and bill of lading names the product organic and carries its lot, and both buyers' certificates are checked before the first load of the season."
+       },
+       "critical_control_points": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": [
+         "inputs",
+         "sales"
+        ]
+       },
+       "fraud_additional_notes": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Nothing further to add."
+       },
        "fraud_mitigation_practices": {
         "at": "2026-08-21T11:21:08.424604+00:00",
         "value": [
@@ -2846,6 +2873,27 @@
          "report_suspected"
         ]
        },
+       "fraud_plan_kept_separately": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": false
+       },
+       "fraud_reporting_channels": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": [
+         "own_certifier",
+         "suppliers_certifier",
+         "usda_nop"
+        ]
+       },
+       "fraud_reporting_triggers": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": [
+         "positive_sample_results",
+         "suspected_fraud",
+         "quantity_exceeds_capacity",
+         "below_market_price"
+        ]
+       },
        "fraud_review_process": {
         "at": "2026-08-21T11:21:08.424604+00:00",
         "value": "I review this myself each August when I put the annual update together, and again whenever something in the chain changes. The check is short because the chain is short: everything we sell is grown on our own six parcels and goes on our own reefer to two buyers: Organically Grown Company for fresh, Willamette Valley Fruit for processing. Before the first load of each season I pull both handlers' certificates and confirm they are current in the USDA Organic Integrity Database, including that they have not been surrendered or suspended, and I do the same for any input supplier that is itself certified. Input labels and invoices are checked against the OSP materials list when the delivery lands, not later. The picking crew gets the organic-handling talk before harvest every year (see the June training record) because a seasonal crew is where separation actually gets tested — red-tagged buffer lugs, no personal produce in the field, clean lugs only. What would make me change something: a new buyer or handler, a custom operator running their own equipment on our ground, a supplier whose certificate lapses, or a price that is too good for the product being offered. Anything I could not resolve would go to Oregon Tilth before the product moved."
@@ -2855,6 +2903,25 @@
         "value": [
          "uncertified_suppliers",
          "seasonal_labor"
+        ]
+       },
+       "internal_audit_scope": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Each August, while the annual update is put together: the inputs used against the materials list, the cleanout records against the harvest days, and each sale's lot against the harvest records."
+       },
+       "internal_audits_conducted": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": true
+       },
+       "ofpp_team": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Laurel Brandt, member-manager, (541) 555-0142: approves the plan, puts it into practice and checks that it works. Javier Morales, field lead, reached on the farm phone (541) 555-0142: trains the picking crew before each harvest."
+       },
+       "ofpp_training_cadence": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": [
+         "onboarding",
+         "annual_refresher"
         ]
        },
        "osp_accuracy_process": {
@@ -2877,9 +2944,9 @@
          "before_inspection"
         ]
        },
-       "supplier_certificate_review_frequency": {
+       "record_review_frequency": {
         "at": "2026-08-21T11:21:08.424604+00:00",
-        "value": "annually"
+        "value": "Each month during the season, and again in August before the annual update goes to Oregon Tilth"
        },
        "supplier_approval_controls": {
         "at": "2026-08-21T11:21:08.424604+00:00",
@@ -2887,6 +2954,22 @@
          "supplier_list",
          "annual_certificate_refresh"
         ]
+       },
+       "supplier_certificate_review_frequency": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "annually"
+       },
+       "supply_chain_description": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "Seed and transplants come from certified organic seed companies, and inputs from the suppliers on the materials list, some of them not certified. Everything we sell is grown on our own six parcels and picked by our own crew. It leaves on our own reefer for two certified buyers, Organically Grown Company for fresh and Willamette Valley Fruit for processing, and ownership changes at each buyer's dock. Nothing is stored or packed off the farm, and nothing is imported or exported."
+       },
+       "supply_chain_shown_as": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": "described"
+       },
+       "written_sops_kept": {
+        "at": "2026-08-21T11:21:08.424604+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:21:45.557883+00:00",

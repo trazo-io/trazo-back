@@ -360,7 +360,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   agency's contract and when (O1 I-B, CCOF Contract G); page B asks whether another agency certifies the operation
 #   today, whether that stays, and its certificate (O1 D-1A, D-1B; CCOF D4); new page E asks the standards to be
 #   assessed to, the regulators that inspect the operation and any negative report (O1 C-2, C-5, C-6).
-CONTENT_VERSION = "2026.12.09"
+# 2026.12.10: G2.0 asks the fraud prevention team (OTCO OFPP 1-1), where suspected fraud is reported and what would be
+#   (OFPP 1-2, WSDA AGR 2121 P 6), whether a separate plan is kept, the upload now shown on its Yes (OFPP 1-4), how
+#   often records are reviewed and staff evaluated, when staff are trained on the plan, internal audits, written SOPs
+#   and a notes field (OFPP 4-1, WSDA P 1 to 3a and 7, OTCO C12 12.3-1). New page D asks the supply chain as a map or a
+#   description and the critical control points, each with its prevention and monitoring (OFPP 2-1, 3-1).
+CONTENT_VERSION = "2026.12.10"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

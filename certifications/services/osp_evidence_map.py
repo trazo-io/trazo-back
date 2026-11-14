@@ -67,6 +67,12 @@ OSP_EVIDENCE_MAP: dict = {
         source="certifications.OrganicSystemPlan.module_responses",
         note="OFPP upload is separately checked by the packet's OFPP (§ 205.201(a)(3)) row.",
     ),
+    "record_review_frequency": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How often the operator reviews the records against the plan (WSDA AGR 2121 P 2, OTCO C12 12.3-1). "
+        "The records reviewed are the plan's own; the review itself leaves no record in Trazo, so the frequency "
+        "is the operator's statement. Closing it needs a logged review (who, when, what was checked).",
+    ),
     # --- G3.0 / G3.0b seeds and planting stock ---------------------------------
     "gmo_documentation": EvidenceEntry(
         EVIDENCED,
