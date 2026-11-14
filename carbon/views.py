@@ -1721,13 +1721,15 @@ class OptimizedEventProcessor:
 
         # The concentration as entered, and no stand-in for a blank (2026-11-13). A fertilizer with
         # no N-P-K was previewed as "10-10-10", so the form showed nitrogen manufacturing the record
-        # never named. A blank ratio box falls back to the three percentage fields, as the save
-        # reads them first; with neither, the calculator omits the nutrient figure and says so.
+        # never named. A fertilizer's three percentage fields win over the ratio text, in the order
+        # the save reads them (`_get_structured_npk_content`): with "46% N" typed and N 46 / P 0 /
+        # K 0 filled, the save prices the urea and the preview must too (review of back #426). The
+        # text is read only when the three fields are not all filled; with neither, the calculator
+        # omits the nutrient figure and says so.
         concentration_raw = event_data.get("concentration")
-        if concentration_raw is not None and str(concentration_raw).strip():
-            concentration = concentration_raw
-        elif chemical_type == "FE":
-            concentration = _npk_from_percentage_fields(event_data)
+        npk_from_fields = _npk_from_percentage_fields(event_data) if chemical_type == "FE" else None
+        if npk_from_fields is not None:
+            concentration = npk_from_fields
         else:
             concentration = concentration_raw
 

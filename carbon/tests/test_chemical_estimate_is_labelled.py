@@ -350,6 +350,27 @@ class FertilizerWithNoNpkTests(_Block):
         self.assertAlmostEqual(payload["breakdown"]["nitrogen_kg"], 200 * 0.45359237 * 0.20, places=3)
         self.assertNotIn("manufacturing_emissions_omitted", payload["breakdown"])
 
+    def test_the_preview_reads_the_percentage_fields_before_the_ratio_text(self):
+        # Review of back #426: with "46% N" typed and N 46 / P 0 / K 0 filled, the save prices the urea
+        # from the fields (`_get_structured_npk_content`); the preview read the text first, which has
+        # no "-" ratio, and showed no nutrient figure. Same input, same answer as the save.
+        payload = self._preview(
+            {
+                "type": "FE",
+                "concentration": "46% N",
+                "volume_applied": "200",
+                "volume_unit": "lbs",
+                "nitrogen_percentage": "46",
+                "phosphorus_percentage": "0",
+                "potassium_percentage": "0",
+                "area_treated": "4",
+                "area_unit": "acres",
+                "application_method": "broadcast",
+            }
+        )
+        self.assertAlmostEqual(payload["breakdown"]["nitrogen_kg"], 200 * 0.45359237 * 0.46, places=3)
+        self.assertNotIn("manufacturing_emissions_omitted", payload["breakdown"])
+
     def test_the_legacy_endpoint_invents_no_npk(self):
         payload = self._legacy(
             {
