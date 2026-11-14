@@ -162,6 +162,22 @@ class ColdwaterBenchSpecimenTests(TestCase):
         self.assertEqual([len(g) for g in groups.values()], [1, 1])
         self.assertNotEqual(groups[1], groups[2])
 
+    # -- The compost mass balance -------------------------------------------------------------
+    def test_the_compost_delivery_is_counted_once_and_each_block_holds_its_amount(self):
+        """The sheet: 5 tons per acre on Blocks 1 to 3, 240 tons from the county yard in one load.
+        The mass balance reads the purchase per record, so it sits on one record, never three."""
+        compost = SoilManagementEvent.objects.filter(
+            history__parcel__establishment=self.est, amendment_type="compost"
+        ).order_by("block_id")
+        self.assertEqual(
+            [(c.block_id, c.amendment_amount_numeric, c.amendment_amount_unit) for c in compost],
+            [("1", Decimal("62.5"), "tons"), ("2", Decimal("40"), "tons"), ("3", Decimal("108"), "tons")],
+        )
+        self.assertIn("5 tons per acre on 12.5 acres", compost[0].amendment_amount)
+        bought = [c.amendment_quantity_purchased for c in compost if c.amendment_quantity_purchased is not None]
+        self.assertEqual(bought, [Decimal("240")])
+        self.assertEqual(compost[0].amendment_quantity_purchased_unit, "tons")
+
     # -- The paper sheet's blanks -------------------------------------------------------------
     def test_the_paper_sheets_blanks_stay_blank(self):
         cyd_x = list(self._sprays().filter(commercial_name="Cyd-X"))

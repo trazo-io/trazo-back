@@ -1185,27 +1185,35 @@ class Command(BaseCommand):
         n = 0
         # 7/15 compost "from the county place", 5 ton/ac, crew. Block 4 not done (spreader broke),
         # so Blocks 1 to 3 only. No feedstock or process sheet: the organic basis stays unconfirmed.
+        # The amount applied is the sheet's rate times the block's acres, and says so. The 240-ton
+        # delivery is ONE purchase for the three blocks, so it sits on Block 1's record alone: the
+        # mass balance reads purchases per record, and 240 on each would print 720 bought.
         for key in ("B1", "B2", "B3"):
-            self._create(
-                SoilManagementEvent,
-                seasons[key],
-                {
-                    "type": "OM",
-                    "date": _dt(2026, 7, 15, 8),
-                    "description": "Compost spread along the tree rows",
-                    "amendment_type": "compost",
-                    "amendment_product_name": "Compost from the county yard",
-                    "amendment_organic_approved": "unverified",
-                    "area_covered": acres[key],
-                    "area_unit": "acres",
-                    "block_id": next(b["block"] for b in BLOCKS if b["key"] == key),
-                    "performed_by": CREW,
-                    "observation": "Compost at 5 tons per acre along the tree rows.",
-                    "private_note": "5 tons per acre as on the sheet. 240 tons came from the county yard; "
-                    "the feedstock and process sheet has been asked for and is not yet on file. Block 4 was not done "
-                    "after the spreader broke.",
-                },
-            )
+            block_acres = Decimal(str(acres[key]))
+            applied = (block_acres * 5).normalize()
+            fields = {
+                "type": "OM",
+                "date": _dt(2026, 7, 15, 8),
+                "description": "Compost spread along the tree rows",
+                "amendment_type": "compost",
+                "amendment_product_name": "Compost from the county yard",
+                "amendment_organic_approved": "unverified",
+                "amendment_amount": f"{applied:f} (5 tons per acre on {block_acres.normalize():f} acres)",
+                "amendment_amount_numeric": applied,
+                "amendment_amount_unit": "tons",
+                "area_covered": acres[key],
+                "area_unit": "acres",
+                "block_id": next(b["block"] for b in BLOCKS if b["key"] == key),
+                "performed_by": CREW,
+                "observation": "Compost at 5 tons per acre along the tree rows.",
+                "private_note": "5 tons per acre as on the sheet. 240 tons came from the county yard in one "
+                "delivery for Blocks 1 to 3 (recorded on Block 1's record); the feedstock and process sheet has "
+                "been asked for and is not yet on file. Block 4 was not done after the spreader broke.",
+            }
+            if key == "B1":
+                fields["amendment_quantity_purchased"] = Decimal("240")
+                fields["amendment_quantity_purchased_unit"] = "tons"
+            self._create(SoilManagementEvent, seasons[key], fields)
             n += 1
         # 6/15 neighbor's crew sprayed Roundup along the north fence. Not our application.
         self._create(

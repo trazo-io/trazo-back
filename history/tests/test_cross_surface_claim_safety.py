@@ -1015,6 +1015,7 @@ class NoClaimFromAGuessTests(TestCase):
             "history/services/traceback.py",
             "history/management/commands/seed_showcase_walnut_farm.py",  # seeds (legacy basis)
             "history/management/commands/seed_calapooia_bend.py",
+            "history/management/commands/seed_coldwater_bench.py",  # seeds PlanMaterialEntry rows
             "history/management/commands/report_national_list_provenance.py",
             "certifications/models.py",  # PlanMaterialEntry's own field
             "certifications/serializers.py",  # PlanMaterialEntry
