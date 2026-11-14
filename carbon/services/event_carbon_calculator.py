@@ -1155,6 +1155,10 @@ class EventCarbonCalculator:
             # Priority: (1) volume_numeric + volume_unit model fields
             #           (2) legacy string field volume="3320" + extra_data.volume_unit
             #           (3) separate volume_applied + volume_unit fields from frontend
+            # When none of them holds an amount, the record holds none and nothing is assumed in
+            # its place: the calculator then omits manufacturing and says why. Until 2026-11-12 a
+            # blank amount read as 50 units, so a spray whose source record gives no amount was
+            # priced on 50 units nobody recorded (tank-mix review).
             from carbon.utils.unit_converter import UnitConverter
 
             volume_numeric = getattr(event, "volume_numeric", None)
@@ -1179,12 +1183,12 @@ class EventCarbonCalculator:
                         extra = getattr(event, "extra_data", None) or {}
                         raw_volume_unit = extra.get("volume_unit", "L")
                 else:
-                    volume_applied = getattr(event, "volume_applied", "50")
+                    volume_applied = getattr(event, "volume_applied", None)
                     raw_volume_unit = getattr(event, "volume_unit", "L") or "L"
                     try:
                         volume_value = float(volume_applied)
                     except (ValueError, TypeError):
-                        volume_value = 50.0
+                        volume_value = None
 
             # Route mass vs volume units through UnitConverter
             amount_is_count = False
@@ -1244,14 +1248,15 @@ class EventCarbonCalculator:
                 area_str = getattr(event, "area", None)
                 if not area_str:
                     # New frontend format: separate area_treated and area_unit fields
-                    area_treated = getattr(event, "area_treated", "1.0")
-                    area_unit = getattr(event, "area_unit", "ha") or "ha"
+                    area_treated = getattr(event, "area_treated", None)
+                    if area_treated not in (None, ""):
+                        area_unit = getattr(event, "area_unit", "ha") or "ha"
 
-                    # Map common unit variations
-                    area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres"}
+                        # Map common unit variations
+                        area_unit_map = {"ha": "Hectares", "hectares": "Hectares", "acres": "Acres", "ac": "Acres"}
 
-                    normalized_area_unit = area_unit_map.get(area_unit.lower(), area_unit)
-                    area_str = f"{area_treated} {normalized_area_unit}"
+                        normalized_area_unit = area_unit_map.get(area_unit.lower(), area_unit)
+                        area_str = f"{area_treated} {normalized_area_unit}"
                 else:
                     # Plain numeric area (e.g. "25") - append area_unit from model
                     try:
@@ -1270,7 +1275,13 @@ class EventCarbonCalculator:
                     except (ValueError, TypeError):
                         pass  # area_str already has unit suffix (e.g. "16.2 Hectares")
 
-            area_hectares = self._convert_area_to_hectares(area_str, event, crop_name)
+            # No area on the record is no area. The shared converter answers a blank or "unknown"
+            # with a per-crop default (1 ha and up), and this path read a missing area_treated as
+            # "1.0": a per-hectare pass estimate was then charged on land the record never names.
+            if area_str is None or not any(ch.isdigit() for ch in str(area_str)):
+                area_hectares = 0.0
+            else:
+                area_hectares = self._convert_area_to_hectares(area_str, event, crop_name)
 
             # Extract NPK content
             npk_content = self._get_structured_npk_content(event, crop_name)
@@ -3527,9 +3538,11 @@ class EventCarbonCalculator:
         """
         Get intelligent default values for events with missing data based on crop type and event type.
         This prevents zero emissions when users enter "Unknown" values.
+
+        It carries no amount applied. The volume defaults that stood here (10 to 500 L) were read
+        only by `_convert_volume_to_liters`, which no longer assumes an amount (2026-11-12).
         """
         defaults = {
-            "volume": 10.0,  # liters
             "area": 1.0,  # hectares
             "concentration": "10-10-10",  # NPK
             "application_method": "broadcast",
@@ -3544,7 +3557,6 @@ class EventCarbonCalculator:
                 if "citrus" in crop_lower or "orange" in crop_lower:
                     defaults.update(
                         {
-                            "volume": 50.0,  # Citrus needs more fertilizer
                             "area": 2.0,  # Typical citrus grove size
                             "concentration": "12-6-6",  # Citrus-specific NPK
                         }
@@ -3552,7 +3564,6 @@ class EventCarbonCalculator:
                 elif "corn" in crop_lower:
                     defaults.update(
                         {
-                            "volume": 75.0,  # Corn is heavy feeder
                             "area": 1.5,  # Typical corn field
                             "concentration": "46-0-0",  # Urea for corn
                         }
@@ -3560,7 +3571,6 @@ class EventCarbonCalculator:
                 elif any(nut in crop_lower for nut in ["almond", "walnut", "pecan"]):
                     defaults.update(
                         {
-                            "volume": 60.0,  # Nuts need substantial fertilizer
                             "area": 3.0,  # Larger orchard areas
                             "concentration": "15-15-15",  # Balanced for nuts
                         }
@@ -3568,16 +3578,13 @@ class EventCarbonCalculator:
                 elif any(veg in crop_lower for veg in ["tomato", "lettuce", "pepper"]):
                     defaults.update(
                         {
-                            "volume": 25.0,  # Vegetables need less volume
                             "area": 0.5,  # Smaller vegetable plots
                             "concentration": "20-20-20",  # High NPK for vegetables
                         }
                     )
                 else:
-                    # Default fertilizer amounts
                     defaults.update(
                         {
-                            "volume": 40.0,
                             "area": 1.5,
                             "concentration": "16-16-16",
                         }
@@ -3585,34 +3592,29 @@ class EventCarbonCalculator:
 
             elif event.type in ["PE", "HE", "FU"]:  # Pesticides, Herbicides, Fungicides
                 if "citrus" in crop_lower:
-                    defaults.update({"volume": 25.0, "area": 2.0, "application_method": "spray"})  # Citrus pest control
+                    defaults.update({"area": 2.0, "application_method": "spray"})  # Citrus pest control
                 elif any(veg in crop_lower for veg in ["tomato", "pepper", "cucumber"]):
-                    defaults.update(
-                        {"volume": 15.0, "area": 0.5, "application_method": "foliar"}  # Vegetables need less pesticide
-                    )
+                    defaults.update({"area": 0.5, "application_method": "foliar"})
                 else:
-                    defaults.update({"volume": 20.0, "area": 1.0, "application_method": "spray"})
+                    defaults.update({"area": 1.0, "application_method": "spray"})
 
         # Production event defaults
         elif hasattr(event, "type") and event.type == "IR":  # Irrigation
             if any(nut in crop_lower for nut in ["almond", "walnut"]):
                 defaults.update(
                     {
-                        "volume": 500.0,  # Nuts need lots of water
                         "area": 3.0,
                     }
                 )
             elif "citrus" in crop_lower:
                 defaults.update(
                     {
-                        "volume": 300.0,  # Citrus moderate water
                         "area": 2.0,
                     }
                 )
             else:
                 defaults.update(
                     {
-                        "volume": 200.0,  # Standard irrigation
                         "area": 1.5,
                     }
                 )
@@ -3620,40 +3622,31 @@ class EventCarbonCalculator:
         return defaults
 
     def _convert_volume_to_liters(self, volume_str: str, event=None, crop_name: str = "default") -> float:
-        """Convert volume string to liters with intelligent defaults for missing data"""
-        try:
-            # Check if volume is missing or "Unknown"
-            if not volume_str or volume_str.lower() in ["unknown", "n/a", "na", "none", "null"]:
-                if event:
-                    defaults = self._get_intelligent_defaults(event, crop_name)
-                    return defaults["volume"]
-                return 10.0  # Fallback default
+        """Convert a free-text volume ("3320 Kilograms", "12 gal") to liters.
 
-            volume_str = volume_str.lower()
-            number = self._extract_numeric_value(volume_str)
+        A text that holds no amount ("Unknown", "approx", "0", blank) converts to 0.0, never to a
+        default: the chemical calculator then omits what needs an amount and says so. Until
+        2026-11-12 it returned a per-crop default of 10 to 75 L, an amount nobody recorded.
+        """
+        if not volume_str or str(volume_str).strip().lower() in ["unknown", "n/a", "na", "none", "null"]:
+            return 0.0
 
-            # If extraction failed, use intelligent defaults
-            if number == 0.0 and event:
-                defaults = self._get_intelligent_defaults(event, crop_name)
-                return defaults["volume"]
+        volume_str = str(volume_str).lower()
+        number = self._extract_numeric_value(volume_str)
+        if number <= 0:
+            return 0.0
 
-            if "gal" in volume_str:
-                return number * 3.78541  # gallons to liters
-            elif "kg" in volume_str or "kilogram" in volume_str:
-                # Convert kg to liters using density (check before 'l' to avoid false matches)
-                return self._convert_kg_to_liters(number, event)
-            elif "ml" in volume_str:
-                return number / 1000
-            elif "l" in volume_str or "liter" in volume_str:
-                return number
-            else:
-                return number  # Assume liters if no unit
-
-        except:
-            if event:
-                defaults = self._get_intelligent_defaults(event, crop_name)
-                return defaults["volume"]
-            return 10.0  # Fallback default
+        if "gal" in volume_str:
+            return number * 3.78541  # gallons to liters
+        elif "kg" in volume_str or "kilogram" in volume_str:
+            # Convert kg to liters using density (check before 'l' to avoid false matches)
+            return self._convert_kg_to_liters(number, event)
+        elif "ml" in volume_str:
+            return number / 1000
+        elif "l" in volume_str or "liter" in volume_str:
+            return number
+        else:
+            return number  # Assume liters if no unit
 
     def _convert_kg_to_liters(self, kg_amount: float, event=None) -> float:
         """

@@ -786,6 +786,10 @@ jobs:
       # it. history.tests.test_consumer_extra_data_claim_shapes joins with it: the shape guard for
       # claim-shaped extra_data keys (2026-08-03) was never in this list. Neither reads the sibling
       # repo.
+      # 2026-11-13: carbon.tests.test_chemical_amount_never_assumed joins. A spray or fertilizer
+      # record with no amount gets no manufacturing figure and says why (it was priced on a default
+      # of 50); the pass counts recorded fuel, else an area estimate, else nothing; no area is never
+      # one hectare; the preview matches the save. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -1031,6 +1035,7 @@ jobs:
             carbon.tests.test_irrigation_pump_energy \
             carbon.tests.test_pumping_plant_and_traps \
             carbon.tests.test_zero_is_not_missing \
+            carbon.tests.test_chemical_amount_never_assumed \
             carbon.tests.test_carbon_claims_2026_11 \
             carbon.tests.test_carbon_entry_activity_link \
             carbon.tests.test_retired_carbon_columns \

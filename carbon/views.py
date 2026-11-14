@@ -2412,9 +2412,11 @@ def calculate_event_carbon_impact(request):
                         self.concentration = "10-10-10"  # conservative NPK estimate, fertilizer only
                     else:
                         self.concentration = _conc
-                    self.volume = event_data.get("volume", "10")  # Volume number only
+                    # Volume and area numbers only, and no stand-ins: a blank amount stays blank
+                    # (it read "10" L and "1.0" ha until 2026-11-12).
+                    self.volume = event_data.get("volume")
                     self.volume_unit = event_data.get("volume_unit", "liters")
-                    self.area = event_data.get("area", "1.0")  # Area number only
+                    self.area = event_data.get("area")
                     self.area_unit = event_data.get("area_unit", "hectares")
                     self.way_of_application = event_data.get("way_of_application", "broadcast")
                     self.weather_conditions = event_data.get("weather_conditions", "")
