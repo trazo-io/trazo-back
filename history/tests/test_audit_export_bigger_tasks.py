@@ -150,14 +150,24 @@ class BiggerTasksAuditTests(TestCase):
         txt = _flowable_text(self._osp_with_input(on_osp=True, status="draft")._build_chemical_log())
         self.assertNotIn("OSP-approved", txt)
         self.assertIn("On draft plan", txt)
-        self.assertIn("plan v1, which is draft, not approved", txt)
-        self.assertIn("not a certifier's approval", txt)
+        self.assertIn("plan v1, which is a draft, not approved", txt)
+        self.assertIn("not that it is on the approved plan in force", txt)
 
     def test_an_input_on_a_submitted_plan_says_submitted(self):
         txt = _flowable_text(self._osp_with_input(on_osp=True, status="submitted")._build_chemical_log())
         self.assertNotIn("OSP-approved", txt)
         self.assertIn("On submitted plan", txt)
+        self.assertIn("submitted to the certifier, not yet approved", txt)
+
+    def test_a_superseded_plan_is_not_called_unapproved(self):
+        """Review of #430: `activate()` supersedes a plan only once approval evidence is on file, so a
+        superseded plan was approved. It is out of force, and the note says that and no more."""
+        txt = _flowable_text(self._osp_with_input(on_osp=True, status="superseded")._build_chemical_log())
+        self.assertNotIn("OSP-approved", txt)
+        self.assertIn("On superseded plan", txt)
+        self.assertIn("superseded by a later version, so it is not the plan in force", txt)
+        self.assertNotIn("not approved", txt)
 
     def test_an_active_plan_prints_no_draft_disclosure(self):
         txt = _flowable_text(self._osp_with_input(on_osp=True)._build_chemical_log())
-        self.assertNotIn("not a certifier's approval", txt)
+        self.assertNotIn("approved plan in force", txt)

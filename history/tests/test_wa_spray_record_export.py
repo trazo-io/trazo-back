@@ -244,7 +244,7 @@ class OrchardReadTests(_WAFarm):
         passes = self.service().build()
         self.assertEqual(len(passes), 3)
         expected = (
-            "One application logged on 2 blocks, printed as applications 1 and 2 (North Orchard). "
+            "Logged as one application on 2 blocks, printed as applications 1 and 2 (North Orchard). "
             "The start and stop times are the whole application's, not this block's alone."
         )
         self.assertEqual(passes[0].notes, [expected])
@@ -259,6 +259,28 @@ class OrchardReadTests(_WAFarm):
         self.spray(block_id="B2", application_group=group, application_end=WHEN.replace(hour=11))
         note = self.service().build()[0].notes[0]
         self.assertIn("printed as applications 1 and 2", note)
+        self.assertNotIn("whole application's", note)
+
+    def test_a_block_with_no_time_on_record_drops_the_whole_window_sentence(self):
+        """Review of #430: a block marked "time not on the source record" holds no window, so the
+        others' shared window is not the whole application's."""
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        self.spray(block_id="B2", application_group=group)
+        self.spray(block_id="B3", application_group=group, application_start=None, application_end=None)
+        note = self.service().build()[0].notes[0]
+        self.assertIn("printed as applications 1, 2 and 3", note)
+        self.assertNotIn("whole application's", note)
+
+    def test_blocks_corrected_to_different_days_say_so(self):
+        """Review of #430: `application_group` never changes, a block's date can be corrected alone."""
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        later = WHEN + timedelta(days=1)
+        self.spray(block_id="B2", application_group=group, date=later, application_start=later)
+        note = self.service().build()[0].notes[0]
+        self.assertIn("Logged as one application on 2 blocks", note)
+        self.assertIn("dates were later recorded differently", note)
         self.assertNotIn("whole application's", note)
 
     def test_a_tank_on_two_blocks_names_the_other_block(self):

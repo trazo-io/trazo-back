@@ -6997,12 +6997,20 @@ class AuditExportService:
                 )
 
             if osp_loaded and plan_status != "active":
+                # A superseded plan WAS approved (`activate()` requires approval evidence before it
+                # supersedes one), so only a draft or a submitted plan is called "not approved".
+                plan_said = {
+                    "draft": "a draft, not approved",
+                    "submitted": "submitted to the certifier, not yet approved",
+                    "superseded": "superseded by a later version, so it is not the plan in force",
+                    "withdrawn": "withdrawn, so it is not the plan in force",
+                }.get(plan_status, "not the active plan")
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        f"The OSP Approval column reads plan v{plan_version}, which is "
-                        f"{plan_status or 'not active'}, not approved. \"On {plan_status or 'unapproved'} plan\" "
-                        "means the operator listed the input on that plan; it is not a certifier's approval.",
+                        f"The OSP Approval column reads plan v{plan_version}, which is {plan_said}. "
+                        f"\"On {plan_status or 'unapproved'} plan\" means the input is listed on that plan, "
+                        "not that it is on the approved plan in force.",
                         self._styles["footer_note"],
                     )
                 )

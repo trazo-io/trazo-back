@@ -795,17 +795,18 @@ class WASprayRecordService:
                 if name not in places:
                     places.append(name)
             note = (
-                f"One application logged on {len(ordered)} blocks, printed as applications {listed} "
+                f"Logged as one application on {len(ordered)} blocks, printed as applications {listed} "
                 f"({', '.join(places)})."
             )
-            windows = {
-                (e.application_start, e.application_end)
-                for other in ordered
-                for e in other.events
-                if e.application_start or e.application_end
-            }
-            if len(windows) == 1:
-                note += " The start and stop times are the whole application's, not this block's alone."
+            # `application_group` is fixed at creation, but each block's date and times can be
+            # corrected alone afterwards. The note claims sameness only where the records still hold it.
+            events = [e for other in ordered for e in other.events]
+            if len({_day(e.date) for e in events}) > 1:
+                note += " The blocks' dates were later recorded differently; item (c) prints each block's own day."
+            else:
+                windows = {(e.application_start, e.application_end) for e in events}
+                if len(windows) == 1 and any(next(iter(windows))):
+                    note += " The start and stop times are the whole application's, not this block's alone."
             record.notes.append(note)
 
     @staticmethod
