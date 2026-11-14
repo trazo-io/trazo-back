@@ -589,11 +589,16 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             response = super().destroy(request, *args, **kwargs)
         except DjangoValidationError as exc:
+            from history.retention import effective_retention_until
+
+            # The date the guard held, which for a Washington season with a spray can be later
+            # than the stored column (see `effective_retention_until`).
+            until = effective_retention_until(instance)
             return Response(
                 {
                     "error": "Record retention period active",
                     "detail": " ".join(exc.messages),
-                    "retention_until": (instance.retention_until.isoformat() if instance.retention_until else None),
+                    "retention_until": until.isoformat() if until else None,
                 },
                 status=status.HTTP_409_CONFLICT,
             )
