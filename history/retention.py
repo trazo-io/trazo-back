@@ -43,7 +43,8 @@ def histories_in_retention(**lookup):
 
     A NULL `retention_until` never blocks: it is written only by `History.finish()`, so a
     draft or abandoned season has none. Blocking those would strand them forever, which
-    `history/tests/test_record_retention.py` pins as deliberate.
+    `history/tests/test_record_retention.py` pins as deliberate. An unfinished season that HOLDS
+    records is refused separately, by `unfinished_histories_holding_records` (OV-ST-C02).
     """
     from history.models import History
 
@@ -57,12 +58,60 @@ def histories_in_retention(**lookup):
     return held
 
 
+def unfinished_histories_holding_records(**lookup):
+    """Seasons under `lookup` not yet finished that hold records (OV-ST-C02).
+
+    `retention_until` is written when a season finishes, so a season still being logged has none,
+    and until 2026-11-13 that made it deletable with everything in it: a pilot's whole first year,
+    one click on "Delete season" or one API call on its parcel, farm or company. 7 CFR 205.103(b)(4)
+    keeps records "not less than 5 years beyond their creation", and an activity is created when
+    it is logged, not when the season closes. An EMPTY draft still deletes: that is the case the
+    NULL rule above was written for.
+
+    "Not finished" is the same test `assert_child_record_deletable` uses for a closed season
+    (`finish_date` set or `published`), keyed on that and NOT on a NULL `retention_until`: a legacy
+    finished season can have no retention date, and its activities are already locked, so telling
+    the grower to delete them first would send them to a button that is not there (review on #422).
+    """
+    from django.db.models import Q
+
+    from history.models import History
+
+    holds = Q()
+    for relation in RECORD_RELATIONS:
+        holds |= Q(**{f"{relation}__isnull": False})
+    return History.objects.filter(finish_date__isnull=True, published=False, **lookup).filter(holds).distinct()
+
+
+def record_count(history):
+    """How many records (activities, sales, amendments) one season holds."""
+    total = 0
+    for relation in RECORD_RELATIONS:
+        manager = getattr(history, relation, None)
+        if manager is not None:
+            total += manager.count()
+    return total
+
+
+def unfinished_season_refusal(history):
+    """The farmer-facing sentence for a season that holds records and has no retention date."""
+    count = record_count(history)
+    noun = "record" if count == 1 else "records"
+    return (
+        f"This season has {count} {noun} logged in it, so it cannot be deleted as a whole: that "
+        "would erase records an organic operation keeps for 5 years (7 CFR 205.103(b)(4)). If it "
+        "was started by mistake, delete its activities one by one while it is open, then delete "
+        "the empty season."
+    )
+
+
 def assert_deletable(container_label, **lookup):
     """Raise RetentionConflict if deleting this container would erase retained records.
 
     `container_label` names the thing being deleted ("parcel", "farm", "company") so the
     farmer reads why THIS delete failed rather than a generic refusal.
     """
+    _assert_no_unretained_records(container_label, **lookup)
     in_retention = histories_in_retention(**lookup)
     if not in_retention:
         return
@@ -83,6 +132,30 @@ def assert_deletable(container_label, **lookup):
             ),
             "retention_until": until,
             "blocking_production_count": count,
+        }
+    )
+
+
+def _assert_no_unretained_records(container_label, **lookup):
+    """Refuse a container delete that would erase records of a season not yet finished."""
+    seasons = list(unfinished_histories_holding_records(**lookup))
+    if not seasons:
+        return
+    records = sum(record_count(season) for season in seasons)
+    s_noun = "season" if len(seasons) == 1 else "seasons"
+    r_noun = "record" if records == 1 else "records"
+    raise RetentionConflict(
+        {
+            "error": "Season holds records",
+            "detail": (
+                f"This {container_label} has {len(seasons)} {s_noun} not yet finished with {records} "
+                f"{r_noun} logged. Deleting the {container_label} would erase records an organic "
+                f"operation keeps for 5 years (7 CFR 205.103(b)(4))."
+            ),
+            # No "retention_until" key: an unfinished season has no date, and APIException turns
+            # None into the string "None" rather than JSON null (review on #422).
+            "blocking_production_count": len(seasons),
+            "record_count": records,
         }
     )
 
@@ -166,6 +239,11 @@ EVENT_RELATIONS = (
     "history_pestmanagementevent_events",
     "history_businessevent_events",
 )
+
+#: What makes a season hold records, by the relation names on History. Events, sales and
+#: amendments are the rows 7 CFR 205.103 is about; a season PLAN (`ProductionPlanItem`) is not a
+#: record (a template produces a plan, never a record), so an untouched draft stays deletable.
+RECORD_RELATIONS = EVENT_RELATIONS + ("sales_records", "amendments")
 
 
 def latest_covered_record_created(history):
