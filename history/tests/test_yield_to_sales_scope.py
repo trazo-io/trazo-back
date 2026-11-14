@@ -1013,8 +1013,12 @@ class Run7RetentionPlantingTests(TestCase):
     def test_the_migration_moves_dates_forward_only(self):
         import importlib
 
-        from django.apps import apps
+        from django.db import connection
+        from django.db.migrations.loader import MigrationLoader
 
+        # The migration's own historical models, as `migrate` hands them to it. The live registry
+        # stopped having a `History` model at history 0264 (renamed Production).
+        apps = MigrationLoader(connection).project_state(("history", "0242_retention_floor")).apps
         history = self._production()
         SalesRecord.objects.create(production=history, sale_date=timezone.now().date(), buyer_name="B", quantity=1)
         History.objects.filter(pk=history.pk).update(retention_until=history.finish_date.date())
