@@ -310,7 +310,8 @@ jobs:
       # PLAN (a window), never a dated grower-attributed RECORD. The cross-repo parity class
       # stays a local-only guard, unchanged.
       # test_season_type_is_stated (2026-11-13) imports only SeasonPlanFixture from it; the
-      # cross-repo read is inside a test method, so naming that module whole is safe.
+      # cross-repo read is inside a test method, so naming that module whole is safe; the same
+      # holds for test_production_method_is_stated (2026-11-13).
       #
       # 2026-09-30: test_packet_section_vocabulary joins the list the SAME way, class by
       # class, for the same reason. Its PacketSectionVocabularyTests reads only
@@ -858,6 +859,7 @@ jobs:
             history.tests.test_season_plan_not_records.PlanBuildEdgeCases \
             history.tests.test_season_plan_not_records.PlanFollowsTheRecords \
             history.tests.test_season_type_is_stated \
+            history.tests.test_production_method_is_stated \
             history.tests.test_pest_zero_carbon_card \
             history.tests.test_public_carbon_counts_only_recorded_basis \
             history.tests.test_dossier_tells_the_truth \
