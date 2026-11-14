@@ -318,9 +318,11 @@ items:
     prints: >-
       modules/operation_profile.pdf §E
   note: >-
-    Closed 2026-11-13 by the Operation profile's page E. Every standard O1 lists is an option; Oregon
-    Tilth Certified Transitional (Class T) is the certified transitional option. Bee Better and GOTS,
-    which the OSP Update Form also lists, are options too, so one answer serves both forms.
+    Closed 2026-11-13 by the Operation profile's page E. Every standard O1 lists is an option; Oregon Tilth
+    Certified Transitional (Class T) is the certified transitional option. Bee Better and GOTS, which the OSP
+    Update Form also lists, are options too, so one answer serves both forms. The asks text no longer lists
+    Bee Better: the O1 file re-downloaded on 2026-11-13 (its hash matches source_sha256 above, rev. 2026/10/02)
+    does not print it, so the earlier transcription's Bee Better was dropped.
 - ref: C-3
   asks: >-
     Have you reviewed the applicable standards and any other applicable international standards or

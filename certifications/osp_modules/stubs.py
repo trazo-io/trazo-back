@@ -2147,8 +2147,8 @@ CERTIFICATION_CONTRACT = Module(
                     ),
                 ),
                 # 2026-11-13: OTCO O1 D-1A, D-1B and the certificate it asks attached; CCOF Contract D4, whose
-                # yes needs the certificate and a transfer form. Each condition is restated: `visible_when` is
-                # not transitive.
+                # yes needs the certificate and a transfer form. Visibility is transitive (conditions.py), so each
+                # follow-up names only the question it follows.
                 Question(
                     key="history_certified_elsewhere_now",
                     kind="boolean",
@@ -2166,10 +2166,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_keeping_other_certification",
                     kind="boolean",
                     required=False,
-                    visible_when=(
-                        Condition("history_ever_certified", "truthy"),
-                        Condition("history_certified_elsewhere_now", "truthy"),
-                    ),
+                    visible_when=(Condition("history_certified_elsewhere_now", "truthy"),),
                     label=text(
                         "Will the operation keep that other certification?",
                         "¿La operación mantendrá esa otra certificación?",
@@ -2179,10 +2176,7 @@ CERTIFICATION_CONTRACT = Module(
                     key="history_current_certificate_upload",
                     kind="upload",
                     required=False,
-                    visible_when=(
-                        Condition("history_ever_certified", "truthy"),
-                        Condition("history_certified_elsewhere_now", "truthy"),
-                    ),
+                    visible_when=(Condition("history_certified_elsewhere_now", "truthy"),),
                     label=text(
                         "Attach the most recent certificate from that agency, and any transfer form the agency "
                         "you file with asks for.",

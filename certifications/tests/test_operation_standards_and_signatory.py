@@ -65,7 +65,7 @@ class _Plan(TestCase):
         company = Company.objects.create(name="Marys River LLC")
         self.est = Establishment.objects.create(name="Marys River Farm", company=company, state="OR")
 
-    def plan(self, answers, certifier=OTCO):
+    def plan(self, answers, certifier=OTCO, g8=None):
         self.osp = OrganicSystemPlan.objects.create(
             establishment=self.est,
             version_number=OrganicSystemPlan.objects.filter(establishment=self.est).count() + 1,
@@ -77,7 +77,17 @@ class _Plan(TestCase):
                     "certification_contract": {
                         "answers": {key: {"value": value} for key, value in answers.items()},
                         "definition_version": "2026.12.09",
-                    }
+                    },
+                    **(
+                        {
+                            "g8_0_record_keeping": {
+                                "answers": {key: {"value": value} for key, value in g8.items()},
+                                "definition_version": "2026.12.09",
+                            }
+                        }
+                        if g8
+                        else {}
+                    ),
                 },
             },
         )
@@ -97,6 +107,13 @@ class _Plan(TestCase):
         from certifications.services.certifier_register import load_forms
 
         form = next(f for f in load_forms(agent) if f.document_id == document_id)
+        return next(r for r in form_answer_states(self.osp, [form])[id(form)] if r.ref == ref)
+
+    def row_of(self, agent, stem, ref):
+        """A row of the form transcribed in `<agent>/forms/<stem>.yaml`; WSDA's sections share one document id."""
+        from certifications.services.certifier_register import load_forms
+
+        form = next(f for f in load_forms(agent) if f.path.stem == stem)
         return next(r for r in form_answer_states(self.osp, [form])[id(form)] if r.ref == ref)
 
     def pdf(self, answers) -> str:
@@ -189,7 +206,22 @@ class TheRegisterReadsThem(_Plan):
         self.plan({"contract_signed_on": "2026-10-30"})
         self.upload("contract_upload")
         self.assertTrue(self.row("otco", "O1", "I-B (signature)").is_open)
+
+    def test_the_affirmations_need_the_signer_too(self):
+        """I-A is executed by the same signature: with its records answered, only the signer keeps it open
+        (review of back #419: the earlier test left the records blank, so it proved nothing about the signer)."""
+        # "No" to the retention attestation: an answer the register reads as answered, where a Yes over this
+        # farm's empty records list reads unconfirmed. Either way the row is decided here by the signer alone.
+        g8 = {
+            "records_retention_attestation": False,
+            "records_location": "primary_only",
+            "primary_contact_records_access": "yes",
+        }
+        self.plan({"contract_signed_on": "2026-10-30"}, g8=g8)
+        self.upload("contract_upload")
         self.assertTrue(self.row("otco", "O1", "I-A").is_open)
+        self.plan({"contract_signed_on": "2026-10-30", "contract_signed_by": "Ann Vos, managing member"}, g8=g8)
+        self.assertEqual(self.row("otco", "O1", "I-A").state, "answered")
 
     def test_ccof_d4_and_the_signature(self):
         self.plan(
@@ -205,3 +237,20 @@ class TheRegisterReadsThem(_Plan):
         for ref in ("D4", "G (signature)"):
             with self.subTest(ref=ref):
                 self.assertEqual(self.row("ccof", "ORGB06", ref).state, "answered")
+
+
+class TheMushroomFormsFollowTheFungiScope(_Plan):
+    """CCOF G3.2 and WSDA 2121-S are not served, and every row past WSDA's own "not applicable" box applies only
+    when the scopes include fungi (review of back #419: the fungi option alone left them open for every farm)."""
+
+    def test_without_fungi_the_rows_do_not_apply(self):
+        self.plan({"contract_scopes": ["crops"]})
+        for agent, stem, ref in (("ccof", "G3.2-mushroom", "A1"), ("wsda", "2121-S-fungi", "1")):
+            with self.subTest(agent=agent):
+                self.assertFalse(self.row_of(agent, stem, ref).is_open)
+
+    def test_with_fungi_they_stay_open(self):
+        self.plan({"contract_scopes": ["crops", "fungi"]})
+        for agent, stem, ref in (("ccof", "G3.2-mushroom", "A1"), ("wsda", "2121-S-fungi", "1")):
+            with self.subTest(agent=agent):
+                self.assertTrue(self.row_of(agent, stem, ref).is_open)
