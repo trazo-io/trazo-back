@@ -110,11 +110,11 @@ class BiggerTasksAuditTests(TestCase):
 
     # ---- #4 OSP-approved stamp ----
 
-    def _osp_with_input(self, on_osp):
+    def _osp_with_input(self, on_osp, status="active"):
         osp = OrganicSystemPlan.objects.create(
             establishment=self.establishment,
             version_number=1,
-            status="active",
+            status=status,
             sections={},
             created_by=self.user,
         )
@@ -142,3 +142,22 @@ class BiggerTasksAuditTests(TestCase):
     def test_input_not_on_osp_shows_review_gap(self):
         txt = _flowable_text(self._osp_with_input(on_osp=False)._build_chemical_log())
         self.assertIn("not on OSP", txt)
+
+    def test_an_input_on_a_draft_plan_is_never_called_approved(self):
+        """Orchard specimen read (2026-11-14): with no active plan the column read the newest draft
+        and printed "OSP-approved" beside every input on it, inputs with an unconfirmed basis
+        included. Approval is a certifier's act; a draft only says what the operator listed."""
+        txt = _flowable_text(self._osp_with_input(on_osp=True, status="draft")._build_chemical_log())
+        self.assertNotIn("OSP-approved", txt)
+        self.assertIn("On draft plan", txt)
+        self.assertIn("plan v1, which is draft, not approved", txt)
+        self.assertIn("not a certifier's approval", txt)
+
+    def test_an_input_on_a_submitted_plan_says_submitted(self):
+        txt = _flowable_text(self._osp_with_input(on_osp=True, status="submitted")._build_chemical_log())
+        self.assertNotIn("OSP-approved", txt)
+        self.assertIn("On submitted plan", txt)
+
+    def test_an_active_plan_prints_no_draft_disclosure(self):
+        txt = _flowable_text(self._osp_with_input(on_osp=True)._build_chemical_log())
+        self.assertNotIn("not a certifier's approval", txt)
