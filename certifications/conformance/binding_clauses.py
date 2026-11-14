@@ -256,7 +256,7 @@ _S103 = (
         ),
         implementation=(
             "trazo-back/history/models.py::compute_retention_until",
-            "trazo-back/history/models.py::History.retention_until",
+            "trazo-back/history/models.py::Production.retention_until",
             # What the deletion guards and printed dates read: the stored date, or a later state
             # floor computed now.
             "trazo-back/history/retention.py::effective_retention_until",

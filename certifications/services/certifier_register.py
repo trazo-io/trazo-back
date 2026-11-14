@@ -968,8 +968,16 @@ def broken_model_references(forms: list[Form]) -> list[str]:
                     continue
                 app_label, model_name, attr = parts
                 try:
-                    model = apps.get_model(app_label, model_name)
-                except Exception:  # noqa: BLE001 — an unknown app/model is not necessarily ours
+                    config = apps.get_app_config(app_label)
+                except LookupError:
+                    continue  # not one of this project's apps: a name in prose, not ours to check
+                try:
+                    model = config.get_model(model_name)
+                except LookupError:
+                    # One of our apps, no such model: a rename the register did not follow. This
+                    # used to be skipped with every other lookup error, so renaming History to
+                    # Production left five rows unchecked with no signal (review of #428).
+                    broken.append(f"{form.certifier}:{form.code or form.document_id} {item.ref} -> {ref} (no model)")
                     continue
                 names = {f.name for f in model._meta.get_fields()}
                 names |= {getattr(f, "attname", "") for f in model._meta.get_fields()}
