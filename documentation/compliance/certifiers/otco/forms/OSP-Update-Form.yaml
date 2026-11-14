@@ -149,21 +149,19 @@ items:
     Organic Program (LPO) · OPT Grass Fed Standards · Bee Better · EU Certification · NSF/ANSI 305 Personal
     Care · Salmon Safe · Global Organic Textile Standards (GOTS). EU and LPO, and all operations in Mexico,
     must file the International Programs Addendum.'
-  status: not_covered
+  status: partial
   severity: P3
   trazo:
+    where: 'modules/operation_profile.pdf: E. Standards and regulatory agencies'
     triggered_by:
-    - g8_0_record_keeping.export_certificate_types
-    - g8_0_record_keeping.export_destinations
-    models:
-    - certifications.Certification.certification_type
-    prints: —
-  gap: Same absence as O1 C-2 — no field records which standards or programmes the operation is assessed to;
-    `Certification.certification_type` lists certificate programmes held, not renewals requested, and G8.0's
-    export certificate types indicate a Canada/EU market without saying an equivalency assessment is wanted.
-    For the ICP the answer is "NOP", which is why this is P3.
-  fix: The `standards_requested` group proposed for O1 C-2 on the contract module, carried onto 02 as "programmes
-    continued".
+    - certification_contract.standards_requested
+    - certification_contract.standards_requested_other
+    prints: modules/operation_profile.pdf §E
+  gap: The services answer lives on the contract module (registered against O1 C-2, where every service on this
+    list is an option, Bee Better and GOTS included) and prints in the module PDF. The copy sheet leaves Step 3's
+    boxes to the operator, since each service is a fee-bearing election on OTCO's form. As with Step 3 (scopes), `OSPAnnualUpdate` has no field for it, so a service added or dropped at renewal shows
+    only as a module change, never as a line on the filing.
+  fix: Print the contract module's standards on 02-annual-update.pdf as "services continued", with the scopes.
 - ref: Step 3 (scopes)
   asks: 'I would like to renew the following scopes of certification under the OTCO program: Crop · Livestock
     · Wild-crop · Handling · Restaurant · Retail (i.e. grocery store).'

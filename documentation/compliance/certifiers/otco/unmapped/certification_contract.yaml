@@ -8,6 +8,9 @@
 # Page D (2026-11-13, legal entity and addresses) is cited by A-1, A-3, B-1 and B-7, except the registered legal
 # address below, which O1 does not ask.
 #
+# Page E (2026-11-13, standards and regulatory agencies) is cited by C-2, C-5 and C-6; the signer and date on page A
+# by I-A and I-B; the certified-elsewhere questions on page B by D-1A, D-1B and the certificate attachment.
+#
 # The certification history pages (2026-11-09) are cited by D-1, D-1D, D-1E and D-2 to D-7, except the info
 # line below, which asks nothing.
 questions:

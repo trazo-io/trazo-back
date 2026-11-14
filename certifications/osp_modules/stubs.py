@@ -2050,6 +2050,8 @@ CERTIFICATION_CONTRACT = Module(
                         Option("wild_crops", text("Wild crops", "Cultivos silvestres")),
                         Option("livestock", text("Livestock", "Ganadería")),
                         Option("handling", text("Handling / processing", "Manipulación / procesamiento")),
+                        Option("transitional", text("Transitional", "En transición")),
+                        Option("fungi", text("Mushrooms and other fungi", "Hongos y setas")),
                     ),
                 ),
                 Question(
@@ -2060,6 +2062,33 @@ CERTIFICATION_CONTRACT = Module(
                         "Adjunta el contrato de certificación firmado / acuerdo de cliente.",
                     ),
                     required=False,
+                ),
+                # 2026-11-13: OTCO O1 I-B and CCOF Contract G ask the signer's name, title and the date beside the
+                # signature. Trazo signs nothing: the operation signs its agency's own form and attaches it above,
+                # and these two say who signed it and when, so the packet names them without opening the file.
+                Question(
+                    key="contract_signed_by",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Who signed it? Name and title.",
+                        "¿Quién lo firmó? Nombre y cargo.",
+                    ),
+                    coaching=text(
+                        "Trazo does not sign for you. Sign your agency's own form, attach it above, and write who "
+                        "signed it. The signer must be able to bind the operation: an owner, an officer, or "
+                        "someone they appointed.",
+                        "Trazo no firma por ti. Firma el formulario de tu agencia, adjúntalo arriba y escribe quién "
+                        "lo firmó. Quien firma debe tener facultad para obligar a la operación: una persona "
+                        "propietaria o directiva, o una persona designada para firmar.",
+                    ),
+                    placeholder=text("e.g. Laurel Brandt, managing member", "p. ej. Laurel Brandt, gerente"),
+                ),
+                Question(
+                    key="contract_signed_on",
+                    kind="date",
+                    required=False,
+                    label=text("Date it was signed", "Fecha de la firma"),
                 ),
             ),
         ),
@@ -2115,6 +2144,44 @@ CERTIFICATION_CONTRACT = Module(
                     placeholder=text(
                         "e.g. Oregon Tilth, March 2015 to June 2021; CCOF since 2022",
                         "p. ej. Oregon Tilth, de marzo de 2015 a junio de 2021; CCOF desde 2022",
+                    ),
+                ),
+                # 2026-11-13: OTCO O1 D-1A, D-1B and the certificate it asks attached; CCOF Contract D4, whose
+                # yes needs the certificate and a transfer form. Visibility is transitive (conditions.py), so each
+                # follow-up names only the question it follows.
+                Question(
+                    key="history_certified_elsewhere_now",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
+                    label=text(
+                        "Is the operation certified organic today by another certifying agency, not the one you "
+                        "file this plan with?",
+                        "¿La operación tiene hoy una certificación orgánica de otra agencia certificadora, distinta "
+                        "de aquella ante la que presentas este plan?",
+                    ),
+                    nop_cite="§ 205.401(c)",
+                ),
+                Question(
+                    key="history_keeping_other_certification",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_certified_elsewhere_now", "truthy"),),
+                    label=text(
+                        "Will the operation keep that other certification?",
+                        "¿La operación mantendrá esa otra certificación?",
+                    ),
+                ),
+                Question(
+                    key="history_current_certificate_upload",
+                    kind="upload",
+                    required=False,
+                    visible_when=(Condition("history_certified_elsewhere_now", "truthy"),),
+                    label=text(
+                        "Attach the most recent certificate from that agency, and any transfer form the agency "
+                        "you file with asks for.",
+                        "Adjunta el certificado más reciente de esa agencia y cualquier formulario de transferencia "
+                        "que pida la agencia ante la que presentas el plan.",
                     ),
                 ),
                 Question(
@@ -2514,6 +2581,106 @@ CERTIFICATION_CONTRACT = Module(
                     required=False,
                     visible_when=(Condition("public_contact_shared", "includes", "website"),),
                     label=text("Public website", "Sitio web público"),
+                ),
+            ),
+        ),
+        # 2026-11-13: OTCO O1 C-2, C-5 and C-6. The standards the operation asks to be assessed to, the regulators
+        # that inspect it, and any negative report one of them gave. The standards list is O1's plus the two more the
+        # OSP Update Form's Step 3 offers (Bee Better, GOTS), so one answer serves both. Optional, every question, as
+        # on pages B and D.
+        ModulePage(
+            key="e_standards_regulators",
+            title=text("E. Standards and regulatory agencies", "E. Normas y organismos reguladores"),
+            questions=(
+                Question(
+                    key="standards_requested",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which standards do you want the operation assessed to?",
+                        "¿Según qué normas quieres que se evalúe la operación?",
+                    ),
+                    coaching=text(
+                        "An EU or Mexico assessment needs your agency's supplement form for it. Ask your agency "
+                        "first: not every agency offers every standard to operations in the US.",
+                        "Una evaluación para la UE o México necesita el formulario complementario de tu agencia. "
+                        "Pregunta antes a tu agencia: no todas ofrecen todas las normas a operaciones en EE. UU.",
+                    ),
+                    options=(
+                        Option(
+                            "usda_nop",
+                            text(
+                                "USDA organic (National Organic Program)", "Orgánico USDA (Programa Orgánico Nacional)"
+                            ),
+                        ),
+                        Option(
+                            "us_canada",
+                            text(
+                                "US-Canada organic equivalency (product that goes to Canada)",
+                                "Equivalencia orgánica entre EE. UU. y Canadá (producto que va a Canadá)",
+                            ),
+                        ),
+                        Option("eu", text("European Union organic", "Orgánico de la Unión Europea")),
+                        Option(
+                            "lpo",
+                            text("Mexico's organic products law (LPO)", "Ley de Productos Orgánicos de México (LPO)"),
+                        ),
+                        Option("salmon_safe", text("Salmon-Safe", "Salmon-Safe")),
+                        Option("transitional", text("Certified transitional", "Transición certificada")),
+                        Option("personal_care", text("NSF/ANSI 305 personal care", "NSF/ANSI 305 de cuidado personal")),
+                        Option(
+                            "grass_fed",
+                            text("Grass-fed (Organic Plus Trust)", "Alimentación con pasto (Organic Plus Trust)"),
+                        ),
+                        Option("bee_better", text("Bee Better", "Bee Better")),
+                        Option(
+                            "gots",
+                            text("Global Organic Textile Standard (GOTS)", "Norma Textil Orgánica Global (GOTS)"),
+                        ),
+                        Option("other", text("Other", "Otra")),
+                    ),
+                ),
+                Question(
+                    key="standards_requested_other",
+                    kind="text",
+                    required=False,
+                    visible_when=(Condition("standards_requested", "includes", "other"),),
+                    label=text("Which other standard?", "¿Qué otra norma?"),
+                ),
+                Question(
+                    key="regulatory_agencies",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        'Which regulatory agencies, if any, inspect the operation? Write "None" if none do.',
+                        '¿Qué organismos reguladores, si hay alguno, inspeccionan la operación? Escribe "Ninguno" '
+                        "si no hay.",
+                    ),
+                    placeholder=text(
+                        "e.g. state department of agriculture (food safety), county agricultural commissioner, FDA",
+                        "p. ej. departamento de agricultura del estado (inocuidad), comisionado agrícola del condado, FDA",
+                    ),
+                ),
+                Question(
+                    key="regulatory_negative_report",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Has any regulatory agency ever given the operation a negative inspection report? For "
+                        "example the FDA, OSHA, or a state health or agriculture department.",
+                        "¿Algún organismo regulador le dio alguna vez a la operación un informe de inspección "
+                        "negativo? Por ejemplo la FDA, OSHA o un departamento estatal de salud o de agricultura.",
+                    ),
+                ),
+                Question(
+                    key="regulatory_reports_upload",
+                    kind="upload",
+                    required=False,
+                    visible_when=(Condition("regulatory_negative_report", "truthy"),),
+                    label=text(
+                        "Attach each report with the operation's written response or corrective actions.",
+                        "Adjunta cada informe con la respuesta escrita o las acciones correctivas de la operación.",
+                    ),
                 ),
             ),
         ),

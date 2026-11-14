@@ -289,50 +289,40 @@ items:
     Indicate all scopes of certification you are applying for (described in the OTCO Certification
     Manual): Crop · Livestock · Handling/Processing/Distribution · Wild-crop · Transitional ·
     Restaurant · Retail · Fungi.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
+    where: >-
+      modules/operation_profile.pdf: A. Contract on file, certification scopes
     questions:
     - certification_contract.contract_scopes
-    prints: "modules/operation_profile.pdf §A (\"Certification scopes: …\")"
-  gap: >-
-    FRESH — the CCOF register left `contract_scopes` unmapped (CCOF's Contract selects a forms
-    guide instead); OTCO asks the scope list directly, so the question maps here. Trazo's options
-    are {crops, wild_crops, livestock, handling}; two OTCO scopes a crop grower can hold are absent
-    — Transitional (OTCO's Class T) and Fungi — and there is no `other`. Restaurant and Retail are
-    different OTCO application classes (the form itself routes retail to the Class OR application)
-    and are not proposed.
-  fix: >-
-    Add `transitional` and `fungi` options to `contract_scopes`; print the handling option as
-    "Handling / Processing / Distribution" for OTCO.
+    prints: >-
+      modules/operation_profile.pdf §A ("Certification scopes: ...")
+  note: >-
+    Closed 2026-11-13: Transitional and Fungi added to the scopes, so every scope a farm can hold is an
+    option. Restaurant and Retail are OTCO application classes for businesses Trazo does not serve (the
+    form routes retail to its own application).
 - ref: C-2
   asks: >-
     Check all certification standards for which you are requesting an assessment: USDA NOP
     (Organic) · US-Canada Equivalency · European Union (EU) (requires the EU Supplement) · Mexico
     Ley de Productos Orgánicos (LPO) (requires the MX Supplement) · Salmon Safe · NSF/ANSI 305
-    Personal Care · Oregon Tilth Certified Transitional (Class T) · Bee Better · Organic Plus Trust
+    Personal Care · Oregon Tilth Certified Transitional (Class T) · Organic Plus Trust
     (OPT) Grass-Fed Standards.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    triggered_by:
-    - g8_0_record_keeping.export_certificate_types
-    - g8_0_record_keeping.export_destinations
-    models:
-    - certifications.Certification.certification_type
-    prints: "—"
-  gap: >-
-    FRESH — no field records which standards or equivalency arrangements the operation is assessed
-    to. `Certification.certification_type` lists certificate PROGRAMMES the operation already holds
-    (USDA Organic, Regenerative Organic Certified, GlobalG.A.P., PrimusGFS, …), not standards
-    requested, and carries no US-Canada, EU, LPO, Salmon Safe, Bee Better, OPT or NSF/ANSI 305
-    value. G8.0's `export_certificate_types` (Canada attestation, EU Certificate of Inspection)
-    indicates a Canada or EU market but is about SHIPMENTS, not the assessment requested. For the
-    ICP the answer is "USDA NOP" alone, which is why this stays P3.
-  fix: >-
-    Add `standards_requested` checkbox_group {usda_nop, us_canada, eu, lpo, transitional, other} to
-    the contract module, suggesting US-Canada / EU from `export_certificate_types` for the operator
-    to confirm.
+    where: >-
+      modules/operation_profile.pdf: E. Standards and regulatory agencies
+    questions:
+    - certification_contract.standards_requested
+    - certification_contract.standards_requested_other
+    prints: >-
+      modules/operation_profile.pdf §E
+  note: >-
+    Closed 2026-11-13 by the Operation profile's page E. Every standard O1 lists is an option; Oregon Tilth
+    Certified Transitional (Class T) is the certified transitional option. Bee Better and GOTS, which the OSP
+    Update Form also lists, are options too, so one answer serves both forms. The asks text no longer lists
+    Bee Better: the O1 file re-downloaded on 2026-11-13 (its hash matches source_sha256 above, rev. 2026/10/02)
+    does not print it, so the earlier transcription's Bee Better was dropped.
 - ref: C-3
   asks: >-
     Have you reviewed the applicable standards and any other applicable international standards or
@@ -351,37 +341,36 @@ items:
     Same as C-3 — an acknowledgment of having read OTCO's own manual and fee schedule.
 - ref: C-5
   asks: Which, if any, regulatory agencies inspect your operations?
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    models:
-    - certifications.StateOrganicRegistration.program_name
-    - company.Establishment.ca_operator_id
-    prints: "— (the CDFA registration prints in the audit dossier only)"
-  gap: >-
-    FRESH — neither CCOF nor WSDA asks this. There is no field for the regulatory agencies that
-    inspect the operation. Two California-specific registrations exist — `StateOrganicRegistration`
-    (CDFA State Organic Program) and `Establishment.ca_operator_id` (DPR operator ID) — but they
-    answer a different question, and neither prints in the packet.
-  fix: >-
-    Add `regulatory_agencies` (text) to the contract module, suggesting CDFA / DPR from those rows
-    when present.
+    where: >-
+      modules/operation_profile.pdf: E. Standards and regulatory agencies
+    questions:
+    - certification_contract.regulatory_agencies
+    prints: >-
+      modules/operation_profile.pdf §E
+  note: >-
+    Closed 2026-11-13 by the Operation profile's page E, in the operation's own words; "None" is an
+    answer.
 - ref: C-6
   asks: >-
     Have you ever had a negative scoring report from any regulatory agency including, but not
     limited to, FDA, OSHA, or a state's Department of Health or Agriculture? No / Yes — reports are
     attached along with the operation's corresponding written responses/corrective actions.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: "—"
-  gap: >-
-    FRESH — CCOF's Contract D5 asks adverse ORGANIC-certification history only; OTCO extends it to
-    any regulatory agency. No question or model captures inspection reports from FDA, OSHA or a
-    state agency, nor the responses to them.
-  fix: >-
-    An optional `regulatory_adverse_reports` page on the contract module {agency, year, upload,
-    corrective action}; low priority for a renewal-focused ICP.
+    where: >-
+      modules/operation_profile.pdf: E. Standards and regulatory agencies; the reports under
+      attachments/certification_contract/
+    questions:
+    - certification_contract.regulatory_negative_report
+    - certification_contract.regulatory_reports_upload
+    prints: >-
+      modules/operation_profile.pdf §E; attachments/certification_contract/regulatory_reports_upload/
+  note: >-
+    Closed 2026-11-13 by the Operation profile's page E. A yes opens the upload for the reports with the
+    operation's written responses, as the form's yes says; a yes with nothing attached keeps the row
+    open.
 - ref: D-1
   asks: 'CERTIFICATION HISTORY. NOTE: "You" here means the person completing the application, the legally responsible
     contact, the primary contact and anyone responsibly connected to the operation (rev. 2026/03/25). Have
@@ -402,45 +391,57 @@ items:
     its own rows, D-1A and D-1B.
 - ref: D-1A
   asks: Are you currently certified organic by another certification agency? Yes / No.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: '00-cover.pdf: Certificate, the certifying agent'
+    where: >-
+      modules/operation_profile.pdf: B. Certification history, certified today by another agency
+    questions:
+    - certification_contract.history_ever_certified
+    - certification_contract.history_certified_elsewhere_now
     models:
-    - certifications.Certification.certifier_name
     - certifications.OrganicSystemPlan.approval_certifier_name
-    prints: 00-cover.pdf (the certifying agent of record)
-  gap: Reused from the CCOF Contract D4 (P3). The current agent's name prints, so a reviewer can see it is
-    not OTCO; the yes/no itself — the transfer case — is not asked, and nothing distinguishes an operation
-    switching agents from one adding a second.
-  fix: Reuse D4 — the `certification_transfer` flag.
+    prints: >-
+      modules/operation_profile.pdf §B; 00-cover.pdf (the certifying agent of record)
+  note: >-
+    Closed 2026-11-13. Asked as "another agency, not the one you file this plan with", which is O1's
+    "another certification agency" whichever agency the plan goes to.
 - ref: D-1B
   asks: If the answer to (A) is yes, will you be maintaining your other organic certification(s)? Yes / No.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    models:
-    - certifications.Certification
-    prints: —
-  gap: Reused from the CCOF Contract D4's transfer branch (P3). Several `Certification` rows can coexist on
-    a profile, but there is no statement of intent to keep or drop one.
-  fix: Part of the same `certification_transfer` page as D-1 / D-1a.
+    where: >-
+      modules/operation_profile.pdf: B. Certification history, keeping the other certification
+    questions:
+    - certification_contract.history_ever_certified
+    - certification_contract.history_certified_elsewhere_now
+    - certification_contract.history_keeping_other_certification
+    prints: >-
+      modules/operation_profile.pdf §B
+  note: >-
+    Closed 2026-11-13. Shown only on a yes to D-1A, as the form asks it.
 - ref: D-1 (certificate attachment)
   asks: If you are currently certified, attach a copy of your most recent organic certificate(s) — Attached.
   status: partial
   severity: P3
   trazo:
-    where: not in this packet; no copy of the certificate is attached
+    where: >-
+      attachments/certification_contract/history_current_certificate_upload/ (another agency's
+      certificate)
+    questions:
+    - certification_contract.history_ever_certified
+    - certification_contract.history_certified_elsewhere_now
+    - certification_contract.history_current_certificate_upload
     models:
-    - certifications.Certification.document_url
     - certifications.OrganicSystemPlan.approval_document
-    prints: — (neither the profile's certificate document nor the OSP's approval document is written into the
-      packet ZIP)
-  gap: Reused from the CCOF Contract D4 (P3). The certificate is held twice — `Certification.document_url`
-    on the profile and `approval_document`, which the OSP activation gate REQUIRES — and neither file travels
-    with the packet; only the number and agent print on the cover.
-  fix: Write the OSP's `approval_document` into the ZIP under `contract/` beside the signed agreement (the
-    shared upload-attachment fix).
+    prints: >-
+      attachments/certification_contract/history_current_certificate_upload/; 00-cover.pdf (the number and
+      agent of the certificate of record)
+  gap: >-
+    Another agency's current certificate is asked on a yes to D-1A and rides in the packet. The
+    certificate of the agency the plan is filed with (`approval_document`, which that agency issued)
+    does not travel; only its number and agent print on the cover.
+  fix: >-
+    Write the OSP's `approval_document` into the ZIP under attachments/certification_contract/.
 - ref: D-1C
   asks: By which agency(ies) were/are you certified?
   status: covered
@@ -711,11 +712,15 @@ items:
     subcontracting testing or inspection; the signer is a legally authorized agent bound by this
     Agreement and the Terms & Conditions, incorporated by reference; Oregon Tilth shall have access
     to all facilities, personnel, records and materials.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: >-
+      attachments/certification_contract/contract_upload/ (the signed form);
+      modules/operation_profile.pdf: A. Contract on file, who signed it and when
     questions:
     - certification_contract.contract_upload
+    - certification_contract.contract_signed_by
+    - certification_contract.contract_signed_on
     - g8_0_record_keeping.records_retention_attestation
     - g8_0_record_keeping.records_location
     - g8_0_record_keeping.additional_records_locations
@@ -725,19 +730,14 @@ items:
     - certifications.OSPAnnualUpdate
     - certifications.OSPChangeNotification
     prints: >-
-      02-annual-update.pdf; 03-change-notifications.pdf; modules/G8_0.pdf §A — the signed
-      agreement upload does not reach the packet
-  gap: >-
-    Reused from the CCOF Contract G (P2). The affirmations that are FACTS about the operation have a
-    record behind them — "report any significant changes" is `OSPChangeNotification` (§ 205.400(f))
-    and `OSPAnnualUpdate` (§ 205.406(a)), printing as documents 02 and 03; "records maintained onsite
-    and available immediately" is G8.0 §A's retention attestation, records location (with the
-    off-site follow-up) and who can produce them. But the signed agreement itself
-    (`contract_upload`) rides in the packet only since 2026-10-01, under
-    attachments/certification_contract/contract_upload/, when it is uploaded for that question; and the
-    Manuals / Terms & Conditions edition acknowledged is not tracked.
-  fix: >-
-    Record which Manuals and Terms & Conditions edition was acknowledged.
+      attachments/certification_contract/contract_upload/; modules/operation_profile.pdf §A; 02-annual-
+      update.pdf; 03-change-notifications.pdf; modules/G8_0.pdf §A
+  note: >-
+    Closed 2026-11-13. The affirmations are executed by signing OTCO's own form, which the operation
+    attaches; the profile names who signed it and when. The ones that are facts about the operation have
+    records behind them: significant changes (OSPChangeNotification, OSPAnnualUpdate, documents 02 and
+    03) and records kept and available (G8.0 section A). Which edition of OTCO's manuals was read is
+    OTCO's own intake, like C-3 and C-4.
 - ref: I-B (e-signature consent)
   asks: 'Electronic signatures — by checking the box you willingly consent to the use of electronic signatures
     in the conduct of your business with Oregon Tilth: AGREE.'
@@ -749,15 +749,19 @@ items:
     that all the information and representations made herein are true and correct, and I understand that the
     information herein and all the documentation that comprise the OSP must be maintained accurate and current."
     Name/Title, Date, Signature.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: >-
+      attachments/certification_contract/contract_upload/ (the signed form);
+      modules/operation_profile.pdf: A. Contract on file, who signed it and when
     questions:
     - certification_contract.contract_upload
-    models:
-    - certifications.OSPAnnualUpdate.submitted_at
-    prints: 02-annual-update.pdf — the producer attestation line (7 CFR 205.401(d)) and the filing date; unsigned
-  gap: Reused from the CCOF Contract G (P2). The filing carries an attestation sentence and its date, but no
-    signatory name, title or signature; the signed application lives only in the contract upload, which does
-    not travel.
-  fix: Reuse G (carry the upload), and print the filer's name and title beside "Filed" on 02.
+    - certification_contract.contract_signed_by
+    - certification_contract.contract_signed_on
+    prints: >-
+      attachments/certification_contract/contract_upload/; modules/operation_profile.pdf §A (name and
+      title, date)
+  note: >-
+    Closed 2026-11-13. Trazo signs nothing: the signature is on OTCO's own form, attached, and the
+    profile prints the signer's name, title and date beside it. A missing file or signer keeps the row
+    open.

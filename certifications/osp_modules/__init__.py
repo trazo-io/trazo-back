@@ -356,7 +356,11 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   state of incorporation, DBAs with where each is registered and used, the registered legal, mailing and billing
 #   addresses (each "same as" first), and which contact details may be published (CCOF Contract A1 to A4, A6, A7;
 #   OTCO O1 A-1, A-3, B-1, B-7).
-CONTENT_VERSION = "2026.12.08"
+# 2026.12.09: the Operation module's scopes add transitional and fungi (OTCO O1 C-1); page A names who signed the
+#   agency's contract and when (O1 I-B, CCOF Contract G); page B asks whether another agency certifies the operation
+#   today, whether that stays, and its certificate (O1 D-1A, D-1B; CCOF D4); new page E asks the standards to be
+#   assessed to, the regulators that inspect the operation and any negative report (O1 C-2, C-5, C-6).
+CONTENT_VERSION = "2026.12.09"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
