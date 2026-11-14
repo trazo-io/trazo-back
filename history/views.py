@@ -823,7 +823,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     expected_harvest=expected_harvest,
                     parcel=parcel,
                     product=product,
-                    production_method=data.get("production_method", "conventional"),
+                    production_method=data.get("production_method") or None,
                     crop_type=crop_type,
                     extra_data=extra_data,
                     type=data.get("type") or None,

@@ -176,12 +176,14 @@ class History(models.Model):
         ("hydroponic", "Hydroponic"),
         ("no_till", "No-Till"),
     ]
+    # No default (2026-11-13). The value prints on certifier records: the renewal land table lists a
+    # certified parcel's "conventional" years, and land history carries it per year. A default made
+    # every season created without a stated method read as conventional there. Unstated is NULL.
     production_method = models.CharField(
         max_length=30,
         choices=PRODUCTION_METHOD_CHOICES,
         blank=True,
         null=True,
-        default="conventional",
         help_text="Farming method used for this production",
     )
 

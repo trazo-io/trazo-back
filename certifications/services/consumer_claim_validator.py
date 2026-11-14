@@ -411,7 +411,7 @@ class ConsumerClaimValidator:
 
         # Priority 4 — conventional.
         return self._conventional_result(
-            reason=f"production_method='{method or 'conventional'}', no cert, no transition.",
+            reason=f"production_method='{method or 'unstated'}', no cert, no transition.",
             specimen=specimen,
         )
 
