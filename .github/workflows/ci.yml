@@ -689,6 +689,12 @@ jobs:
       # month, re-verifies after, and fails the run only when the mirror is over a month behind. The
       # download and both commands are faked. No sibling repo read.
       #
+      # 2026-11-13: history.tests.test_open_season_records_not_deletable joins (OV-ST-C02), with the
+      # two retention modules it extends, test_retention_cascade and test_record_retention, which
+      # were not in this list. A season holding records cannot be deleted before it has a retention
+      # date, nor can the parcel, farm or company above it; empty drafts and seasons past retention
+      # still delete. No sibling repo read.
+      #
       # 2026-11-13: common.tests.test_backup_database_offsite joins (OV-ST-C13). The daily off-platform
       # dump uploads only with the put-only user, encrypted, after pg_restore can read it, and fails
       # the run when unconfigured. pg_dump and S3 are faked. No sibling repo read.
@@ -1082,6 +1088,9 @@ jobs:
             users.tests.test_account_closure \
             certifications.tests.test_verification_notes \
             common.tests.test_backup_database_offsite \
+            history.tests.test_open_season_records_not_deletable \
+            history.tests.test_retention_cascade \
+            history.tests.test_record_retention \
             certifications.tests.test_refresh_usda_organic_mirror \
             backend.tests.test_sentry_scrub \
             backend.security.tests.test_checks \
