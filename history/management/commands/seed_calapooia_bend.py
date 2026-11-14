@@ -1071,11 +1071,14 @@ def _specimen_pdf(title: str, lines: list[str]) -> bytes:
 ACRES_PER_HECTARE = 2.47105
 
 
-def _specimen_map_pdf(parcel: dict) -> bytes:
+def _specimen_map_pdf(parcel: dict, county: str = "Linn County, OR", status: str = "certified organic") -> bytes:
     """A one-page field map drawn from the fixture's own parcel row, standing in for the 8.5x11 map an
     operator would upload. It carries the elements CCOF lists for a parcel map that this parcel has: a
     north arrow, the boundary, acreage, the permanent identifiers, each adjoining land use by side, and
-    every buffer with its width and any crop grown in it. Watermarked SPECIMEN like every other file."""
+    every buffer with its width and any crop grown in it. Watermarked SPECIMEN like every other file.
+
+    `county` and `status` let another specimen (seed_coldwater_bench) draw its own blocks, including one
+    in transition; an identifier the parcel does not have is left off the line rather than printed blank."""
     import io
 
     from reportlab.lib import colors
@@ -1094,11 +1097,13 @@ def _specimen_map_pdf(parcel: dict) -> bytes:
     c.drawString(54, height - 60, f"{parcel['name']}: field map (specimen)")
     c.setFont("Helvetica", 9)
     acres = float(parcel["area"]) * ACRES_PER_HECTARE
-    c.drawString(
-        54,
-        height - 76,
-        f"{acres:.1f} acres  ·  APN {parcel['apn']}  ·  {parcel['section_township_range']}  ·  Linn County, OR",
-    )
+    identifiers = [
+        f"{acres:.1f} acres",
+        f"APN {parcel['apn']}" if parcel.get("apn") else "",
+        parcel.get("section_township_range") or "",
+        county,
+    ]
+    c.drawString(54, height - 76, "  ·  ".join(part for part in identifiers if part))
     c.drawString(54, height - 89, "Not to scale. Specimen map for a demo farm; it is not a survey or a real record.")
 
     # The parcel, centred, with a band inside each side that carries a buffer.
@@ -1123,7 +1128,7 @@ def _specimen_map_pdf(parcel: dict) -> bytes:
     c.setFont("Helvetica-Bold", 12)
     c.drawCentredString(x0 + w / 2, y0 + h / 2 + 6, parcel["name"])
     c.setFont("Helvetica", 9)
-    c.drawCentredString(x0 + w / 2, y0 + h / 2 - 8, f"{acres:.1f} ac certified organic")
+    c.drawCentredString(x0 + w / 2, y0 + h / 2 - 8, f"{acres:.1f} ac {status}")
 
     def label(lines_text, x, y, max_width, align="center"):
         lines = []
