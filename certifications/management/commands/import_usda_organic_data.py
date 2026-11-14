@@ -75,6 +75,37 @@ def normalize_name(name: str) -> str:
     return " ".join(words).strip()
 
 
+def download_export(url: str, out, err) -> str | None:
+    """Download one monthly export to a temp file and return its path, or None if USDA has none.
+
+    Module-level so `refresh_usda_organic_mirror` can ask "is this month published?" with the same
+    download the import uses. The caller owns the file and must delete it.
+    """
+    try:
+        resp = requests.get(url, timeout=120, stream=True)
+        if resp.status_code != 200:
+            err(f"HTTP {resp.status_code} from {url}")
+            return None
+
+        content_type = resp.headers.get("Content-Type", "")
+        if "html" in content_type:
+            err(f"Got HTML instead of XLSX from {url}")
+            return None
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        for chunk in resp.iter_content(chunk_size=8192):
+            tmp.write(chunk)
+        tmp.close()
+
+        size_mb = os.path.getsize(tmp.name) / (1024 * 1024)
+        out(f"Downloaded {size_mb:.1f} MB to {tmp.name}")
+        return tmp.name
+
+    except Exception as e:
+        err(f"Download error: {e}")
+        return None
+
+
 # A parse that yields fewer rows than this is not a real USDA export — the smallest plausible
 # national snapshot is tens of thousands of operations. Used only when the table is empty, where
 # there is no previous count to compare against.
@@ -302,29 +333,7 @@ class Command(BaseCommand):
 
     def _download_file(self, url: str) -> str | None:
         """Download the XLSX file to a temp location."""
-        try:
-            resp = requests.get(url, timeout=120, stream=True)
-            if resp.status_code != 200:
-                self.stderr.write(f"HTTP {resp.status_code} from {url}")
-                return None
-
-            content_type = resp.headers.get("Content-Type", "")
-            if "html" in content_type:
-                self.stderr.write(f"Got HTML instead of XLSX from {url}")
-                return None
-
-            tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-            for chunk in resp.iter_content(chunk_size=8192):
-                tmp.write(chunk)
-            tmp.close()
-
-            size_mb = os.path.getsize(tmp.name) / (1024 * 1024)
-            self.stdout.write(f"Downloaded {size_mb:.1f} MB to {tmp.name}")
-            return tmp.name
-
-        except Exception as e:
-            self.stderr.write(f"Download error: {e}")
-            return None
+        return download_export(url, self.stdout.write, self.stderr.write)
 
     def _parse_xlsx(self, file_path: str, us_only: bool = True) -> list:
         """Parse the USDA XLSX export into records."""

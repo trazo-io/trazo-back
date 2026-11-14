@@ -209,6 +209,22 @@ PERIODIC_WORK = {
             "it or soften the notice before a crew number is handed to a farm."
         ),
     },
+    "refresh_usda_organic_mirror": {
+        "source": JOB,
+        "cadence": "daily",
+        "command": "refresh_usda_organic_mirror",
+        "runner": NOTHING,
+        "kind": PROMISE,
+        "note": (
+            "Imports USDA's monthly Organic Integrity export as soon as one newer than the local "
+            "mirror exists, then re-verifies every certification (2026-11-13). The public badge says "
+            "'Verified via USDA Organic Integrity Database', and that is only true while the mirror "
+            "is current: on 2026-11-13 it was 104 days old because nothing had ever run the import, "
+            "so newly certified farms read as not verified and surrendered farms kept their badge. "
+            "Daily, not monthly, because USDA posts the export days after the 1st; on most days it "
+            "compares two dates and exits."
+        ),
+    },
     "backup_database_offsite": {
         "source": JOB,
         "cadence": "daily",

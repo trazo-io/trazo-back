@@ -7,9 +7,10 @@ class only ever meant to define `create` and its actions. An anonymous
 scan by integer id, which then showed on that farm's dashboard. Found by the 2026-10-20 route
 inventory (`backend/route_tenancy.py`); reproduced here before the fix.
 
-`comment` is now authorised the way `consent` already is: by the scan's `claim_token`, the 256-bit
-value only the browser that made the scan received. Nothing in the app calls `comment` today
-(`useCommentHistoryMutation` has no call sites), so the contract can tighten without a client change.
+`comment` was then authorised the way `consent` is, by the scan's `claim_token`. On 2026-11-13 it
+was REMOVED: no surface has a comment input, and the app's two writers had zero call sites
+(trazo-app #383). The route now answers like any other path that does not exist, with or without a
+valid token.
 """
 
 from django.test import TestCase
@@ -43,39 +44,17 @@ class PublicScansScopedTests(TestCase):
         self.assertTrue(HistoryScan.objects.filter(pk=self.scan.pk).exists())
         self.assertIn(self.client.get("/api/public_scans/").status_code, (404, 405))
 
-    def test_comment_without_the_claim_token_is_refused(self):
-        response = self.client.post(f"/api/public_scans/{self.scan.id}/comment/", {"comment": "PWNED"}, format="json")
-        self.assertIn(response.status_code, (403, 404), response.content[:300])
+    def test_nobody_can_write_a_comment_onto_a_scan(self):
+        """Not a stranger, and not the browser holding the scan's own claim_token either."""
+        for token in (None, self.scan.claim_token):
+            with self.subTest(with_own_token=token is not None):
+                body = {"comment": "PWNED"} | ({"claim_token": token} if token else {})
+                response = self.client.post(f"/api/public_scans/{self.scan.id}/comment/", body, format="json")
+                self.assertIn(response.status_code, (404, 405), response.content[:300])
         self.scan.refresh_from_db()
         self.assertFalse(self.scan.comment)
 
-    def test_comment_with_another_scans_token_is_refused(self):
-        other = HistoryScan.objects.create(history=self.season)
-        response = self.client.post(
-            f"/api/public_scans/{self.scan.id}/comment/",
-            {"comment": "PWNED", "claim_token": other.claim_token},
-            format="json",
-        )
-        self.assertIn(response.status_code, (403, 404), response.content[:300])
-        self.scan.refresh_from_db()
-        self.assertFalse(self.scan.comment)
-
-    def test_non_ascii_token_is_a_404_not_a_500(self):
-        """compare_digest raises on a non-ASCII str; that 500 only happened for scans that exist."""
-        for scan_id in (self.scan.id, 999999):
-            with self.subTest(scan_id=scan_id):
-                response = self.client.post(
-                    f"/api/public_scans/{scan_id}/comment/", {"comment": "x", "claim_token": "\u00e9"}, format="json"
-                )
-                self.assertEqual(response.status_code, 404, response.content[:300])
-
-    def test_comment_with_its_own_claim_token_saves(self):
-        """The control: the browser that made the scan can still leave its one comment."""
-        response = self.client.post(
-            f"/api/public_scans/{self.scan.id}/comment/",
-            {"comment": "Tasty", "claim_token": self.scan.claim_token},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 200, response.content[:300])
-        self.scan.refresh_from_db()
-        self.assertEqual(self.scan.comment, "Tasty")
+    def test_the_scan_itself_still_records(self):
+        """The control: removing comment left the shopper scan route alive."""
+        response = self.client.post("/api/public_scans/", {"production_id": str(self.season.public_id)}, format="json")
+        self.assertEqual(response.status_code, 201, response.content[:300])
