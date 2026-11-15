@@ -648,8 +648,16 @@ class WASprayRecordService:
         def field_of(attr):
             return lambda event: _or_blank(getattr(event, attr, None))
 
+        def licensed(event):
+            # (l) asks for "the licensed applicator's full name". A name copied from a profile with
+            # no license number is not a licensed applicator, so it never prints bare in that row.
+            name = _s(event.applicator_name)
+            if name and not _s(event.applicator_certification):
+                return f"{name} (no license number on the record)", BLANK
+            return _or_blank(name)
+
         return [
-            _shared(events, "l", "Licensed applicator", field_of("applicator_name")),
+            _shared(events, "l", "Licensed applicator", licensed),
             _shared(events, "l", "Applicator license number", field_of("applicator_certification")),
             _shared(events, "l", "Applicator address", field_of("applicator_address")),
             _shared(events, "l", "Applicator phone", field_of("applicator_phone")),
@@ -759,7 +767,47 @@ class WASprayRecordService:
             self._build_pass(number, lines, operator_rows, mapped, entered)
             for number, lines in enumerate(groups, start=1)
         ]
+        self._note_one_application_on_several_blocks(self._built)
         return self._built
+
+    @staticmethod
+    def _note_one_application_on_several_blocks(passes) -> None:
+        """A spray logged once on several blocks is one record per block (`multi_target`), so it
+        prints as one block per parcel. Without a note, four blocks sprayed 07:30 to 13:00 read as
+        four applications each lasting the whole window. Each such block names its siblings."""
+        by_group = {}
+        for record in passes:
+            for group in {e.application_group for e in record.events if getattr(e, "application_group", None)}:
+                by_group.setdefault(group, []).append(record)
+        for record in passes:
+            siblings = {}
+            for group in {e.application_group for e in record.events if getattr(e, "application_group", None)}:
+                for other in by_group.get(group, []):
+                    siblings[other.number] = other
+            if len(siblings) < 2:
+                continue
+            ordered = [siblings[n] for n in sorted(siblings)]
+            numbers = [str(other.number) for other in ordered]
+            listed = ", ".join(numbers[:-1]) + f" and {numbers[-1]}"
+            places = []
+            for other in ordered:
+                name = _s(getattr(other.parcel, "name", None)) or "parcel not recorded"
+                if name not in places:
+                    places.append(name)
+            note = (
+                f"Logged as one application on {len(ordered)} blocks, printed as applications {listed} "
+                f"({', '.join(places)})."
+            )
+            # `application_group` is fixed at creation, but each block's date and times can be
+            # corrected alone afterwards. The note claims sameness only where the records still hold it.
+            events = [e for other in ordered for e in other.events]
+            if len({_day(e.date) for e in events}) > 1:
+                note += " The blocks' dates were later recorded differently; item (c) prints each block's own day."
+            else:
+                windows = {(e.application_start, e.application_end) for e in events}
+                if len(windows) == 1 and any(next(iter(windows))):
+                    note += " The start and stop times are the whole application's, not this block's alone."
+            record.notes.append(note)
 
     @staticmethod
     def parcels(records) -> list:

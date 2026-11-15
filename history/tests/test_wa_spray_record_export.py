@@ -215,6 +215,92 @@ class TankPrintsOnceTests(_WAFarm):
         self.assertIn("line 1: WA-FARM-1234; line 2: WA-FARM-9999; line 3: WA-FARM-1234", text)
 
 
+class OrchardReadTests(_WAFarm):
+    """Orchard specimen read (2026-11-14): what a reviewer misread on Coldwater Bench's export."""
+
+    def test_an_applicator_with_no_license_is_never_printed_as_the_licensed_applicator(self):
+        """(l) asks for "the licensed applicator's full name". A crew member's profile carries a
+        name and no license, and that name printed bare beside "Licensed applicator"."""
+        self.spray(applicator_name="Rafael Ibarra", applicator_certification="")
+        item, text, status = self.row("Licensed applicator")
+        self.assertEqual(item, "l")
+        self.assertEqual(text, "Rafael Ibarra (no license number on the record)")
+        self.assertEqual(status, "not_recorded")
+        self.assertIn("l", self.service().build()[0].blank_items())
+        csv_row = self.service().csv_rows()[0]
+        self.assertEqual(csv_row["l_applicator"], "Rafael Ibarra (no license number on the record)")
+
+    def test_a_licensed_applicator_prints_as_recorded(self):
+        self.spray()
+        self.assertEqual(self.row("Licensed applicator")[1:], ("Maria Lopez", "value"))
+
+    def test_one_application_on_several_blocks_names_its_siblings(self):
+        """A spray logged once on four blocks is four records, so it prints four blocks each with
+        the whole 07:30 to 13:00 window. Each says it is part of one application."""
+        group = uuid.uuid4()
+        for block in ("B1", "B2"):
+            self.spray(block_id=block, application_group=group)
+        self.spray(block_id="B3", date=WHEN.replace(day=20), application_start=WHEN.replace(day=20))
+        passes = self.service().build()
+        self.assertEqual(len(passes), 3)
+        expected = (
+            "Logged as one application on 2 blocks, printed as applications 1 and 2 (North Orchard). "
+            "The start and stop times are the whole application's, not this block's alone."
+        )
+        self.assertEqual(passes[0].notes, [expected])
+        self.assertEqual(passes[1].notes, [expected])
+        self.assertEqual(passes[2].notes, [])
+        self.assertIn("printed as applications 1 and 2", self.pdf_text())
+        self.assertIn("printed as applications 1 and 2", self.service().csv_rows()[0]["notes"])
+
+    def test_blocks_corrected_to_different_times_drop_the_whole_window_sentence(self):
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        self.spray(block_id="B2", application_group=group, application_end=WHEN.replace(hour=11))
+        note = self.service().build()[0].notes[0]
+        self.assertIn("printed as applications 1 and 2", note)
+        self.assertNotIn("whole application's", note)
+
+    def test_a_block_with_no_time_on_record_drops_the_whole_window_sentence(self):
+        """Review of #430: a block marked "time not on the source record" holds no window, so the
+        others' shared window is not the whole application's."""
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        self.spray(block_id="B2", application_group=group)
+        self.spray(block_id="B3", application_group=group, application_start=None, application_end=None)
+        note = self.service().build()[0].notes[0]
+        self.assertIn("printed as applications 1, 2 and 3", note)
+        self.assertNotIn("whole application's", note)
+
+    def test_blocks_corrected_to_different_days_say_so(self):
+        """Review of #430: `application_group` never changes, a block's date can be corrected alone."""
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        later = WHEN + timedelta(days=1)
+        self.spray(block_id="B2", application_group=group, date=later, application_start=later)
+        note = self.service().build()[0].notes[0]
+        self.assertIn("Logged as one application on 2 blocks", note)
+        self.assertIn("dates were later recorded differently", note)
+        self.assertNotIn("whole application's", note)
+
+    def test_a_tank_on_two_blocks_names_the_other_block(self):
+        tank = uuid.uuid4()
+        for block in ("B1", "B2"):
+            for line, (name, role) in enumerate((("Entrust SC", "product"), ("Dyne-Amic", "adjuvant")), start=1):
+                self.spray(
+                    block_id=block,
+                    commercial_name=name,
+                    tank_mix_group=tank,
+                    tank_mix_line=line,
+                    tank_mix_role=role,
+                    application_group=uuid.uuid5(tank, str(line)),
+                )
+        passes = self.service().build()
+        self.assertEqual(len(passes), 2)
+        self.assertTrue(all(p.is_tank for p in passes))
+        self.assertIn("printed as applications 1 and 2", passes[0].notes[0])
+
+
 class BlankItemTests(_WAFarm):
     def _pass(self):
         return self.service().build()[0]

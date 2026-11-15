@@ -6793,6 +6793,11 @@ class AuditExportService:
             approved_wsda_ids = set()
             approved_plan_names = set()
             osp_loaded = False
+            # "OSP-approved" is a certifier's act. The read below falls back to the newest plan of
+            # any status, so a draft's materials list must never print as approved: a draft or a
+            # submitted plan says what the operator listed, and the column says which plan it was.
+            plan_status = ""
+            plan_version = None
             try:
                 from certifications.models import OrganicSystemPlan
 
@@ -6805,6 +6810,8 @@ class AuditExportService:
                 )
                 if _osp:
                     osp_loaded = True
+                    plan_status = _osp.status or ""
+                    plan_version = _osp.version_number
                     approved_omri_ids = set(_osp.approved_omri_products.values_list("id", flat=True))
                     approved_nl_ids = set(_osp.approved_national_list_substances.values_list("id", flat=True))
                     approved_wsda_ids = set(_osp.approved_wsda_materials.values_list("id", flat=True))
@@ -6918,7 +6925,9 @@ class AuditExportService:
                     or (event_name and event_name in approved_plan_names)
                 )
                 if on_plan:
-                    osp_approval = "OSP-approved"
+                    osp_approval = (
+                        "OSP-approved" if plan_status == "active" else f"On {plan_status or 'unapproved'} plan"
+                    )
                 elif osp_loaded and (omri or nl or wsda):
                     osp_approval = "Listed — not on OSP"
                     not_on_osp_count += 1
@@ -6987,12 +6996,34 @@ class AuditExportService:
                     )
                 )
 
+            if osp_loaded and plan_status != "active":
+                # A superseded plan WAS approved (`activate()` requires approval evidence before it
+                # supersedes one), so only a draft or a submitted plan is called "not approved".
+                plan_said = {
+                    "draft": "a draft, not approved",
+                    "submitted": "submitted to the certifier, not yet approved",
+                    "superseded": "superseded by a later version, so it is not the plan in force",
+                    "withdrawn": "withdrawn, so it is not the plan in force",
+                }.get(plan_status, "not the active plan")
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"The OSP Approval column reads plan v{plan_version}, which is {plan_said}. "
+                        f"\"On {plan_status or 'unapproved'} plan\" means the input is listed on that plan, "
+                        "not that it is on the approved plan in force.",
+                        self._styles["footer_note"],
+                    )
+                )
+
             if osp_loaded and not_on_osp_count > 0:
+                plan_words = (
+                    "active OSP Material List" if plan_status == "active" else f"{plan_status} plan's materials list"
+                )
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
                         f"<b>[REVIEW] OSP material approval:</b> {not_on_osp_count} input(s) are OMRI / "
-                        "National-List recognized but are NOT on this operation's active OSP Material List. "
+                        f"National-List recognized but are NOT on this operation's {plan_words}. "
                         "Certifiers generally require every input to be approved on the OSP before use — add "
                         "them to the OSP "
                         "Material List or confirm approval with the certifier.",
