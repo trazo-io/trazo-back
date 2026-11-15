@@ -244,8 +244,8 @@ class OrchardReadTests(_WAFarm):
         passes = self.service().build()
         self.assertEqual(len(passes), 3)
         expected = (
-            "Logged as one application on 2 blocks, printed as applications 1 and 2 (North Orchard). "
-            "The start and stop times are the whole application's, not this block's alone."
+            "Part of spray job 1: logged as one application and printed as applications 1 and 2 (North Orchard). "
+            "The start and stop times are the whole job's, not this record's alone."
         )
         self.assertEqual(passes[0].notes, [expected])
         self.assertEqual(passes[1].notes, [expected])
@@ -259,18 +259,18 @@ class OrchardReadTests(_WAFarm):
         self.spray(block_id="B2", application_group=group, application_end=WHEN.replace(hour=11))
         note = self.service().build()[0].notes[0]
         self.assertIn("printed as applications 1 and 2", note)
-        self.assertNotIn("whole application's", note)
+        self.assertNotIn("whole job's", note)
 
     def test_a_block_with_no_time_on_record_drops_the_whole_window_sentence(self):
         """Review of #430: a block marked "time not on the source record" holds no window, so the
-        others' shared window is not the whole application's."""
+        others' shared window is not the whole job's."""
         group = uuid.uuid4()
         self.spray(block_id="B1", application_group=group)
         self.spray(block_id="B2", application_group=group)
         self.spray(block_id="B3", application_group=group, application_start=None, application_end=None)
         note = self.service().build()[0].notes[0]
         self.assertIn("printed as applications 1, 2 and 3", note)
-        self.assertNotIn("whole application's", note)
+        self.assertNotIn("whole job's", note)
 
     def test_blocks_corrected_to_different_days_say_so(self):
         """Review of #430: `application_group` never changes, a block's date can be corrected alone."""
@@ -279,9 +279,9 @@ class OrchardReadTests(_WAFarm):
         later = WHEN + timedelta(days=1)
         self.spray(block_id="B2", application_group=group, date=later, application_start=later)
         note = self.service().build()[0].notes[0]
-        self.assertIn("Logged as one application on 2 blocks", note)
-        self.assertIn("dates were later recorded differently", note)
-        self.assertNotIn("whole application's", note)
+        self.assertIn("Part of spray job 1: logged as one application", note)
+        self.assertIn("Their dates were later recorded differently", note)
+        self.assertNotIn("whole job's", note)
 
     def test_a_tank_on_two_blocks_names_the_other_block(self):
         tank = uuid.uuid4()
@@ -299,6 +299,82 @@ class OrchardReadTests(_WAFarm):
         self.assertEqual(len(passes), 2)
         self.assertTrue(all(p.is_tank for p in passes))
         self.assertIn("printed as applications 1 and 2", passes[0].notes[0])
+
+
+class SprayJobIndexTests(_WAFarm):
+    """A reviewer counted "23 applications" from 12 sheet rows: a spray logged once on four blocks
+    prints once per block. The index on page one gives one row per job and the applications it
+    printed as, so the count reads right without merging what WAC 16-228-1320(1)(b) locates by field."""
+
+    def _four_blocks_and_a_tank_on_two(self):
+        group = uuid.uuid4()
+        for block in ("B1", "B2", "B3", "B4"):
+            self.spray(block_id=block, application_group=group, commercial_name="JMS Stylet-Oil", area="5")
+        tank = uuid.uuid4()
+        later = WHEN + timedelta(days=5)
+        for block in ("B1", "B2"):
+            for line, (name, role) in enumerate((("Entrust SC", "product"), ("Dyne-Amic", "adjuvant")), start=1):
+                self.spray(
+                    block_id=block,
+                    date=later,
+                    application_start=later,
+                    application_end=later + timedelta(hours=2),
+                    commercial_name=name,
+                    tank_mix_group=tank,
+                    tank_mix_line=line,
+                    tank_mix_role=role,
+                    application_group=uuid.uuid5(tank, str(line)),
+                )
+        self.spray(block_id="B9", date=WHEN + timedelta(days=9), application_start=WHEN + timedelta(days=9))
+
+    def test_jobs_join_the_blocks_of_one_application(self):
+        self._four_blocks_and_a_tank_on_two()
+        service = self.service()
+        jobs = service.jobs()
+        self.assertEqual(len(service.build()), 7)
+        self.assertEqual([len(job.passes) for job in jobs], [4, 2, 1])
+        first, tank, single = jobs
+        self.assertEqual(first.pass_numbers_text(), "1, 2, 3 and 4")
+        self.assertEqual(first.products(), ["JMS Stylet-Oil"])
+        self.assertEqual(first.acres_text(), "20 acres")
+        self.assertEqual(first.date_text(), "2026-06-15")
+        self.assertEqual(tank.products(), ["Entrust SC", "Dyne-Amic"])
+        self.assertEqual(tank.places(), ["North Orchard, block B1", "North Orchard, block B2"])
+        self.assertEqual(single.pass_numbers_text(), "7")
+        self.assertEqual(service.summary()["job_count"], 3)
+
+    def test_the_pdf_opens_with_the_index_and_the_true_count(self):
+        self._four_blocks_and_a_tank_on_two()
+        text = self.pdf_text()
+        self.assertIn("Spray jobs: 3, printed as 7 applications, one per parcel or block.", text)
+        self.assertIn("Printed as applications", text)
+        self.assertIn("1, 2, 3 and 4", text)
+        self.assertLess(text.index("Spray jobs: 3"), text.index("Application 1:"))
+
+    def test_the_csv_carries_the_job_on_every_line(self):
+        self._four_blocks_and_a_tank_on_two()
+        rows = self.service().csv_rows()
+        self.assertEqual([r["job"] for r in rows], [1, 1, 1, 1, 2, 2, 2, 2, 3])
+        self.assertEqual(WASprayRecordService.CSV_COLUMNS[1], ("job", "Spray job"))
+
+    def test_acres_are_not_added_up_when_a_block_has_none(self):
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        self.spray(block_id="B2", application_group=group, area="", area_unit="")
+        job = self.service().jobs()[0]
+        self.assertEqual(job.acres_text(), "Not added up: a block's acres are not recorded in acres or hectares")
+
+    def test_a_job_whose_blocks_were_corrected_apart_lists_each_day(self):
+        group = uuid.uuid4()
+        self.spray(block_id="B1", application_group=group)
+        later = WHEN + timedelta(days=1)
+        self.spray(block_id="B2", application_group=group, date=later, application_start=later)
+        self.assertEqual(self.service().jobs()[0].date_text(), "Days differ: 2026-06-15, 2026-06-16")
+
+    def test_single_sprays_are_one_job_each(self):
+        self.spray()
+        self.spray(commercial_name="Kocide 3000-O", date=WHEN.replace(day=20))
+        self.assertEqual(self.service().summary()["job_count"], 2)
 
 
 class BlankItemTests(_WAFarm):

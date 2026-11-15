@@ -586,7 +586,11 @@ class Run7PlanRecordsTests(TestCase):
         from certifications.models import OSPAnnualUpdate
 
         return OSPAnnualUpdate.objects.create(
-            establishment=self.est, prior_osp=self.v3, reporting_year=2026, revision_number=number, **kw
+            establishment=self.est,
+            prior_osp=self.v3,
+            reporting_year=2026,
+            revision_number=number,
+            **{"prior_plan_basis": OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION, **kw},
         )
 
     def test_a_notice_filed_on_v1_appears_in_the_v3_dossier(self):
@@ -1269,6 +1273,7 @@ class Run7bResidualTests(TestCase):
             revision_number=1,
             changes_summary="No changes.",
             sections_unchanged_attestation={"application_information": True},
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
         )
         return sign_filing(filing, self.user, signer_title="Owner")
 

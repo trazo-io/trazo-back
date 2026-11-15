@@ -140,6 +140,13 @@ def changed_only_scope(osp) -> PacketScope:
             "to compare. Build the full packet, or record the annual update first.",
         )
     prior, new = filing.prior_osp, filing.new_osp
+    if filing.holds_no_agent_copy:
+        raise PacketScopeUnavailable(
+            "first_version",
+            f"Plan v{prior.version_number} is the first plan version in Trazo, and the certifying agent holds the "
+            "plan filed with it before Trazo. Trazo has no copy of that plan, so it cannot tell which sections "
+            "changed against it. Build the full packet.",
+        )
     if new is None:
         raise PacketScopeUnavailable(
             "no_new_version",

@@ -1960,6 +1960,21 @@ class OSPAnnualUpdate(models.Model):
     sales_period_start = models.DateField(null=True, blank=True)
     sales_period_end = models.DateField(null=True, blank=True)
 
+    # What the certifier holds as "the previous plan", asked only when `prior_osp` is the
+    # operation's first plan version in Trazo (no `previous_version`). Overall review 2026-11,
+    # OV-PK-C01/W03/O02: in a grower's first year on Trazo the certifier holds the plan filed before
+    # Trazo, on its own forms, and Trazo has no copy of it, so no comparison Trazo makes is a change
+    # list against it. Status cannot answer this: `activate` takes the certificate a grower already
+    # holds for the old plan. Blank on every later version (the comparison is between Trazo
+    # versions) and on filings signed before the question existed.
+    PRIOR_BASIS_AGENT_FILE = "agent_file"
+    PRIOR_BASIS_TRAZO_VERSION = "trazo_version"
+    PRIOR_PLAN_BASIS_CHOICES = [
+        (PRIOR_BASIS_AGENT_FILE, "The certifier holds a plan filed before Trazo"),
+        (PRIOR_BASIS_TRAZO_VERSION, "The certifier received this plan version from Trazo"),
+    ]
+    prior_plan_basis = models.CharField(max_length=20, choices=PRIOR_PLAN_BASIS_CHOICES, blank=True, default="")
+
     # ------------------------------------------------------------------
     # Revisions. A filed update is never edited: a correction is the next revision, and the
     # one it corrects stays exactly as signed and filed.
@@ -2126,7 +2141,16 @@ class OSPAnnualUpdate(models.Model):
             attached = sorted(str(pid) for pid in self.supporting_documents.values_list("public_id", flat=True))
             if attached:
                 content["supporting_documents"] = attached
+        # Added 2026-11-14, hashed only when stated, for the same reason.
+        if self.prior_plan_basis:
+            content["prior_plan_basis"] = self.prior_plan_basis
         return content
+
+    @property
+    def holds_no_agent_copy(self) -> bool:
+        """True when the operation states its certifier holds a plan filed before Trazo, so Trazo has
+        no copy of the plan the changes are measured against."""
+        return self.prior_plan_basis == self.PRIOR_BASIS_AGENT_FILE
 
     def content_sha256(self) -> str:
         import hashlib

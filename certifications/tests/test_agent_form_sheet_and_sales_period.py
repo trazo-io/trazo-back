@@ -76,7 +76,10 @@ class _Farm(TestCase):
 
     def _filing(self, osp, reporting_year=2027, **kw):
         return OSPAnnualUpdate.objects.create(
-            prior_osp=osp, reporting_year=reporting_year, changes_summary="No changes to the plan this year.", **kw
+            prior_osp=osp,
+            reporting_year=reporting_year,
+            changes_summary="No changes to the plan this year.",
+            **{"prior_plan_basis": OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION, **kw},
         )
 
     def _sale(self, when, amount, organic=True):

@@ -171,7 +171,12 @@ class AgentSentFormTests(_Farm):
 class RoutingNeverAnswersTheAgentsFormTests(_Farm):
     def test_a_filed_update_never_makes_a_renewal_form_answered(self):
         osp = self._plan("CCOF")
-        filing = OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow.")
+        filing = OSPAnnualUpdate.objects.create(
+            prior_osp=osp,
+            reporting_year=2026,
+            changes_summary="Hedgerow.",
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+        )
         file_filing(sign_filing(filing, self.user), "agent_web_form")
         for coverage in form_coverage(osp, "ccof"):
             if coverage.document_id in ("Annual Renewal Contract", "ORGB88"):
@@ -181,7 +186,12 @@ class RoutingNeverAnswersTheAgentsFormTests(_Farm):
         """Routing lives in 02s. A filed 02 is the bytes that were filed, whatever the register
         says about the agent's forms afterwards."""
         osp = self._plan("CCOF")
-        filing = OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow.")
+        filing = OSPAnnualUpdate.objects.create(
+            prior_osp=osp,
+            reporting_year=2026,
+            changes_summary="Hedgerow.",
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+        )
         filing = file_filing(sign_filing(filing, self.user), "agent_web_form", datetime(2026, 8, 21, tzinfo=dt_tz.utc))
         frozen = bytes(filing.filed_pdf)
         osp.approval_certifier_name = "Washington State Department of Agriculture"
@@ -238,7 +248,11 @@ class Run3RenewalMeaningTests(_Farm):
             with self.subTest(agent=agent):
                 osp = self._plan(agent)
                 filing = OSPAnnualUpdate.objects.create(
-                    prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow planted.", created_by=self.user
+                    prior_osp=osp,
+                    reporting_year=2026,
+                    changes_summary="Hedgerow planted.",
+                    created_by=self.user,
+                    prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
                 )
                 text = _pdf_text(zipfile.ZipFile(io.BytesIO(generate_osp_packet(osp))).read("02-annual-update.pdf"))
                 self.assertIn("not any certifying agent's fee figure", text)
@@ -254,7 +268,12 @@ class Run3RenewalMeaningTests(_Farm):
         from certifications.services.annual_update_filing import file_filing, sign_filing
 
         osp = self._plan("Organic Certifiers, Inc.")
-        filing = OSPAnnualUpdate.objects.create(prior_osp=osp, reporting_year=2026, changes_summary="Hedgerow.")
+        filing = OSPAnnualUpdate.objects.create(
+            prior_osp=osp,
+            reporting_year=2026,
+            changes_summary="Hedgerow.",
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+        )
         filing = file_filing(sign_filing(filing, self.user, signer_title="Owner"), filing_method="email")
         osp.approval_certifier_name = "Oregon Tilth Certified Organic"
         osp.save(update_fields=["approval_certifier_name"])

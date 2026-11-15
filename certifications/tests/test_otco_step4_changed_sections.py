@@ -65,7 +65,13 @@ class _Renewal(TestCase):
         )
         _answer(v1, "g5_0_pest", "pest_prevention", "Hedgerows and owl boxes")
         v2 = fork_plan(v1, self.user)
-        OSPAnnualUpdate.objects.create(prior_osp=v1, new_osp=v2, reporting_year=2027, changes_summary="Pest plan.")
+        OSPAnnualUpdate.objects.create(
+            prior_osp=v1,
+            new_osp=v2,
+            reporting_year=2027,
+            changes_summary="Pest plan.",
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+        )
         return v1, v2
 
     def _supplement(self, osp) -> str:

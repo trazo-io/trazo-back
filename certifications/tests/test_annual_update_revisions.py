@@ -63,6 +63,9 @@ class _Renewal(APITestCase):
             "prior_osp": self.v1.pk,
             "reporting_year": year,
             "changes_summary": "Hedgerow planted on the north line.",
+            # v1 is the first plan version in Trazo: the certifier received it from Trazo here, so
+            # the comparisons these tests read are the ones before 2026-11-14.
+            "prior_plan_basis": OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
             **content,
         }
         res = self.client.post(self._base(), payload, format="json")
@@ -547,7 +550,12 @@ class FreezeEvidenceCommitsNothingTests(TransactionTestCase):
             created_by=user,
             module_responses={"modules": {"g6_0_production": {"answers": {"split_operation": {"value": False}}}}},
         )
-        filing = OSPAnnualUpdate.objects.create(prior_osp=plan, reporting_year=2026, changes_summary="Hedgerow.")
+        filing = OSPAnnualUpdate.objects.create(
+            prior_osp=plan,
+            reporting_year=2026,
+            changes_summary="Hedgerow.",
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+        )
         filing = sign_filing(filing, user, signer_title="Owner")
         filing = file_filing(filing, filing_method="email")
         plan.refresh_from_db()

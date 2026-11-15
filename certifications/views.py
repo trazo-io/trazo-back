@@ -952,6 +952,10 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 osp.submitted_at = dj_tz.now()
                 # Save FIRST so submitted_at is in the PDF.
                 osp.save(update_fields=["status", "submitted_at", "updated_at"])
+                # A first version leaving draft: what the certifier holds is the operator's to say now.
+                from .services.annual_update_filing import release_server_answered_basis
+
+                release_server_answered_basis(osp)
 
                 # This render IS the frozen submission copy: never labelled a reconstruction.
                 pdf_bytes = generate_osp_snapshot_pdf(osp, generated_from_records=False)

@@ -17,6 +17,9 @@ WHAT A PAGE SHOWS
 One block per application pass, for one farm and one period. A tank (the records sharing
 `tank_mix_group` on one season and block, `history/services/tank_mix.py`) prints ONCE, with every
 product line under it: (d), (f), (g), (h) and (i) are per product, the rest belong to the pass.
+Page one indexes the SPRAY JOBS: what was logged as one application, joined by `application_group`.
+A spray logged once on several parcels is one record per parcel, so it prints once per parcel; the
+index and a note on each tie them together instead of merging what (1)(b) locates field by field.
 Every row is labelled with its item letter. An item the record does not hold prints one of three
 phrases, never a value taken from somewhere else:
 
@@ -244,6 +247,59 @@ class ApplicationPass:
         return "Items not on this record: " + ", ".join(f"({letter})" for letter in blank) + "."
 
 
+@dataclass
+class SprayJob:
+    """What the operator logged as one application: one pass, or every pass that shares an
+    `application_group` (a spray logged once on several blocks, a tank on several blocks). The
+    record keeps one row per block, so the export prints per block and this ties them together."""
+
+    number: int
+    passes: list
+
+    @property
+    def events(self) -> list:
+        return [e for record in self.passes for e in record.events]
+
+    def pass_numbers_text(self) -> str:
+        numbers = [str(record.number) for record in self.passes]
+        if len(numbers) == 1:
+            return numbers[0]
+        return ", ".join(numbers[:-1]) + f" and {numbers[-1]}"
+
+    def days(self) -> list:
+        return list(dict.fromkeys(d for d in (_day(e.date) for e in self.events) if d))
+
+    def date_text(self) -> str:
+        days = self.days()
+        if not days:
+            return NOT_RECORDED
+        if len(days) == 1:
+            return days[0].isoformat()
+        return "Days differ: " + ", ".join(d.isoformat() for d in days)
+
+    def products(self) -> list:
+        return list(dict.fromkeys(line.name.text for record in self.passes for line in record.products))
+
+    def places(self) -> list:
+        out = []
+        for record in self.passes:
+            name = _s(getattr(record.parcel, "name", None)) or "parcel not recorded"
+            block = _s(record.events[0].block_id)
+            out.append(f"{name}{f', block {block}' if block else ''}")
+        return out
+
+    def acres_text(self) -> str:
+        """The blocks' acres added up, only when every block holds a figure in acres or hectares."""
+        total = 0.0
+        for record in self.passes:
+            first = record.events[0]
+            acres = _acres(_s(first.area) or _num(getattr(first, "area_numeric", None)), _s(first.area_unit))
+            if acres is None:
+                return "Not added up: a block's acres are not recorded in acres or hectares"
+            total += acres
+        return f"{_num(Decimal(str(round(total, 2))))} acres"
+
+
 def _line_number(event) -> str:
     return str(event.tank_mix_line) if getattr(event, "tank_mix_line", None) else "1"
 
@@ -328,6 +384,7 @@ class WASprayRecordService:
         self.start = start
         self.end = end
         self._built = None
+        self._jobs = None
 
     @classmethod
     def for_year(cls, establishment, year: int):
@@ -767,47 +824,62 @@ class WASprayRecordService:
             self._build_pass(number, lines, operator_rows, mapped, entered)
             for number, lines in enumerate(groups, start=1)
         ]
-        self._note_one_application_on_several_blocks(self._built)
+        self._note_one_application_on_several_blocks()
         return self._built
 
-    @staticmethod
-    def _note_one_application_on_several_blocks(passes) -> None:
+    def jobs(self) -> list:
+        """The passes joined into spray jobs by `application_group`, in the order they print."""
+        if self._jobs is not None:
+            return self._jobs
+        passes = self.build()
+        parent = {record.number: record.number for record in passes}
+
+        def root(n):
+            while parent[n] != n:
+                parent[n] = parent[parent[n]]
+                n = parent[n]
+            return n
+
+        first_by_group = {}
+        for record in passes:
+            for group in {e.application_group for e in record.events if getattr(e, "application_group", None)}:
+                if group in first_by_group:
+                    parent[root(record.number)] = root(first_by_group[group])
+                else:
+                    first_by_group[group] = record.number
+        members = {}
+        for record in passes:
+            members.setdefault(root(record.number), []).append(record)
+        ordered = sorted(members.values(), key=lambda group: group[0].number)
+        self._jobs = [SprayJob(number=n, passes=group) for n, group in enumerate(ordered, start=1)]
+        return self._jobs
+
+    def _note_one_application_on_several_blocks(self) -> None:
         """A spray logged once on several blocks is one record per block (`multi_target`), so it
         prints as one block per parcel. Without a note, four blocks sprayed 07:30 to 13:00 read as
-        four applications each lasting the whole window. Each such block names its siblings."""
-        by_group = {}
-        for record in passes:
-            for group in {e.application_group for e in record.events if getattr(e, "application_group", None)}:
-                by_group.setdefault(group, []).append(record)
-        for record in passes:
-            siblings = {}
-            for group in {e.application_group for e in record.events if getattr(e, "application_group", None)}:
-                for other in by_group.get(group, []):
-                    siblings[other.number] = other
-            if len(siblings) < 2:
+        four applications each lasting the whole window. Each such block names its siblings and the
+        index row (`jobs`) that ties them."""
+        for job in self.jobs():
+            if len(job.passes) < 2:
                 continue
-            ordered = [siblings[n] for n in sorted(siblings)]
-            numbers = [str(other.number) for other in ordered]
-            listed = ", ".join(numbers[:-1]) + f" and {numbers[-1]}"
-            places = []
-            for other in ordered:
-                name = _s(getattr(other.parcel, "name", None)) or "parcel not recorded"
-                if name not in places:
-                    places.append(name)
+            places = list(
+                dict.fromkeys(_s(getattr(r.parcel, "name", None)) or "parcel not recorded" for r in job.passes)
+            )
             note = (
-                f"Logged as one application on {len(ordered)} blocks, printed as applications {listed} "
-                f"({', '.join(places)})."
+                f"Part of spray job {job.number}: logged as one application and printed as applications "
+                f"{job.pass_numbers_text()} ({', '.join(places)})."
             )
             # `application_group` is fixed at creation, but each block's date and times can be
             # corrected alone afterwards. The note claims sameness only where the records still hold it.
-            events = [e for other in ordered for e in other.events]
+            events = job.events
             if len({_day(e.date) for e in events}) > 1:
-                note += " The blocks' dates were later recorded differently; item (c) prints each block's own day."
+                note += " Their dates were later recorded differently; item (c) prints each one's own day."
             else:
                 windows = {(e.application_start, e.application_end) for e in events}
                 if len(windows) == 1 and any(next(iter(windows))):
-                    note += " The start and stop times are the whole application's, not this block's alone."
-            record.notes.append(note)
+                    note += " The start and stop times are the whole job's, not this record's alone."
+            for record in job.passes:
+                record.notes.append(note)
 
     @staticmethod
     def parcels(records) -> list:
@@ -834,6 +906,7 @@ class WASprayRecordService:
             "period_start": self.start.isoformat(),
             "period_end": self.end.isoformat(),
             "pass_count": len(passes),
+            "job_count": len(self.jobs()),
             "product_line_count": sum(len(p.products) for p in passes),
             "passes_with_blank_items": sum(1 for p in passes if p.blank_items()),
             "parcels_without_map": [parcel.name for parcel, mapped in parcels if not mapped],
@@ -865,6 +938,7 @@ class WASprayRecordService:
     #: its lines and the "Pass" column ties them, so no cell is blank by layout.
     CSV_COLUMNS = (
         ("pass", "Pass"),
+        ("job", "Spray job"),
         ("line", "Line in pass"),
         ("a_name", "(a) Person for whom applied"),
         ("a_address", "(a) Address"),
@@ -907,6 +981,7 @@ class WASprayRecordService:
 
     def csv_rows(self) -> list:
         rows = []
+        job_of = {record.number: job.number for job in self.jobs() for record in job.passes}
         for record in self.build():
             pass_rows = record.before + record.after
             location = next(
@@ -917,6 +992,7 @@ class WASprayRecordService:
             )
             shared = {
                 "pass": record.number,
+                "job": job_of.get(record.number, ""),
                 "a_name": self._by_label(pass_rows, "a", "Name"),
                 "a_address": self._by_label(pass_rows, "a", "Address"),
                 "b_parcel": self._by_label(pass_rows, "b", "Parcel and block"),
@@ -1085,9 +1161,11 @@ class WASprayRecordService:
         story.append(Spacer(1, 6))
         story.append(p(self.header_text(), "body"))
         passes = self.build()
+        jobs = self.jobs()
         story.append(
             p(
-                f"Applications: {len(passes)}. Product lines: {sum(len(x.products) for x in passes)}. "
+                f"Spray jobs: {len(jobs)}, printed as {len(passes)} applications, one per parcel or block. "
+                f"Product lines: {sum(len(x.products) for x in passes)}. "
                 "Pesticide, fungicide and herbicide records logged for this farm with a date in the period; "
                 "fertilizer records are not included. A tank prints once, with each product on its own line. "
                 "Each application shows the day it was made and the day its record was entered in Trazo "
@@ -1099,6 +1177,44 @@ class WASprayRecordService:
         )
         if not passes:
             story.append(p("No pesticide application is recorded for this farm in this period.", "body"))
+        else:
+            story.append(p("Spray jobs", "head"))
+            story.append(
+                p(
+                    "Each row is what was logged as one application. A job on several parcels or blocks is one "
+                    "record for each, so it prints as one application for each below; this index ties them together.",
+                    "body",
+                )
+            )
+            index = [
+                [
+                    p("Job", "cell_head"),
+                    p("Date", "cell_head"),
+                    p("Product(s)", "cell_head"),
+                    p("Parcel and block", "cell_head"),
+                    p("Acres", "cell_head"),
+                    p("Printed as applications", "cell_head"),
+                ]
+            ]
+            for job in jobs:
+                index.append(
+                    [
+                        p(job.number),
+                        p(job.date_text()),
+                        p("; ".join(job.products())),
+                        p("; ".join(job.places())),
+                        p(job.acres_text()),
+                        p(job.pass_numbers_text()),
+                    ]
+                )
+            index_table = Table(
+                index,
+                colWidths=[0.4 * inch, 0.9 * inch, 1.85 * inch, 2.2 * inch, 0.95 * inch, 1.0 * inch],
+                repeatRows=1,
+            )
+            index_table.setStyle(head_grid)
+            story.append(index_table)
+            story.append(Spacer(1, 6))
 
         for record in passes:
             parcel_name = _s(getattr(record.parcel, "name", None)) or "parcel not recorded"

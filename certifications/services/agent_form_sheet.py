@@ -337,6 +337,9 @@ def _ccof_rows(osp, filing, ctx, submission, company, client_id) -> list[SheetRo
             "yours",
             extra={
                 "has_filing": filing is not None,
+                # The year's filing continues the first plan version in Trazo and CCOF holds the plan
+                # filed before Trazo: nothing Trazo compares is a change against CCOF's copy.
+                "first_version": bool(filing is not None and filing.holds_no_agent_copy),
                 "additions": len(filing.additions or []) if filing else 0,
                 "deletions": len(filing.deletions or []) if filing else 0,
                 "application_info_changes": bool(filing and (filing.application_info_changes or "").strip()),
