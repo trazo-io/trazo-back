@@ -142,6 +142,21 @@ DIFFERS_NARRATIVE = "narrative"  # the operator's own narrative for the section
 DIFFERS_RECORD_TYPES = "record_types"  # which record types the operator confirmed, and their labels
 
 
+def stated_modules(filing) -> list:
+    """The modules `filing` states changed against the plan on file with its agent, in registry order.
+
+    Empty unless the operation holds no Trazo copy of that plan (`holds_no_agent_copy`): there the
+    statement stands in for the comparison this module makes between two Trazo versions, and is never
+    presented as one.
+    """
+    from certifications.osp_modules import MODULE_REGISTRY
+
+    if filing is None or not filing.holds_no_agent_copy:
+        return []
+    keys = set(filing.agent_file_changed_modules or [])
+    return [module for module in MODULE_REGISTRY if module.key in keys]
+
+
 def section_differences(prior, new) -> dict[str, dict]:
     """{section key: {"differs": [...], "modules": [Module, ...]}} for every § 205.201(a) section
     whose content differs between `prior` and `new`, in regulation order.

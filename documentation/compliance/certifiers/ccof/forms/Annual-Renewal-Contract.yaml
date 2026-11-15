@@ -60,12 +60,15 @@ items:
     - certifications.OSPAnnualUpdate.deletions
     - certifications.OSPAnnualUpdate.sections_unchanged_attestation
     - certifications.OSPAnnualUpdate.prior_plan_basis
+    - certifications.OSPAnnualUpdate.agent_file_changed_modules
+    - certifications.OSPAnnualUpdate.agent_file_nothing_changed
     prints: 02-annual-update.pdf — (a)(1) changes, (a)(2) additions and deletions, sections attested unchanged
   gap: The filing records the changes themselves, not CCOF's two-way election. An operation with no changes and
     one with changes both read their answer off 02, but which box to tick is the operator's call on CCOF's form.
     In a first year on Trazo (`prior_plan_basis` agent_file, 2026-11-14) CCOF holds the plan filed before Trazo
     and Trazo has no copy of it. The cover, 02 and 02s say so, and the changes are the operator's own account
-    against that plan.
+    against that plan. The operator may state which plan sections changed against it, or that nothing did, and
+    02 and 02s print that statement as the operator's.
   fix: Print on 02s which of CCOF's two Step 2 options the filed update corresponds to, from whether (a)(1) or
     (a)(2) lists anything.
 - ref: Operation Name

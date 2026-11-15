@@ -771,7 +771,23 @@ def agent_form_sheet(osp) -> dict | None:
         SheetRow("3", "production_partners", "yours"),
     ]
     step4 = changed_sections(osp)
-    if step4 is None or step4.state != "compared":
+    if step4 is not None and step4.state == "stated":
+        # A first year: the list is the operation's statement on its annual update, never a comparison
+        # (Trazo has no copy of the plan the agent holds). An empty list is its "nothing changed".
+        sections = [{"label": label, "files": list(files)} for label, files in step4.forms]
+        sections += [{"label": label, "files": [path]} for label, path in step4.unmapped]
+        rows.append(
+            SheetRow(
+                "4",
+                "osp_changes",
+                "value",
+                sections,
+                "filing",
+                {"stated": True, "prior_version": step4.prior_version},
+            )
+        )
+        since = plan_reference_date(filing.prior_osp)[0] if filing else None
+    elif step4 is None or step4.state != "compared":
         rows.append(
             SheetRow(
                 "4",
@@ -831,12 +847,14 @@ def agent_form_sheet(osp) -> dict | None:
     else:
         # The row is always there: the form names new land whatever the comparison could do. Without
         # a second plan version there is no date to count from (review of back #218).
+        # A stated list says nothing about land either: Trazo still has no copy of the plan on file.
+        reason = step4.state if step4 else "no_filing"
         rows.append(
             SheetRow(
                 "4",
                 "new_land",
                 "not_recorded",
-                extra={"reason": step4.state if step4 else "no_filing"},
+                extra={"reason": "first_version" if reason == "stated" else reason},
             )
         )
     rows.append(SheetRow("4", "submit_changes_early", "note", extra=submission))

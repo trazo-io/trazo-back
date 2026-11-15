@@ -1974,6 +1974,16 @@ class OSPAnnualUpdate(models.Model):
         (PRIOR_BASIS_TRAZO_VERSION, "The certifier received this plan version from Trazo"),
     ]
     prior_plan_basis = models.CharField(max_length=20, choices=PRIOR_PLAN_BASIS_CHOICES, blank=True, default="")
+    # What changed against that plan, as the operation states it, when the certifier holds a plan filed
+    # before Trazo (`agent_file`): module keys (`MODULE_REGISTRY`), or "nothing changed". The two are
+    # exclusive; both empty is "not stated", never "nothing changed". Trazo compares nothing here: it has
+    # no copy of the plan these are measured against (overall review 2026-11, OV-PK-O02).
+    agent_file_changed_modules = models.JSONField(default=list, blank=True)
+    agent_file_nothing_changed = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="True only when the operation states nothing in the plan on file with its agent changed",
+    )
 
     # ------------------------------------------------------------------
     # Revisions. A filed update is never edited: a correction is the next revision, and the
@@ -2144,6 +2154,10 @@ class OSPAnnualUpdate(models.Model):
         # Added 2026-11-14, hashed only when stated, for the same reason.
         if self.prior_plan_basis:
             content["prior_plan_basis"] = self.prior_plan_basis
+        if self.agent_file_changed_modules:
+            content["agent_file_changed_modules"] = list(self.agent_file_changed_modules)
+        if self.agent_file_nothing_changed is not None:
+            content["agent_file_nothing_changed"] = self.agent_file_nothing_changed
         return content
 
     @property
@@ -2151,6 +2165,13 @@ class OSPAnnualUpdate(models.Model):
         """True when the operation states its certifier holds a plan filed before Trazo, so Trazo has
         no copy of the plan the changes are measured against."""
         return self.prior_plan_basis == self.PRIOR_BASIS_AGENT_FILE
+
+    @property
+    def states_agent_file_changes(self) -> bool:
+        """The operation said what changed against the plan its agent holds: modules, or nothing."""
+        return self.holds_no_agent_copy and (
+            bool(self.agent_file_changed_modules) or self.agent_file_nothing_changed is True
+        )
 
     def content_sha256(self) -> str:
         import hashlib

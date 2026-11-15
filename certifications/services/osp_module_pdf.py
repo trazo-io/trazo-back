@@ -2988,6 +2988,37 @@ def _agent_file_sentence(filing, osp, *, then: str = "so this packet lists no ch
     )
 
 
+def _stated_module_line(module) -> str:
+    title = (module.title or {}).get("en", module.key) if isinstance(module.title, dict) else str(module.title)
+    return f"{module.code} {title}".strip()
+
+
+def _stated_changes_lines(filing, osp, styles) -> list:
+    """02: what the operation states changed against the plan on file with its agent, signed with the
+    filing. Printed only when stated; "not stated" prints nothing, never "nothing changed"."""
+    from certifications.services.plan_version_changes import stated_modules
+
+    if not filing.states_agent_file_changes:
+        return []
+    agent = _agent_name(osp)
+    story = [
+        Spacer(1, 8),
+        Paragraph(
+            _escape(f"Changed since the plan on file with {agent} (the operation's statement)"), styles["header"]
+        ),
+    ]
+    modules = stated_modules(filing)
+    if modules:
+        story += [Paragraph(_escape(f"• {_stated_module_line(m)}"), styles["body"]) for m in modules]
+    else:
+        story.append(
+            Paragraph(
+                _escape(f"Nothing in the plan on file with {agent} changed, as the operation states."), styles["body"]
+            )
+        )
+    return story
+
+
 def _renewal_context(osp) -> dict:
     """The facts a renewal cover is read for, gathered once for the cover and the filing PDF.
 
@@ -3999,6 +4030,7 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
         Paragraph(_escape(filing.changes_summary or "—"), styles["body"]),
     ]
     story += _supporting_document_lines(filing, styles)
+    story += _stated_changes_lines(filing, osp, styles)
     story += [
         Spacer(1, 8),
         # Run 3, R3-01: the year is stated, so a change already made cannot read as an intention.
@@ -4278,21 +4310,60 @@ def _agent_file_flowables(filing, osp, styles) -> list:
     for section updates to its living plan, and a packet that says nothing about either reads as
     "nothing changed" (overall review 2026-11, OV-PK-C01, OV-PK-W03).
     """
+    from certifications.services.packet_coverage import _module_location
+    from certifications.services.plan_version_changes import stated_modules
+
     if filing is None or not filing.holds_no_agent_copy:
         return []
     agent = _agent_name(osp)
-    return [
+    send = f"Send the changed sections the way {agent}'s renewal asks, on {agent}'s own forms."
+    story = [
         Spacer(1, 10),
         Paragraph(_escape(f"Changes against the plan on file with {agent}"), styles["header"]),
+    ]
+    if not filing.states_agent_file_changes:
+        story.append(
+            Paragraph(
+                _escape(
+                    _agent_file_sentence(
+                        filing, osp, then="so this packet cannot list which sections changed against it."
+                    )
+                    + " The year's changes are the ones the operation states on its annual update (document 02). "
+                    + send
+                ),
+                styles["body"],
+            )
+        )
+        return story
+    story.append(
         Paragraph(
             _escape(
-                _agent_file_sentence(filing, osp, then="so this packet cannot list which sections changed against it.")
-                + f" The year's changes are the ones the operation states on its annual update (document 02). Send "
-                f"the changed sections the way {agent}'s renewal asks, on {agent}'s own forms."
+                _agent_file_sentence(
+                    filing, osp, then="so what follows is the operation's own statement, not a comparison Trazo made."
+                )
             ),
             styles["body"],
-        ),
+        )
+    )
+    modules = stated_modules(filing)
+    if not modules:
+        story.append(
+            Paragraph(
+                _escape(f"The operation states that nothing in the plan on file with {agent} changed."), styles["body"]
+            )
+        )
+        return story
+    story.append(
+        Paragraph(
+            _escape("Sections the operation states changed, and where their current answers are in this packet:"),
+            styles["body"],
+        )
+    )
+    story += [
+        Paragraph(_escape(f"• {_stated_module_line(m)}: {_module_location(m.key)}"), styles["body"]) for m in modules
     ]
+    story.append(Paragraph(_escape(send), styles["body"]))
+    return story
 
 
 def _changed_sections_flowables(osp, styles) -> list:
@@ -4310,7 +4381,14 @@ def _changed_sections_flowables(osp, styles) -> list:
     agent = result.agent_name
     story = [
         Spacer(1, 10),
-        Paragraph("OSP Update Form Step 4: plan sections whose answers changed", styles["header"]),
+        Paragraph(
+            (
+                "OSP Update Form Step 4: plan sections the operation states changed"
+                if result.state == "stated"
+                else "OSP Update Form Step 4: plan sections whose answers changed"
+            ),
+            styles["header"],
+        ),
     ]
     if result.state == "no_filing":
         story.append(
@@ -4330,6 +4408,33 @@ def _changed_sections_flowables(osp, styles) -> list:
                 styles["body"],
             )
         )
+        return story
+    if result.state == "stated":
+        story.append(
+            Paragraph(
+                _escape(
+                    f"Listed from the operation's statement on its annual update, by {agent}'s form codes: Trazo has no "
+                    f"copy of the plan on file with {agent} to compare (see above). The sections are still listed on "
+                    "the agent's form, with the agent's own forms attached."
+                ),
+                styles["body"],
+            )
+        )
+        if not result.forms and not result.unmapped:
+            story.append(
+                Paragraph(_escape("The operation states that nothing in the plan on file changed."), styles["body"])
+            )
+        for label, files in result.forms:
+            story.append(
+                Paragraph(_escape(f"• {label}: stated changed; current answers in {', '.join(files)}"), styles["body"])
+            )
+        for label, path in result.unmapped:
+            story.append(
+                Paragraph(
+                    _escape(f"• {label}: stated changed; current answers in {path} (no form of the agent maps to it)"),
+                    styles["body"],
+                )
+            )
         return story
     if result.state == "no_new_version":
         story.append(

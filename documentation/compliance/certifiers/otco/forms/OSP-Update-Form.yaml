@@ -199,6 +199,8 @@ items:
     - certifications.OSPAnnualUpdate.deletions
     - certifications.OSPAnnualUpdate.new_osp
     - certifications.OSPAnnualUpdate.prior_plan_basis
+    - certifications.OSPAnnualUpdate.agent_file_changed_modules
+    - certifications.OSPAnnualUpdate.agent_file_nothing_changed
     - certifications.OrganicSystemPlan.module_responses
     - certifications.PlanMaterialEntry
     - certifications.OrganicSystemPlan.sections
@@ -216,7 +218,8 @@ items:
     `date_began_managing` is on or after the prior version''s submitted (else effective) date, and those with
     no date as not stated. The packet still attaches every module; 02s names the changed files. In a first
     year on Trazo (`prior_plan_basis` agent_file, 2026-11-14) OTCO holds the plan filed before Trazo and Trazo
-    has no copy of it, so nothing is listed: 02s says why and leaves the list to the operator.'
+    has no copy of it, so nothing is compared. The operator states which sections changed, or that nothing did,
+    and 02s lists that statement by OTCO form code, named as the operator''s statement.'
   fix: Per-parcel land changes are the next slice (CCOF ORGB88 and WSDA AGR 2516 ask for them per parcel and
     site), which would let this row read covered.
   note: The 'reviewed and current' election is OSPAnnualUpdate's reaffirmation and the OSPChangeNotification

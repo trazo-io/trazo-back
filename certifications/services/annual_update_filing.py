@@ -492,6 +492,8 @@ def correct_filing(filing, user):
         sales_period_start=filing.sales_period_start,
         sales_period_end=filing.sales_period_end,
         prior_plan_basis=filing.prior_plan_basis,
+        agent_file_changed_modules=list(filing.agent_file_changed_modules or []),
+        agent_file_nothing_changed=filing.agent_file_nothing_changed,
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
     # The evidence travels with the statement it supports; the operator edits the list on the

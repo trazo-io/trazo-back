@@ -383,3 +383,123 @@ class LeavingDraftTests(_FirstYear):
         filing.refresh_from_db()
         self.assertEqual(filing.prior_plan_basis, AGENT_FILE)
         self.assertEqual(filing.content_sha256(), filing.signed_content_sha256)
+
+
+class StatedChangesTests(_FirstYear):
+    """PR 2: the operation states what changed against the plan its agent holds (OV-PK-O02)."""
+
+    def test_the_statement_is_kept_in_plan_order_without_repeats(self):
+        filing = self._created(
+            self._plan(),
+            prior_plan_basis=AGENT_FILE,
+            agent_file_changed_modules=["g9_0_facility_pest", "g5_0_pest", "g5_0_pest"],
+        )
+        self.assertEqual(filing.agent_file_changed_modules, ["g5_0_pest", "g9_0_facility_pest"])
+        self.assertEqual(filing.signed_content()["agent_file_changed_modules"], ["g5_0_pest", "g9_0_facility_pest"])
+
+    def test_refused_unless_the_certifier_holds_the_plan_filed_before_trazo(self):
+        res = self._create(self._plan(), prior_plan_basis=TRAZO_VERSION, agent_file_changed_modules=["g5_0_pest"])
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        self.assertIn("agent_file_changed_modules", res.json())
+
+    def test_an_unknown_section_is_refused(self):
+        res = self._create(self._plan(), prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g99_made_up"])
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        self.assertIn("g99_made_up", str(res.json()["agent_file_changed_modules"]))
+
+    def test_sections_and_nothing_changed_are_exclusive(self):
+        res = self._create(
+            self._plan(),
+            prior_plan_basis=AGENT_FILE,
+            agent_file_changed_modules=["g5_0_pest"],
+            agent_file_nothing_changed=True,
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        self.assertIn("agent_file_nothing_changed", res.json())
+
+    def test_a_module_stated_changed_cannot_have_its_section_ticked_unchanged(self):
+        # G5.0's answers compile into (a)(1) by default.
+        res = self._create(
+            self._plan(),
+            prior_plan_basis=AGENT_FILE,
+            agent_file_changed_modules=["g5_0_pest"],
+            sections_unchanged_attestation={"practices_procedures": True},
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        message = str(res.json()["agent_file_changed_modules"])
+        self.assertIn("G5.0", message)
+        self.assertIn("(a)(1)", message)
+        # Another section ticked unchanged is fine.
+        filing = self._created(
+            OrganicSystemPlan.objects.get(establishment=self.est),
+            reporting_year=2028,
+            prior_plan_basis=AGENT_FILE,
+            agent_file_changed_modules=["g5_0_pest"],
+            sections_unchanged_attestation={"commingling_barriers": True},
+        )
+        self.assertEqual(filing.agent_file_changed_modules, ["g5_0_pest"])
+
+    def test_not_changed_is_only_ever_true(self):
+        filing = self._created(self._plan(), prior_plan_basis=AGENT_FILE, agent_file_nothing_changed=False)
+        self.assertIsNone(filing.agent_file_nothing_changed)
+        self.assertNotIn("agent_file_nothing_changed", filing.signed_content())
+        self.assertNotIn("agent_file_changed_modules", filing.signed_content())
+
+    def test_a_correction_carries_the_statement(self):
+        filing = self._created(self._plan(), prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g5_0_pest"])
+        filing = file_filing(sign_filing(filing, self.user), filing_method="email", user=self.user)
+        correction = correct_filing(filing, self.user)
+        self.assertEqual(correction.agent_file_changed_modules, ["g5_0_pest"])
+
+
+class StatedChangesPrintedTests(_FirstYear):
+    _packet = PrintedTests._packet
+
+    def test_the_stated_sections_print_as_the_operations_statement_on_02_02s_and_step_4(self):
+        v1 = self._plan()
+        self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g5_0_pest"])
+        agent = packet_agent(v1).name
+        docs = self._packet(v1)
+        filing, supplement = docs["02-annual-update.pdf"], docs["02s-renewal-status-and-routing.pdf"]
+
+        self.assertIn(f"Changed since the plan on file with {agent} (the operation's statement)", filing)
+        self.assertIn("G5.0", filing)
+        self.assertIn("not a comparison Trazo made", supplement)
+        self.assertIn("Sections the operation states changed", supplement)
+        self.assertIn("modules/G5_0.pdf", supplement)
+        self.assertIn("Listed from the operation's statement on its annual update", supplement)
+        self.assertIn("stated changed; current answers in modules/G5_0.pdf", supplement)
+        self.assertNotIn("None listed from Trazo", supplement)
+        for name, text in docs.items():
+            self.assertIsNone(_VERDICT.search(text), name)
+
+    def test_nothing_changed_prints_as_stated_and_never_without_the_statement(self):
+        v1 = self._plan(certifier=CCOF)
+        self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_nothing_changed=True)
+        agent = packet_agent(v1).name
+        docs = self._packet(v1)
+        self.assertIn(
+            f"Nothing in the plan on file with {agent} changed, as the operation states.", docs["02-annual-update.pdf"]
+        )
+        self.assertIn(
+            f"The operation states that nothing in the plan on file with {agent} changed.",
+            docs["02s-renewal-status-and-routing.pdf"],
+        )
+
+
+class StatedChangesSheetTests(_FirstYear):
+    def test_otco_step_4_is_the_statement_with_its_source(self):
+        v1 = self._plan()
+        self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g5_0_pest"])
+        rows = {row["item"]: row for row in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
+        step4 = rows["osp_changes"]
+        self.assertEqual((step4["kind"], step4["source"], step4["extra"]["stated"]), ("value", "filing", True))
+        self.assertTrue(any("modules/G5_0.pdf" in s["files"] for s in step4["value"]), step4["value"])
+        self.assertEqual(rows["new_land"]["extra"]["reason"], "first_version")
+
+    def test_nothing_changed_is_an_empty_stated_list(self):
+        v1 = self._plan()
+        self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_nothing_changed=True)
+        rows = {row["item"]: row for row in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
+        self.assertEqual((rows["osp_changes"]["kind"], rows["osp_changes"]["value"]), ("value", []))
+        self.assertTrue(rows["osp_changes"]["extra"]["stated"])
