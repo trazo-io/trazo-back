@@ -160,6 +160,41 @@ def certificate_from_another_agent(osp) -> AnotherAgent | None:
     return AnotherAgent(certificate=certificate, confirmed=held is not None)
 
 
+def _certification_recorded(establishment_id) -> bool:
+    """A NOP certification row, an approved plan version, or a plan carrying an approval certificate
+    number or agent. Raises on a read error; the callers decide what an error reads as."""
+    from certifications.constants import NOP_CERTIFICATION_TYPES
+    from certifications.models import Certification, OrganicSystemPlan
+
+    if Certification.objects.filter(
+        establishment_id=establishment_id, certification_type__in=NOP_CERTIFICATION_TYPES
+    ).exists():
+        return True
+    plans = OrganicSystemPlan.objects.filter(establishment_id=establishment_id)
+    if plans.filter(status__in=("active", "superseded")).exists():
+        return True
+    for field in ("approval_certificate_number", "approval_certifier_name"):
+        if plans.exclude(**{f"{field}__isnull": True}).exclude(**{f"{field}__regex": r"^\s*$"}).exists():
+            return True
+    return False
+
+
+def certification_on_record(establishment_id) -> bool:
+    """True only when Trazo holds positive evidence the operation is certified organic.
+
+    Narrower than `not never_certified(...)`: an annual update on record is NOT evidence here. That
+    reading keeps a renewing operation's packet a renewal; this one decides whether Trazo may say a
+    certifier holds a plan for the operation at all (`prior_plan_basis` for a draft first version),
+    and an operation's own earlier filing against a draft says nothing about that (review of back
+    #434). A read error reads as no evidence, so nothing is claimed.
+    """
+    try:
+        return _certification_recorded(establishment_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read the certification record for establishment %s", establishment_id)
+        return False
+
+
 def never_certified(establishment_id) -> bool:
     """True only when nothing Trazo holds says this operation has ever been certified organic.
 
@@ -175,20 +210,11 @@ def never_certified(establishment_id) -> bool:
     agent, or any annual update on record. Only an operation with none of these reads as never
     certified. A read error keeps the renewal reading too.
     """
-    from certifications.constants import NOP_CERTIFICATION_TYPES
-    from certifications.models import Certification, OrganicSystemPlan, OSPAnnualUpdate
+    from certifications.models import OSPAnnualUpdate
 
     try:
-        if Certification.objects.filter(
-            establishment_id=establishment_id, certification_type__in=NOP_CERTIFICATION_TYPES
-        ).exists():
+        if _certification_recorded(establishment_id):
             return False
-        plans = OrganicSystemPlan.objects.filter(establishment_id=establishment_id)
-        if plans.filter(status__in=("active", "superseded")).exists():
-            return False
-        for field in ("approval_certificate_number", "approval_certifier_name"):
-            if plans.exclude(**{f"{field}__isnull": True}).exclude(**{f"{field}__regex": r"^\s*$"}).exists():
-                return False
         if OSPAnnualUpdate.objects.filter(establishment_id=establishment_id).exists():
             return False
         if OSPAnnualUpdate.objects.filter(prior_osp__establishment_id=establishment_id).exists():
