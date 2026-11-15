@@ -84,6 +84,28 @@ def basis_question_applies(osp) -> bool:
     return is_first_version(osp) and osp.status != "draft"
 
 
+def release_server_answered_basis(osp) -> int:
+    """`osp`, a first plan version, has just left draft: forget the answer the server gave for it.
+
+    While a first version is a draft the serializer answers `agent_file` (the certifier cannot hold a
+    plan nobody sent). Once it is submitted the certifier may receive it from Trazo, so that answer no
+    longer goes without saying, and an unsigned filing continuing it is asked again at signing (review
+    of back #431). Signed and filed revisions keep theirs: it was true when they were signed.
+    Returns the number of filings changed.
+    """
+    from certifications.models import OSPAnnualUpdate
+
+    if not is_first_version(osp):
+        return 0
+    return OSPAnnualUpdate.objects.filter(
+        prior_osp=osp,
+        signed_at__isnull=True,
+        submitted_at__isnull=True,
+        withdrawn_at__isnull=True,
+        prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_AGENT_FILE,
+    ).update(prior_plan_basis="")
+
+
 #: How the English sentence names each kind of difference (`plan_version_changes.DIFFERS_*`).
 _DIFFERS_WORDS = {
     "answers": "answers",

@@ -275,3 +275,52 @@ class ScopeAndSheetTests(_FirstYear):
                 self._created(v1, prior_plan_basis=basis)
                 rows = {r["item"]: r for r in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
                 self.assertIs(rows["ccof_osp_update"]["extra"]["first_version"], expected)
+
+
+class LeavingDraftTests(_FirstYear):
+    """Review of back #431: the server's answer for a draft first version does not outlive the draft."""
+
+    _NARRATIVE = (
+        "The three blocks are on raised beds with sawdust mulch and drip; the ground runs a four-year rotation "
+        "with a winter cover of cereal rye, hairy vetch and crimson clover drilled in October and terminated in "
+        "March. Inputs come only from the approved materials list, each delivery checked against it when it "
+        "lands. Records are kept in Trazo as the work happens and reviewed before each renewal goes out."
+    )
+
+    def _draft_v1(self):
+        from certifications.models import OSP_SECTION_KEYS
+
+        v1 = self._plan(status_="draft")
+        v1.sections = {key: {"narrative_manual": f"Section {key}: {self._NARRATIVE}"} for key in OSP_SECTION_KEYS}
+        v1.save(update_fields=["sections"])
+        return v1
+
+    def test_submitting_the_first_version_asks_again_before_signing(self):
+        v1 = self._draft_v1()
+        filing = self._created(v1)
+        self.assertEqual(filing.prior_plan_basis, AGENT_FILE)
+
+        res = self.client.post(
+            f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/osps/{v1.pk}/submit/", {}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:500])
+
+        filing.refresh_from_db()
+        self.assertEqual(filing.prior_plan_basis, "")
+        res = self._sign(filing)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        self.assertEqual(res.json()["code"], PRIOR_PLAN_BASIS_REQUIRED)
+
+    def test_a_filing_signed_while_the_plan_was_a_draft_keeps_its_answer(self):
+        v1 = self._draft_v1()
+        filing = self._created(v1)
+        self.assertEqual(self._sign(filing).status_code, status.HTTP_200_OK)
+
+        res = self.client.post(
+            f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/osps/{v1.pk}/submit/", {}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:500])
+
+        filing.refresh_from_db()
+        self.assertEqual(filing.prior_plan_basis, AGENT_FILE)
+        self.assertEqual(filing.content_sha256(), filing.signed_content_sha256)
