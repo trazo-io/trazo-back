@@ -383,6 +383,40 @@ class PlanReviewTests(_Farm):
         self.est.save(update_fields=["contact_person"])
         self.assertIn("responsible_person_missing", {f.code for f in plan_review(self.v2).findings})
 
+    def _contact(self, name, **flags):
+        from certifications.models import OperationContact
+
+        return OperationContact.objects.create(establishment=self.est, name=name, **flags)
+
+    def test_review_names_a_signer_who_is_not_the_legally_responsible_contact(self):
+        """Orchard specimen read (2026-11-15): the cover and the signature printed the office manager
+        from "Responsible person" while the contacts marked the owner legally responsible. Which one
+        signs is the operation's call, so the review names both and the packet keeps the profile's."""
+        self.est.contact_person = "Karen Tollefsen"
+        self.est.save(update_fields=["contact_person"])
+        self._contact("Dan Tollefsen", is_legally_responsible=True, is_authorized_representative=True)
+        self._contact("Karen Tollefsen", is_primary_contact=True)
+        finding = next(
+            f for f in plan_review(self.v2).findings if f.code == "responsible_person_not_legally_responsible"
+        )
+        self.assertEqual(
+            finding.details,
+            [
+                "Responsible person on the farm profile, printed as the signer: Karen Tollefsen",
+                "Marked legally responsible in the operation's contacts: Dan Tollefsen",
+            ],
+        )
+        self.assertEqual(finding.module_key, "certification_contract")
+
+    def test_no_signer_finding_when_they_agree_or_no_contact_is_marked(self):
+        self.est.contact_person = "dan tollefsen"
+        self.est.save(update_fields=["contact_person"])
+        codes = {f.code for f in plan_review(self.v2).findings}
+        self.assertNotIn("responsible_person_not_legally_responsible", codes)
+        self._contact("Dan Tollefsen", is_legally_responsible=True)
+        codes = {f.code for f in plan_review(self.v2).findings}
+        self.assertNotIn("responsible_person_not_legally_responsible", codes)
+
     def test_review_endpoint_and_submit_echo(self):
         from rest_framework.test import APIClient
 
