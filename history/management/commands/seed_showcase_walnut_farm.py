@@ -496,20 +496,22 @@ def _album(image_key):
 OSP_ANSWERS_PATH = os.path.join(os.path.dirname(__file__), "_blue_oak_osp_answers.json")
 
 
-def _load_osp_answers() -> dict:
+def _load_osp_answers(path: str = OSP_ANSWERS_PATH) -> dict:
     """Blue Oak's module answers, checked against the questionnaire as it stands today.
 
     Fails the seed, naming the module and question, when a module has no entry, a required
     question is unanswered, a choice is not one of the options, or an answer names a question that
     no longer exists. A content change to a module therefore breaks this seeder until the fixture
     answers it, which is the point: the screenshot cannot drift from the product.
+
+    `path` lets another specimen (seed_coldwater_bench) hold its answers to the same check.
     """
     import json
 
     from certifications.osp_modules import MODULE_REGISTRY
     from certifications.osp_modules.conditions import invalid_choice_answers, missing_required, validate_answer_keys
 
-    with open(OSP_ANSWERS_PATH, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         fixture = json.load(fh)
     problems = []
     for module in MODULE_REGISTRY:
@@ -535,7 +537,7 @@ def _load_osp_answers() -> dict:
         elif RECORD_TYPES_BY_KEY[key].free_text:
             problems.append(f"common_osp_records.{key}: a free-text row needs a label; not supported here")
     if problems:
-        raise CommandError(f"{os.path.basename(OSP_ANSWERS_PATH)} is out of step:\n  " + "\n  ".join(problems))
+        raise CommandError(f"{os.path.basename(path)} is out of step:\n  " + "\n  ".join(problems))
     return fixture
 
 
