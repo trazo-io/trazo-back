@@ -728,7 +728,7 @@ class Production(models.Model):
             if is_unique_visitor:
                 update_fields["unique_visitors"] = F("unique_visitors") + 1
 
-            History.objects.filter(id=self.id).update(**update_fields)
+            Production.objects.filter(id=self.id).update(**update_fields)
             self.refresh_from_db(fields=["public_views", "unique_visitors"])
 
             logger.debug(
@@ -1044,7 +1044,7 @@ class CommonEvent(models.Model):
     date = models.DateTimeField()
     album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
     history = models.ForeignKey(
-        History,
+        Production,
         on_delete=models.CASCADE,
         blank=True,
         null=True,
@@ -3513,7 +3513,7 @@ class HistoryScan(models.Model):
 
     # EXISTING CORE FIELDS
     history = models.ForeignKey(
-        History,
+        Production,
         on_delete=models.CASCADE,
         related_name="history_scans",
     )
@@ -5138,7 +5138,7 @@ class BuyerDocRequest(models.Model):
     ]
 
     production = models.ForeignKey(
-        History,
+        Production,
         on_delete=models.CASCADE,
         related_name="buyer_doc_requests",
     )
@@ -5196,7 +5196,7 @@ class SalesRecord(models.Model):
     """
 
     production = models.ForeignKey(
-        History,
+        Production,
         on_delete=models.CASCADE,
         related_name="sales_records",
     )
@@ -5236,7 +5236,7 @@ class SalesRecord(models.Model):
     #: `default="kg"` is deliberately left alone rather than flipped to "lb": the model cannot
     #: know the farm's country, and the US-first resolution belongs in the editor
     #: (useDefaultUnits, which now seeds this field from the production's own harvest unit).
-    quantity_unit = models.CharField(max_length=20, choices=History.UNIT_CHOICES, default="kg")
+    quantity_unit = models.CharField(max_length=20, choices=Production.UNIT_CHOICES, default="kg")
     invoice_number = models.CharField(max_length=80, blank=True, default="")
 
     #: What the operation was PAID for this sale.
@@ -5725,7 +5725,7 @@ class ProductionPlanItem(models.Model):
     ]
 
     history = models.ForeignKey(
-        History,
+        Production,
         on_delete=models.CASCADE,
         related_name="plan_items",
         help_text="The production season this plan belongs to.",

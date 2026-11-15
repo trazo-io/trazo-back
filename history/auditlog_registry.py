@@ -16,8 +16,8 @@ from history.models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -31,7 +31,7 @@ from history.models import (
 # exclude_fields entry naming a field that does not exist is not an error django-auditlog
 # raises, so it would have sat here indefinitely looking like a decision.
 auditlog.register(
-    History,
+    Production,
     exclude_fields=[
         "public_views",
         "unique_visitors",

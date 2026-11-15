@@ -24,7 +24,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService, _esc, _val
 from product.models import Parcel, Product
 from users.models import User
@@ -55,7 +55,7 @@ class PacketSurvivesHostileFreeTextTests(TestCase):
         self.establishment = Establishment.objects.create(name=HOSTILE, company=company)
         self.parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=42.5)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Esc Production",
             start_date=timezone.now(),
             product=product,

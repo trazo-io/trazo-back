@@ -1350,7 +1350,7 @@ async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) ->
 
     from asgiref.sync import sync_to_async
 
-    from history.models import History
+    from history.models import Production
 
     try:
         # Calculate 30 days ago
@@ -1362,7 +1362,7 @@ async def _fetch_recent_events_from_db(establishment_id: str, parcel_id: str) ->
         @sync_to_async
         def get_recent_histories():
             return list(
-                History.objects.filter(
+                Production.objects.filter(
                     parcel_id=parcel_id,
                     parcel__establishment_id=establishment_id,
                     finish_date__isnull=True,  # Active (not finished) productions

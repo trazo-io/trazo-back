@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from carbon.models import CarbonEntry, CarbonSource
-from history.models import History
+from history.models import Production
 
 User = get_user_model()
 
@@ -19,7 +19,7 @@ class Command(BaseCommand):
 
         try:
             user = User.objects.get(email="demo@trazo.io")
-            production = History.objects.filter(published=True).first()
+            production = Production.objects.filter(published=True).first()
             source = CarbonSource.objects.first()
 
             # Try creating with absolutely minimal required fields

@@ -17,7 +17,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -32,7 +32,7 @@ class EventAmendPermissionTests(TestCase):
         self.viewer = User.objects.create_user(email="amend-viewer@test.com", password="x")
         WorksIn.objects.create(user=self.admin, company=self.company, role=WorksIn.COMPANY_ADMIN)
         WorksIn.objects.create(user=self.viewer, company=self.company, role="VI")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Amend Season",
             start_date=timezone.now() - timedelta(days=30),
             product=self.product,

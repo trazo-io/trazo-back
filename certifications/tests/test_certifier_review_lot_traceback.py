@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from certifications.models import CertifierAccessLink, CertifierAccessLog
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent, SalesRecord
+from history.models import ChemicalEvent, Production, ProductionEvent, SalesRecord
 from product.models import Parcel, Product
 
 DUMMY_CACHE = {"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}}
@@ -41,7 +41,7 @@ class CertifierReviewLotTracebackTests(TestCase):
         self.foreign_pick = self._pick(self._season(other), "HON-NB2-20260926", "Cooler 1")
 
     def _season(self, est):
-        return History.objects.create(
+        return Production.objects.create(
             name="Honeycrisp 2026",
             parcel=Parcel.objects.create(name="North Bench", establishment=est, area=18.5),
             product=Product.objects.create(name="Honeycrisp Apple"),

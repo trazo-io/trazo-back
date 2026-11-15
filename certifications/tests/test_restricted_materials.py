@@ -40,7 +40,7 @@ from certifications.services.restricted_materials import (
     potassium_chloride_evidence,
 )
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel
 
 G4 = MODULES_BY_KEY["g4_0_rotation_soil"]
@@ -64,7 +64,7 @@ class _Orchard(TestCase):
         self.company = Company.objects.create(name="Wenatchee Heights Orchards LLC")
         self.est = Establishment.objects.create(name="Wenatchee Heights", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="Honeycrisp Block", establishment=self.est, area=12.0)
-        self.history = History.objects.create(name="Honeycrisp 2026", start_date=timezone.now(), parcel=parcel)
+        self.history = Production.objects.create(name="Honeycrisp 2026", start_date=timezone.now(), parcel=parcel)
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="active")
 
     def _substance(self, name):

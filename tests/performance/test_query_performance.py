@@ -13,7 +13,7 @@ from django.test.utils import override_settings
 
 from company.models import Company, Establishment
 from company.views import EstablishmentViewSet
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from history.views import HistoryScanViewSet, PublicHistoryScanViewSet
 from product.models import Parcel, Product
 from product.views import ParcelViewSet
@@ -223,7 +223,7 @@ class HistoryScanQueryPerformanceTests(QueryPerformanceTestCase):
         self.history_scans = []
         for parcel in self.parcels[:3]:  # Limit to avoid too much test data
             # Create a history record first
-            history = History.objects.create(
+            history = Production.objects.create(
                 name=f"Prod {parcel.id}", parcel=parcel, start_date="2024-01-01", published=True  # Short name
             )
 

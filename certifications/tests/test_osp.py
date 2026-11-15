@@ -98,7 +98,7 @@ class OSPAnnualUpdateTests(TestCase):
         self.assertIn("submitted_at", refused.errors)
 
     def test_annual_update_renders_in_audit_export(self):
-        from history.models import History
+        from history.models import Production
         from history.services.audit_export_service import AuditExportService
         from product.models import Product
 
@@ -110,7 +110,7 @@ class OSPAnnualUpdateTests(TestCase):
         parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=10.0)
         product = Product.objects.create(name="Walnut")
         user = User.objects.create_user(email="au@test.com", password="x")
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Prod",
             start_date=timezone.now(),
             product=product,

@@ -20,7 +20,7 @@ from rest_framework.test import APIClient
 
 from certifications.models import CertifierAccessLink, CertifierAccessLog
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -37,7 +37,7 @@ class UnpublishedLotPublicViewTests(TestCase):
         self.owner.companies.add(company)
 
         def make(published):
-            return History.objects.create(
+            return Production.objects.create(
                 name=f"Spinach {'pub' if published else 'unpub'}",
                 start_date=timezone.now(),
                 finish_date=timezone.now(),

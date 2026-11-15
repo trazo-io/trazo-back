@@ -18,7 +18,7 @@ from django.utils import timezone
 from carbon.models import CropType
 from certifications.models import OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -49,7 +49,7 @@ class ProducerAttestationTests(TestCase):
         )
         product = Product.objects.create(name="Walnuts")
         # A season with NO operator — the shape that produced the bug.
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,

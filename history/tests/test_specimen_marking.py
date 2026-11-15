@@ -49,7 +49,7 @@ from django.utils import timezone
 from carbon.models import CropType
 from common.specimen import SPECIMEN_TITLE, is_specimen
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -99,7 +99,7 @@ class _PacketFixture(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Blueberries")
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,

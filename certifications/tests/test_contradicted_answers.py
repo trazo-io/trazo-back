@@ -23,7 +23,7 @@ from django.utils import timezone
 from certifications.models import OrganicSystemPlan, PlanMaterialEntry
 from certifications.services.osp_module_pdf import generate_module_pdf
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 from users.models import User
 
@@ -43,7 +43,7 @@ class _Farm(TestCase):
         self.company = Company.objects.create(name="Stands Orchards LLC")
         self.est = Establishment.objects.create(name="Stands Orchard", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(name="Pears 2026", start_date=timezone.now(), parcel=parcel)
+        self.history = Production.objects.create(name="Pears 2026", start_date=timezone.now(), parcel=parcel)
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="active")
 
     def _store(self, module, **answers):

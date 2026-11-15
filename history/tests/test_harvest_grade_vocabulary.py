@@ -46,7 +46,7 @@ from history.harvest_grades import (
     all_grades,
     grades_for_crop,
 )
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import _humanize_enum
 
 # `settings.BASE_DIR` is trazo-back/backend, so the repo root is TWO levels up.
@@ -58,7 +58,7 @@ class OneVocabularyTests(SimpleTestCase):
         """The finding was that the header and its own picks offered DIFFERENT lists. They now
         carry no list at all — the one catalogue is what both forms render — so what is left to
         assert here is that neither column has quietly grown a vocabulary of its own again."""
-        for model, field in ((ProductionEvent, "harvest_quality_grade"), (History, "quality_grade")):
+        for model, field in ((ProductionEvent, "harvest_quality_grade"), (Production, "quality_grade")):
             column = model._meta.get_field(field)
             self.assertEqual(column.max_length, MAX_GRADE_LENGTH)
             self.assertFalse(

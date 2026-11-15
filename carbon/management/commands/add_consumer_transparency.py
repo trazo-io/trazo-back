@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from carbon.models import CropType, EventTemplate, ProductionTemplate
-from history.models import History
+from history.models import Production
 
 
 class Command(BaseCommand):

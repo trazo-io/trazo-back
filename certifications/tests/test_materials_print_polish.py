@@ -20,7 +20,7 @@ from certifications.services import national_list_citations as nlc
 from certifications.services.common_osp_workbooks import _amendment_words, build_workbook
 from certifications.services.plan_materials import materials_list_rows
 from company.models import Company, Establishment
-from history.models import History, SoilManagementEvent
+from history.models import Production, SoilManagementEvent
 from product.models import Parcel
 
 
@@ -57,7 +57,7 @@ class AmendmentWordsTests(TestCase):
         company = Company.objects.create(name="Amend Co")
         est = Establishment.objects.create(name="Amend Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=est, area=2.0)
-        history = History.objects.create(name="Pears", start_date=timezone.now(), parcel=parcel)
+        history = Production.objects.create(name="Pears", start_date=timezone.now(), parcel=parcel)
         SoilManagementEvent.objects.create(
             history=history,
             date=timezone.now(),

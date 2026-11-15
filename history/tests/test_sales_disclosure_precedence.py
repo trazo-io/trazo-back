@@ -18,7 +18,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, SalesRecord, compute_retention_until
+from history.models import Production, SalesRecord, compute_retention_until
 from history.services.audit_export_service import AuditExportService, _label_category_display, resolve_sales_disclosure
 from product.models import Parcel, Product
 from users.models import User
@@ -30,7 +30,7 @@ class SalesDisclosurePrecedenceTests(TestCase):
         company = Company.objects.create(name="SD Co")
         establishment = Establishment.objects.create(name="SD Farm", company=company)
         parcel = Parcel.objects.create(name="SD P1", establishment=establishment, area=4.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="SD Production",
             start_date=timezone.now() - timedelta(days=90),
             finish_date=timezone.now() - timedelta(days=5),
@@ -196,7 +196,7 @@ class OrganicLabelCategoryTests(TestCase):
         company = Company.objects.create(name="LC Co")
         establishment = Establishment.objects.create(name="LC Farm", company=company)
         parcel = Parcel.objects.create(name="LC P1", establishment=establishment, area=3.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="LC Production",
             start_date=timezone.now() - timedelta(days=60),
             finish_date=timezone.now() - timedelta(days=3),

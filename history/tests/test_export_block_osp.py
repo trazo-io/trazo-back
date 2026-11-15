@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from certifications.models import OrganicSystemPlan, OSPAnnualUpdate
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent, ProductionEvent
+from history.models import PestManagementEvent, Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -41,7 +41,7 @@ class _Base(TestCase):
         self.establishment = Establishment.objects.create(name="EE1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="EP", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Exp Production",
             start_date=timezone.now(),
             product=self.product,

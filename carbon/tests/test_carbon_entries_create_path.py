@@ -22,7 +22,7 @@ from rest_framework.test import APITestCase
 
 from carbon.models import CarbonAuditLog, CarbonEntry
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from users.models import WorksIn
 
@@ -32,7 +32,7 @@ class CarbonEntriesCreatePathTests(APITestCase):
         company = Company.objects.create(name="Entries Co")
         self.est = Establishment.objects.create(name="Entries Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
-        self.season = History.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
+        self.season = Production.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
         CarbonEntry.objects.all().delete()  # whatever the save receivers wrote
         user = get_user_model().objects.create_user(email="entries@example.com", password="x")
         WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)  # may write

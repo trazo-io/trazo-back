@@ -40,7 +40,7 @@ from common.field_registry import UNIT_VOLUME, UNIT_YIELD
 from company.models import Company, Establishment
 from history.amendments import apply_amendment
 from history.constants import CHEMICAL_EVENT_TYPE
-from history.models import ChemicalEvent, History, ProductionEvent, SalesRecord
+from history.models import ChemicalEvent, Production, ProductionEvent, SalesRecord
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -77,7 +77,7 @@ class _RehearsalSeason(TestCase):
             name="Test Block", company=self.company, state="WA", contact_person="Crew lead"
         )
         self.parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=6.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Honeycrisp 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Apples"),
@@ -130,7 +130,7 @@ class HarvestUnitReachesSeasonAndSaleTests(_RehearsalSeason):
 
     def test_every_harvest_unit_is_a_season_unit_and_a_sale_unit(self):
         canonical = AuditExportService._canonical_unit
-        season_units = {v for v, _ in History.UNIT_CHOICES}
+        season_units = {v for v, _ in Production.UNIT_CHOICES}
         sale_units = {v for v, _ in SalesRecord._meta.get_field("quantity_unit").choices}
         for code, _label in UNIT_YIELD:
             with self.subTest(harvest_unit=code):
@@ -142,7 +142,7 @@ class HarvestUnitReachesSeasonAndSaleTests(_RehearsalSeason):
         sale = self._sale(unit="bins")
         try:
             self.history.clean_fields(
-                exclude=[f.name for f in History._meta.concrete_fields if f.name != "production_unit"]
+                exclude=[f.name for f in Production._meta.concrete_fields if f.name != "production_unit"]
             )
             sale.clean_fields(exclude=[f.name for f in SalesRecord._meta.concrete_fields if f.name != "quantity_unit"])
         except ValidationError as exc:

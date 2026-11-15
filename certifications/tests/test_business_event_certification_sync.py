@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from certifications.models import Certification
 from company.models import Company, Establishment
-from history.models import BusinessEvent, History
+from history.models import BusinessEvent, Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -27,7 +27,7 @@ class BusinessEventCertificationSyncTests(TestCase):
         self.establishment = Establishment.objects.create(name="Home Ranch", company=company, state="OR")
         parcel = Parcel.objects.create(name="River Block", establishment=self.establishment, area=4.0)
         product = Product.objects.create(name="Blueberries")
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Dukes",
             start_date=timezone.now(),
             product=product,

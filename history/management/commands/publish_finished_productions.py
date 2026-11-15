@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from history.models import History
+from history.models import Production
 
 
 class Command(BaseCommand):
@@ -16,12 +16,12 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("🌾 Publishing finished productions..."))
 
         # Get all histories
-        all_histories = History.objects.all()
+        all_histories = Production.objects.all()
         self.stdout.write(f"Total productions: {all_histories.count()}")
 
         # Count current published status
-        published_before = History.objects.filter(published=True).count()
-        unpublished_before = History.objects.filter(published=False).count()
+        published_before = Production.objects.filter(published=True).count()
+        unpublished_before = Production.objects.filter(published=False).count()
         self.stdout.write(f"Currently published: {published_before}")
         self.stdout.write(f"Currently unpublished: {unpublished_before}")
 
@@ -76,7 +76,7 @@ class Command(BaseCommand):
                 )
 
         # Show summary
-        published_after = History.objects.filter(published=True).count()
+        published_after = Production.objects.filter(published=True).count()
 
         self.stdout.write("\n📊 Publishing Summary:")
         self.stdout.write(f"   Published before: {published_before}")
@@ -86,7 +86,7 @@ class Command(BaseCommand):
         # Show all published productions with their public URLs
         self.stdout.write("\n🌐 All Published Productions:")
         published = (
-            History.objects.filter(published=True)
+            Production.objects.filter(published=True)
             .select_related("product", "parcel__establishment")
             .order_by("parcel__establishment", "product__name")
         )

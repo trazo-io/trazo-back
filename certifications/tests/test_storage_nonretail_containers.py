@@ -26,7 +26,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import _Answers, row_answer_state
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel
 
 G62 = "g6_2_storage"
@@ -121,7 +121,7 @@ class StorageRecordCountTests(_Plan):
     def setUp(self):
         super().setUp()
         parcel = Parcel.objects.create(name="Block 4", establishment=self.est, area=12.0)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             name="2026 pears",
             parcel=parcel,
             start_date=datetime(2026, 3, 1, tzinfo=dt_tz.utc),

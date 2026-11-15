@@ -155,7 +155,7 @@ class EvidenceBundle:
     def __init__(self, establishment, start_date=None, end_date=None, osp=None):
         from django.db.models import Q
 
-        from history.models import History
+        from history.models import Production
 
         self.establishment = establishment
         # The plan the evidence is read for, when there is one: a suggestion that compares the
@@ -164,7 +164,7 @@ class EvidenceBundle:
         self.start_date = start_date
         self.end_date = end_date
 
-        qs = History.objects.filter(parcel__establishment=establishment)
+        qs = Production.objects.filter(parcel__establishment=establishment)
         if start_date:
             qs = qs.filter(Q(finish_date__gte=start_date) | Q(finish_date__isnull=True))
         if end_date:

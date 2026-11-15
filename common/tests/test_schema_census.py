@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from common.services import census as svc
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, EventAmendment, GeneralEvent, History
+from history.models import ChemicalEvent, EventAmendment, GeneralEvent, Production
 from product.models import Parcel
 
 SHARED_PK = 424_242
@@ -30,7 +30,7 @@ class SchemaCensusTests(TransactionTestCase):
         company = Company.objects.create(name="Census Co")
         est = Establishment.objects.create(name="Census Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=est, area=1)
-        self.history = History.objects.create(parcel=parcel, name="2026 Season")
+        self.history = Production.objects.create(parcel=parcel, name="2026 Season")
         self.general = GeneralEvent.objects.create(
             pk=SHARED_PK, history=self.history, name="g", description="general", date=timezone.now(), index=1
         )
@@ -98,7 +98,7 @@ class SchemaCensusTests(TransactionTestCase):
 
     def test_a_sealed_season_records_both_layers_and_its_preimage_order(self):
         current, count = self.history.compute_finalization_hash()
-        History.objects.filter(pk=self.history.pk).update(
+        Production.objects.filter(pk=self.history.pk).update(
             extra_data={"finalization_hash": current, "finalization_event_count": count}
         )
         seal = svc.take_census()["domain"]["seals"]["seasons"][str(self.history.pk)]
@@ -126,7 +126,7 @@ class SchemaCensusTests(TransactionTestCase):
 
     def test_a_seal_that_stops_verifying_is_a_loss(self):
         current, count = self.history.compute_finalization_hash()
-        History.objects.filter(pk=self.history.pk).update(
+        Production.objects.filter(pk=self.history.pk).update(
             extra_data={"finalization_hash": current, "finalization_event_count": count}
         )
         before = svc.take_census()
@@ -259,7 +259,7 @@ class SchemaCensusTests(TransactionTestCase):
     def test_a_database_error_in_one_seal_check_is_recorded_and_the_census_finishes(self):
         """Review of back #289: without a savepoint the error aborts the whole transaction."""
         current, count = self.history.compute_finalization_hash()
-        History.objects.filter(pk=self.history.pk).update(
+        Production.objects.filter(pk=self.history.pk).update(
             extra_data={"finalization_hash": current, "finalization_event_count": count}
         )
 

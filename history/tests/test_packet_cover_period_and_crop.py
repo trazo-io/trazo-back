@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService, production_period
 from product.models import Parcel, Product
 from users.models import User
@@ -99,7 +99,7 @@ class CoverCropLabelTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name=crop_name),
             crop_type=crop,
@@ -167,7 +167,7 @@ class RecordsSpanDisclosureTests(TestCase):
         )
         self.start = datetime(2026, 3, 1, 8, tzinfo=dt_timezone.utc)
         self.finish = datetime(2026, 7, 12, 17, tzinfo=dt_timezone.utc)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=self.parcel,
             product=Product.objects.create(name="Blueberries"),
             crop_type=crop,

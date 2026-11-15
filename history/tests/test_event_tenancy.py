@@ -23,7 +23,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from company.models import Company
-from history.models import GeneralEvent, History
+from history.models import GeneralEvent, Production
 from product.models import Establishment, Parcel
 
 
@@ -36,7 +36,7 @@ class EventCrossTenantAccessTests(APITestCase):
             user.companies.add(company)
             est = Establishment.objects.create(name=f"{prefix} Farm", company=company)
             parcel = Parcel.objects.create(name=f"{prefix} Parcel", establishment=est, area=1)
-            history = History.objects.create(parcel=parcel, name=f"{prefix} Season")
+            history = Production.objects.create(parcel=parcel, name=f"{prefix} Season")
             event = GeneralEvent.objects.create(history=history, name=f"{prefix} event", date=timezone.now())
             return user, event
 
@@ -119,7 +119,7 @@ class EventCrossTenantCreateTests(APITestCase):
             user.companies.add(company)
             est = Establishment.objects.create(name=f"{prefix} Create Farm", company=company)
             parcel = Parcel.objects.create(name=f"{prefix} Create Parcel", establishment=est, area=1)
-            history = History.objects.create(parcel=parcel, name=f"{prefix} Create Season")
+            history = Production.objects.create(parcel=parcel, name=f"{prefix} Create Season")
             parcel.current_history = history
             parcel.save(update_fields=["current_history"])
             return user, parcel, history
@@ -204,7 +204,7 @@ class EventListRequiresEventTypeTests(APITestCase):
         cls.user.companies.add(company)
         est = Establishment.objects.create(name="Evtype Farm", company=company)
         parcel = Parcel.objects.create(name="Evtype Parcel", establishment=est, area=1)
-        history = History.objects.create(parcel=parcel, name="Evtype Season")
+        history = Production.objects.create(parcel=parcel, name="Evtype Season")
         cls.event = GeneralEvent.objects.create(history=history, name="evtype event", date=timezone.now())
 
     def setUp(self):
@@ -252,14 +252,14 @@ class DocumentLinksToOneEventTests(APITestCase):
             grant_compliance_exports(company)
             est = Establishment.objects.create(name=f"{prefix} Doc Farm", company=company, state="WA")
             parcel = Parcel.objects.create(name=f"{prefix} Doc Parcel", establishment=est, area=1)
-            history = History.objects.create(parcel=parcel, name=f"{prefix} Doc Season")
+            history = Production.objects.create(parcel=parcel, name=f"{prefix} Doc Season")
             event = GeneralEvent.objects.create(history=history, name=f"{prefix} spray", date=timezone.now())
             return user, company, est, history, event
 
         cls.owner, cls.company, cls.est, cls.history, cls.event = build("owner")
         cls.stranger, _, _, cls.stranger_history, cls.stranger_event = build("stranger")
         other_parcel = Parcel.objects.create(name="owner second parcel", establishment=cls.est, area=1)
-        cls.other_history = History.objects.create(parcel=other_parcel, name="owner other season")
+        cls.other_history = Production.objects.create(parcel=other_parcel, name="owner other season")
 
     def setUp(self):
         self.client.force_authenticate(user=self.owner)

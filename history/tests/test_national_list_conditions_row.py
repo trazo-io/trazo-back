@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from certifications.models import NationalListSubstance
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel
 
@@ -37,7 +37,7 @@ class _Season(TestCase):
         company = Company.objects.create(name="Wenatchee Heights Orchards LLC")
         est = Establishment.objects.create(name="Wenatchee Heights", company=company, state="WA")
         parcel = Parcel.objects.create(name="Honeycrisp Block", establishment=est, area=12.0)
-        self.history = History.objects.create(name="Honeycrisp 2026", start_date=timezone.now(), parcel=parcel)
+        self.history = Production.objects.create(name="Honeycrisp 2026", start_date=timezone.now(), parcel=parcel)
         self.now = timezone.now()
 
     def _chem(self, name, when=None, substance=None, **fields):

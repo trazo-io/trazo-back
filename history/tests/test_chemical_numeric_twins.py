@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.serializers import UpdateChemicalEventSerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -44,7 +44,7 @@ class ChemicalNumericTwinTests(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,

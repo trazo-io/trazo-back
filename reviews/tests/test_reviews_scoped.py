@@ -19,7 +19,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from product.models import Parcel
 from reviews.models import Review
 from users.constants import CONSUMER, PRODUCER
@@ -38,8 +38,8 @@ class ReviewsScopedTests(TestCase):
         cls.victim_co = Company.objects.create(name="Victim Farms")
         cls.victim_farm = Establishment.objects.create(name="Victim Farm", company=cls.victim_co)
         parcel = Parcel.objects.create(name="Victim Parcel", establishment=cls.victim_farm, area=2.0)
-        cls.published = History.objects.create(name="Victim Published", parcel=parcel, published=True)
-        cls.unpublished = History.objects.create(name="Victim Unpublished", parcel=parcel, published=False)
+        cls.published = Production.objects.create(name="Victim Published", parcel=parcel, published=True)
+        cls.unpublished = Production.objects.create(name="Victim Unpublished", parcel=parcel, published=False)
         cls.victim_admin = _user("admin@victim.example")
         WorksIn.objects.create(user=cls.victim_admin, company=cls.victim_co, role=WorksIn.COMPANY_ADMIN)
 
@@ -52,7 +52,7 @@ class ReviewsScopedTests(TestCase):
         other_parcel = Parcel.objects.create(
             name="Other Parcel", establishment=Establishment.objects.create(name="Other", company=other_co), area=1
         )
-        cls.other_season = History.objects.create(name="Other Published", parcel=other_parcel, published=True)
+        cls.other_season = Production.objects.create(name="Other Published", parcel=other_parcel, published=True)
         cls.other_scan = HistoryScan.objects.create(history=cls.other_season)
 
         cls.outsider = _user("admin@outsider.example")

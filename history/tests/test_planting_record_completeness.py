@@ -15,7 +15,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.record_completeness import (
     PLANTING_EVENT_REQUIRED_FIELDS,
     completeness_gap_keys,
@@ -34,7 +34,7 @@ class PlantingRecordCompletenessTests(TestCase):
         establishment = Establishment.objects.create(name="PC1", company=company)
         parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=10)
         product = Product.objects.create(name="Avocado")
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Planting Completeness",
             start_date=timezone.now(),
             product=product,

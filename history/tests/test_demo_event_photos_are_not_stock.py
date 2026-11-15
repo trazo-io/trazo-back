@@ -39,7 +39,7 @@ from django.utils import timezone
 from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
 from history.management.commands.prune_misleading_demo_photos import STOCK_IMAGE_HOSTS, _demo_event_gallery_ids
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel, Product
 
 
@@ -48,7 +48,7 @@ class DemoEventPhotosAreNotStockTests(TestCase):
         company = Company.objects.create(name=f"{name} Co")
         est = Establishment.objects.create(name=name, company=company, is_demo=is_demo)
         parcel = Parcel.objects.create(name="Block A", establishment=est, area=2.0)
-        history = History.objects.create(parcel=parcel, product=Product.objects.create(name=f"Crop {name}"))
+        history = Production.objects.create(parcel=parcel, product=Product.objects.create(name=f"Crop {name}"))
         return est, history
 
     def _event_with_image(self, history, url):

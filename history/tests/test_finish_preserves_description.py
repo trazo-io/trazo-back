@@ -23,7 +23,7 @@ import datetime
 from django.test import SimpleTestCase
 from django.utils import timezone
 
-from history.models import History
+from history.models import Production
 
 
 def _finish(history, **overrides):
@@ -44,25 +44,25 @@ class FinishPreservesDescriptionTests(SimpleTestCase):
 
     def test_a_blank_observation_leaves_the_description_alone(self):
         """The regression. Optional field, absent key — nothing to write, so write nothing."""
-        history = _finish(History(description=self.SEASON_NOTE))
+        history = _finish(Production(description=self.SEASON_NOTE))
         self.assertEqual(history.description, self.SEASON_NOTE)
 
     def test_an_empty_string_observation_leaves_the_description_alone(self):
         """The form submits "" rather than omitting the key, which is the path that actually ran."""
-        history = _finish(History(description=self.SEASON_NOTE), observation="")
+        history = _finish(Production(description=self.SEASON_NOTE), observation="")
         self.assertEqual(history.description, self.SEASON_NOTE)
 
     def test_a_whitespace_only_observation_leaves_the_description_alone(self):
-        history = _finish(History(description=self.SEASON_NOTE), observation="   \n  ")
+        history = _finish(Production(description=self.SEASON_NOTE), observation="   \n  ")
         self.assertEqual(history.description, self.SEASON_NOTE)
 
     def test_a_real_observation_still_wins(self):
         """The feature this aliasing exists for must keep working."""
-        history = _finish(History(description=self.SEASON_NOTE), observation="Hulled on site, 4% moisture")
+        history = _finish(Production(description=self.SEASON_NOTE), observation="Hulled on site, 4% moisture")
         self.assertEqual(history.description, "Hulled on site, 4% moisture")
 
     def test_an_observation_is_stored_trimmed(self):
-        history = _finish(History(description=""), observation="  Rain delayed the last block  ")
+        history = _finish(Production(description=""), observation="  Rain delayed the last block  ")
         self.assertEqual(history.description, "Rain delayed the last block")
 
     def test_the_rest_of_finalization_still_lands(self):
@@ -72,7 +72,7 @@ class FinishPreservesDescriptionTests(SimpleTestCase):
         executed at all.
         """
         history = _finish(
-            History(description=self.SEASON_NOTE),
+            Production(description=self.SEASON_NOTE),
             production_unit="lb",
             quality_grade="premium",
             harvest_method="mechanical",

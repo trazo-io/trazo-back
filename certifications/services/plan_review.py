@@ -155,7 +155,7 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
         LandownerAffidavit,
         OSPChangeNotification,
     )
-    from history.models import GeneralEvent, History
+    from history.models import GeneralEvent, Production
     from product.models import Parcel
 
     establishment = osp.establishment
@@ -229,7 +229,7 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
                 )
             )
 
-        seasons = History.objects.filter(parcel__establishment=establishment)
+        seasons = Production.objects.filter(parcel__establishment=establishment)
         closed = list(seasons.filter(finish_date__gt=answers_as_of, finish_date__lte=reference).order_by("finish_date"))
         started = list(seasons.filter(start_date__gt=answers_as_of, start_date__lte=reference).order_by("start_date"))
         if closed:

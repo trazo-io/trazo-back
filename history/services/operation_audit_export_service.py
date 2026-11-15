@@ -94,8 +94,8 @@ class OperationAuditExportService:
             ChemicalEvent,
             EquipmentEvent,
             GeneralEvent,
-            History,
             PestManagementEvent,
+            Production,
             ProductionEvent,
             SoilManagementEvent,
             WeatherEvent,
@@ -105,7 +105,7 @@ class OperationAuditExportService:
             return Prefetch(name, queryset=model.objects.select_related("album").prefetch_related("album__images"))
 
         qs = (
-            History.objects.filter(parcel__establishment=self.establishment)
+            Production.objects.filter(parcel__establishment=self.establishment)
             .select_related("parcel__establishment__company", "product", "crop_type", "operator")
             .prefetch_related(
                 _ev("history_weatherevent_events", WeatherEvent),

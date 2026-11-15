@@ -115,7 +115,7 @@ from history.constants import (
     PRODUCTION_EVENT_TYPE,
     SOIL_MANAGEMENT_EVENT_TYPE,
 )
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent, SoilManagementEvent
 from history.services import multi_target, tank_mix
 from history.services.cogpro_import import ImportPlan, RowResult, _as_event_datetime
 from history.services.record_source import KIND_TRANSCRIPTION, SOURCE_KEY, source_ref, write_record
@@ -659,16 +659,16 @@ def _season_for(parcel, named, problems):
     if named:
         history = None
         if named.isdigit():
-            history = History.objects.filter(id=int(named), parcel=parcel).first()
+            history = Production.objects.filter(id=int(named), parcel=parcel).first()
         else:
             try:
-                history = History.objects.filter(public_id=uuid.UUID(named), parcel=parcel).first()
+                history = Production.objects.filter(public_id=uuid.UUID(named), parcel=parcel).first()
             except ValueError:
                 history = None
         if history is None:
             problems.append(f"no production {named!r} on parcel {parcel.name!r}")
         return history
-    open_seasons = list(History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
+    open_seasons = list(Production.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
     if not open_seasons:
         problems.append(f"parcel {parcel.name!r} has no open production; start one, or name the finished season")
         return None
@@ -1398,7 +1398,7 @@ def execute(plan: ImportPlan, farm, created_by, batch: str) -> dict:
                     tank_mix_group=uuid.UUID(tank["group"]), tank_mix_line=tank["line"], tank_mix_role=tank["role"]
                 )
             for history_id in p["histories"]:
-                history = History.objects.select_related("parcel__establishment").get(id=history_id)
+                history = Production.objects.select_related("parcel__establishment").get(id=history_id)
                 if history.parcel.establishment_id != farm.id:
                     raise ValueError(f"production {history_id} is not on farm {farm.id}")
                 extra = dict(p["extra"])

@@ -25,7 +25,7 @@ from certifications.services.osp_module_pdf import generate_module_pdf, generate
 from certifications.services.packet_answers import form_answer_states
 from certifications.tests.test_supplier_register import _Base
 from company.models import Company
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -105,7 +105,9 @@ class PanelTests(_Plan):
     def test_only_this_farms_bought_transplants_are_listed(self):
         self.planting(supplier="Saved Stock Farm", seeds_source="farm_saved")
         other_parcel = Parcel.objects.create(name="North 1", establishment=self.other_est, area=3.0)
-        other_season = History.objects.create(name="North 2025", start_date=self.season.start_date, parcel=other_parcel)
+        other_season = Production.objects.create(
+            name="North 2025", start_date=self.season.start_date, parcel=other_parcel
+        )
         self.planting(supplier="Elsewhere Nursery", history=other_season)
         text = self.g3_0a(self.plan())
         self.assertIn("No transplant purchase naming a supplier is recorded in Trazo.", text)

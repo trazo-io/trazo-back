@@ -17,7 +17,7 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
-from history.models import History
+from history.models import Production
 
 
 class Command(BaseCommand):
@@ -43,7 +43,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("DRY RUN - no changes will be made"))
 
         # Build queryset
-        queryset = History.objects.select_related("product", "parcel__establishment")
+        queryset = Production.objects.select_related("product", "parcel__establishment")
         if production_id:
             queryset = queryset.filter(id=production_id)
 
@@ -78,7 +78,7 @@ class Command(BaseCommand):
 
                 consumer_url = f"{settings.BASE_CONSUMER_URL}production/{history.public_id}"
 
-                qr_image = History._generate_branded_qr(consumer_url)
+                qr_image = Production._generate_branded_qr(consumer_url)
 
                 buf = BytesIO()
                 qr_image.save(buf, format="PNG")
@@ -88,7 +88,7 @@ class Command(BaseCommand):
                     ContentFile(buf.getvalue()),
                     save=False,
                 )
-                History.objects.filter(pk=history.pk).update(qr_code=history.qr_code.name)
+                Production.objects.filter(pk=history.pk).update(qr_code=history.qr_code.name)
 
                 regenerated += 1
                 self.stdout.write(self.style.SUCCESS(f"  OK {label}"))

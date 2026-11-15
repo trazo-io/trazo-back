@@ -18,7 +18,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from product.models import Parcel
 
 
@@ -29,7 +29,7 @@ class PublicScansScopedTests(TestCase):
         parcel = Parcel.objects.create(
             name="Victim Parcel", establishment=Establishment.objects.create(name="Farm", company=company), area=1
         )
-        cls.season = History.objects.create(name="Victim 2026", parcel=parcel, published=True)
+        cls.season = Production.objects.create(name="Victim 2026", parcel=parcel, published=True)
 
     def setUp(self):
         self.scan = HistoryScan.objects.create(history=self.season)

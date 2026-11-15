@@ -30,7 +30,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from company.models import Company
-from history.models import History
+from history.models import Production
 from users.models import User
 
 from ._loewen_base import COMPANY_NAME
@@ -68,7 +68,7 @@ class Command(BaseCommand):
             return
 
         prod = (
-            History.objects.filter(parcel__establishment__company=company, published=True)
+            Production.objects.filter(parcel__establishment__company=company, published=True)
             .order_by("-finish_date", "-id")
             .first()
         )

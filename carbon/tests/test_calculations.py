@@ -14,7 +14,7 @@ from carbon.models import CarbonEntry, CropType
 from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 
 User = get_user_model()
@@ -80,7 +80,7 @@ class TestCarbonFootprintCalculator(TransactionTestCase):
         )
 
         # Create test production
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             establishment=self.establishment,
             parcel=self.parcel,
             product="Oranges",

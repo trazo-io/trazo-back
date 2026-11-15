@@ -32,7 +32,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from product.models import Parcel, Product
 from users.models import User
 
@@ -48,7 +48,7 @@ class YieldToSalesScopeTests(TestCase):
 
     def _production(self, name, *, harvested_lb, sold_lb=None, sale_date=None):
         """A season with a harvest record, and optionally a sale dated AFTER the harvest year."""
-        history = History.objects.create(
+        history = Production.objects.create(
             name=name,
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
@@ -286,7 +286,7 @@ class Run7DossierWordingTests(TestCase):
         self.company = Company.objects.create(name="R7 Co")
         self.establishment = Establishment.objects.create(name="R7 Farm", company=self.company, state="OR")
         self.parcel = Parcel.objects.create(name="River", establishment=self.establishment, area=6.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Liberty 2026",
             start_date=timezone.now() - timedelta(days=200),
             product=Product.objects.create(name="Blueberries"),
@@ -541,7 +541,7 @@ class WorkbookOrderTests(TestCase):
         company = Company.objects.create(name="WB Co")
         est = Establishment.objects.create(name="WB Farm", company=company, state="OR")
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
-        history = History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        history = Production.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
         now = timezone.now()
         # Inserted out of date order, so neither insertion order nor its reverse is date order.
         for name, days in (("Bravo", 9), ("Charlie", 1), ("Alpha", 20), ("ALPHA", 25)):
@@ -566,7 +566,7 @@ class Run7PlanRecordsTests(TestCase):
         company = Company.objects.create(name="R7B Co")
         self.est = Establishment.objects.create(name="R7B Farm", company=company, state="OR")
         parcel = Parcel.objects.create(name="Bottom", establishment=self.est, area=6.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Carrots 2026",
             start_date=timezone.now().replace(year=2026, month=4, day=1),
             parcel=parcel,
@@ -699,7 +699,7 @@ class Run7AggregationTests(TestCase):
         company = Company.objects.create(name="R7C Co")
         self.est = Establishment.objects.create(name="R7C Farm", company=company, state="OR")
         parcel = Parcel.objects.create(name="Home Field East", establishment=self.est, area=6.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Duke 2026", start_date=timezone.now() - timedelta(days=200), parcel=parcel, operator=self.user
         )
         self.when = timezone.now() - timedelta(days=100)
@@ -823,7 +823,7 @@ class Run7AggregationTests(TestCase):
         sale.harvest_events.add(picks[1])
         # A FINISHED season: on an open one an unsold pick is usually a pick not sold yet, and is
         # named without the flag (test_sales_open_season).
-        History.objects.filter(pk=self.history.pk).update(finish_date=timezone.now())
+        Production.objects.filter(pk=self.history.pk).update(finish_date=timezone.now())
         self.history.refresh_from_db()
         text = self._mass_balance()
         self.assertIn("[REVIEW] 1 harvest record(s) of this production are on no sales record: CBF-26-HFE-P1", text)
@@ -939,7 +939,7 @@ class Run7RetentionPlantingTests(TestCase):
 
     def _production(self, crop="Blueberries", finished=True, start=None, kind="OR"):
         start = start or timezone.now().replace(year=2026, month=3, day=1)
-        history = History.objects.create(
+        history = Production.objects.create(
             name=f"{crop} 2026",
             start_date=start,
             product=Product.objects.get_or_create(name=crop)[0],
@@ -951,7 +951,7 @@ class Run7RetentionPlantingTests(TestCase):
             finish = start.replace(month=8, day=12)
             from history.models import compute_retention_until
 
-            History.objects.filter(pk=history.pk).update(
+            Production.objects.filter(pk=history.pk).update(
                 finish_date=finish, retention_until=compute_retention_until(finish)
             )
             history.refresh_from_db()
@@ -971,7 +971,7 @@ class Run7RetentionPlantingTests(TestCase):
     def test_the_stored_date_is_never_shortened(self):
         history = self._production()
         far = history.retention_until.replace(year=2040)
-        History.objects.filter(pk=history.pk).update(retention_until=far)
+        Production.objects.filter(pk=history.pk).update(retention_until=far)
         SalesRecord.objects.create(production=history, sale_date=timezone.now().date(), buyer_name="B", quantity=1)
         history.refresh_from_db()
         self.assertEqual(history.retention_until, far)
@@ -1025,12 +1025,12 @@ class Run7RetentionPlantingTests(TestCase):
         apps = MigrationLoader(connection).project_state(("history", "0242_retention_floor")).apps
         history = self._production()
         SalesRecord.objects.create(production=history, sale_date=timezone.now().date(), buyer_name="B", quantity=1)
-        History.objects.filter(pk=history.pk).update(retention_until=history.finish_date.date())
+        Production.objects.filter(pk=history.pk).update(retention_until=history.finish_date.date())
         importlib.import_module("history.migrations.0242_retention_floor").forward(apps, None)
         history.refresh_from_db()
         self.assertGreaterEqual(history.retention_until.year, timezone.now().year + 5)
         far = history.retention_until.replace(year=2040)
-        History.objects.filter(pk=history.pk).update(retention_until=far)
+        Production.objects.filter(pk=history.pk).update(retention_until=far)
         importlib.import_module("history.migrations.0242_retention_floor").forward(apps, None)
         history.refresh_from_db()
         self.assertEqual(history.retention_until, far)
@@ -1095,7 +1095,7 @@ class Run7RetentionPlantingTests(TestCase):
             production=history, sale_date=timezone.now().date(), buyer_name="B", quantity=1
         )
         later = timezone.now() + timedelta(days=60)
-        History.objects.filter(pk=history.pk).update(retention_until=history.finish_date.date())
+        Production.objects.filter(pk=history.pk).update(retention_until=history.finish_date.date())
         sale.voided_at = later
         sale.void_reason = "wrong buyer"
         sale.save(update_fields=["voided_at", "void_reason"])
@@ -1108,7 +1108,7 @@ class Run7RetentionPlantingTests(TestCase):
 
         first = self._production()
         second = self._production(crop="Raspberries")
-        History.objects.filter(pk=second.pk).update(retention_until=first.retention_until.replace(year=2035))
+        Production.objects.filter(pk=second.pk).update(retention_until=first.retention_until.replace(year=2035))
         second.refresh_from_db()
         text = _retention_detail([first, second], [first, second])
         self.assertIn(f"Kept until at least {first.retention_until}", text)
@@ -1138,7 +1138,7 @@ class Run7ExportTests(TestCase):
         self.company = Company.objects.create(name="R7E Co")
         self.est = Establishment.objects.create(name="R7E Farm", company=self.company, state="OR")
         parcel = Parcel.objects.create(name="Home", establishment=self.est, area=6.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Duke 2026", start_date=timezone.now() - timedelta(days=200), parcel=parcel, operator=self.user
         )
 
@@ -1168,7 +1168,7 @@ class Run7ExportTests(TestCase):
 
     def test_another_operations_links_never_appear(self):
         other = Establishment.objects.create(name="Other", company=self.company, state="OR")
-        other_history = History.objects.create(
+        other_history = Production.objects.create(
             name="Other 2026",
             start_date=timezone.now(),
             parcel=Parcel.objects.create(name="O", establishment=other, area=1.0),
@@ -1225,7 +1225,7 @@ class Run7bResidualTests(TestCase):
         company = Company.objects.create(name="R7F Co")
         self.est = Establishment.objects.create(name="R7F Farm", company=company, state="OR")
         parcel = Parcel.objects.create(name="Bottom", establishment=self.est, area=6.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Carrots 2026",
             start_date=timezone.now().replace(year=2026, month=4, day=1),
             parcel=parcel,
@@ -1351,7 +1351,7 @@ class Run7BrowserPassTests(TestCase):
         company = Company.objects.create(name="R7G Co")
         est = Establishment.objects.create(name="R7G Farm", company=company, state="OR")
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
-        history = History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        history = Production.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
         OrganicSystemPlan.objects.create(establishment=est, version_number=1, status="active")
         event = ChemicalEvent.objects.create(
             history=history, date=timezone.now(), description="x", commercial_name="Rex"
@@ -1372,7 +1372,7 @@ class Run7BrowserPassTests(TestCase):
         company = Company.objects.create(name="R7H Co")
         est = Establishment.objects.create(name="R7H Farm", company=company, state="OR")
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
-        history = History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        history = Production.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
         OrganicSystemPlan.objects.create(establishment=est, version_number=1, status="active")
         seed = ProductionEvent.objects.create(history=history, type="PL", date=timezone.now(), created_by=user)
         ProductionEvent.objects.filter(pk=seed.pk).update(
@@ -1407,7 +1407,7 @@ class Run8DateSemanticsTests(TestCase):
         user = User.objects.create_user(email="r8tz@test.com", password="x")
         est = Establishment.objects.create(name="TZ Farm", company=Company.objects.create(name="TZ Co"), state="OR")
         parcel = Parcel.objects.create(name="TZ block", establishment=est, area=2.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="TZ 2026",
             start_date=datetime(2026, 10, 5, 0, 0, tzinfo=dt_tz.utc),
             parcel=parcel,
@@ -1464,7 +1464,7 @@ class Run8UnknownOrganicBasisTests(TestCase):
         user = User.objects.create_user(email="r8basis@test.com", password="x")
         est = Establishment.objects.create(name="Basis", company=Company.objects.create(name="Basis Co"), state="OR")
         parcel = Parcel.objects.create(name="B", establishment=est, area=1.0)
-        self.history = History.objects.create(name="B 2026", start_date=timezone.now(), parcel=parcel, operator=user)
+        self.history = Production.objects.create(name="B 2026", start_date=timezone.now(), parcel=parcel, operator=user)
         self.establishment = est
 
     def _event(self, basis):

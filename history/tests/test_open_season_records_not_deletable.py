@@ -18,7 +18,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History, SalesRecord
+from history.models import GeneralEvent, Production, SalesRecord
 from history.retention import RetentionConflict, assert_deletable, unfinished_histories_holding_records
 from product.models import Parcel
 from users.models import User, WorksIn
@@ -35,7 +35,7 @@ class _Tree(TestCase):
         self.farm = Establishment.objects.create(name="Home", company=self.company, state="WA")
         WorksIn.objects.create(user=self.owner, company=self.company, role="CA")
         self.parcel = Parcel.objects.create(name="North", establishment=self.farm, area=3.0)
-        self.season = History.objects.create(parcel=self.parcel, name="2026 apples", start_date=timezone.now())
+        self.season = Production.objects.create(parcel=self.parcel, name="2026 apples", start_date=timezone.now())
         self.client = APIClient()
         self.client.force_authenticate(self.owner)
 
@@ -63,7 +63,7 @@ class SeasonDeleteTests(_Tree):
         self.assertEqual(res.status_code, 409, res.content)
         self.assertIn("3 records", res.json()["detail"])
         self.assertIn("205.103(b)(4)", res.json()["detail"])
-        self.assertTrue(History.objects.filter(pk=self.season.pk).exists())
+        self.assertTrue(Production.objects.filter(pk=self.season.pk).exists())
         self.assertEqual(GeneralEvent.objects.filter(history=self.season).count(), 3)
 
     def test_a_sale_alone_also_holds_the_season(self):
@@ -72,12 +72,12 @@ class SeasonDeleteTests(_Tree):
         )
         with self.assertRaises(ValidationError):
             self.season.delete()
-        self.assertTrue(History.objects.filter(pk=self.season.pk).exists())
+        self.assertTrue(Production.objects.filter(pk=self.season.pk).exists())
 
     def test_an_empty_draft_still_deletes(self):
         res = self._delete_season()
         self.assertEqual(res.status_code, 204, res.content)
-        self.assertFalse(History.objects.filter(pk=self.season.pk).exists())
+        self.assertFalse(Production.objects.filter(pk=self.season.pk).exists())
 
     def test_deleting_the_activities_first_frees_the_season(self):
         """The way out for a season started by mistake: each activity delete is its own, logged act."""
@@ -88,20 +88,20 @@ class SeasonDeleteTests(_Tree):
     def test_a_finished_season_past_retention_still_deletes(self):
         """The guard must not become a tombstone: a finished season follows its retention date."""
         self._log()
-        History.objects.filter(pk=self.season.pk).update(
+        Production.objects.filter(pk=self.season.pk).update(
             finish_date=timezone.now() - timedelta(days=6 * 366),
             retention_until=timezone.now().date() - timedelta(days=1),
         )
         self.season.refresh_from_db()
         self.season.delete()
-        self.assertFalse(History.objects.filter(pk=self.season.pk).exists())
+        self.assertFalse(Production.objects.filter(pk=self.season.pk).exists())
 
     def test_a_legacy_finished_season_without_a_date_is_not_sent_to_a_locked_remedy(self):
         """Review on #422: keyed on a NULL retention date, a finished season from before that column
         existed was refused with "delete its activities first", and those are locked (423) once a
         season is finished. The new rule is about seasons not yet finished; this one is unchanged."""
         self._log()
-        History.objects.filter(pk=self.season.pk).update(
+        Production.objects.filter(pk=self.season.pk).update(
             finish_date=timezone.now() - timedelta(days=30), retention_until=None
         )
         self.season.refresh_from_db()
@@ -116,7 +116,7 @@ class SeasonDeleteTests(_Tree):
 
     def test_a_published_season_is_not_treated_as_open(self):
         self._log()
-        History.objects.filter(pk=self.season.pk).update(published=True)
+        Production.objects.filter(pk=self.season.pk).update(published=True)
         self.season.refresh_from_db()
         self.assertFalse(cmd_unfinished(self.season.pk), "a published season's activities are locked; it is not open")
 
@@ -142,7 +142,7 @@ class ContainerDeleteTests(_Tree):
             assert_deletable("company", parcel__establishment__company=self.company)
 
     def test_counts_cover_every_open_season_under_the_container(self):
-        second = History.objects.create(parcel=self.parcel, name="2026 pears", start_date=timezone.now())
+        second = Production.objects.create(parcel=self.parcel, name="2026 pears", start_date=timezone.now())
         self._log(n=2)
         self._log(season=second, n=1)
         with self.assertRaises(RetentionConflict) as ctx:

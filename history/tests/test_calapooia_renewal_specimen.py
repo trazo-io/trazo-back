@@ -82,10 +82,10 @@ class CalapooiaRenewalSpecimenTests(_Seeded):
         """The fixture carries the source database's finalization_hash, computed over ITS ids.
         Copied as is, no seeded seal could match, and the QR page read the specimen as tampered
         (diagnose_seals on production, 2026-11-04). The seeder reseals over what it wrote."""
-        from history.models import History
+        from history.models import Production
         from history.seals import CURRENT_VERSION, INTACT, verify
 
-        sealed = list(History.objects.filter(extra_data__has_key="finalization_hash"))
+        sealed = list(Production.objects.filter(extra_data__has_key="finalization_hash"))
         self.assertGreaterEqual(len(sealed), 2, "the fixture has closed, sealed seasons")
         for history in sealed:
             with self.subTest(season=history.name):
@@ -398,13 +398,13 @@ class Run3SpecimenTests(_Seeded):
 
     def test_the_dossier_prints_the_filed_signed_hash_and_labels_the_held_one_apart(self):
         """Run 7c, R7-02: the dossier printed a re-hash of this database as revision 3's signed hash."""
-        from history.models import History
+        from history.models import Production
         from history.services.audit_export_service import AuditExportService
         from history.tests.test_pdf_field_coverage import flowable_text
 
         _original, _revision_2, current = self._year(2026, expected=3)
         history = (
-            History.objects.filter(parcel__establishment_id=current.establishment_id, name__contains="2026")
+            Production.objects.filter(parcel__establishment_id=current.establishment_id, name__contains="2026")
             .order_by("pk")
             .first()
         )

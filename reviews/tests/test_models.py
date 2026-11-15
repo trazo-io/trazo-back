@@ -25,7 +25,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from reviews.models import Review
 
@@ -94,7 +94,7 @@ class ReviewModelTestCase(TestCase):
             name="Review Test Parcel", establishment=self.establishment, area=20.0, organic_certified=True
         )
 
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             title="Organic Tomato Harvest",
             establishment=self.establishment,
             parcel=self.parcel,
@@ -535,7 +535,7 @@ class ReviewAPITestCase(APITestCase):
 
         self.establishment = Establishment.objects.create(name="API Test Field", company=self.company)
 
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             title="API Test Production",
             establishment=self.establishment,
             event_date=timezone.now().date(),

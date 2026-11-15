@@ -21,8 +21,8 @@ from company.models import Company, Establishment
 from history.models import (
     ChemicalEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
 )
@@ -54,7 +54,7 @@ class PdfFieldCoverageTests(TestCase):
         self.parcel = Parcel.objects.create(name="C-parcel", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Almond")
         self.now = timezone.now()
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Coverage Production",
             start_date=self.now - timedelta(days=200),
             product=self.product,
@@ -168,7 +168,7 @@ class PdfFieldCoverageTests(TestCase):
         an application_group: each row must say it is one incident and where else it hit,
         or the certifier reads two incidents."""
         other_parcel = Parcel.objects.create(name="D-parcel", establishment=self.establishment, area=4.0)
-        other = History.objects.create(
+        other = Production.objects.create(
             name="Second Production",
             start_date=self.now - timedelta(days=200),
             product=self.product,

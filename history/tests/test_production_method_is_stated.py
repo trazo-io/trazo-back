@@ -15,17 +15,17 @@ from datetime import timezone as dt_tz
 
 from django.urls import reverse
 
-from history.models import History
+from history.models import Production
 from history.tests.test_season_plan_not_records import SeasonPlanFixture
 from product.services.land_history import land_history_rows
 
 
 class TheModelAssumesNoMethod(SeasonPlanFixture):
     def test_a_new_season_has_no_method_until_one_is_stated(self):
-        self.assertIsNone(History().production_method)
+        self.assertIsNone(Production().production_method)
 
     def test_a_season_logged_without_a_method_is_not_a_conventional_year(self):
-        History.objects.create(
+        Production.objects.create(
             name="2026 Walnuts",
             parcel=self.parcel,
             crop_type=self.crop_type,
@@ -53,7 +53,7 @@ class BothCreatePathsStoreUnstatedAsNull(SeasonPlanFixture):
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.content)
-        self.assertIsNone(History.objects.get(name="2026 Walnuts").production_method)
+        self.assertIsNone(Production.objects.get(name="2026 Walnuts").production_method)
 
     def test_start_production_keeps_a_stated_method(self):
         response = self.client.post(
@@ -68,7 +68,7 @@ class BothCreatePathsStoreUnstatedAsNull(SeasonPlanFixture):
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.content)
-        self.assertEqual(History.objects.get(name="2026 Walnuts").production_method, "conventional")
+        self.assertEqual(Production.objects.get(name="2026 Walnuts").production_method, "conventional")
 
     def test_the_nested_create(self):
         url = reverse(
@@ -82,4 +82,4 @@ class BothCreatePathsStoreUnstatedAsNull(SeasonPlanFixture):
         body = {"parcel": self.parcel.id, "product": "Walnuts", "start_date": "2026-03-01T00:00:00Z"}
         response = self.client.post(url, body, format="json")
         self.assertEqual(response.status_code, 201, response.content)
-        self.assertIsNone(History.objects.latest("id").production_method)
+        self.assertIsNone(Production.objects.latest("id").production_method)

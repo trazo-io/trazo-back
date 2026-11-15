@@ -33,7 +33,7 @@ from certifications.services.common_osp_workbooks import _material_rows
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.plan_materials import logged_post_harvest_sanitizers, none_used_contradictions
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel
 
 DUMP_DIR = os.environ.get("TRAZO_DUMP_PDF_DIR")
@@ -125,7 +125,7 @@ class _Farm(TestCase):
             establishment=self.establishment, version_number=1, status="active", submitted_at=timezone.now()
         )
         parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=1.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel, name="Apples 2026", start_date=date(2026, 1, 1), published=False
         )
 

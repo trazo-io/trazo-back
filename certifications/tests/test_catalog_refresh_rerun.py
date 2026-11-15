@@ -366,7 +366,7 @@ class ThePacketDoesNotPrintAnUnreviewedListAsSynced(TestCase):
     def setUp(self):
         from django.utils import timezone
 
-        from history.models import History
+        from history.models import Production
         from history.services.audit_export_service import AuditExportService
         from product.models import Parcel, Product
         from users.models import User
@@ -374,7 +374,7 @@ class ThePacketDoesNotPrintAnUnreviewedListAsSynced(TestCase):
         company = Company.objects.create(name="Packet Farm")
         establishment = Establishment.objects.create(name="Home", company=company, state="WA")
         parcel = Parcel.objects.create(name="P", establishment=establishment, area=1.0)
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026 Pears",
             start_date=timezone.now(),
             product=Product.objects.create(name="Pears"),

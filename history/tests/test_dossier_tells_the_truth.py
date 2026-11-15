@@ -22,7 +22,7 @@ import pdfplumber
 
 from certifications.models import Certification, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord, SoilManagementEvent
+from history.models import Production, ProductionEvent, SalesRecord, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -83,7 +83,7 @@ class DossierTellsTheTruthTests(TestCase):
         cls.product = Product.objects.create(name="Blueberries")
 
     def _production(self, header_lb, picks, buyer="Cascade Organic Distributors, Portland OR"):
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Duke 2026",
             start_date=timezone.now() - timedelta(days=220),
             finish_date=timezone.now() - timedelta(days=10),

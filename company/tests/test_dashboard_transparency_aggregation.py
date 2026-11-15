@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from company.models import Company, Establishment
 from company.serializers import EstablishmentDashboardMetricsSerializer
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel, Product
 
 
@@ -28,7 +28,7 @@ class FarmTransparencyAggregationTests(TestCase):
         self.serializer = EstablishmentDashboardMetricsSerializer()
 
     def _production(self, *, published, finished, name, events=0):
-        history = History.objects.create(
+        history = Production.objects.create(
             name=name,
             start_date=timezone.now() - timezone.timedelta(days=200),
             finish_date=timezone.now() - timezone.timedelta(days=10) if finished else None,
@@ -124,7 +124,7 @@ class FarmTransparencyAggregationTests(TestCase):
 
         other_est = Establishment.objects.create(name="Other", company=self.company, state="CA")
         other_parcel = Parcel.objects.create(name="OtherP", establishment=other_est, area=1.0)
-        other = History.objects.create(
+        other = Production.objects.create(
             name="Elsewhere",
             start_date=timezone.now(),
             product=self.product,

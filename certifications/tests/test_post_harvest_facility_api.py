@@ -30,7 +30,7 @@ from rest_framework.test import APIClient
 
 from certifications.models import PostHarvestFacility
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -121,7 +121,7 @@ class ProductionHandlerLinkTests(TestCase):
         self.establishment = Establishment.objects.create(name="Link Farm", company=self.company)
         self.parcel = Parcel.objects.create(name="Block A", establishment=self.establishment, area=12.0)
         self.product = Product.objects.create(name="Walnut")
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Walnut 2026",
             parcel=self.parcel,
             product=self.product,
@@ -198,7 +198,7 @@ class FacilityReachesTheAuditExportTests(TestCase):
         self.establishment = Establishment.objects.create(name="Export Farm", company=self.company)
         self.parcel = Parcel.objects.create(name="Block B", establishment=self.establishment, area=8.0)
         self.product = Product.objects.create(name="Almond")
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Almond 2026",
             parcel=self.parcel,
             product=self.product,

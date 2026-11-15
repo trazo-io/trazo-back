@@ -23,7 +23,7 @@ from rest_framework.test import APITestCase
 
 from company.models import Company
 from history.constants import CHEMICAL_EVENT_TYPE, GENERAL_EVENT_TYPE
-from history.models import ChemicalEvent, GeneralEvent, History
+from history.models import ChemicalEvent, GeneralEvent, Production
 from product.models import Establishment, Parcel
 from users.models import WorksIn
 
@@ -38,7 +38,7 @@ class EventDetailRequiresTypeTests(APITestCase):
         WorksIn.objects.create(user=cls.user, company=company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Owner Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=est, area=1)
-        history = History.objects.create(parcel=parcel, name="2026 Season")
+        history = Production.objects.create(parcel=parcel, name="2026 Season")
         cls.general = GeneralEvent.objects.create(
             pk=SHARED_PK, history=history, name="general record", description="general", date=timezone.now()
         )

@@ -26,7 +26,7 @@ from certifications.serializers import _ApprovedNationalListInline
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.plan_materials import NONSYNTHETIC_SOURCE, plan_materials
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 
 from .test_renewal_packet_contents import _pdf_text
@@ -55,7 +55,7 @@ class _Farm(TestCase):
         self.est = Establishment.objects.create(name="Tule River Citrus", company=company, state="CA")
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="active")
         parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             name="Navels 2026",
             parcel=parcel,
             product=Product.objects.create(name="Oranges"),

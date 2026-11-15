@@ -9,7 +9,7 @@ perennial verdict; an unknown code is refused.
 
 from django.urls import reverse
 
-from history.models import History
+from history.models import Production
 from history.tests.test_season_plan_not_records import SeasonPlanFixture
 
 
@@ -32,27 +32,27 @@ class StartProductionStoresWhatTheGrowerStated(SeasonPlanFixture):
     def test_an_unstated_season_is_not_recorded_as_perennial(self):
         response = self._start()
         self.assertEqual(response.status_code, 201, response.content)
-        self.assertIsNone(History.objects.get(name="2026 Walnuts").type)
+        self.assertIsNone(Production.objects.get(name="2026 Walnuts").type)
 
     def test_an_empty_choice_is_unstated_too(self):
         response = self._start(type="")
         self.assertEqual(response.status_code, 201, response.content)
-        self.assertIsNone(History.objects.get(name="2026 Walnuts").type)
+        self.assertIsNone(Production.objects.get(name="2026 Walnuts").type)
 
     def test_each_stated_value_is_kept(self):
         for code in ("OR", "GA"):
             with self.subTest(code=code):
-                History.objects.filter(name=f"Season {code}").delete()
+                Production.objects.filter(name=f"Season {code}").delete()
                 response = self._start(name=f"Season {code}", type=code)
                 self.assertEqual(response.status_code, 201, response.content)
-                self.assertEqual(History.objects.get(name=f"Season {code}").type, code)
+                self.assertEqual(Production.objects.get(name=f"Season {code}").type, code)
 
     def test_an_unknown_code_is_refused_before_anything_is_written(self):
-        before = History.objects.count()
+        before = Production.objects.count()
         response = self._start(type="XX")
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("type", response.json())
-        self.assertEqual(History.objects.count(), before)
+        self.assertEqual(Production.objects.count(), before)
 
 
 class NestedCreateRefusesAnUnknownCode(SeasonPlanFixture):
@@ -73,12 +73,12 @@ class NestedCreateRefusesAnUnknownCode(SeasonPlanFixture):
         return self.client.post(self.url, body, format="json")
 
     def test_unknown_code_is_a_400(self):
-        before = History.objects.count()
+        before = Production.objects.count()
         response = self._post(type="XX")
         self.assertEqual(response.status_code, 400, response.content)
-        self.assertEqual(History.objects.count(), before)
+        self.assertEqual(Production.objects.count(), before)
 
     def test_unstated_is_null(self):
         response = self._post()
         self.assertEqual(response.status_code, 201, response.content)
-        self.assertIsNone(History.objects.latest("id").type)
+        self.assertIsNone(Production.objects.latest("id").type)

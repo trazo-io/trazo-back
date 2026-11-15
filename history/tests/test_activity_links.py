@@ -18,7 +18,7 @@ from company.models import Company, Establishment
 from documents.models import GeneratedDocument
 from documents.services.filing import file_document
 from history.activity_ref import activity_id_for
-from history.models import ChemicalEvent, EventAmendment, GeneralEvent, History, ProductionPlanItem
+from history.models import ChemicalEvent, EventAmendment, GeneralEvent, Production, ProductionPlanItem
 from history.services.records_export import export_establishment_records_zip
 from product.models import Parcel
 
@@ -28,7 +28,7 @@ class _LinkFixture(TestCase):
         company = Company.objects.create(name="Link Co")
         self.est = Establishment.objects.create(name="Link Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
-        self.history = History.objects.create(parcel=parcel, name="2026")
+        self.history = Production.objects.create(parcel=parcel, name="2026")
         self.general = GeneralEvent.objects.create(
             history=self.history, name="g", description="general", date=timezone.now()
         )

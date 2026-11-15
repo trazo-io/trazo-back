@@ -264,11 +264,11 @@ class Command(BaseCommand):
         # flow before it reached the assertions this audit is for.
         from django.utils import timezone as _tz
 
-        from history.models import History
+        from history.models import Production
 
         first_block = Parcel.objects.filter(establishment=farm).order_by("id").first()
         if first_block and first_block.current_history is None:
-            history = History.objects.create(
+            history = Production.objects.create(
                 parcel=first_block,
                 start_date=_tz.now(),
                 expected_harvest=_tz.now() + __import__("datetime").timedelta(days=120),
@@ -725,7 +725,7 @@ class Command(BaseCommand):
                 check("a plain message is not read as negated", True)
 
         from fieldnotes.models import FieldNote
-        from history.models import History  # noqa: F401
+        from history.models import Production  # noqa: F401
 
         # SCOPED TO THIS RUN'S NOTES. It counted the whole table, so a single legitimate
         # confirmation by a human or the paired UI suite, against the same database this command

@@ -48,7 +48,7 @@ from certifications.services.consumer_claim_validator import (
     consumer_certification_status,
 )
 from company.models import Company, Establishment
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from history.serializers_consumer import EnhancedHistoryScanSerializer
 from history.transparency_views import _build_organic_summary
 from product.models import Parcel, Product
@@ -99,7 +99,7 @@ class CertificationClaimStateMatrixTests(TestCase):
         )
         parcel = Parcel.objects.create(name=f"Block {label}", establishment=establishment, area=4.0)
         product = Product.objects.create(name=f"Blueberries {label}")
-        history = History.objects.create(
+        history = Production.objects.create(
             name=f"Season {label}",
             start_date=timezone.now() - timedelta(days=60),
             product=product,

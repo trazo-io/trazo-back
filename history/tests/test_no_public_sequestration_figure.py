@@ -24,7 +24,7 @@ from rest_framework.test import APITestCase
 
 from company.models import Company, Establishment
 from history.constants import SOIL_MANAGEMENT_EVENT_TYPE
-from history.models import History, SoilManagementEvent
+from history.models import Production, SoilManagementEvent
 from history.serializers import PublicHistorySerializer
 from product.models import Parcel, Product
 from users.models import WorksIn
@@ -49,7 +49,7 @@ class NoPublicSequestrationFigureTests(APITestCase):
         WorksIn.objects.create(user=cls.user, company=company, role=WorksIn.COMPANY_ADMIN)
         establishment = Establishment.objects.create(name="Soil Farm", company=company)
         parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=8)
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Oranges 2026",
             start_date=timezone.now(),
             product=Product.objects.create(name="Oranges"),
@@ -66,7 +66,7 @@ class NoPublicSequestrationFigureTests(APITestCase):
             extra_data={"species": "Lolium multiflorum", "carbon_sequestration_kg": 9.6},
         )
         # A published season locks its events (423), so the write test uses an open one.
-        cls.open_season = History.objects.create(
+        cls.open_season = Production.objects.create(
             name="Oranges 2027", start_date=timezone.now(), parcel=parcel, operator=cls.user
         )
         cls.open_cover_crop = SoilManagementEvent.objects.create(

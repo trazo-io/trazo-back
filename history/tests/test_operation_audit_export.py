@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.operation_audit_export_service import OperationAuditExportService
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -32,7 +32,7 @@ class OperationAuditExportTests(TestCase):
         )
 
     def _history(self, name, parcel):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             start_date=timezone.now(),
             product=self.product,

@@ -42,7 +42,7 @@ from rest_framework.test import APIClient
 from company.models import Company
 from history.amendments import AmendmentError, apply_history_amendment
 from history.constants import PRODUCTION_EVENT_TYPE
-from history.models import EventAmendment, History, ProductionEvent
+from history.models import EventAmendment, Production, ProductionEvent
 from product.models import Establishment, Parcel
 from users.models import User, WorksIn
 
@@ -54,7 +54,7 @@ class SeasonHeaderAmendmentServiceTests(TestCase):
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Calapooia Bend Farm", company=self.company)
         parcel = Parcel.objects.create(name="Home Field East", establishment=est, area=5.06)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             name="Duke 2025 — Home Field East",
             finish_date=timezone.now() - timedelta(days=30),
@@ -180,7 +180,7 @@ class SeasonHeaderAmendmentAPITests(TestCase):
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Calapooia Bend Farm", company=self.company)
         parcel = Parcel.objects.create(name="Home Field East", establishment=est, area=5.06)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             name="Duke 2025",
             finish_date=timezone.now() - timedelta(days=30),

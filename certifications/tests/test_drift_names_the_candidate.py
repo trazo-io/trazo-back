@@ -22,7 +22,7 @@ from rest_framework.test import APITestCase
 
 from certifications.models import OMRIProduct, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -47,7 +47,7 @@ class DriftNamesTheCandidateTests(APITestCase):
             omri_id="OMRI-SER-1", product_name="Bayer Serenade Opti A Wettable Powder Biofungicide"
         )
         self.osp.approved_omri_products.add(self.omri)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Duke 2026",
             start_date=timezone.now(),
             product=self.product,

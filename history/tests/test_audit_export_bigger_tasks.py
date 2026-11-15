@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from certifications.models import OMRIProduct, OrganicSystemPlan, PostHarvestFacility
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -40,7 +40,7 @@ class BiggerTasksAuditTests(TestCase):
         self.establishment = Establishment.objects.create(name="B1", company=self.company, state="California")
         self.parcel = Parcel.objects.create(name="BP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="BH1",
             start_date=timezone.now(),
             product=self.product,

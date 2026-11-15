@@ -9,7 +9,7 @@ from django.test.client import Client
 from django.test.utils import override_settings
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 
 User = get_user_model()

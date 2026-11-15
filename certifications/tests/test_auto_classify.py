@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from certifications.models import NationalListSubstance
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -42,7 +42,7 @@ class ChemicalEventAutoClassificationTests(TestCase):
         self.establishment = Establishment.objects.create(name="Field", company=self.company)
         self.parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
         self.product = Product.objects.create(name="Tomato")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="H",
             start_date=timezone.now(),
             product=self.product,

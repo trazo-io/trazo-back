@@ -11,7 +11,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from backend.security.qr_security import get_qr_security_manager
-from history.models import History
+from history.models import Production
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +52,14 @@ def verify_qr_code(request):
             production_id = payload.get("id")
             if production_id:
                 try:
-                    production = History.objects.get(id=production_id, published=True)
+                    production = Production.objects.get(id=production_id, published=True)
                     response_data["production"] = {
                         "id": str(production.public_id),
                         "name": production.name,
                         "verified": True,
                         "reputation": production.reputation,
                     }
-                except History.DoesNotExist:
+                except Production.DoesNotExist:
                     response_data["production"] = {
                         "id": production_id,
                         "verified": False,

@@ -19,8 +19,8 @@ from django.utils import timezone
 
 from history.models import (
     ChemicalEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -50,8 +50,8 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
 
         try:
-            production = History.objects.get(id=production_id)
-        except History.DoesNotExist:
+            production = Production.objects.get(id=production_id)
+        except Production.DoesNotExist:
             self.stderr.write(self.style.ERROR(f"Production {production_id} not found"))
             return
 

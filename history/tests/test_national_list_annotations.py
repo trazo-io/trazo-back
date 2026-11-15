@@ -21,7 +21,7 @@ from django.utils import timezone
 from carbon.models import CropType
 from certifications.models import NationalListSubstance
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 
@@ -57,7 +57,7 @@ class NationalListAnnotationTests(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Apple")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,

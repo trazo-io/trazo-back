@@ -22,7 +22,7 @@ from rest_framework.test import APITestCase
 from certifications.models import NationalListSubstance
 from common.location import city_state_label, joined_parts
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.claim_authority import LABEL_INPUT_GROWER_REPORTED
 from history.services.claim_resolver import resolve_input_status
 from history.services.privacy import redact_supplier_names
@@ -48,7 +48,7 @@ class BuyerPageStatesTheRecordTests(APITestCase):
         )
         cls.parcel = Parcel.objects.create(name="Home Field", establishment=cls.establishment, area=5.0)
         cls.product = Product.objects.create(name="Blueberries")
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Blueberries 2026",
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
@@ -203,7 +203,7 @@ class NationalListCitationFromProvenanceTests(APITestCase):
         company = Company.objects.create(name="R5 Co")
         establishment = Establishment.objects.create(name="R5 Farm", company=company, city="Tangent", state="OR")
         parcel = Parcel.objects.create(name="Block 4", establishment=establishment, area=5.0)
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Blueberries R5",
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),

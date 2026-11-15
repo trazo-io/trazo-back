@@ -26,7 +26,7 @@ from certifications.services.operation_certificate import certificate_from_anoth
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.packet_coverage import renewal_routing
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 from users.models import User
 
@@ -47,7 +47,7 @@ class _Farm(TestCase):
         self.company = Company.objects.create(name="Truth Orchards LLC")
         self.est = Establishment.objects.create(name="Truth Orchard", company=self.company, contact_person="Ira Vale")
         self.parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Pears 2026", start_date=timezone.now(), parcel=self.parcel, operator=self.user
         )
 

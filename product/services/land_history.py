@@ -208,7 +208,7 @@ def land_history_rows(parcel, *, limit: Optional[int] = None, through_year: Opti
     `through_year` caps derived rows (a renewal for year N should not show N+1's plantings);
     typed rows are never filtered — they are the operator's own statement.
     """
-    from history.models import History
+    from history.models import Production
 
     recorded = {}
     for h in parcel.crop_history.all():
@@ -237,7 +237,7 @@ def land_history_rows(parcel, *, limit: Optional[int] = None, through_year: Opti
         recorded.setdefault(h.year, []).append(row)
 
     seasons = list(
-        History.objects.filter(parcel=parcel, start_date__isnull=False).select_related("product", "crop_type")
+        Production.objects.filter(parcel=parcel, start_date__isnull=False).select_related("product", "crop_type")
     )
     years = set()
     for s in seasons:

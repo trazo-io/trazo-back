@@ -26,7 +26,7 @@ from certifications.models import (
 )
 from certifications.services.omri_verifier import looks_like_omri_code
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelCropHistory, Product
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
@@ -385,9 +385,9 @@ def create_solana_verde_base(user):
     finish_dt = _dt(2026, 4, 14, 12)
     retention_until = finish_dt.date() + timedelta(days=5 * 365)
 
-    production_finished = History(
+    production_finished = Production(
         name="Hass Avocado Hillside Grove A 2026",
-        type=History.ORCHARD,
+        type=Production.ORCHARD,
         start_date=_dt(2026, 1, 15),
         expected_harvest=_dt(2026, 4, 1),
         finish_date=finish_dt,
@@ -434,9 +434,9 @@ def create_solana_verde_base(user):
     # ------------------------------------------------------------------ #
     # Current / in-progress production: 2026-2027 season                  #
     # ------------------------------------------------------------------ #
-    production_current = History(
+    production_current = Production(
         name="Hass Avocado Hillside Grove A 2026-2027",
-        type=History.ORCHARD,
+        type=Production.ORCHARD,
         start_date=_dt(2026, 9, 1),
         published=False,
         description=(

@@ -26,7 +26,7 @@ from rest_framework.test import APIClient
 
 from certifications.models import CertifierAccessLink, CertifierAccessLog
 from company.models import Company, Establishment
-from history.models import History, HistoryScan, ProductionEvent
+from history.models import HistoryScan, Production, ProductionEvent
 from product.models import Parcel, Product
 
 
@@ -47,7 +47,7 @@ class BuyerReviewLinkTests(TestCase):
         cls.establishment = Establishment.objects.create(name="Main", company=cls.company, state="WA")
         cls.parcel = Parcel.objects.create(name="P1", establishment=cls.establishment, area=5.0)
         # UNPUBLISHED, in-season: the whole point of the buyer surface.
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="In-season 2026",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apple"),

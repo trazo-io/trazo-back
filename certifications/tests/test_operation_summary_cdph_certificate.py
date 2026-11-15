@@ -250,7 +250,7 @@ class TheDossierReadsEachAgency(TestCase):
     def setUp(self):
         from django.utils import timezone
 
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel, Product
         from users.models import User
 
@@ -258,7 +258,7 @@ class TheDossierReadsEachAgency(TestCase):
         company = Company.objects.create(name="Valley Walnuts LLC")
         self.est = Establishment.objects.create(name="Valley Walnuts", company=company, state="CA")
         parcel = Parcel.objects.create(name="Home Block", establishment=self.est, area=10.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Walnuts 2026",
             start_date=timezone.now(),
             product=Product.objects.create(name="Walnut"),

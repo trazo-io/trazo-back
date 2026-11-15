@@ -27,7 +27,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.serializers import _drop_unset
 from product.models import Parcel, Product
 from users.models import User
@@ -110,7 +110,7 @@ class ConsumerEndpointCompressionTests(TestCase):
         self.establishment = Establishment.objects.create(name="G1", company=self.company)
         self.parcel = Parcel.objects.create(name="GP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Gzip Production",
             start_date=timezone.now(),
             product=self.product,

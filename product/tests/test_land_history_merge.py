@@ -21,7 +21,7 @@ from django.test import TestCase
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel, ParcelCropHistory, Product
 from product.services.land_history import SOURCE_DERIVED, SOURCE_RECORDED, land_history_rows
 
@@ -53,7 +53,7 @@ class LandHistoryMergeTests(TestCase):
         )
 
     def _season(self, name, product, start, finish=None, method="organic"):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             parcel=self.parcel,
             product=product,
@@ -137,7 +137,7 @@ class LandHistoryMergeTests(TestCase):
         from django.utils import timezone as tz
 
         this_year = tz.now().year
-        History.objects.create(
+        Production.objects.create(
             name="Young orchard",
             parcel=self.parcel,
             product=self.carrots,

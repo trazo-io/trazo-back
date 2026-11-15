@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from history.models import History
+from history.models import Production
 
 
 class Command(BaseCommand):
@@ -25,7 +25,7 @@ class Command(BaseCommand):
         batch_size = options.get("batch_size")
 
         # Build queryset
-        queryset = History.objects.all()
+        queryset = Production.objects.all()
         if parcel_id:
             queryset = queryset.filter(parcel_id=parcel_id)
             self.stdout.write(f"Processing productions for parcel {parcel_id}...")

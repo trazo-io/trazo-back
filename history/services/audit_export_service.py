@@ -8167,7 +8167,7 @@ class AuditExportService:
         """
         import re
 
-        from history.models import History
+        from history.models import Production
 
         prod = self.production
         parcel = getattr(prod, "parcel", None)
@@ -8189,7 +8189,7 @@ class AuditExportService:
         same_crop = {"crop_type_id": prod.crop_type_id} if prod.crop_type_id else {"product_id": prod.product_id}
         if any(same_crop.values()):
             earlier = (
-                History.objects.filter(
+                Production.objects.filter(
                     parcel=parcel, finish_date__isnull=False, start_date__year__lt=start.year, **same_crop
                 )
                 .exclude(pk=prod.pk)
@@ -11677,7 +11677,7 @@ class AuditExportService:
 
     def _transcribed_record_counts(self, docs):
         """{document public_id: records transcribed from it}, over the productions this packet covers."""
-        from history.models import History
+        from history.models import Production
         from history.services.record_source import SOURCE_KEY
 
         wanted = {str(d.public_id) for d in docs}
@@ -11685,7 +11685,7 @@ class AuditExportService:
             return {}
         establishment = self.production.parcel.establishment if self.production.parcel else None
         if getattr(self, "documents_scope", "production") == "establishment" and establishment is not None:
-            productions = list(History.objects.filter(parcel__establishment=establishment))
+            productions = list(Production.objects.filter(parcel__establishment=establishment))
         else:
             productions = [self.production]
         counts = {}
@@ -14599,13 +14599,13 @@ class AuditExportService:
             )
             elements.append(self._spacer(0.08))
 
-            from history.models import History
+            from history.models import Production
 
             # PRIOR land use only. Without the published/date filters an unpublished developer
             # scratch production dated AFTER the audited season was printed under a
             # § 205.202 heading as this parcel's field history.
             prev_qs = (
-                History.objects.filter(parcel=parcel, published=True)
+                Production.objects.filter(parcel=parcel, published=True)
                 .exclude(pk=self.production.pk)
                 .select_related("crop_type", "product")
             )
@@ -19439,7 +19439,7 @@ class AuditExportService:
                         )
                 else:
                     writer.writerow(["No structured crop history. Showing previous productions on this parcel."])
-                    from history.models import History
+                    from history.models import Production
 
                     writer.writerow(
                         [
@@ -19452,7 +19452,7 @@ class AuditExportService:
                         ]
                     )
                     prev_productions = list(
-                        History.objects.filter(parcel=parcel)
+                        Production.objects.filter(parcel=parcel)
                         .exclude(pk=self.production.pk)
                         .select_related("crop_type", "product")
                         .order_by("-start_date")[:15]

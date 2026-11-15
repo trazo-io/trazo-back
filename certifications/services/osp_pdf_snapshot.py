@@ -78,8 +78,8 @@ def _record_inventory(establishment):
     from history.models import (
         ChemicalEvent,
         GeneralEvent,
-        History,
         PestManagementEvent,
+        Production,
         ProductionEvent,
         SoilManagementEvent,
     )
@@ -104,7 +104,7 @@ def _record_inventory(establishment):
         return (n, span)
 
     specs = [
-        ("Production records", History.objects.filter(parcel__establishment=est), "start_date"),
+        ("Production records", Production.objects.filter(parcel__establishment=est), "start_date"),
         ("Chemical / spray records", ChemicalEvent.objects.filter(history__parcel__establishment=est), "date"),
         ("Field / production events", ProductionEvent.objects.filter(history__parcel__establishment=est), "date"),
         ("Soil management events", SoilManagementEvent.objects.filter(history__parcel__establishment=est), "date"),

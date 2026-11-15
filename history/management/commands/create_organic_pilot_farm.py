@@ -168,14 +168,14 @@ class Command(BaseCommand):
             ChemicalEvent,
             EquipmentEvent,
             GeneralEvent,
-            History,
             PestManagementEvent,
+            Production,
             ProductionEvent,
             SoilManagementEvent,
             WeatherEvent,
         )
 
-        histories = History.objects.filter(parcel__establishment__company=company)
+        histories = Production.objects.filter(parcel__establishment__company=company)
         history_ids = list(histories.values_list("id", flat=True))
 
         if history_ids:

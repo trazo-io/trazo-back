@@ -44,7 +44,7 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.serializers import OptimizedHistoryListSerializer, PublicHistorySerializer
 from history.services.transparency_calculator import TransparencyCalculator
 from product.models import Parcel, Product
@@ -107,7 +107,7 @@ class _SeasonFixture(TestCase):
         self.establishment = Establishment.objects.create(name="SR1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="SRP1", establishment=self.establishment, area=4.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Score Retirement Season",
             start_date=timezone.now(),
             product=self.product,
@@ -196,7 +196,7 @@ class TheColumnIsGone(TestCase):
     """The storage, not just the payload. A column with no reader is still an invitation."""
 
     def test_history_has_no_transparency_score_field(self):
-        names = {f.name for f in History._meta.get_fields()}
+        names = {f.name for f in Production._meta.get_fields()}
         self.assertNotIn(
             "transparency_score",
             names,
@@ -205,7 +205,7 @@ class TheColumnIsGone(TestCase):
 
     def test_confidence_score_survives(self):
         """Proves the check above read a real field list rather than an empty set."""
-        names = {f.name for f in History._meta.get_fields()}
+        names = {f.name for f in Production._meta.get_fields()}
         self.assertIn("confidence_score", names)
         self.assertIn("public_views", names)
 
@@ -259,12 +259,12 @@ class TheColumnIsGone(TestCase):
 class TheWritePathIsGone(_SeasonFixture):
     def test_the_model_cannot_calculate_a_score(self):
         self.assertFalse(
-            hasattr(History, "calculate_transparency_score"),
+            hasattr(Production, "calculate_transparency_score"),
             "History.calculate_transparency_score is back; it was the write-path entry",
         )
 
     def test_update_trust_metrics_saves_only_confidence(self):
-        with mock.patch.object(History, "save", autospec=True) as saved:
+        with mock.patch.object(Production, "save", autospec=True) as saved:
             self.history.update_trust_metrics()
         self.assertEqual(saved.call_count, 1)
         self.assertEqual(
@@ -274,7 +274,7 @@ class TheWritePathIsGone(_SeasonFixture):
         )
 
     def test_update_trust_metrics_body_mentions_no_score(self):
-        body = strip_python_comments(inspect.getsource(History.update_trust_metrics))
+        body = strip_python_comments(inspect.getsource(Production.update_trust_metrics))
         self.assertNotIn(
             "transparency_score",
             body.split('"""')[-1],

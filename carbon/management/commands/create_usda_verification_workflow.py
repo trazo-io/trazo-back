@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from carbon.models import CarbonCertification, CarbonSource
 from company.models import Establishment
-from history.models import History
+from history.models import Production
 
 
 class Command(BaseCommand):
@@ -91,7 +91,7 @@ class Command(BaseCommand):
 
         try:
             establishment = Establishment.objects.get(id=establishment_id)
-            production = History.objects.get(id=production_id)
+            production = Production.objects.get(id=production_id)
 
             # Create USDA certification
             certification = CarbonCertification.objects.create(
@@ -112,7 +112,7 @@ class Command(BaseCommand):
 
         except Establishment.DoesNotExist:
             self.stdout.write(self.style.ERROR(f"❌ Establishment {establishment_id} not found"))
-        except History.DoesNotExist:
+        except Production.DoesNotExist:
             self.stdout.write(self.style.ERROR(f"❌ Production {production_id} not found"))
 
     def show_verification_workflow(self):

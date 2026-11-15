@@ -13,7 +13,7 @@ from rest_framework import serializers as rest_serializers
 from rest_framework.test import APITestCase
 
 from company.models import Company, Establishment
-from history.models import BusinessEvent, History
+from history.models import BusinessEvent, Production
 from history.serializers import UpdateBusinessEventSerializer
 from product.models import Parcel
 
@@ -51,7 +51,7 @@ class BusinessEventValidationTestCase(APITestCase):
         # depended on seed data being present in whatever database the suite happened to run
         # against. crop_type is nullable and irrelevant to BusinessEvent validation, so the
         # assumption is dropped rather than replaced with a different hardcoded id.
-        self.history = History.objects.create(name="Test Production", parcel=self.parcel)
+        self.history = Production.objects.create(name="Test Production", parcel=self.parcel)
 
     # `carbon_credits` was withdrawn as a business activity (2026-08-18), so these cases now
     # run on "compliance". What they exercise is unchanged and still worth guarding: the

@@ -15,7 +15,7 @@ from certifications.services.omri_verifier import national_list_candidates_by_na
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.plan_materials import post_harvest_listing_review
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel
 
 from .test_materials_stated_absences import _pdf_text
@@ -52,7 +52,7 @@ class ListingReviewTests(TestCase):
         self.est = Establishment.objects.create(name="Flume Farm", company=company, state="OR")
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="active")
         parcel = Parcel.objects.create(name="Bottom Ground", establishment=self.est, area=2.0)
-        season = History.objects.create(parcel=parcel, name="Carrots 2026", published=False)
+        season = Production.objects.create(parcel=parcel, name="Carrots 2026", published=False)
         ProductionEvent.objects.create(
             history=season,
             type="PH",

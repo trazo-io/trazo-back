@@ -10,7 +10,7 @@ from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, ParcelCropHistory, Product
 from product.services.transition_status_service import TRANSITION_MONTHS, compute_transition_status
 from users.models import User
@@ -25,7 +25,7 @@ class TransitionStatusServiceTests(TestCase):
         self.product = Product.objects.create(name="Tomato")
 
     def _new_history(self):
-        return History.objects.create(
+        return Production.objects.create(
             name="H",
             start_date=timezone.now(),
             product=self.product,
@@ -154,7 +154,7 @@ class ApprovedInputMustNotResetTheClockTests(TestCase):
         self.establishment = Establishment.objects.create(name="Field C", company=self.company)
         self.parcel = Parcel.objects.create(name="P-C", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="H",
             start_date=timezone.now(),
             product=self.product,
@@ -267,7 +267,7 @@ class UnclassifiedApplicationsAreNamedTests(TestCase):
 
         from carbon.models import CropType
         from company.models import Company, Establishment
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Parcel, Product
 
         company = Company.objects.create(name="Named Co")
@@ -289,7 +289,7 @@ class UnclassifiedApplicationsAreNamedTests(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnut")
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=self.parcel,
             product=product,
             crop_type=crop,

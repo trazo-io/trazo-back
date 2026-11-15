@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from backend.permissions import CallerScopedRelatedFields, scope_to_caller_companies
 from company.models import Establishment
-from history.models import History
+from history.models import Production
 
 from .models import (
     CarbonAuditLog,
@@ -531,9 +531,9 @@ class CarbonEntrySerializer(CallerScopedRelatedFields, serializers.ModelSerializ
         if production_id:
             try:
                 data["production"] = scope_to_caller_companies(
-                    History.objects.all(), self._caller(), "parcel__establishment__company"
+                    Production.objects.all(), self._caller(), "parcel__establishment__company"
                 ).get(id=production_id)
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 raise serializers.ValidationError("Invalid production ID")
 
         # Handle source_id

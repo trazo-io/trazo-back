@@ -64,7 +64,7 @@ from carbon.services.timeline_service import TimelineService
 from carbon.validation import APIResponseValidator, QRParameterValidator
 from common.us_states import normalize_state
 from company.models import Establishment
-from history.models import History
+from history.models import Production
 
 # Public-payload sanitisers. This module serves an ANONYMOUS production endpoint
 # (PublicProductionViewSet), so it is bound by the same privacy and claim rules as
@@ -3024,10 +3024,10 @@ class CarbonEstablishmentSummaryViewSet(viewsets.ViewSet):
             offset_ratio = (total_offsets / total_emissions) if total_emissions > 0 else 0
 
             # Calculate transparency metrics: photos and active productions
-            from history.models import History
+            from history.models import Production
 
             # Get active productions for this establishment
-            active_productions = History.objects.filter(
+            active_productions = Production.objects.filter(
                 parcel__establishment_id=establishment_id, finish_date__isnull=True  # Only active productions
             )
             active_productions_count = active_productions.count()
@@ -3311,7 +3311,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
 
             from django.core.cache import cache
 
-            from history.models import History
+            from history.models import Production
 
             # Support both UUID (public_id) and integer (legacy) lookups
             lookup_kwargs = {}
@@ -3343,7 +3343,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
             # Get the production object
             try:
                 production = (
-                    History.objects.select_related("product", "parcel__establishment__company", "album")
+                    Production.objects.select_related("product", "parcel__establishment__company", "album")
                     .prefetch_related(
                         "carbonentry_set__source",
                         "album__images",
@@ -3358,7 +3358,7 @@ class PublicProductionViewSet(viewsets.ViewSet):
                     .filter(visibility, **lookup_kwargs)
                     .get()
                 )
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 return Response(
                     {"error": "Production not found or not accessible."},
                     status=status.HTTP_404_NOT_FOUND,
@@ -3734,7 +3734,7 @@ class ProductionSerializer(serializers.ModelSerializer):
     events_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = History
+        model = Production
         fields = [
             "id",
             "public_id",
@@ -3783,7 +3783,7 @@ class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
     authenticated and company-scoped.
     """
 
-    queryset = History.objects.none()
+    queryset = Production.objects.none()
     permission_classes = [IsAuthenticated]
     serializer_class = ProductionSerializer
 
@@ -3791,10 +3791,10 @@ class CarbonProductionViewSet(viewsets.ReadOnlyModelViewSet):
         """Return only productions belonging to the requesting user's companies."""
         user = self.request.user
         if not user.is_authenticated:
-            return History.objects.none()
+            return Production.objects.none()
 
         queryset = (
-            History.objects.select_related("parcel__establishment")
+            Production.objects.select_related("parcel__establishment")
             .prefetch_related(*ProductionSerializer.EVENT_RELATIONS)
             .filter(parcel__establishment__company__in=user.companies.all())
         )
@@ -3828,7 +3828,7 @@ def get_production_carbon_economics(request, production_id):
     try:
         # Verify user has access to this production
         # First get the production, then check access through company membership
-        production = History.objects.get(id=production_id)
+        production = Production.objects.get(id=production_id)
 
         # Check if user has access through company membership or ownership
         from users.models import WorksIn
@@ -3904,7 +3904,7 @@ def get_production_carbon_economics(request, production_id):
             }
         )
 
-    except History.DoesNotExist:
+    except Production.DoesNotExist:
         return Response({"success": False, "error": "Production not found"}, status=404)
     except Exception as e:
         logger.error(f"Error getting cached carbon economics: {e}")
@@ -4722,8 +4722,8 @@ def get_usda_compliance_history(request, production_id):
 
         # Get production
         try:
-            production = History.objects.get(id=production_id)
-        except History.DoesNotExist:
+            production = Production.objects.get(id=production_id)
+        except Production.DoesNotExist:
             return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
 
         # Check permissions

@@ -23,7 +23,7 @@ from django.utils import timezone
 from carbon.models import CarbonEntry
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import EquipmentEvent, History, PestManagementEvent
+from history.models import EquipmentEvent, PestManagementEvent, Production
 from history.serializers import OptimizedHistoryListSerializer
 from history.serializers_consumer import season_recorded_emissions
 from history.services.records_export import export_establishment_records_zip
@@ -37,7 +37,7 @@ class _Farm(TestCase):
         company = Company.objects.create(name="Carbon Co")
         self.est = Establishment.objects.create(name="Carbon Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
-        self.history = History.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
+        self.history = Production.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
 
     def _pest(self, code="BR"):
         return PestManagementEvent.objects.create(
@@ -121,7 +121,7 @@ class SurfacesTests(_Farm):
 
     def test_a_season_with_no_entries_does_not_borrow_its_farms(self):
         """complete_summary added every same-year entry of the farm to an empty season."""
-        other = History.objects.create(parcel=self.history.parcel, name="other", start_date=timezone.now())
+        other = Production.objects.create(parcel=self.history.parcel, name="other", start_date=timezone.now())
         self._entry(40, production=other)
         from carbon.views import PublicProductionViewSet
 

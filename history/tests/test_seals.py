@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from company.models import Company, Establishment
 from history import seals
-from history.models import ChemicalEvent, GeneralEvent, History
+from history.models import ChemicalEvent, GeneralEvent, Production
 from product.models import Parcel
 
 
@@ -22,7 +22,7 @@ class _Season(TestCase):
         company = Company.objects.create(name="Seal Co")
         est = Establishment.objects.create(name="Seal Farm", company=company)
         self.parcel = Parcel.objects.create(name="North", establishment=est, area=1)
-        self.history = History.objects.create(parcel=self.parcel, name="2026")
+        self.history = Production.objects.create(parcel=self.parcel, name="2026")
 
     def _events(self, n=3, index=None):
         out = []
@@ -52,7 +52,7 @@ class _Season(TestCase):
         extra = {"finalization_hash": digest, "finalization_event_count": 4}
         if version is not None:
             extra["finalization_hash_version"] = version
-        History.objects.filter(pk=self.history.pk).update(extra_data=extra)
+        Production.objects.filter(pk=self.history.pk).update(extra_data=extra)
         self.history.refresh_from_db()
 
 
@@ -165,12 +165,12 @@ class VerifyIsSafeInsideATransactionTests(_Season):
             with mock.patch.object(seals, "v1_rows", broken):
                 check = seals.verify(self.history)
             self.assertEqual(check.status, seals.ERROR)
-            self.assertEqual(History.objects.filter(pk=self.history.pk).count(), 1)  # still usable
+            self.assertEqual(Production.objects.filter(pk=self.history.pk).count(), 1)  # still usable
 
 
 class VerifyEndpointTests(_Season):
     def _integrity(self):
-        History.objects.filter(pk=self.history.pk).update(published=True)
+        Production.objects.filter(pk=self.history.pk).update(published=True)
         res = self.client.get(f"/api/transparency/{self.history.public_id}/verify-blockchain/")
         self.assertEqual(res.status_code, 200, res.content)
         return res.json()["data"]["data_integrity"] if "data" in res.json() else res.json()["data_integrity"]
@@ -183,7 +183,7 @@ class VerifyEndpointTests(_Season):
     def _submitted(self, recomputed_matches):
         """A v1 seal with a wide tie, also submitted to the blockchain (review of back #298)."""
         self._events(n=7, index=1)
-        History.objects.filter(pk=self.history.pk).update(
+        Production.objects.filter(pk=self.history.pk).update(
             extra_data={
                 "finalization_hash": "0" * 64,
                 "finalization_event_count": 8,

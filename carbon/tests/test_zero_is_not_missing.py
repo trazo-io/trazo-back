@@ -109,13 +109,13 @@ class Run8UnreportedIsNotEstimatedTests(TestCase):
 
     def setUp(self):
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel, Product
         from users.models import User
 
         user = User.objects.create_user(email="r8carbon@test.com", password="x")
         est = Establishment.objects.create(name="R8C", company=Company.objects.create(name="R8C Co"), state="OR")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Duke 2026",
             start_date=timezone.now(),
             product=Product.objects.create(name="Blueberries"),

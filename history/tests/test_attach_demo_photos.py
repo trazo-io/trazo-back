@@ -25,7 +25,7 @@ from django.utils import timezone
 from carbon.models import CropType
 from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel, Product
 
 PNG = (
@@ -61,7 +61,7 @@ class AttachDemoPhotosTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name=f"Walnuts {is_demo}"),
             crop_type=crop,

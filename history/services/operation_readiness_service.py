@@ -762,9 +762,9 @@ class OperationReadinessService:
 
     def _check_has_records(self):
         """An empty dossier wastes the reviewer's time and the farmer's credibility."""
-        from history.models import History
+        from history.models import Production
 
-        has_any = History.objects.filter(parcel__establishment=self.establishment).exists()
+        has_any = Production.objects.filter(parcel__establishment=self.establishment).exists()
         if not has_any:
             return {
                 "key": "records",

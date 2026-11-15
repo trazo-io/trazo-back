@@ -32,7 +32,7 @@ django.setup()
 
 from carbon.models import CachedEmissionFactor, CarbonEntry, CarbonSource
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 
 
 class DatabaseResilienceTests:
@@ -536,7 +536,7 @@ class DatabaseResilienceTests:
 
             # Clean up histories
             if self.created_objects["histories"]:
-                History.objects.filter(id__in=self.created_objects["histories"]).delete()
+                Production.objects.filter(id__in=self.created_objects["histories"]).delete()
                 self.created_objects["histories"].clear()
 
             # Clean up establishments

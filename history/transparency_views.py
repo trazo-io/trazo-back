@@ -30,8 +30,8 @@ from .models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -70,7 +70,7 @@ def production_transparency_detail(request, production_public_id=None):
         # OPTIMIZATION (2025-12-12): Also prefetch CarbonEntry to support carbon data lookups
         from carbon.models import CarbonEntry
 
-        base_qs = History.objects.select_related(
+        base_qs = Production.objects.select_related(
             "product", "parcel__establishment__company", "parcel__establishment"
         ).prefetch_related(
             # Prefetch all 8 event types with albums and images to avoid N+1 queries
@@ -129,10 +129,10 @@ def production_transparency_detail(request, production_public_id=None):
         owns_it = False
         if request.user.is_authenticated:
             try:
-                h = History.objects.select_related("parcel__establishment__company").get(**lookup_kwargs)
+                h = Production.objects.select_related("parcel__establishment__company").get(**lookup_kwargs)
                 if h.parcel and h.parcel.establishment and h.parcel.establishment.company:
                     owns_it = request.user.companies.filter(id=h.parcel.establishment.company_id).exists()
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 pass
         is_owner = owns_it and not public_view
 
@@ -772,7 +772,7 @@ def production_transparency_detail(request, production_public_id=None):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    except (History.DoesNotExist, Http404):
+    except (Production.DoesNotExist, Http404):
         formatter = TransparencyResponseFormatter()
         error_response = formatter.format_error_response(
             error_message="Production not found",
@@ -1276,7 +1276,7 @@ def verify_blockchain(request, production_public_id=None):
             )
         lookup_kwargs = {"published": True, "public_id": production_public_id}
 
-        history = get_object_or_404(History, **lookup_kwargs)
+        history = get_object_or_404(Production, **lookup_kwargs)
         verification_data = _get_blockchain_verification_data(history)
         extra = history.extra_data if isinstance(history.extra_data, dict) else {}
 
@@ -1501,7 +1501,7 @@ def verify_blockchain(request, production_public_id=None):
             status=status.HTTP_200_OK,
         )
 
-    except (History.DoesNotExist, Http404):
+    except (Production.DoesNotExist, Http404):
         return Response(
             {"error": "Production not found"},
             status=status.HTTP_404_NOT_FOUND,

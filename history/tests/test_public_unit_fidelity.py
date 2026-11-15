@@ -26,7 +26,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.serializers import PublicHistorySerializer, _public_unit
 from product.models import Parcel, Product
 from users.models import User
@@ -70,7 +70,7 @@ class PublicChemicalUnitFidelityTests(TestCase):
         self.establishment = Establishment.objects.create(name="U1", company=self.company)
         self.parcel = Parcel.objects.create(name="UP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Unit Fidelity Production",
             start_date=timezone.now(),
             product=self.product,

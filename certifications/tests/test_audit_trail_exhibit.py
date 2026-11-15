@@ -19,7 +19,7 @@ from certifications.services import common_osp_records
 from certifications.services.audit_trail_exhibit import document_table, sample_trail
 from certifications.services.osp_module_pdf import generate_osp_packet
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -42,7 +42,7 @@ class _ExhibitBase(TestCase):
 
     def _finished_season(self, lot_id="CBF-26-UT-01"):
         product = Product.objects.create(name="Blueberries")
-        return History.objects.create(
+        return Production.objects.create(
             name="2026 blueberries",
             parcel=self.parcel,
             product=product,

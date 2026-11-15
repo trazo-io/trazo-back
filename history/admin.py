@@ -13,9 +13,9 @@ from backend.storage import using_s3_storage
 from .models import (
     ChemicalEvent,
     GeneralEvent,
-    History,
     HistoryScan,
     LabelImage,
+    Production,
     ProductionEvent,
     ProductionPostHarvestFacility,
     SoilManagementEvent,
@@ -120,7 +120,7 @@ class HistoryAdminForm(forms.ModelForm):
     )
 
     class Meta:
-        model = History
+        model = Production
         fields = "__all__"
 
 
@@ -379,7 +379,7 @@ admin.site.register(WeatherEvent, EventAdmin)
 admin.site.register(ChemicalEvent, EventAdmin)
 admin.site.register(GeneralEvent, EventAdmin)
 admin.site.register(ProductionEvent, EventAdmin)
-admin.site.register(History, HistoryAdmin)
+admin.site.register(Production, HistoryAdmin)
 admin.site.register(HistoryScan, HistoryScanAdmin)
 
 

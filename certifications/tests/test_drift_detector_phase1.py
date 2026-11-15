@@ -22,7 +22,7 @@ from certifications.models import (
     WSDAMaterial,
 )
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel
 
 
@@ -38,7 +38,7 @@ class Phase1DriftTests(TransactionTestCase):
             state="CA",
         )
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Phase1 Production",
             start_date=timezone.now(),
             parcel=self.parcel,
@@ -213,7 +213,7 @@ class SeedSourceDriftTests(TransactionTestCase):
         self.company = Company.objects.create(name="Seed Farm")
         self.establishment = Establishment.objects.create(name="Seed Ranch", company=self.company, state="OR")
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Seed Production",
             start_date=timezone.now(),
             parcel=self.parcel,

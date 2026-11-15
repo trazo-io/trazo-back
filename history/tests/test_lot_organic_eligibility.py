@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from certifications.models import Certification
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.claim_resolver import (
     build_organic_claim_evidence,
     resolve_input_status,
@@ -41,7 +41,7 @@ class LotOrganicEligibilityTests(TestCase):
         self.parcel = Parcel.objects.create(name="LP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
         today = timezone.now()
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Lot Eligibility Test Production",
             start_date=today - timedelta(days=120),
             finish_date=today - timedelta(days=10),

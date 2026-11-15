@@ -20,7 +20,7 @@ from rest_framework.test import APIClient
 
 from certifications.models import Certification
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SalesRecord
+from history.models import ChemicalEvent, Production, SalesRecord
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -35,7 +35,7 @@ class _Base(TestCase):
         WorksIn.objects.create(user=self.owner, company=self.company, role="CA")
         self.parcel = Parcel.objects.create(name="SP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Sales Test Production",
             start_date=timezone.now() - timedelta(days=120),
             finish_date=timezone.now() - timedelta(days=10),
@@ -92,7 +92,7 @@ class SalesRecordTests(_Base):
     def test_a_sale_on_an_open_season_is_still_deletable(self):
         """The floor starts when the season closes. While it is open the operator is still
         writing the record, and a typo must not be permanent from the moment it is typed."""
-        open_history = History.objects.create(
+        open_history = Production.objects.create(
             name="Open season",
             start_date=timezone.now() - timedelta(days=20),
             product=self.product,

@@ -16,7 +16,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from company.models import Company
-from history.models import COUNTED_SCAN_BOT_SCORE_MAX, History, HistoryScan
+from history.models import COUNTED_SCAN_BOT_SCORE_MAX, HistoryScan, Production
 from history.services.analytics_service import AnalyticsService
 from history.services.bot_detection_service import BotDetectionService
 from history.services.deduplication_service import DeduplicationService
@@ -42,7 +42,7 @@ def build_season(prefix):
     company = Company.objects.create(name=f"{prefix} Scan Co")
     establishment = Establishment.objects.create(name=f"{prefix} Scan Farm", company=company)
     parcel = Parcel.objects.create(name=f"{prefix} Scan Parcel", establishment=establishment, area=1)
-    history = History.objects.create(parcel=parcel, name=f"{prefix} Season", published=True)
+    history = Production.objects.create(parcel=parcel, name=f"{prefix} Season", published=True)
     return establishment, history
 
 
@@ -403,7 +403,7 @@ class TestEnhancedScanCreation(TestCase):
         self.viewset = PublicHistoryScanViewSet()
 
         # Create test history
-        self.history = History.objects.create(name="Test Production", published=True)
+        self.history = Production.objects.create(name="Test Production", published=True)
 
     @patch("history.views.timezone")
     def test_successful_scan_creation(self, mock_timezone):

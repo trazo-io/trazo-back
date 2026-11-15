@@ -94,7 +94,7 @@ def batch_submit_monthly_summaries(self):
 
         blockchain_service = BlockchainCarbonService()
 
-        from history.models import History
+        from history.models import Production
 
         # Get companies with active blockchain subscriptions
         companies_with_blockchain = Company.objects.filter(blockchain_subscription_status=True)
@@ -111,7 +111,7 @@ def batch_submit_monthly_summaries(self):
             # finalization_hash exists (events have been hashed).
             # A production is "not yet on blockchain" when extra_data has no
             # blockchain_tx_hash, or extra_data is null.
-            productions = History.objects.filter(
+            productions = Production.objects.filter(
                 parcel__establishment__company=company,
                 finish_date__isnull=False,
                 extra_data__finalization_hash__isnull=False,
@@ -273,9 +273,9 @@ def submit_production_to_blockchain(self, production_id):
     """
     logger.info("BLOCKCHAIN TASK: Starting for production %s", production_id)
     try:
-        from history.models import History
+        from history.models import Production
 
-        production = History.objects.select_related("parcel__establishment__company").get(id=production_id)
+        production = Production.objects.select_related("parcel__establishment__company").get(id=production_id)
         logger.info("BLOCKCHAIN TASK: Found production %s (finish_date=%s)", production_id, production.finish_date)
 
         company = (
@@ -313,7 +313,7 @@ def submit_production_to_blockchain(self, production_id):
         else:
             raise Exception(f"Blockchain submission failed for production {production_id}")
 
-    except History.DoesNotExist:
+    except Production.DoesNotExist:
         logger.error("BLOCKCHAIN TASK: Production %s not found", production_id)
         return {"status": "error", "error": "Production not found"}
     except Exception as e:

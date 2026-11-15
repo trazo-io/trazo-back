@@ -29,7 +29,7 @@ from django.utils import timezone
 from reportlab.platypus import Table
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord, SoilManagementEvent
+from history.models import Production, ProductionEvent, SalesRecord, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 
@@ -60,7 +60,7 @@ class CCOFChecklistBase(TestCase):
         self.establishment = Establishment.objects.create(name="Checklist Farm", company=self.company)
         self.parcel = Parcel.objects.create(name="Home Block", establishment=self.establishment, area=20.0)
         self.product = Product.objects.create(name="Walnut")
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Walnut 2026",
             parcel=self.parcel,
             product=self.product,

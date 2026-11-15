@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import _choice_label
 from product.models import Parcel, Product
 
@@ -43,7 +43,7 @@ class ChoiceLabelGuardTests(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Apple")
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,

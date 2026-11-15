@@ -15,7 +15,7 @@ from carbon.services.coolfarm_service import CoolFarmService
 from carbon.services.emission_factors import emission_factors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 
 User = get_user_model()
 
@@ -158,7 +158,7 @@ class CentralizedFactorsIntegrationTest(TestCase):
     def test_carbon_calculation_with_centralized_factors(self):
         """Test that carbon calculations work with centralized factors"""
         # Create a test chemical event
-        history = History.objects.create(
+        history = Production.objects.create(
             product_name="Test Corn", lot_id="TEST001", establishment=self.establishment, user=self.user
         )
 

@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from certifications.models import OMRIProduct, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 
 
@@ -44,7 +44,7 @@ class CADPRPermitDriftTests(TransactionTestCase):
         self.company = Company.objects.create(name="DPR Farm")
         self.establishment = Establishment.objects.create(name="CA Ranch", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="DPR Production",
             start_date=timezone.now(),
             parcel=self.parcel,
@@ -198,7 +198,7 @@ class EmptyRestrictedListBehaviourTests(TransactionTestCase):
         self.company = Company.objects.create(name="Empty-Tuple Farm")
         self.establishment = Establishment.objects.create(name="CA Test Ranch", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Empty-Tuple Production",
             start_date=timezone.now(),
             parcel=self.parcel,

@@ -22,9 +22,9 @@ from history.models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     HistoryScan,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -139,8 +139,8 @@ class Command(BaseCommand):
 
         # Validate source production
         try:
-            original = History.objects.get(pk=production_id)
-        except History.DoesNotExist:
+            original = Production.objects.get(pk=production_id)
+        except Production.DoesNotExist:
             self.stderr.write(self.style.ERROR(f"Production {production_id} not found"))
             return
 

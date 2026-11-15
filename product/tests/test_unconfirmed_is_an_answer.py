@@ -16,7 +16,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from product.models import Parcel, ParcelCropHistory, Product
 from product.services import input_evidence
 from product.services.input_evidence import UNKNOWN, classify
@@ -35,7 +35,7 @@ class UnconfirmedIsAnAnswerTests(APITestCase):
         self.est = Establishment.objects.create(name="Answer Farm", company=self.company, state="OR")
         self.parcel = Parcel.objects.create(name="Home Field East", establishment=self.est, area=5.0)
         self.product = Product.objects.create(name="Blueberries")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Duke 2026",
             start_date=timezone.now() - timedelta(days=120),
             product=self.product,

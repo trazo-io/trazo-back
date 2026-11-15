@@ -27,7 +27,7 @@ from certifications.services.material_identity import record_decision
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.plan_materials import unmatched_logged_materials
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -43,7 +43,7 @@ class SectionDTests(TestCase):
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         self.est = Establishment.objects.create(name="Wash Line", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="Packing Block", establishment=self.est, area=2.0)
-        self.history = History.objects.create(name="Pears 2026", start_date=timezone.now(), parcel=parcel)
+        self.history = Production.objects.create(name="Pears 2026", start_date=timezone.now(), parcel=parcel)
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")
         self.wash = ProductionEvent.objects.create(
             history=self.history, date=timezone.now(), description="flume", type="PH", sanitizer_name="SaniDate 5.0"

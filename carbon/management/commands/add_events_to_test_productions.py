@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from carbon.models import EventTemplate, ProductionTemplate
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent
+from history.models import ChemicalEvent, GeneralEvent, Production, ProductionEvent
 
 
 class Command(BaseCommand):
@@ -44,7 +44,7 @@ class Command(BaseCommand):
 
         for prod_id in production_ids:
             try:
-                production = History.objects.get(id=prod_id)
+                production = Production.objects.get(id=prod_id)
                 self.stdout.write(f"\n🌱 Production {prod_id}: {production.crop_type.name}")
 
                 # Get existing events
@@ -72,7 +72,7 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write(f"   ❌ No template found for {production.crop_type.name}")
 
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 self.stdout.write(f"❌ Production {prod_id} not found")
 
     def add_events_to_productions(self, production_ids):
@@ -82,7 +82,7 @@ class Command(BaseCommand):
 
         for prod_id in production_ids:
             try:
-                production = History.objects.get(id=prod_id)
+                production = Production.objects.get(id=prod_id)
                 self.stdout.write(f"\n🌱 Processing Production {prod_id}: {production.crop_type.name}")
 
                 # Skip if already has events
@@ -108,7 +108,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"   ✅ Created {events_created} events")
                 created_count += 1
 
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 self.stdout.write(f"❌ Production {prod_id} not found")
                 continue
             except Exception as e:

@@ -22,7 +22,7 @@ from django.test import TestCase, override_settings
 
 from common.models import DataOperationLog
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History
+from history.models import GeneralEvent, Production
 from product.models import Parcel
 from subscriptions.models import Plan, Subscription
 from users.constants import PRODUCER
@@ -195,7 +195,7 @@ class RemovePilotOperatorTests(_PilotFixture):
 
     def test_an_account_that_authored_records_keeps_its_membership(self):
         parcel = Parcel.objects.create(name="Block A", area=1, establishment=self.farm)
-        history = History.objects.create(parcel=parcel, name="2026 season")
+        history = Production.objects.create(parcel=parcel, name="2026 season")
         GeneralEvent.objects.create(
             history=history, name="x", description="x", date="2026-10-01T00:00Z", created_by=self.main
         )
@@ -214,7 +214,7 @@ class RemovePilotOperatorTests(_PilotFixture):
         parcel = Parcel.objects.create(
             name="Own block", area=1, establishment=Establishment.objects.create(name="Own", company=self.own)
         )
-        history = History.objects.create(parcel=parcel, name="Own season", operator=self.main)
+        history = Production.objects.create(parcel=parcel, name="Own season", operator=self.main)
         GeneralEvent.objects.create(
             history=history, name="x", description="x", date="2026-10-01T00:00Z", created_by=self.main
         )

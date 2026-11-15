@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.serializers import (
     UpdateChemicalEventSerializer,
     UpdateGeneralEventSerializer,
@@ -32,7 +32,7 @@ class EventDescriptionFallbackTests(TestCase):
         self.establishment = Establishment.objects.create(name="F01E", company=self.company)
         self.parcel = Parcel.objects.create(name="F01P", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="F01 Prod",
             start_date=timezone.now(),
             product=self.product,

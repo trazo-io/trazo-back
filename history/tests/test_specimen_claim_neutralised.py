@@ -37,7 +37,7 @@ from certifications.services.consumer_claim_validator import (
     filter_certifications_for_consumer,
 )
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.serializers import PublicHistorySerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -66,7 +66,7 @@ class SpecimenClaimMixin:
         )
         self.parcel = Parcel.objects.create(name="Block", establishment=self.establishment, area=4.0)
         self.product = Product.objects.create(name=f"Blueberries {suffix}")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name=f"Season {suffix}",
             start_date=timezone.now() - timedelta(days=60),
             product=self.product,

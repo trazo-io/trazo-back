@@ -26,7 +26,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService, _rate_per_area
 from product.models import Parcel, Product
 from users.models import User
@@ -61,7 +61,7 @@ class RateReachesBothExportsTests(TestCase):
         self.establishment = Establishment.objects.create(name="RF1", company=self.company)
         self.parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=42.5)
         self.product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Rate Production",
             start_date=timezone.now(),
             product=self.product,

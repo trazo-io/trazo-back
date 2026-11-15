@@ -271,7 +271,7 @@ class Command(BaseCommand):
         from certifications.models import Certification, CertifierAccessLink, OrganicSystemPlan
         from company.models import Establishment
         from documents.models import GeneratedDocument
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
         from users.models import WorksIn
         from users.models_invitation import CompanyInvitation
@@ -297,7 +297,7 @@ class Command(BaseCommand):
 
         checks = (
             ("parcel", Parcel.objects.filter(establishment__company=company)),
-            ("record", History.objects.filter(parcel__establishment__company=company)),
+            ("record", Production.objects.filter(parcel__establishment__company=company)),
             ("certificate", Certification.objects.filter(establishment__company=company)),
             ("organic system plan", OrganicSystemPlan.objects.filter(establishment__company=company)),
             ("document", GeneratedDocument.objects.filter(establishment__company=company)),

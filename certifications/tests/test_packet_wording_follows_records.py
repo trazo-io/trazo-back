@@ -26,7 +26,7 @@ from certifications.models import OrganicSystemPlan
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.osp_pdf_snapshot import generate_osp_snapshot_pdf, snapshot_title
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelCropHistory, Product
 from product.services.transition_status_service import operator_statement_lines
 from users.models import User
@@ -146,7 +146,7 @@ class AuditExportTransitionTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=self.parcel,
             product=Product.objects.create(name="Walnuts"),
             crop_type=crop,
@@ -271,7 +271,7 @@ class RehearsalDraftOperationTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=self.parcel,
             product=Product.objects.create(name="Apples"),
             crop_type=crop,

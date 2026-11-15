@@ -82,7 +82,7 @@ class PrivateNoteRoundTripTests(TestCase):
         establishment = Establishment.objects.create(name="Home Ranch", company=company, country="US", state="CA")
         parcel = Parcel.objects.create(name="River Block", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Walnuts")
-        cls.history = hm.History.objects.create(
+        cls.history = hm.Production.objects.create(
             parcel=parcel,
             product=product,
             start_date=timezone.now(),

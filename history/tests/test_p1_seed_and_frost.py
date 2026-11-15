@@ -16,7 +16,7 @@ from django.utils import timezone
 from rest_framework import serializers as drf_serializers
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.serializers import UpdateProductionEventSerializer
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
@@ -122,7 +122,7 @@ class FrostProtectionExportTests(TestCase):
         self.establishment = Establishment.objects.create(name="FE1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="FP-parcel", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Frost Production",
             start_date=timezone.now(),
             product=self.product,

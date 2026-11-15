@@ -23,7 +23,7 @@ from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
-from history.models import ChemicalEvent, History, ProductionEvent, SalesRecord, SoilManagementEvent
+from history.models import ChemicalEvent, Production, ProductionEvent, SalesRecord, SoilManagementEvent
 from history.serializers import (
     HistorySerializer,
     UpdateChemicalEventSerializer,
@@ -59,7 +59,7 @@ class _ReceiptBase(TestCase):
         # The same company's second farm: its files must never count on this farm's records.
         self.other_est = Establishment.objects.create(name="Second farm", company=self.company, state="OR")
         self.parcel = Parcel.objects.create(name="Home Field West", establishment=self.est, area=4.0)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             name="Draper 2026", start_date=timezone.now(), parcel=self.parcel, lot_id="CBF-26-HFW"
         )
         self.spray = ChemicalEvent.objects.create(
@@ -275,7 +275,7 @@ class SeedPurchaseReceiptTests(_ReceiptBase):
         """The subtype is checked after the farm scope: a foreign id is never asked "harvest or
         planting?", so the two refusals must be indistinguishable."""
         other_parcel = Parcel.objects.create(name="Second farm field", establishment=self.other_est, area=2.0)
-        other_season = History.objects.create(name="Other", start_date=timezone.now(), parcel=other_parcel)
+        other_season = Production.objects.create(name="Other", start_date=timezone.now(), parcel=other_parcel)
         foreign = {
             sub: ProductionEvent.objects.create(history=other_season, type=sub, description=sub, date=timezone.now())
             for sub in (ProductionEvent.PLANTING, ProductionEvent.HARVESTING)
@@ -405,7 +405,7 @@ class GroupReceiptTests(_ReceiptBase):
             season = (
                 self.season
                 if parcel == self.parcel
-                else History.objects.create(name=f"Draper 2026 {name}", start_date=timezone.now(), parcel=parcel)
+                else Production.objects.create(name=f"Draper 2026 {name}", start_date=timezone.now(), parcel=parcel)
             )
             ev = ProductionEvent.objects.create(
                 history=season,
@@ -420,7 +420,7 @@ class GroupReceiptTests(_ReceiptBase):
             self.records.append(ev)
         # The same UUID on another farm's record: never a sibling of these.
         other_parcel = Parcel.objects.create(name="Second farm field", establishment=self.other_est, area=2.0)
-        other_season = History.objects.create(name="Other", start_date=timezone.now(), parcel=other_parcel)
+        other_season = Production.objects.create(name="Other", start_date=timezone.now(), parcel=other_parcel)
         self.foreign = ProductionEvent.objects.create(
             history=other_season, type=ProductionEvent.PLANTING, description="p", date=timezone.now()
         )
@@ -486,7 +486,7 @@ class GroupReceiptTests(_ReceiptBase):
 
         group = uuid.uuid4()
         east = Parcel.objects.create(name="Spray East", establishment=self.est, area=2.0)
-        east_season = History.objects.create(name="East", start_date=timezone.now(), parcel=east)
+        east_season = Production.objects.create(name="East", start_date=timezone.now(), parcel=east)
         twin = ChemicalEvent.objects.create(
             history=east_season,
             date=timezone.now(),

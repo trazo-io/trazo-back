@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, GeneralEvent, Production, ProductionEvent, SoilManagementEvent
 from history.serializers import PublicHistorySerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -26,7 +26,7 @@ class ConsumerHighlightAnnotationTests(TestCase):
         self.establishment = Establishment.objects.create(name="H1", company=self.company)
         self.parcel = Parcel.objects.create(name="HP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Highlight Test Production",
             start_date=timezone.now(),
             product=self.product,

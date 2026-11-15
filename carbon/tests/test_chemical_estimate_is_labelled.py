@@ -52,7 +52,7 @@ from carbon.services.verified_emission_factors import (
     VerifiedEmissionFactors,
 )
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.serializers import ChemicalEventSerializer
 from history.services.audit_export_service import _emission_factor_basis
 from history.services.records_export import _factor_basis
@@ -73,7 +73,7 @@ class _Block(TestCase):
         self.company = Company.objects.create(name="Fictional Ridge Orchard")
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Fictional Ridge", company=self.company, state="WA")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Gala 2026",
             parcel=Parcel.objects.create(name="South Block", establishment=est, area=4.0),
             product=Product.objects.create(name="Apples"),

@@ -32,7 +32,7 @@ from certifications.services.packet_coverage import form_coverage
 from certifications.services.parcel_land_history import land_history_summary
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, ParcelCropHistory, Product
 from product.services.parcel_application_status import parcel_application_status, parcel_evidence_status
 
@@ -165,7 +165,7 @@ class CcofCertifiedBranchTests(_Certified):
         self.assertEqual(self._states()[cpb.CONTINUITY], cpb.ATTACHED)
 
     def test_conflicting_records_stay_as_review_items(self):
-        season = History.objects.create(
+        season = Production.objects.create(
             name="2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Grapes"),

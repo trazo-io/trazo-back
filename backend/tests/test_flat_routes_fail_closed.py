@@ -26,7 +26,7 @@ from backend.permissions import (
 from backend.route_tenancy import COMPANY, ROUTE_TENANCY
 from backend.tests.test_route_tenancy_declared import _view_key, _walk
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History, HistoryScan
+from history.models import GeneralEvent, HistoryScan, Production
 from product.models import Parcel
 from users.constants import PRODUCER
 from users.models import User, WorksIn
@@ -116,7 +116,7 @@ class FlatRouteWritesAreRoleCheckedTests(TestCase):
         cls.company = Company.objects.create(name="Farm Co")
         farm = Establishment.objects.create(name="Farm", company=cls.company)
         cls.parcel = Parcel.objects.create(name="Block 1", establishment=farm, area=2.0)
-        cls.season = History.objects.create(name="2026", parcel=cls.parcel)
+        cls.season = Production.objects.create(name="2026", parcel=cls.parcel)
         cls.scan = HistoryScan.objects.create(history=cls.season)
         cls.event = GeneralEvent.objects.create(
             history=cls.season, name="Walked rows", description="d", date="2026-05-01T10:00:00Z"
@@ -180,7 +180,7 @@ class CrossCompanyObjectTests(TestCase):
         cls.company_b = Company.objects.create(name="B Farms")
         farm_b = Establishment.objects.create(name="B Farm", company=cls.company_b)
         parcel_b = Parcel.objects.create(name="B Block", establishment=farm_b, area=1.0)
-        season_b = History.objects.create(name="B 2026", parcel=parcel_b)
+        season_b = Production.objects.create(name="B 2026", parcel=parcel_b)
         cls.scan_b = HistoryScan.objects.create(history=season_b)
         cls.event_b = GeneralEvent.objects.create(
             history=season_b, name="B work", description="d", date="2026-05-01T10:00:00Z"

@@ -18,7 +18,7 @@ from rest_framework.test import APITestCase
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -63,7 +63,7 @@ class ProductionCropRepairTests(APITestCase):
         )
 
     def _cropless_production(self):
-        return History.objects.create(
+        return Production.objects.create(
             name="Imported Season",
             parcel=self.parcel,
             start_date=timezone.now(),

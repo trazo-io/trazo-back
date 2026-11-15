@@ -29,7 +29,7 @@ from certifications.services.osp_module_pdf import _annual_update_pdf, generate_
 from certifications.services.osp_pdf_snapshot import generate_osp_snapshot_pdf
 from certifications.services.packet_coverage import coverage_rows, exclusion_rows
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 
 from .test_renewal_packet_contents import _pdf_text
@@ -56,7 +56,7 @@ class _Orchard(TestCase):
         self.est = Establishment.objects.create(name="Cascade Ridge Orchards", company=company, state="WA")
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="active")
         parcel = Parcel.objects.create(name="Ridge Block", establishment=self.est, area=11.49)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             name="Honeycrisp 2026",
             parcel=parcel,
             product=Product.objects.create(name="Apples"),

@@ -16,7 +16,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent, SoilManagementEvent, WeatherEvent
+from history.models import ChemicalEvent, GeneralEvent, Production, ProductionEvent, SoilManagementEvent, WeatherEvent
 from history.serializers import ChemicalEventSerializer, UpdateChemicalEventSerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -29,7 +29,7 @@ class EventReviewSignoffTests(TestCase):
         self.establishment = Establishment.objects.create(name="F21E", company=self.company)
         self.parcel = Parcel.objects.create(name="F21P", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="F21 Prod",
             start_date=timezone.now(),
             product=self.product,

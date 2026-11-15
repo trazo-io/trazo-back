@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand
 from django.test import RequestFactory
 from django.utils import timezone
 
-from history.models import History
+from history.models import Production
 
 
 class Command(BaseCommand):
@@ -28,7 +28,7 @@ class Command(BaseCommand):
         self.stdout.write("\n=== Blockchain Verification Flow Test ===\n")
 
         # Step 1: Find a published production
-        production = History.objects.filter(published=True).first()
+        production = Production.objects.filter(published=True).first()
         if not production:
             self.stdout.write(self.style.ERROR("No published productions found. Run create_demo_user first."))
             return

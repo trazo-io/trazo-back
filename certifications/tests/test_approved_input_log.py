@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from certifications.models import ApprovedInputChangeLog, NationalListSubstance, OMRIProduct, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 
 # ---------------------------------------------------------------------------
@@ -343,7 +343,7 @@ class AuditPDFChangeLogSectionTests(TransactionTestCase):
         self.company = Company.objects.create(name="PDF Log Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Prod",
             start_date=timezone.now(),
             parcel=self.parcel,

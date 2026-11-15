@@ -22,7 +22,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, GeneralEvent, History, compute_retention_until
+from history.models import ChemicalEvent, GeneralEvent, Production, compute_retention_until
 from history.retention import (
     RecordLocked,
     RetentionConflict,
@@ -43,14 +43,14 @@ class _Season(TestCase):
         company = Company.objects.create(name=f"{state} Orchard Co")
         farm = Establishment.objects.create(name=f"{state} farm", company=company, state=state)
         parcel = Parcel.objects.create(name="Block 1", establishment=farm, area=4.0)
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026 Apples",
             start_date=SPRAYED - timedelta(days=60),
             product=Product.objects.create(name="Apples"),
             parcel=parcel,
         )
         if finished:
-            History.objects.filter(pk=history.pk).update(
+            Production.objects.filter(pk=history.pk).update(
                 finish_date=FINISHED, retention_until=compute_retention_until(FINISHED)
             )
             history.refresh_from_db()
@@ -139,7 +139,7 @@ class RefusalsNameTheRuleTests(_Season):
         states the floor's date and names the rule; it still states only the date the guard holds."""
         history = self.season("WA")
         self.spray(history)
-        History.objects.filter(pk=history.pk).update(retention_until=compute_retention_until(FINISHED))
+        Production.objects.filter(pk=history.pk).update(retention_until=compute_retention_until(FINISHED))
         history.refresh_from_db()
         with self.assertRaises(ValidationError) as ctx:
             history.delete()
@@ -197,16 +197,16 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         self.spray(history, kind=kind)
         # The spray's post_save moved the stored date (`extend_retention`); put back the date a
         # season that finished before the floor existed still holds.
-        History.objects.filter(pk=history.pk).update(retention_until=self.FIVE)
+        Production.objects.filter(pk=history.pk).update(retention_until=self.FIVE)
         history.refresh_from_db()
         return history
 
     def another_season(self, parcel, name):
-        history = History.objects.create(
+        history = Production.objects.create(
             name=name, start_date=SPRAYED - timedelta(days=60), product=Product.objects.create(name=name), parcel=parcel
         )
         self.spray(history)
-        History.objects.filter(pk=history.pk).update(finish_date=FINISHED, retention_until=self.FIVE)
+        Production.objects.filter(pk=history.pk).update(finish_date=FINISHED, retention_until=self.FIVE)
         return history
 
     def owner(self, history):
@@ -215,7 +215,7 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         return user
 
     def assertStoredUntouched(self, history):
-        self.assertEqual(History.objects.get(pk=history.pk).retention_until, self.FIVE)
+        self.assertEqual(Production.objects.get(pk=history.pk).retention_until, self.FIVE)
 
     # --- Washington, with a spray ------------------------------------------------------------
 
@@ -240,7 +240,7 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
 
         with mock.patch("django.utils.timezone.now", return_value=self.AFTER):
             history.delete()
-        self.assertFalse(History.objects.filter(pk=history.pk).exists())
+        self.assertFalse(Production.objects.filter(pk=history.pk).exists())
 
     def test_a_farm_delete_is_refused_past_the_stored_date_until_the_floor(self):
         history = self.closed_before_the_floor("WA")
@@ -340,7 +340,7 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         with mock.patch("django.utils.timezone.now", return_value=self.BETWEEN):
             assert_deletable("farm", parcel__establishment=history.parcel.establishment)  # does not raise
             history.delete()
-        self.assertFalse(History.objects.filter(pk=history.pk).exists())
+        self.assertFalse(Production.objects.filter(pk=history.pk).exists())
 
     def test_a_washington_season_without_a_spray_is_unchanged(self):
         from history.retention import effective_retention_until
@@ -350,7 +350,7 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         self.assertStoredUntouched(history)
         with mock.patch("django.utils.timezone.now", return_value=self.BETWEEN):
             history.delete()
-        self.assertFalse(History.objects.filter(pk=history.pk).exists())
+        self.assertFalse(Production.objects.filter(pk=history.pk).exists())
 
     def test_an_open_season_still_has_no_date(self):
         """The floor does not give a season that never finished a retention date. Whether such a
@@ -366,4 +366,4 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         self.assertIsNone(effective_retention_until(history))
         with self.assertRaises(ValidationError):
             history.delete()
-        self.assertTrue(History.objects.filter(pk=history.pk).exists())
+        self.assertTrue(Production.objects.filter(pk=history.pk).exists())

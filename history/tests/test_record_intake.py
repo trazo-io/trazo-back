@@ -20,7 +20,7 @@ from django.test import TestCase
 from certifications.models import NationalListSubstance
 from company.models import Company, Establishment
 from documents.services.filing import file_document
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent, SoilManagementEvent
 from history.services import tank_mix
 from history.services.not_on_source_record import CONCENTRATION_CONFLICT, WINDOW_CONFLICT
 from history.services.record_intake import ALL_COLUMNS, COLUMNS, OPTIONAL_COLUMNS, build_plan, execute, plan_fingerprint
@@ -61,7 +61,7 @@ class IntakeFarm(TestCase):
         self.seasons = {}
         for name in ("Block 1", "Block 2", "Block 3", "Block 4"):
             parcel = Parcel.objects.create(name=name, establishment=self.farm, area=4.0)
-            season = History.objects.create(
+            season = Production.objects.create(
                 name=f"2026 {name}", parcel=parcel, product=self.product, start_date=_dt(2026, 1, 1)
             )
             parcel.current_history = season
@@ -299,7 +299,7 @@ class ParcelAndSeasonTests(IntakeFarm):
     def test_a_parcel_of_another_farm_with_the_same_name_is_never_written(self):
         other = Establishment.objects.create(name="Other Orchard", company=Company.objects.create(name="Other Co"))
         other_parcel = Parcel.objects.create(name="Block 1", establishment=other, area=1.0)
-        other_season = History.objects.create(name="Other 2026", parcel=other_parcel, product=self.product)
+        other_season = Production.objects.create(name="Other 2026", parcel=other_parcel, product=self.product)
         execute(self.one(), self.farm, self.operator, BATCH)
         self.assertEqual(ChemicalEvent.objects.filter(history=self.seasons["Block 1"]).count(), 1)
         self.assertEqual(ChemicalEvent.objects.filter(history=other_season).count(), 0)
@@ -316,7 +316,7 @@ class ParcelAndSeasonTests(IntakeFarm):
         self.assertIn("has no open production", self.reasons(unnamed)[2])
 
     def test_a_parcel_with_two_open_seasons_needs_the_production_named(self):
-        second = History.objects.create(
+        second = Production.objects.create(
             name="2026 Block 1 (replant)", parcel=self.seasons["Block 1"].parcel, product=self.product
         )
         self.assertIn("2 open productions", self.reasons(self.one())[2])

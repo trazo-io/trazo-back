@@ -25,7 +25,7 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production
 from history.serializers import ChemicalEventSerializer, PublicHistorySerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -71,7 +71,7 @@ class InputRatesOffPublicWireTests(TestCase):
         self.stranger.companies.add(other)
         establishment = Establishment.objects.create(name="R1", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="RP1", establishment=establishment, area=10.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Rate Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apples"),

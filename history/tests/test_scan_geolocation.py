@@ -35,7 +35,7 @@ from unittest.mock import patch
 from django.test import Client, RequestFactory, TestCase
 from django.utils import timezone
 
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from history.services.geoip_service import GeoIPService, GeoLocation
 from history.services.privacy_service import PrivacyService
 
@@ -245,7 +245,7 @@ class ConsentUpgradeTests(TestCase):
     def setUp(self):
         GeoIPService._reader = None
         GeoIPService._unavailable = False
-        self.history = History.objects.create(name="Consent Upgrade Production", published=True)
+        self.history = Production.objects.create(name="Consent Upgrade Production", published=True)
         self.url = "/api/public_scans/consent/"
         self.resolved = GeoLocation("UY", "Uruguay", "Canelones", "Barros Blancos")
 

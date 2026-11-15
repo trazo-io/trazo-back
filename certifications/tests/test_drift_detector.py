@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from certifications.models import NationalListSubstance, OMRIProduct, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel
 
 
@@ -29,7 +29,7 @@ class DriftDetectorSignalTests(TransactionTestCase):
         self.company = Company.objects.create(name="Drift Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Drift Production",
             start_date=timezone.now(),
             parcel=self.parcel,
@@ -220,7 +220,7 @@ class DriftDetectorApprovedInputsActionsTests(TransactionTestCase):
         self.company = Company.objects.create(name="Add/Remove Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
-        self.history = History.objects.create(name="Prod", start_date=timezone.now(), parcel=self.parcel)
+        self.history = Production.objects.create(name="Prod", start_date=timezone.now(), parcel=self.parcel)
         self.osp = OrganicSystemPlan.objects.create(
             establishment=self.establishment,
             version_number=1,
@@ -299,7 +299,7 @@ class OSPActivateDriftRecomputeTests(TransactionTestCase):
         self.company = Company.objects.create(name="Activation Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
-        self.history = History.objects.create(name="Prod", start_date=timezone.now(), parcel=self.parcel)
+        self.history = Production.objects.create(name="Prod", start_date=timezone.now(), parcel=self.parcel)
         self.omri = OMRIProduct.objects.create(omri_id="OMRI-ACT", product_name="Activation Widget")
         # OSP v1 is active and approves the OMRI product.
         self.v1 = OrganicSystemPlan.objects.create(
@@ -461,7 +461,7 @@ class DriftFindingsPDFSectionTests(TransactionTestCase):
         self.company = Company.objects.create(name="PDF Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="PDF Prod",
             start_date=timezone.now(),
             parcel=self.parcel,
@@ -539,7 +539,7 @@ class SoilAmendmentCategoryEnumTests(TransactionTestCase):
         self.company = Company.objects.create(name="Enum Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Enum Production",
             start_date=timezone.now(),
             parcel=self.parcel,
@@ -594,7 +594,7 @@ class UpdateSerializerLabFlattenTests(TransactionTestCase):
         self.company = Company.objects.create(name="Lab Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Lab Production",
             start_date=timezone.now(),
             parcel=self.parcel,

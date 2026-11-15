@@ -340,11 +340,11 @@ def hand_off_tank_mix_pass(sender, instance, **kwargs):
     try:
         if not getattr(instance, "tank_mix_group", None) or instance.history_id is None:
             return
-        from history.models import History
+        from history.models import Production
         from history.services.tank_mix import hand_off_fuel
 
         # A cascade from the season or the parcel: everything on the target is going too.
-        if not History.objects.filter(pk=instance.history_id).exists():
+        if not Production.objects.filter(pk=instance.history_id).exists():
             return
         remaining = ChemicalEvent.objects.filter(
             tank_mix_group=instance.tank_mix_group, history_id=instance.history_id, block_id=instance.block_id
@@ -551,9 +551,9 @@ def cleanup_carbon_entries_on_event_delete(sender, instance, **kwargs):
         # entries" once per event — 512 lines for one farm — and a REAL cleanup failure was
         # indistinguishable from that noise. Same shape as the `except Exception` that once
         # disguised a fixture bug as a product bug.
-        from history.models import History
+        from history.models import Production
 
-        if instance.history_id is None or not History.objects.filter(pk=instance.history_id).exists():
+        if instance.history_id is None or not Production.objects.filter(pk=instance.history_id).exists():
             return
 
         # By the activity link, which outlives the event (its Activity is tombstoned). The text

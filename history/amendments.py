@@ -370,9 +370,9 @@ HISTORY_FIELD_LABELS = {
 
 def history_amendable_fields():
     """The season-header fields a correction may target, as model field objects."""
-    from history.models import History
+    from history.models import Production
 
-    by_name = {f.name: f for f in History._meta.get_fields() if getattr(f, "concrete", False)}
+    by_name = {f.name: f for f in Production._meta.get_fields() if getattr(f, "concrete", False)}
     return [by_name[name] for name in HISTORY_AMENDABLE_FIELDS if name in by_name]
 
 
@@ -397,13 +397,13 @@ def apply_history_amendment(*, history, field_name, new_value, reason, user):
     export reads the truth without special-casing, and the amendment carries the original,
     the actor and the mandatory reason.
     """
-    from history.models import EventAmendment, History
+    from history.models import EventAmendment, Production
 
     reason = (reason or "").strip()
     if not reason:
         raise AmendmentError({"reason": "Say why this record is being corrected. The reason is part of the record."})
 
-    if not isinstance(history, History):
+    if not isinstance(history, Production):
         raise AmendmentError({"history": "That is not a production."})
 
     allowed = {f.name: f for f in history_amendable_fields()}
@@ -438,7 +438,7 @@ def apply_history_amendment(*, history, field_name, new_value, reason, user):
         # `full_clean` is the wrong tool here.
         history.clean_fields(
             exclude=[
-                f.name for f in History._meta.get_fields() if getattr(f, "concrete", False) and f.name != field_name
+                f.name for f in Production._meta.get_fields() if getattr(f, "concrete", False) and f.name != field_name
             ]
         )
     except DjangoValidationError as exc:

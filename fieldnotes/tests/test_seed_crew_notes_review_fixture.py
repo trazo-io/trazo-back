@@ -28,7 +28,7 @@ from common.models import DataOperationLog
 from company.models import Company
 from fieldnotes.management.commands import seed_crew_notes_review_fixture as fixture
 from fieldnotes.models import CrewSender, FieldNote, FieldNoteConfirmation
-from history.models import History
+from history.models import Production
 from notifications.models import Notification
 from product.models import Establishment, Parcel
 from subscriptions.models import Plan, Subscription
@@ -310,7 +310,7 @@ class RemoveTests(FixtureTestCase):
     def confirm_note_04(self):
         """Confirm a fixture note through the wizard's real save, as the reviewer would."""
         parcel = Parcel.objects.create(name="ASTRA lot", establishment=self.farm, area=1)
-        season = History.objects.create(parcel=parcel, name="ASTRA season")
+        season = Production.objects.create(parcel=parcel, name="ASTRA season")
         parcel.current_history = season
         parcel.save(update_fields=["current_history"])
         note = FieldNote.objects.get(provider_message_id="ASTRATEST-CREWNOTE-04")

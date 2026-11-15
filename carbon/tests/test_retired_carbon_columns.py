@@ -21,7 +21,7 @@ from carbon.retired_columns import RETIRED_CARBON_ENTRY_COLUMNS
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from common.services import census
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent
+from history.models import PestManagementEvent, Production
 from product.models import Parcel
 
 LABEL = "carbon.CarbonEntry"
@@ -32,7 +32,7 @@ class _FarmMixin:
         company = Company.objects.create(name="Retire Co")
         self.est = Establishment.objects.create(name="Retire Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
-        self.season = History.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
+        self.season = Production.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
         self.event = PestManagementEvent.objects.create(
             history=self.season, type="SC", description="scouting", date=timezone.now()
         )

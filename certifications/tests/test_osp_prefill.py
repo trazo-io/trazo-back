@@ -137,7 +137,7 @@ class ModuleGetSuggestionTests(APITestCase):
     def setUpTestData(cls):
         from certifications.models import OrganicSystemPlan
         from company.models import Company, Establishment
-        from history.models import History, SoilManagementEvent
+        from history.models import Production, SoilManagementEvent
         from product.models import Parcel
         from users.models import User, WorksIn
 
@@ -146,7 +146,7 @@ class ModuleGetSuggestionTests(APITestCase):
         cls.establishment = Establishment.objects.create(name="PF1", company=cls.company)
         WorksIn.objects.create(user=cls.owner, company=cls.company, role="CA")
         cls.parcel = Parcel.objects.create(name="PP1", establishment=cls.establishment, area=5.0)
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Prefill Season", parcel=cls.parcel, start_date="2026-01-01", published=False
         )
         SoilManagementEvent.objects.create(history=cls.history, type="CC", date="2026-02-01", created_by=cls.owner)

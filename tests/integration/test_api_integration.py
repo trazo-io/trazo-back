@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from company.models import Company, Establishment
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from product.models import Parcel, Product
 from subscriptions.models import Subscription
 
@@ -376,7 +376,7 @@ class APIPerformanceIntegrationTests(APITestCase):
         # Create history records with relationships
         for establishment in self.establishments[:2]:  # Limit to prevent excessive test data
             for parcel in establishment.parcel_set.all()[:2]:
-                History.objects.create(
+                Production.objects.create(
                     name=f"Production for {parcel.name}", parcel=parcel, start_date="2024-01-01", published=True
                 )
 

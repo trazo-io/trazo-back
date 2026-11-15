@@ -97,7 +97,7 @@ def resolve_lot_organic_eligibility(history, cert) -> LotOrganicEligibility:
     Gate the farm-level organic claim down to this production lot.
 
     Args:
-        history: history.models.History (the production lot).
+        history: history.models.Production (the production lot).
         cert: the active verified USDA Organic Certification record used for
               the farm-level claim (from ConsumerClaimValidator), or None.
 

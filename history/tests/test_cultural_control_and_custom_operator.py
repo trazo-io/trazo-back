@@ -27,7 +27,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent, ProductionEvent
+from history.models import PestManagementEvent, Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -40,7 +40,7 @@ class OrchardBase(TestCase):
         establishment = Establishment.objects.create(name="SF1", company=company, state="CA")
         parcel = Parcel.objects.create(name="cu-parcel", establishment=establishment, area=44.5)
         product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Sanitation Production",
             start_date=timezone.now(),
             product=product,

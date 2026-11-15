@@ -480,11 +480,11 @@ def buffer_dispositions(establishment) -> list:
 
 def sample_trail(establishment) -> Optional[SampleTrail]:
     """Part B — the most recently finished season with at least one live sale, or None."""
-    from history.models import History, ProductionEvent, SalesRecord
+    from history.models import Production, ProductionEvent, SalesRecord
     from history.services.claim_authority import may_label_container
 
     season = (
-        History.objects.filter(
+        Production.objects.filter(
             parcel__establishment=establishment,
             finish_date__isnull=False,
             sales_records__in=SalesRecord.objects.live(),

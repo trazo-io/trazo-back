@@ -24,7 +24,7 @@ from rest_framework.test import APIClient
 from carbon.models import CarbonEntry
 from certifications.models import Certification, LandownerAffidavit, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelCropHistory
 from support.models import SupportAttachment, SupportTicket
 from users.constants import PRODUCER
@@ -46,7 +46,7 @@ class _Tenants(TestCase):
         cls.victim = _admin_of(cls.victim_co, "admin@victim.example")
         cls.victim_farm = Establishment.objects.create(name="Victim Farm", company=cls.victim_co)
         cls.victim_parcel = Parcel.objects.create(name="Victim Parcel", establishment=cls.victim_farm, area=2.0)
-        cls.victim_season = History.objects.create(name="Victim 2026", parcel=cls.victim_parcel)
+        cls.victim_season = Production.objects.create(name="Victim 2026", parcel=cls.victim_parcel)
         cls.victim_cert = Certification.objects.create(establishment=cls.victim_farm, certification_type="usda_organic")
         cls.victim_osp = OrganicSystemPlan.objects.create(establishment=cls.victim_farm, version_number=1)
         cls.victim_ticket = SupportTicket.objects.create(

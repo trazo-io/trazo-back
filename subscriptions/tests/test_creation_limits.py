@@ -148,11 +148,11 @@ class ProductionQuotaTests(TestCase):
     """The quota must key off something the customer cannot edit."""
 
     def _production(self, farm, name, *, start_date=None):
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         parcel = Parcel.objects.filter(establishment=farm).first() or _parcel(farm, "P1")
-        return History.objects.create(parcel=parcel, name=name, start_date=start_date)
+        return Production.objects.create(parcel=parcel, name=name, start_date=start_date)
 
     def test_blocks_at_the_limit(self):
         company = _company_on(_plan("t-two-prods", max_productions_per_year=2))
@@ -187,20 +187,20 @@ class ProductionQuotaTests(TestCase):
         # `current_period_start`: that is the BILLING period, so on a monthly plan it is ~30 days,
         # and a limit named `max_productions_per_year` would reset every month — 3/year would
         # silently become 36/year.
-        from history.models import History
+        from history.models import Production
 
         company = _company_on(_plan("t-prev-year", max_productions_per_year=1))
         farm = _farm(company)
         old = self._production(farm, "last season")
 
         start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        History.objects.filter(pk=old.pk).update(created_at=start_of_year - timedelta(days=1))
+        Production.objects.filter(pk=old.pk).update(created_at=start_of_year - timedelta(days=1))
         self.assertTrue(company.can_create_production())
 
     def test_a_production_created_this_year_counts_regardless_of_billing_period(self):
         # Guards the regression directly: with a billing-period window, a production created
         # before the current month would have fallen outside the count and freed up quota.
-        from history.models import History
+        from history.models import Production
 
         company = _company_on(
             _plan("t-billing-window", max_productions_per_year=1),
@@ -212,7 +212,7 @@ class ProductionQuotaTests(TestCase):
         start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         # Somewhere earlier in the same calendar year, but before the billing period started.
         earlier = max(start_of_year, timezone.now() - timedelta(days=45))
-        History.objects.filter(pk=created.pk).update(created_at=earlier)
+        Production.objects.filter(pk=created.pk).update(created_at=earlier)
         self.assertFalse(
             company.can_create_production(),
             "a production from earlier in the calendar year must still count against the annual limit",
@@ -247,11 +247,11 @@ class MeterMatchesTheGateTests(TestCase):
         return SubscriptionSerializer()._compute_used_productions(company.subscription)
 
     def _production(self, farm, name, *, start_date=None):
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         parcel = Parcel.objects.filter(establishment=farm).first() or _parcel(farm, "P1")
-        return History.objects.create(parcel=parcel, name=name, start_date=start_date)
+        return Production.objects.create(parcel=parcel, name=name, start_date=start_date)
 
     def test_a_backdated_season_is_visible_to_the_meter_because_it_counts_against_the_gate(self):
         company = _company_on(_plan("t-meter-backdate", max_productions_per_year=2))
@@ -278,13 +278,13 @@ class MeterMatchesTheGateTests(TestCase):
         self.assertFalse(company.can_create_production(), "the meter says 2 of 2 — the gate must agree")
 
     def test_a_previous_year_season_counts_for_neither(self):
-        from history.models import History
+        from history.models import Production
 
         company = _company_on(_plan("t-meter-prev-year", max_productions_per_year=1))
         farm = _farm(company)
         old = self._production(farm, "last season")
         start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        History.objects.filter(pk=old.pk).update(created_at=start_of_year - timedelta(days=1))
+        Production.objects.filter(pk=old.pk).update(created_at=start_of_year - timedelta(days=1))
         self.assertEqual(self._meter(company), 0)
         self.assertTrue(company.can_create_production())
 
@@ -320,7 +320,10 @@ class MeterMatchesTheGateTests(TestCase):
 
         self.assertIn("productions_created_this_year", code)
         self.assertNotIn("start_date", code)
-        self.assertNotIn("History", code)
+        # The model under either name. The code switched from `History` to `Production` on 2026-11-15,
+        # and a check for one name alone goes blind on the day the code switches to the other.
+        for model_name in ("History", "Production"):
+            self.assertNotIn(model_name, code)
 
 
 class EstablishmentLimitTests(TestCase):

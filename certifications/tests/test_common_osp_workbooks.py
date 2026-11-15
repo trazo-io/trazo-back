@@ -23,7 +23,7 @@ from certifications.services.common_osp_workbooks import (
     workbooks_for,
 )
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from product.models import Parcel, ParcelCropHistory, Product
 from users.models import User, WorksIn
 
@@ -207,11 +207,11 @@ class NeverGuessTests(_Base):
         from datetime import datetime
         from datetime import timezone as dt_tz
 
-        from history.models import History
+        from history.models import Production
         from product.models import Product
 
         spinach = Product.objects.create(name="Spinach")
-        History.objects.create(
+        Production.objects.create(
             name="Overwintered Spinach",
             parcel=self.parcel,
             product=spinach,
@@ -238,7 +238,7 @@ class NeverGuessTests(_Base):
         """USDA defines "In Use" as CURRENTLY used. Trazo only knows a product was applied at
         some point — an input last sprayed in 2019 is not in use — so ticking it would be the
         same guess this module refuses to make on the last-prohibited-input cell."""
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -254,7 +254,7 @@ class NeverGuessTests(_Base):
         """🔴 Regression. This read `history.name`, a season label like "Hass Avocado Hillside
         Grove A 2026", and wrote it into the USDA "Product Name" column — describing a season to
         a certifier who expects the product the supplier provided."""
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Hass Avocado Hillside Grove A 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Avocado"),
@@ -272,7 +272,7 @@ class NeverGuessTests(_Base):
     def test_formula_injection_is_defused(self):
         """These files go to a CERTIFIER. Excel executes any cell starting with = + - @, and every
         string here is farmer-typed free text."""
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -295,7 +295,7 @@ class NeverGuessTests(_Base):
         """
         from history.models import PestManagementEvent
 
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -316,7 +316,7 @@ class NeverGuessTests(_Base):
         """A row reading "— / Rincon-Vitova" tells a certifier nothing about what was released."""
         from history.models import PestManagementEvent
 
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -333,7 +333,7 @@ class NeverGuessTests(_Base):
 
     def test_supplier_certifier_column_is_never_invented(self):
         """The supplier's certifier comes off THEIR organic certificate, which Trazo lacks."""
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -354,7 +354,7 @@ class NeverGuessTests(_Base):
 
 class ContentTests(_Base):
     def _history(self):
-        return History.objects.create(
+        return Production.objects.create(
             name="2026 Season",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -435,11 +435,13 @@ class MaterialsListTests(_Base):
     def test_a_material_with_no_stated_status_leaves_both_boxes_blank(self):
         """⛔ "Planned" and "in use" are different claims; neither is a default, and a logged
         application is not a statement that the product is CURRENTLY used."""
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Product
 
         product = Product.objects.create(name="Walnut")
-        history = History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        history = Production.objects.create(
+            name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1)
+        )
         ChemicalEvent.objects.create(history=history, type="FU", date=date(2026, 5, 1), commercial_name="Champ WG")
         row = next(r for r in self._data_rows(self._sheet("materials_list")) if r[0] == "Champ WG")
         self.assertIsNone(row[3])
@@ -465,11 +467,13 @@ class MaterialsListTests(_Base):
     def test_the_operators_reason_beats_the_event_subtype(self):
         """CCOF and WSDA ask for a per-row reason; the subtype only says what KIND of product
         it is, which is a weaker answer to the same question."""
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Product
 
         product = Product.objects.create(name="Walnut")
-        history = History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        history = Production.objects.create(
+            name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1)
+        )
         ChemicalEvent.objects.create(history=history, type="FU", date=date(2026, 5, 1), commercial_name="Champ WG")
         self._entry(product_name="Champ WG", reason_for_use="Walnut blight, bloom sprays")
 
@@ -497,7 +501,7 @@ class CurrentSeasonCropTests(_Base):
             parcel=self.parcel, year=2025, crop_grown="Full-season cover crop", production_method="organic"
         )
         product = Product.objects.create(name="Onions")
-        History.objects.create(
+        Production.objects.create(
             parcel=self.parcel,
             name="Onions 2026",
             start_date=date(2026, 4, 1),
@@ -515,7 +519,7 @@ class CurrentSeasonCropTests(_Base):
             parcel=self.parcel, year=2026, crop_grown="Carrots (Bolero)", production_method="organic"
         )
         product = Product.objects.create(name="Onions")
-        History.objects.create(
+        Production.objects.create(
             parcel=self.parcel,
             name="Onions 2026",
             start_date=date(2026, 4, 1),
@@ -529,7 +533,7 @@ class CurrentSeasonCropTests(_Base):
 
     def _seasons(self, *specs):
         for name, start, finish in specs:
-            History.objects.create(
+            Production.objects.create(
                 parcel=self.parcel,
                 name=f"{name} {start.year}",
                 start_date=start,
@@ -567,11 +571,11 @@ class SummaryTests(_Base):
         printed declaration, "Imports" under "I do not import". A four-product operation was
         told it had 36 cells to fill when the truthful number was zero, and a count that
         overstates by an order of magnitude is read as noise."""
-        from history.models import History
+        from history.models import Production
         from product.models import Product
 
         product = Product.objects.create(name="Walnut")
-        History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        Production.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
         entry = next(s for s in workbook_summary(self.establishment) if s["key"] == "crop_livestock_product_list")
 
         self.assertEqual(entry["rows"], 1)
@@ -596,11 +600,13 @@ class SummaryTests(_Base):
     def test_a_supplier_certifier_counts_as_work_trazo_cannot_do(self):
         """Only the operator holds it — it is on the SUPPLIER's certificate. Still work, but
         not a record Trazo failed to fill, and the two are different sentences to a farmer."""
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Product
 
         product = Product.objects.create(name="Walnut")
-        history = History.objects.create(name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1))
+        history = Production.objects.create(
+            name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1)
+        )
         ChemicalEvent.objects.create(
             history=history,
             type="FU",
@@ -794,7 +800,7 @@ class FactTableTests(_Base):
             ("Spinach", date(2026, 3, 5), spinach_finish),
             ("Carrots", date(2026, 6, 20), None),
         ):
-            History.objects.create(
+            Production.objects.create(
                 parcel=block,
                 name=f"{name} 2026",
                 start_date=start,

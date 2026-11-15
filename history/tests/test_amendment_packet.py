@@ -17,7 +17,7 @@ from django.utils import timezone
 from company.models import Company
 from history.amendments import apply_amendment
 from history.constants import PRODUCTION_EVENT_TYPE
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Establishment, Parcel
 from users.models import User, WorksIn
@@ -30,7 +30,7 @@ class AmendmentPacketTests(TestCase):
         WorksIn.objects.create(user=self.user, company=company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Packet Farm", company=company, state="CA")
         parcel = Parcel.objects.create(name="Packet Parcel", establishment=est, area=5)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             name="2026",
             finish_date=timezone.now() - timedelta(days=1),

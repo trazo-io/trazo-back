@@ -77,7 +77,7 @@ def media_storage_bytes(company) -> int:
         return 0
 
     from common.models import GalleryImage
-    from history.models import History
+    from history.models import Production
     from product.models import Parcel
 
     # Every gallery the company owns — farm, parcel, season and the eight event tables — as ONE
@@ -87,7 +87,7 @@ def media_storage_bytes(company) -> int:
     sources = [
         company.establishment_set.exclude(album__isnull=True).values_list("album_id", flat=True),
         Parcel.objects.filter(establishment__company=company, album__isnull=False).values_list("album_id", flat=True),
-        History.objects.filter(**scoped).values_list("album_id", flat=True),
+        Production.objects.filter(**scoped).values_list("album_id", flat=True),
     ]
     for related_name in (
         "history_productionevent_events",
@@ -99,7 +99,7 @@ def media_storage_bytes(company) -> int:
         "history_pestmanagementevent_events",
         "history_businessevent_events",
     ):
-        manager = getattr(History, related_name, None)
+        manager = getattr(Production, related_name, None)
         if manager is None:
             continue
         related_model = manager.rel.related_model

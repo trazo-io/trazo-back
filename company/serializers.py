@@ -872,7 +872,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         """
         from django.utils import timezone
 
-        from history.models import History, HistoryScan
+        from history.models import HistoryScan, Production
 
         now = timezone.now()
         # A rolling 30-day window, not calendar month-to-date. On the 2nd of a month the
@@ -912,7 +912,7 @@ class EstablishmentDashboardMetricsSerializer(serializers.Serializer):
         # number on a count that small. The card shows the two counts and their window.
 
         # --- 3. PRODUCTIONS + EVENT COUNTS (bulk, no N+1) ---
-        establishment_histories = History.objects.filter(parcel__establishment=establishment)
+        establishment_histories = Production.objects.filter(parcel__establishment=establishment)
         total_productions = establishment_histories.count()
 
         # Count total documented events across all event types in bulk

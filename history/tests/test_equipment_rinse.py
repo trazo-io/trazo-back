@@ -12,7 +12,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -39,7 +39,7 @@ class EquipmentRinseFalseFlagTests(TestCase):
         self.establishment = Establishment.objects.create(name="RE1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="RP", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Rinse Production",
             start_date=timezone.now(),
             product=self.product,

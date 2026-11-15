@@ -37,7 +37,7 @@ from rest_framework.test import APITestCase
 from carbon.models import CarbonEntry
 from carbon.tests.test_live_carbon_payloads_carry_no_grade import assert_carries_no_grade
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent
+from history.models import PestManagementEvent, Production
 from history.serializers import PestManagementEventSerializer
 from product.models import Parcel
 from users.models import WorksIn
@@ -111,7 +111,7 @@ class LivePayloadsCarryNoScoreTests(APITestCase):
         company = Company.objects.create(name="Score Co")
         self.establishment = Establishment.objects.create(name="Score Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=self.establishment, area=2)
-        self.season = History.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
+        self.season = Production.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
         user = get_user_model().objects.create_user(email="score@example.com", password="x")
         WorksIn.objects.create(user=user, company=company, role=WorksIn.COMPANY_ADMIN)
         self.client.force_authenticate(user)

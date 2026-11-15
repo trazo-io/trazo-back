@@ -22,7 +22,7 @@ from rest_framework.test import APIClient
 from certifications.models import Supplier, SupplierCertificate, SupplierName
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from history.services import supplier_certificates as sc
 from history.services.privacy import establishment_supplier_names
 from history.services.traceback import trace_sale
@@ -46,7 +46,7 @@ class _Base(TestCase):
         self.est = Establishment.objects.create(name="Home", company=self.company, state="WA")
         self.other_est = Establishment.objects.create(name="North ranch", company=self.company, state="WA")
         self.parcel = Parcel.objects.create(name="Block 7", establishment=self.est, area=10.0)
-        self.season = History.objects.create(name="Honeycrisp 2025", start_date=timezone.now(), parcel=self.parcel)
+        self.season = Production.objects.create(name="Honeycrisp 2025", start_date=timezone.now(), parcel=self.parcel)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 

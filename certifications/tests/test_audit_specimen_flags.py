@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from certifications.models import Certification
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -35,7 +35,7 @@ class AuditSpecimenFlagsTests(TestCase):
         company = Company.objects.create(name=company_name) if company_name else self.company
         establishment = Establishment.objects.create(name=name, company=company, state="CA", is_demo=is_demo)
         parcel = Parcel.objects.create(name=f"{name} block", establishment=establishment, area=3.0)
-        History.objects.create(
+        Production.objects.create(
             name=f"{name} season",
             start_date=timezone.now() - timedelta(days=30),
             product=self.product,
@@ -107,7 +107,7 @@ class AuditSpecimenFlagsTests(TestCase):
             establishment.is_demo,
             Establishment.objects.count(),
             Certification.objects.count(),
-            History.objects.count(),
+            Production.objects.count(),
         )
         self._run()
         establishment.refresh_from_db()
@@ -116,7 +116,7 @@ class AuditSpecimenFlagsTests(TestCase):
                 establishment.is_demo,
                 Establishment.objects.count(),
                 Certification.objects.count(),
-                History.objects.count(),
+                Production.objects.count(),
             ),
             before,
         )

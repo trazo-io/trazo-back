@@ -32,7 +32,7 @@ from rest_framework.test import APIClient
 
 from common.specimen import SPECIMEN_TITLE
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.wa_spray_record_service import HEADER_STATEMENT, ITEM_LETTERS, WASprayRecordService
 from product.models import Parcel, ParcelPlannedCrop, Product
 from subscriptions.testing import grant_compliance_exports
@@ -87,7 +87,7 @@ class _WAFarm(TestCase):
         )
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         self.parcel = Parcel.objects.create(name="North Orchard", establishment=self.farm, area=10.0, polygon=BOUNDARY)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Apples",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apples"),
@@ -526,7 +526,7 @@ class CopyTests(_WAFarm):
     def test_a_map_page_for_a_drawn_parcel_and_a_named_absence_for_the_rest(self):
         self.spray()
         bare = Parcel.objects.create(name="South Block", establishment=self.farm, area=4.0)
-        season = History.objects.create(
+        season = Production.objects.create(
             name="South", start_date=timezone.now(), product=self.history.product, parcel=bare
         )
         self.spray(history=season, block_id="", date=WHEN.replace(day=16))

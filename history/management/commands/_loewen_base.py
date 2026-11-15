@@ -28,7 +28,7 @@ from carbon.models import CropType
 from certifications.models import OSP_SECTION_KEYS, Certification, OMRIProduct, OrganicSystemPlan
 from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
-from history.models import History, LabelImage
+from history.models import LabelImage, Production
 from product.models import Parcel, ParcelCropHistory, Product
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
@@ -385,9 +385,9 @@ def create_loewen_base(user):
     # Finished production (PUBLISHED) — 2024-25 walnut season             #
     # ------------------------------------------------------------------ #
     finish_dt = _dt(2025, 10, 20, 12)
-    production_finished = History(
+    production_finished = Production(
         name="Loewen Organic Walnuts 2024-2025",
-        type=History.ORCHARD,
+        type=Production.ORCHARD,
         start_date=_dt(2024, 11, 1),
         expected_harvest=_dt(2025, 9, 20),
         finish_date=finish_dt,
@@ -449,9 +449,9 @@ def create_loewen_base(user):
     # ------------------------------------------------------------------ #
     # Current production — 2025-26 season (in progress, unpublished)      #
     # ------------------------------------------------------------------ #
-    production_current = History(
+    production_current = Production(
         name="Loewen Organic Walnuts 2025-2026",
-        type=History.ORCHARD,
+        type=Production.ORCHARD,
         start_date=_dt(2025, 11, 1),
         published=False,
         description=(

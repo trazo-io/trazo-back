@@ -264,12 +264,12 @@ def crop_is_listed(name: str, listed: list[str]) -> bool:
 
 def open_season_crops(parcel) -> list[str]:
     """Crops of the seasons still open on the parcel (started, not finished), as the season names them."""
-    from history.models import History
+    from history.models import Production
 
     names: list[str] = []
-    seasons = History.objects.filter(parcel=parcel, start_date__isnull=False, finish_date__isnull=True).select_related(
-        "product", "crop_type"
-    )
+    seasons = Production.objects.filter(
+        parcel=parcel, start_date__isnull=False, finish_date__isnull=True
+    ).select_related("product", "crop_type")
     for season in seasons.order_by("start_date", "pk"):
         name = (getattr(season.product, "name", None) or getattr(season.crop_type, "name", None) or "").strip()
         if name and name not in names:

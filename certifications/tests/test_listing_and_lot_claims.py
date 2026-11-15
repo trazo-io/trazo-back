@@ -30,7 +30,7 @@ from certifications.services.material_identity import record_decision
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.osp_prefill import resolve_suggestions
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -62,7 +62,7 @@ class _Farm(TestCase):
         WorksIn.objects.create(user=self.user, company=company, role=WorksIn.COMPANY_ADMIN)
         self.est = Establishment.objects.create(name="Home Orchard", company=company, state="OR")
         parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Pears 2026", start_date=timezone.now(), parcel=parcel, operator=self.user
         )
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="active")

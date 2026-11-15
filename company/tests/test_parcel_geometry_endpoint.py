@@ -18,7 +18,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History
+from history.models import GeneralEvent, Production
 from history.services.block_ids import known_block_ids_for_parcel, known_block_ids_for_parcels
 from product.models import Parcel, ParcelPlannedCrop
 from users.models import WorksIn
@@ -51,9 +51,9 @@ class ParcelGeometryEndpointTests(APITestCase):
             polygon=None,
             map_metadata={"center": {"lat": 44.5, "lng": -123.0}, "zoom": 15},
         )
-        season = History.objects.create(parcel=cls.drawn, name="A 2026", start_date=timezone.now())
-        History.objects.create(parcel=cls.seeded, name="B 2026", start_date=timezone.now())
-        History.objects.create(parcel=cls.seeded, name="B 2027", start_date=timezone.now())
+        season = Production.objects.create(parcel=cls.drawn, name="A 2026", start_date=timezone.now())
+        Production.objects.create(parcel=cls.seeded, name="B 2026", start_date=timezone.now())
+        Production.objects.create(parcel=cls.seeded, name="B 2027", start_date=timezone.now())
         GeneralEvent.objects.create(history=season, name="x", date=timezone.now(), block_id="Rows 1-12")
         GeneralEvent.objects.create(history=season, name="y", date=timezone.now(), block_id="rows 1-12")
         GeneralEvent.objects.create(history=season, name="z", date=timezone.now(), block_id="Rows 1-12")
@@ -134,7 +134,7 @@ class KnownSectionsBatchTests(APITestCase):
         farm = Establishment.objects.create(name="Batch Farm", company=company)
         parcels = [Parcel.objects.create(name=f"P{i}", establishment=farm, area=1) for i in range(4)]
         for i, parcel in enumerate(parcels[:3]):
-            season = History.objects.create(parcel=parcel, name=f"S{i}", start_date=timezone.now())
+            season = Production.objects.create(parcel=parcel, name=f"S{i}", start_date=timezone.now())
             for label in ("North", "north", "South", f"Only {i}"):
                 GeneralEvent.objects.create(history=season, name=label, date=timezone.now(), block_id=label)
             ParcelPlannedCrop.objects.create(parcel=parcel, crop="Apples", block_name=f"Planted {i}")

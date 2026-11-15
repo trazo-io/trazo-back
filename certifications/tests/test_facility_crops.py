@@ -20,7 +20,7 @@ from certifications.models import OrganicSystemPlan, PostHarvestFacility
 from certifications.services.facility_crops import crops_by_facility, crops_for
 from certifications.services.osp_module_pdf import generate_module_pdf
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -66,7 +66,7 @@ class _Farm(TestCase):
         )
 
     def season(self, crop, year, facilities, parcel=None):
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel or self.parcel,
             crop_type=crop,
             name=f"{crop.name} {year}",

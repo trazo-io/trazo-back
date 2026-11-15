@@ -46,9 +46,9 @@ def na_contradictions(osp) -> list[str]:
                 "[REVIEW] G3.1 is marked not applicable, but these parcels are recorded as container or greenhouse "
                 f"production: {', '.join(parcels)}."
             )
-        from history.models import History
+        from history.models import Production
 
-        indoor = History.objects.filter(parcel__establishment_id=osp.establishment_id, is_outdoor=False).count()
+        indoor = Production.objects.filter(parcel__establishment_id=osp.establishment_id, is_outdoor=False).count()
         if indoor:
             lines.append(
                 "[REVIEW] G3.1 is marked not applicable, but "

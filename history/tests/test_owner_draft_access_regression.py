@@ -18,7 +18,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -30,7 +30,7 @@ def _make_production(published):
     product = Product.objects.create(name="Walnut")
     user = User.objects.create_user(email=f"owner-{'pub' if published else 'draft'}@t.com", password="x")
     user.companies.add(company)
-    history = History.objects.create(
+    history = Production.objects.create(
         name="Prod",
         start_date=timezone.now(),
         product=product,

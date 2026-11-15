@@ -10,7 +10,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import GeneralEvent, Production, ProductionEvent, SoilManagementEvent
 from history.serializers import ProductionEventSerializer, UpdateProductionEventSerializer
 from history.services.audit_export_service import AuditExportService
 from history.tests.test_pdf_field_coverage import flowable_text
@@ -26,7 +26,7 @@ class SweepGapTests(TestCase):
         self.parcel = Parcel.objects.create(name="Upper Terrace", establishment=self.establishment, area=6.0)
         product = Product.objects.create(name="Onions")
         self.now = timezone.now()
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Onions 2026",
             start_date=self.now - timedelta(days=120),
             product=product,
@@ -89,7 +89,7 @@ class SweepGapTests(TestCase):
         """The operation dossier builds the attestation section once, from a service bound to
         one production; `scope_productions` is how it names the rest."""
         other_parcel = Parcel.objects.create(name="River Block", establishment=self.establishment, area=3.0)
-        other = History.objects.create(
+        other = Production.objects.create(
             name="Carrots 2026",
             start_date=self.now - timedelta(days=90),
             product=Product.objects.create(name="Carrots"),
@@ -134,7 +134,7 @@ class SweepGapTests(TestCase):
 
     def test_operation_dossier_contamination_incidents_cover_every_production_named(self):
         other_parcel = Parcel.objects.create(name="River Block", establishment=self.establishment, area=3.0)
-        other = History.objects.create(
+        other = Production.objects.create(
             name="Carrots 2026",
             start_date=self.now - timedelta(days=90),
             product=Product.objects.create(name="Carrots"),

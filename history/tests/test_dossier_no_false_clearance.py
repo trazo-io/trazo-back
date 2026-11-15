@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from certifications.models import Certification, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.audit_export_service import AuditExportService
 from history.services.operation_readiness_service import OperationReadinessService
 from history.tests.test_pdf_field_coverage import flowable_text
@@ -82,7 +82,7 @@ class EmptyOSPIsABlockerTests(TestCase):
         self.user = User.objects.create_user(email="grower3@test.com", password="x")
         parcel = Parcel.objects.create(name="Block", establishment=self.establishment, area=10.0)
         product = Product.objects.create(name="Avocados")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Avocados",
             start_date=timezone.now(),
             product=product,
@@ -136,7 +136,7 @@ class NoFalseAllClearTests(TestCase):
         self.user = User.objects.create_user(email="grower4@test.com", password="x")
         parcel = Parcel.objects.create(name="Block", establishment=self.establishment, area=10.0)
         product = Product.objects.create(name="Avocados")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Avocados",
             start_date=timezone.now(),
             product=product,
@@ -235,7 +235,7 @@ class ProhibitedSoilAmendmentTests(TestCase):
         user = User.objects.create_user(email="grower5@test.com", password="x")
         parcel = Parcel.objects.create(name="Block", establishment=self.establishment, area=10.0)
         product = Product.objects.create(name="Avocados")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Avocados",
             start_date=timezone.now(),
             product=product,
@@ -300,7 +300,7 @@ class PhotoReuseDedupTests(TestCase):
         user = User.objects.create_user(email="grower6@test.com", password="x")
         parcel = Parcel.objects.create(name="Block", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Avocados")
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026 Avocados",
             start_date=timezone.now(),
             product=product,
@@ -394,7 +394,7 @@ class PaddingDefeatsLengthFloorTests(TestCase):
         user = User.objects.create_user(email="padded@test.com", password="x")
         parcel = Parcel.objects.create(name="Block", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Avocados")
-        History.objects.create(
+        Production.objects.create(
             name="2026 Avocados",
             start_date=timezone.now(),
             product=product,
@@ -497,7 +497,7 @@ class DraftOSPIsNotAnActiveOneTests(TestCase):
         self.user = User.objects.create_user(email="drafted@test.com", password="x")
         parcel = Parcel.objects.create(name="Block", establishment=self.establishment, area=10.0)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Walnuts",
             start_date=timezone.now(),
             product=product,
@@ -624,7 +624,7 @@ class CatalogFreshnessTests(TestCase):
         parcel = Parcel.objects.create(name="P", establishment=establishment, area=1.0)
         product = Product.objects.create(name="Olives")
         user = User.objects.create_user(email="fresh@test.com", password="x")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Olives",
             start_date=timezone.now(),
             product=product,
@@ -720,7 +720,7 @@ class NoInventedRegistrationInTheDriftTableTests(TestCase):
         parcel = Parcel.objects.create(name="P", establishment=self.establishment, area=1.0)
         product = Product.objects.create(name="Almonds")
         user = User.objects.create_user(email="ca@test.com", password="x")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Almonds",
             start_date=timezone.now(),
             product=product,

@@ -28,7 +28,7 @@ from backend.storage import private_records_storage
 from common.services import account_closure
 from company.models import Applicator, Company, Establishment
 from history.constants import CHEMICAL_EVENT_TYPE
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -293,7 +293,7 @@ class RecordKeepsItsCopyTests(_Orchards):
     def test_editing_or_deactivating_the_profile_leaves_a_saved_spray_unchanged(self):
         farm = Establishment.objects.create(name="Fictional Bench", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="North Block", establishment=farm, area=4.0)
-        season = History.objects.create(
+        season = Production.objects.create(
             name="Honeycrisp 2026",
             parcel=parcel,
             product=Product.objects.create(name="Apples"),

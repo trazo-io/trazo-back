@@ -12,7 +12,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from product.models import Parcel
 from users.constants import PRODUCER
 from users.models import User, WorksIn
@@ -32,7 +32,7 @@ class ScansPaginatedScopedTests(TestCase):
         cls.victim_co = Company.objects.create(name="Victim Farms")
         cls.victim_farm = Establishment.objects.create(name="Victim Farm", company=cls.victim_co)
         parcel = Parcel.objects.create(name="Victim Parcel", establishment=cls.victim_farm, area=2.0)
-        season = History.objects.create(name="Victim 2026", parcel=parcel, published=True)
+        season = Production.objects.create(name="Victim 2026", parcel=parcel, published=True)
         shopper = _user("shopper@example.com")
         HistoryScan.objects.create(history=season, user=shopper, ip_address="203.0.113.7", comment="victim comment")
 

@@ -45,7 +45,7 @@ from company.models import Company
 from history import seals
 from history.amendments import AmendmentError, amendable_fields, apply_amendment
 from history.constants import CHEMICAL_EVENT_TYPE
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services import multi_target, tank_mix
 from history.services.audit_export_service import AuditExportService, _purchase_rows
 from history.services.pur_export_service import PURExportService
@@ -72,7 +72,7 @@ def _flatten(elements) -> str:
 
 def _parcel(establishment, name, area=4):
     parcel = Parcel.objects.create(name=name, establishment=establishment, area=area)
-    history = History.objects.create(
+    history = Production.objects.create(
         parcel=parcel,
         name=f"{name} 2026",
         product=Product.objects.create(name="Apples"),
@@ -317,7 +317,7 @@ class TankWriteTests(_Orchard):
         self.assertFalse(ChemicalEvent.objects.exists())
 
     def test_one_closed_target_writes_nothing(self):
-        finished = History.objects.create(
+        finished = Production.objects.create(
             parcel=self.east,
             name="East 2025",
             start_date=datetime(2025, 3, 1, tzinfo=dt_tz.utc),
@@ -987,7 +987,7 @@ class SealAcrossTheMigrationTests(TransactionTestCase):
         company = Company.objects.create(name="Sealed Co")
         farm = Establishment.objects.create(name="Sealed Farm", company=company)
         parcel = Parcel.objects.create(name="Sealed Block", establishment=farm, area=2)
-        season = History.objects.create(
+        season = Production.objects.create(
             parcel=parcel, name="Sealed 2025", start_date=datetime(2025, 3, 1, tzinfo=dt_tz.utc)
         )
         ChemicalEvent.objects.create(

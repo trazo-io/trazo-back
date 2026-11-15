@@ -84,10 +84,10 @@ def with_latest_season_crop(parcels):
     `crop_names` falls back to it once no season is underway; without it a block whose season
     had just finished printed "15.4 ac" with no crop, as if it had never grown anything.
     """
-    from history.models import History
+    from history.models import Production
 
     latest = (
-        History.objects.filter(parcel=OuterRef("pk"), product__isnull=False)
+        Production.objects.filter(parcel=OuterRef("pk"), product__isnull=False)
         # NULLS LAST: PostgreSQL sorts NULL first under DESC, so a season with no start date
         # would outrank every dated one (same guard as lot_code_key).
         .order_by(F("start_date").desc(nulls_last=True), "-id").values("product__name")[:1]

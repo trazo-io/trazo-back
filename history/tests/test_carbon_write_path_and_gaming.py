@@ -25,7 +25,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History, ProductionEvent
+from history.models import GeneralEvent, Production, ProductionEvent
 from history.serializers import ProductionEventSerializer, UpdateProductionEventSerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -72,7 +72,7 @@ class ManualOperationCarbonTests(TestCase):
         establishment = Establishment.objects.create(name="MF1", company=company, state="CA")
         self.parcel = Parcel.objects.create(name="M-parcel", establishment=establishment, area=10.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Manual Production",
             start_date=timezone.now(),
             product=self.product,
@@ -128,7 +128,7 @@ class GeneralEventNoCarbonTests(TestCase):
         establishment = Establishment.objects.create(name="GF1", company=company, state="CA")
         parcel = Parcel.objects.create(name="G-parcel", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="General Production",
             start_date=timezone.now(),
             product=product,
@@ -205,7 +205,7 @@ class SelfAssessedEfficiencyTests(TestCase):
         establishment = Establishment.objects.create(name="EF1", company=company, state="CA")
         parcel = Parcel.objects.create(name="E-parcel", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Eff Production",
             start_date=timezone.now(),
             product=product,

@@ -30,7 +30,7 @@ from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.parcel_land_history import coverage, season_evidence_lines
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, SoilManagementEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production, SoilManagementEvent
 from product.models import Parcel, Product
 from product.services.parcel_application_status import parcel_application_status
 from product.services.transition_status_service import (
@@ -58,7 +58,7 @@ class _Parcel(TestCase):
         self.product = Product.objects.create(name="Apples")
 
     def _season(self, start, end, name="Season"):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             parcel=self.parcel,
             product=self.product,
@@ -255,7 +255,7 @@ class ReviewOfBack83Tests(_Parcel):
         self.assertEqual(self._parcel_text().count("Feather meal"), 1)
 
     def test_an_input_with_no_land_history_line_still_prints(self):
-        season = History.objects.create(name="Undated season", parcel=self.parcel, product=self.product)
+        season = Production.objects.create(name="Undated season", parcel=self.parcel, product=self.product)
         self._soil(season, self.today - timedelta(days=40), "not_organic", product="Synthetic urea")
         text = self._parcel_text()
         self.assertIn("Dated input records in years with no land-history line above", text)

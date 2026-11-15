@@ -22,7 +22,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -35,7 +35,7 @@ class SummaryModeReachesPacketTests(TestCase):
         est = Establishment.objects.create(name="S1", company=company, state="California")
         parcel = Parcel.objects.create(name="Block 1", establishment=est, area=120)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Summary Production",
             start_date=timezone.now(),
             product=product,

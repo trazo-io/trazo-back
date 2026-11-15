@@ -30,8 +30,8 @@ from history.models import (
     BusinessEvent,
     ChemicalEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -114,7 +114,7 @@ class PublicPayloadFixtureMixin:
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         self.parcel = Parcel.objects.create(name="Schema Block", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Blueberries")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Schema Season",
             start_date=timezone.now() - timedelta(days=90),
             product=self.product,

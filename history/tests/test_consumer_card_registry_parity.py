@@ -31,8 +31,8 @@ from history.models import (
     BusinessEvent,
     ChemicalEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -115,7 +115,7 @@ class ConsumerCardRegistryParityTests(TestCase):
         company = Company.objects.create(name="Parity Farm")
         establishment = Establishment.objects.create(name="P1", company=company, state="OR")
         parcel = Parcel.objects.create(name="PP1", establishment=establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Parity Production",
             start_date=timezone.now() - timedelta(days=30),
             product=Product.objects.create(name="Blueberries"),

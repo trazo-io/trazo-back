@@ -26,7 +26,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History, HistoryScan, ProductionEvent
+from history.models import GeneralEvent, HistoryScan, Production, ProductionEvent
 from product.models import Parcel
 
 URL = "/api/consumer/dashboard/impact_dashboard/"
@@ -41,7 +41,7 @@ def _parcel(name):
 
 
 def _production(parcel, name):
-    return History.objects.create(name=name, parcel=parcel, start_date=timezone.now())
+    return Production.objects.create(name=name, parcel=parcel, start_date=timezone.now())
 
 
 def _get(user):

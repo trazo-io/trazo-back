@@ -6,7 +6,7 @@ from django.db import transaction
 
 from carbon.models import CropType, EventTemplate, ProductionTemplate
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from users.models import User
 
@@ -191,7 +191,7 @@ class Command(BaseCommand):
                         )
 
                         # Create production history
-                        production = History.objects.create(
+                        production = Production.objects.create(
                             user=user,
                             parcel=parcel,
                             crop_type=crop,

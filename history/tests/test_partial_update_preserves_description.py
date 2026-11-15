@@ -34,7 +34,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.serializers import (
     UpdateBusinessEventSerializer,
     UpdateEquipmentEventSerializer,
@@ -71,7 +71,7 @@ class PartialUpdatePreservesDescriptionTests(TestCase):
         establishment = Establishment.objects.create(name="DC1", company=company)
         parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=10)
         product = Product.objects.create(name="Walnuts")
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Desc Production",
             start_date=timezone.now(),
             product=product,

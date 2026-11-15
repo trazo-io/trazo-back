@@ -36,7 +36,7 @@ from rest_framework.test import APIClient
 from company.models import Company, Establishment
 from history.amendments import AmendmentError, amendable_fields, apply_amendment
 from history.constants import CHEMICAL_EVENT_TYPE
-from history.models import ChemicalEvent, EventAmendment, History
+from history.models import ChemicalEvent, EventAmendment, Production
 from history.serializers import ChemicalEventSerializer, PublicHistorySerializer, UpdateChemicalEventSerializer
 from history.services import multi_target
 from history.services.application_conditions import (
@@ -100,7 +100,7 @@ class _Orchard(TestCase):
             name="Fictional Bench", company=self.company, address="1 Orchard Rd", city="Wenatchee", state="WA"
         )
         self.parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Honeycrisp 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Apples"),
@@ -422,7 +422,7 @@ class MultiParcelApiTests(_Orchard):
         self.parcel.current_history = self.history
         self.parcel.save(update_fields=["current_history"])
         south = Parcel.objects.create(name="South Block", establishment=self.est, area=6.0)
-        south_season = History.objects.create(
+        south_season = Production.objects.create(
             name="Gala 2026", parcel=south, operator=self.user, start_date=datetime(2026, 3, 1, tzinfo=dt_tz.utc)
         )
         south.current_history = south_season

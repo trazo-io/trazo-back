@@ -24,7 +24,7 @@ from django.utils import timezone
 from certifications.models import OrganicSystemPlan
 from common.models import Gallery, GalleryImage
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService, _photo_count, album_images, related_events
 from history.services.operation_audit_export_service import OperationAuditExportService
 from product.models import Parcel, Product
@@ -46,7 +46,7 @@ class _Base(TestCase):
         self.establishment = Establishment.objects.create(name="Budget Ranch", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="Block A", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Almonds")
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Almonds",
             start_date=timezone.now(),
             product=self.product,
@@ -171,7 +171,7 @@ class RelatedEventsTests(_Base):
 
     def test_falls_back_to_a_query_when_not_prefetched(self):
         self._events(2)
-        plain = History.objects.get(pk=self.production.pk)
+        plain = Production.objects.get(pk=self.production.pk)
         rows = related_events(plain, "history_chemicalevent_events", type=ChemicalEvent.PESTICIDE)
         self.assertEqual(len(rows), 2)
 

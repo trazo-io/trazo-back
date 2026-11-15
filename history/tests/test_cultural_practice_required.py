@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent
+from history.models import PestManagementEvent, Production
 from history.serializers import UpdatePestManagementEventSerializer
 from product.models import Parcel, Product
 
@@ -45,7 +45,7 @@ class CulturalPracticeRequiredTests(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,
