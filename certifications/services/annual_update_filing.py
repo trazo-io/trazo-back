@@ -64,6 +64,48 @@ class FilingStateError(Exception):
 #: and the `sections` beside it to name each section in the reader's language.
 ATTESTED_UNCHANGED_BUT_DIFFERS = "attested_unchanged_but_differs"
 
+#: The refusal code on a signing refused by `_refuse_unstated_basis`.
+PRIOR_PLAN_BASIS_REQUIRED = "prior_plan_basis_required"
+
+
+def is_first_version(osp) -> bool:
+    """`osp` is the operation's first plan version in Trazo: no version came before it, so no filing
+    produced it (a fork always sets `previous_version`)."""
+    return osp is not None and osp.previous_version_id is None
+
+
+def basis_question_applies(osp) -> bool:
+    """Whether a filing continuing `osp` must say what the certifier holds (`prior_plan_basis`).
+
+    Only for a first version that has left draft. A draft was never submitted, so the certifier
+    cannot hold it and the answer is `agent_file` without asking (the serializer sets it). A later
+    version came from an earlier one in Trazo, so the comparison between versions stands.
+    """
+    return is_first_version(osp) and osp.status != "draft"
+
+
+def release_server_answered_basis(osp) -> int:
+    """`osp`, a first plan version, has just left draft: forget the answer the server gave for it.
+
+    While a first version is a draft the serializer answers `agent_file` (the certifier cannot hold a
+    plan nobody sent). Once it is submitted the certifier may receive it from Trazo, so that answer no
+    longer goes without saying, and an unsigned filing continuing it is asked again at signing (review
+    of back #431). Signed and filed revisions keep theirs: it was true when they were signed.
+    Returns the number of filings changed.
+    """
+    from certifications.models import OSPAnnualUpdate
+
+    if not is_first_version(osp):
+        return 0
+    return OSPAnnualUpdate.objects.filter(
+        prior_osp=osp,
+        signed_at__isnull=True,
+        submitted_at__isnull=True,
+        withdrawn_at__isnull=True,
+        prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_AGENT_FILE,
+    ).update(prior_plan_basis="")
+
+
 #: How the English sentence names each kind of difference (`plan_version_changes.DIFFERS_*`).
 _DIFFERS_WORDS = {
     "answers": "answers",
@@ -157,6 +199,24 @@ def _refuse_attestation_that_differs(filing):
     )
 
 
+def _refuse_unstated_basis(filing):
+    """Raise when `filing` continues a first plan version and does not say what the certifier holds.
+
+    Asked at signing, not at saving: a draft may be saved half done, but a signed filing names the
+    plan its changes are measured against, and on a first version only the operation knows whether
+    that is this version or the plan it filed before Trazo (overall review 2026-11, OV-PK-C01).
+    """
+    if filing.prior_plan_basis or not basis_question_applies(filing.prior_osp):
+        return
+    version = filing.prior_osp.version_number
+    raise FilingStateError(
+        f"Not signed. Plan v{version} is the first plan version in Trazo. Say whether your certifier received "
+        "this version from Trazo or holds the plan you filed with it before Trazo, then sign.",
+        status_code=400,
+        extra={"code": PRIOR_PLAN_BASIS_REQUIRED, "action": "sign", "prior_osp_version": version},
+    )
+
+
 def _signer_name(user) -> str:
     name = (user.get_full_name() or "").strip() if hasattr(user, "get_full_name") else ""
     return name or (getattr(user, "email", "") or "")
@@ -192,9 +252,10 @@ def sign_filing(filing, user, signer_title: str = "", *, compare_plan_versions: 
     """Sign `filing` as `user`.
 
     `compare_plan_versions=False` is for one caller only: `seed_calapooia_bend`, which replays
-    revisions filed on 2026-10-01 and 2026-10-02, before signing compared the plan versions, and
-    restores their committed frozen bytes. Those bytes are records and print the attestation as it
-    was signed. The viewset never passes it, and no request field reaches it.
+    revisions filed on 2026-10-01 and 2026-10-02, before signing compared the plan versions or asked
+    what the certifier holds (`prior_plan_basis`, 2026-11-14), and restores their committed frozen
+    bytes. Those bytes are records and print the attestation as it was signed. The viewset never
+    passes it, and no request field reaches it.
     """
     from certifications.models import OSPAnnualUpdate
     from subscriptions.pilot_operator import refuse_setup_operator
@@ -219,6 +280,7 @@ def sign_filing(filing, user, signer_title: str = "", *, compare_plan_versions: 
     if filing.withdrawn_at is not None:
         raise FilingStateError("A withdrawn revision cannot be signed.")
     if compare_plan_versions:
+        _refuse_unstated_basis(filing)
         _refuse_attestation_that_differs(filing)
     filing.signed_by = user
     filing.signer_name = default_signer_name(filing, user)[:255]
@@ -398,6 +460,7 @@ def correct_filing(filing, user):
         agent_requested_info_none=filing.agent_requested_info_none,
         sales_period_start=filing.sales_period_start,
         sales_period_end=filing.sales_period_end,
+        prior_plan_basis=filing.prior_plan_basis,
         created_by=user if getattr(user, "is_authenticated", False) else None,
     )
     # The evidence travels with the statement it supports; the operator edits the list on the

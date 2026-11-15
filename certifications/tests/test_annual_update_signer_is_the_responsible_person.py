@@ -46,7 +46,12 @@ class AnnualUpdateSignerTests(APITestCase):
     def _draft(self, year=2026):
         res = self.client.post(
             self._base(),
-            {"prior_osp": self.v1.pk, "reporting_year": year, "changes_summary": "Hedgerow planted."},
+            {
+                "prior_osp": self.v1.pk,
+                "reporting_year": year,
+                "changes_summary": "Hedgerow planted.",
+                "prior_plan_basis": OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+            },
             format="json",
         )
         self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:300])

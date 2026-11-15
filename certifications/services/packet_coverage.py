@@ -740,7 +740,9 @@ class ChangedSections:
 
     agent_name: str
     #: "compared", "no_new_version" (the update reaffirmed the plan), "newer_version" (this packet
-    #: is built from the prior plan while the update moves to a later one) or "no_filing".
+    #: is built from the prior plan while the update moves to a later one), "first_version" (the
+    #: update continues the first plan version in Trazo and the agent holds a plan filed before
+    #: Trazo) or "no_filing".
     state: str
     prior_version: int | None = None
     new_version: int | None = None
@@ -780,6 +782,15 @@ def changed_sections(osp) -> ChangedSections | None:
     if filing is None:
         return ChangedSections(agent_name, "no_filing")
     prior, new = filing.prior_osp, filing.new_osp
+    if filing.holds_no_agent_copy:
+        # The agent holds a plan filed before Trazo, so a comparison between Trazo versions is not a
+        # list of what changed against it (overall review 2026-11, OV-PK-O02).
+        return ChangedSections(
+            agent_name,
+            "first_version",
+            prior_version=prior.version_number,
+            new_version=new.version_number if new is not None else None,
+        )
     if new is None:
         return ChangedSections(agent_name, "no_new_version", prior_version=prior.version_number)
     if new.pk != osp.pk:

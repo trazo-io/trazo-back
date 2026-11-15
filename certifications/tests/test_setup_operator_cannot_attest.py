@@ -54,7 +54,10 @@ class AnnualUpdateSignTests(_PilotFarm):
             establishment=self.est, version_number=1, status="active", created_by=self.operator
         )
         self.filing = OSPAnnualUpdate.objects.create(
-            prior_osp=self.v1, reporting_year=2027, changes_summary="Hedgerow planted."
+            prior_osp=self.v1,
+            reporting_year=2027,
+            changes_summary="Hedgerow planted.",
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
         )
 
     def _sign_url(self):
