@@ -71,6 +71,20 @@ class _FirstYear(APITestCase):
             submitted_at=None if status_ == "draft" else datetime(2026, 1, 10, tzinfo=dt_tz.utc),
         )
 
+    def _certified(self):
+        """Something Trazo holds that says the operation is certified (`never_certified` is False)."""
+        from datetime import date
+
+        from certifications.models import Certification
+
+        Certification.objects.create(
+            establishment=self.est,
+            certification_type="usda_organic",
+            certifier_name=OTCO,
+            effective_date=date(2022, 1, 1),
+            expiry_date=date(2030, 12, 31),
+        )
+
     def _base(self):
         return f"/api/companies/{self.company.pk}/establishments/{self.est.pk}/osp-annual-updates/"
 
@@ -138,12 +152,24 @@ class AskedOfAFirstVersionTests(_FirstYear):
 
 class AnsweredByTheServerTests(_FirstYear):
     def test_a_draft_first_version_was_never_sent_so_the_certifier_holds_the_plan_filed_before_trazo(self):
+        self._certified()
         v1 = self._plan(status_="draft")
         res = self._create(v1)
         self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
         self.assertEqual(res.json()["prior_plan_basis"], AGENT_FILE)
         self.assertFalse(res.json()["basis_question_applies"])
         self.assertEqual(self._sign(OSPAnnualUpdate.objects.get(pk=res.json()["id"])).status_code, status.HTTP_200_OK)
+
+    def test_a_first_time_applicants_draft_gets_no_answer_and_no_claim(self):
+        """Review of app #389: an applicant's certifier holds no plan, so none is described."""
+        v1 = self._plan(status_="draft")
+        res = self._create(v1)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content[:500])
+        self.assertEqual(res.json()["prior_plan_basis"], "")
+        self.assertFalse(res.json()["basis_question_applies"])
+        for name, text in PrintedTests._packet(self, v1).items():
+            self.assertNotIn("first plan version in Trazo", text, name)
+            self.assertNotIn("holds the plan the operation filed with it before Trazo", text, name)
 
     def test_a_draft_first_version_cannot_be_called_the_plan_the_certifier_received(self):
         res = self._create(self._plan(status_="draft"), prior_plan_basis=TRAZO_VERSION)
@@ -290,6 +316,7 @@ class LeavingDraftTests(_FirstYear):
     def _draft_v1(self):
         from certifications.models import OSP_SECTION_KEYS
 
+        self._certified()
         v1 = self._plan(status_="draft")
         v1.sections = {key: {"narrative_manual": f"Section {key}: {self._NARRATIVE}"} for key in OSP_SECTION_KEYS}
         v1.save(update_fields=["sections"])
