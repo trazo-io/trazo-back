@@ -81,6 +81,12 @@ class SalesDisclosurePrecedenceTests(TestCase):
         self.assertEqual(row["detail"], "No sale recorded for this lot")
         self.assertNotIn("Add buyer", row["detail"])
 
+    def test_a_lot_flagged_organic_on_invoice_with_no_buyer_still_asks_for_the_buyer(self):
+        """Local review of back #436: the flag says an invoice exists, so it is an incomplete sale, not no sale."""
+        self.production.organic_on_invoice = True
+        self.production.save(update_fields=["organic_on_invoice"])
+        self.assertIn("Add buyer", self._snapshot()["detail"])
+
     def test_a_sale_row_with_no_buyer_still_asks_for_the_buyer(self):
         SalesRecord.objects.create(
             production=self.production,

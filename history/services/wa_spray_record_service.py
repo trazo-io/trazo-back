@@ -176,7 +176,7 @@ def _license_plate(event):
     if plate:
         return plate, VALUE
     if application_method_code(event).lower() == "hand_dispenser":
-        return "None: hand-placed dispensers, no apparatus", VALUE
+        return "None: hand-placed dispensers (the method recorded), no application apparatus", VALUE
     return NOT_RECORDED, BLANK
 
 

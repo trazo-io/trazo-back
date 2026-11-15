@@ -430,7 +430,8 @@ class BlankItemTests(_WAFarm):
         record = self._pass()
         self.assertNotIn("k", record.blank_items())
         self.assertEqual(
-            self.row("Apparatus license plate"), ("k", "None: hand-placed dispensers, no apparatus", "value")
+            self.row("Apparatus license plate"),
+            ("k", "None: hand-placed dispensers (the method recorded), no application apparatus", "value"),
         )
 
     def test_a_stored_plate_on_a_dispenser_record_still_prints_as_recorded(self):

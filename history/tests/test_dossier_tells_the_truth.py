@@ -299,6 +299,30 @@ class DossierTellsTheTruthTests(TestCase):
         self.assertNotIn("Composting must document peak temperature", text)
         self.assertIn("supplier's process documentation (C:N, temperatures, turnings) not on file", text)
 
+    def test_a_compost_bought_by_quantity_alone_is_read_as_bought_everywhere(self):
+        """Local review of back #436: page 1 and the soil table read one record two ways when only a
+        purchase quantity said it was bought."""
+        from history.services.audit_export_service import _compost_cn_is_initial, _compost_is_purchased
+
+        history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
+        compost = self._compost(
+            history, type="CO", amendment_quantity_purchased=240, amendment_quantity_purchased_unit="tons"
+        )
+        self.assertTrue(_compost_is_purchased(compost))
+        self.assertFalse(_compost_cn_is_initial(compost))
+
+    def test_a_bought_compost_with_temperatures_but_no_c_n_gets_the_soil_note_too(self):
+        history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
+        self._compost(
+            history,
+            amendment_product_name="Compost from the county yard",
+            compost_peak_temp_f=150,
+            compost_duration_days_at_temp=15,
+            compost_method="windrow",
+        )
+        self.assertIn("supplier's process documentation", self._snapshot_detail(history, "Compost"))
+        self.assertIn("Purchased compost: supplier's process documentation", self._full_text(history))
+
     def test_an_on_farm_compost_still_asks_the_operator_for_the_figures(self):
         history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
         self._compost(history, type="CO")

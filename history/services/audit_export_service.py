@@ -772,11 +772,8 @@ def _compost_cn_is_initial(ev):
 
     Trazo stores one C:N field, labelled initial. For a purchased compost the operator may have
     copied the finished-product analysis into it, and the record does not say which, so only an
-    on-farm pile (type CO, no product or supplier named) is read as an initial C:N."""
-    purchased = (getattr(ev, "amendment_product_name", None) or "").strip() or (
-        getattr(ev, "amendment_supplier_name", None) or ""
-    ).strip()
-    return ev.type == "CO" and not purchased
+    on-farm pile (type CO, not bought: `_compost_is_purchased`) is read as an initial C:N."""
+    return ev.type == "CO" and not _compost_is_purchased(ev)
 
 
 def _compost_is_purchased(ev):
@@ -4506,32 +4503,28 @@ class AuditExportService:
                 missing_parts.append(f"{compost_missing_method} missing method")
             if compost_missing_temp_or_duration > 0:
                 missing_parts.append(f"{compost_missing_temp_or_duration} missing temp/duration")
-            if missing_parts:
-                missing_text = f"{' · '.join(missing_parts)}, add before inspection."
-                if compost_supplier_docs_missing > 0:
-                    missing_text += (
-                        f" {compost_supplier_docs_missing} purchased compost: {_COMPOST_SUPPLIER_DOCS_NOTE}."
-                    )
-            else:
-                missing_text = f"{compost_supplier_docs_missing} purchased compost: {_COMPOST_SUPPLIER_DOCS_NOTE}."
-            compost_row = (
-                "Compost (§ 205.203(c)(2))",
-                "REVIEW",
-                f"{missing_text} Pathway: {_compost_pathway_summary()}",
-            )
-            if not missing_parts:
-                compost_row += (said("compost.supplier_documents_missing", count=compost_supplier_docs_missing),)
-            else:
-                compost_row += (
-                    said(
-                        "compost.fields_missing",
-                        purchased=compost_supplier_docs_missing,
-                        cn=compost_missing_cn,
-                        method=compost_missing_method,
-                        temperature=compost_missing_temp_or_duration,
-                    ),
+            sentences = [f"{' · '.join(missing_parts)}, add before inspection."] if missing_parts else []
+            if compost_supplier_docs_missing > 0:
+                sentences.append(f"{compost_supplier_docs_missing} purchased compost: {_COMPOST_SUPPLIER_DOCS_NOTE}.")
+            compost_said = (
+                said(
+                    "compost.fields_missing",
+                    purchased=compost_supplier_docs_missing,
+                    cn=compost_missing_cn,
+                    method=compost_missing_method,
+                    temperature=compost_missing_temp_or_duration,
                 )
-            snapshot_rows.append(compost_row)
+                if missing_parts
+                else said("compost.supplier_documents_missing", count=compost_supplier_docs_missing)
+            )
+            snapshot_rows.append(
+                (
+                    "Compost (§ 205.203(c)(2))",
+                    "REVIEW",
+                    f"{' '.join(sentences)} Pathway: {_compost_pathway_summary()}",
+                    compost_said,
+                )
+            )
         elif compost_compliant == len(compost_events):
             snapshot_rows.append(
                 (
@@ -4919,7 +4912,14 @@ class AuditExportService:
                     f"organic on invoice = {'Yes' if sales_disclosure.organic_on_invoice else 'No'}",
                 )
             )
-        elif sales_disclosure.source == "legacy" and not sales_disclosure.sale_date and not sales_disclosure.quantity:
+        elif (
+            sales_disclosure.source == "legacy"
+            and not sales_disclosure.sale_date
+            and not sales_disclosure.quantity
+            and not sales_disclosure.organic_on_invoice
+            and not sales_disclosure.label_category
+            and not sales_disclosure.label_categories
+        ):
             # No SalesRecord row and nothing on the legacy fields: no sale was recorded for this
             # lot (bins that went to the packer, for one). Asking for a buyer on a sale that
             # does not exist reads as a gap in a record the operation has no reason to keep.
@@ -9012,17 +9012,18 @@ class AuditExportService:
                 elements.append(lt)
 
             # Warning if any compost event is missing temperature data
-            missing_temp = any(
-                (ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None)
-                and not _compost_is_purchased(ev)
-                for ev in compost_events
-            )
-            purchased_missing_temp = any(
-                (ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None)
-                and _compost_is_purchased(ev)
-                for ev in compost_events
-            )
-            if purchased_missing_temp:
+            missing_temp = False
+            purchased_missing_figures = False
+            for ev in compost_events:
+                no_temperature = ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None
+                if _compost_is_purchased(ev):
+                    # The page-1 row counts a bought compost missing any of these, so this note does too.
+                    purchased_missing_figures |= (
+                        no_temperature or ev.compost_initial_cn_ratio is None or not ev.compost_method
+                    )
+                else:
+                    missing_temp |= no_temperature
+            if purchased_missing_figures:
                 elements.append(
                     Paragraph(
                         "<b>[NOTE] NOP 7 CFR 205.203(c)(2):</b> Purchased compost: "
