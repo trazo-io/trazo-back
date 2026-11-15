@@ -428,6 +428,38 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             )
         )
 
+    # ---- the signer and the contacts must agree ---------------------------------------------
+    # The farm form's "Responsible person" is the name the cover prints and the attestation is
+    # signed under. A contact marked legally responsible is a second place the grower named who
+    # answers for the operation. When they name different people a reviewer reads two answers to
+    # § 205.401(b); which one signs is the operation's call, so the review names both and never
+    # picks one (orchard specimen read, 2026-11-15).
+    responsible = (getattr(establishment, "contact_person", None) or "").strip()
+    if responsible:
+        from certifications.models import OperationContact
+
+        legally_responsible = [
+            name.strip()
+            for name in OperationContact.objects.filter(
+                establishment=establishment, is_legally_responsible=True
+            ).values_list("name", flat=True)
+            if name and name.strip()
+        ]
+        if legally_responsible and responsible.casefold() not in {n.casefold() for n in legally_responsible}:
+            findings.append(
+                ReviewFinding(
+                    code="responsible_person_not_legally_responsible",
+                    message="The farm's responsible person, who signs the packet, is not a contact marked "
+                    "legally responsible; name the person who signs in both places",
+                    count=1,
+                    details=[
+                        f"Responsible person on the farm profile, printed as the signer: {responsible}",
+                        f"Marked legally responsible in the operation's contacts: {', '.join(legally_responsible)}",
+                    ],
+                    module_key="certification_contract",
+                )
+            )
+
     # ---- modules not revisited in a renewal cycle -----------------------------------------
     stale = []
     for key, newest in sorted(times.items(), key=lambda kv: kv[1]):
