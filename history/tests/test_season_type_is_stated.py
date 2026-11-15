@@ -23,7 +23,7 @@ class StartProductionStoresWhatTheGrowerStated(SeasonPlanFixture):
             "production_method": "organic",
             **extra,
         }
-        return self.client.post(reverse("histories-start-production"), body, format="json")
+        return self.client.post(reverse("productions-start-production"), body, format="json")
 
     def setUp(self):
         super().setUp()
@@ -60,7 +60,7 @@ class NestedCreateRefusesAnUnknownCode(SeasonPlanFixture):
         super().setUp()
         self.client.force_authenticate(user=self.user)
         self.url = reverse(
-            "parcel-histories-list",
+            "parcel-productions-list",
             kwargs={
                 "company_pk": self.company.id,
                 "establishment_pk": self.establishment.id,

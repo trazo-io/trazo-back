@@ -22,7 +22,6 @@ from certifications.views import (
 from documents.views import GeneratedDocumentViewSet
 from history.views import EventViewSet, HistoryScanViewSet, HistoryViewSet, RecordsExportViewSet
 from product.views import ParcelPlannedCropViewSet, ParcelViewSet, ProductsViewSet
-from reviews.views import ReviewsViewSet
 
 from .views import ApplicatorViewSet, CompanyViewSet, EstablishmentViewSet
 
@@ -126,12 +125,6 @@ establishment_router.register(r"products", ProductsViewSet, basename="establishm
 parcel_router = routers.NestedDefaultRouter(establishment_router, r"parcels", lookup="parcel")
 
 parcel_router.register(
-    r"histories",
-    HistoryViewSet,
-    basename="parcel-histories",
-)
-# Same viewset under the model's name; `histories` goes once the app has moved (expand/contract).
-parcel_router.register(
     r"productions",
     HistoryViewSet,
     basename="parcel-productions",
@@ -140,16 +133,11 @@ parcel_router.register(
 # OTCO C2 2.1 10).
 parcel_router.register(r"planned-crops", ParcelPlannedCropViewSet, basename="parcel-planned-crops")
 
-# History routes
-history_router = routers.NestedDefaultRouter(parcel_router, r"histories", lookup="history")
-history_router.register(r"reviews", ReviewsViewSet, basename="history-reviews")
-
 
 urlpatterns = [
     re_path(r"^", include(router.urls)),
     re_path(r"^", include(company_router.urls)),
     re_path(r"^", include(establishment_router.urls)),
     re_path(r"^", include(parcel_router.urls)),
-    re_path(r"^", include(history_router.urls)),
     path("", include("history.urls")),
 ]

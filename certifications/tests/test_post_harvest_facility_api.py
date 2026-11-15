@@ -145,7 +145,7 @@ class ProductionHandlerLinkTests(TestCase):
         )
 
     def _url(self):
-        return f"/api/histories/{self.production.id}/"
+        return f"/api/productions/{self.production.id}/"
 
     def test_production_can_be_linked_to_its_own_farms_handler(self):
         self.client.force_authenticate(user=self.user)

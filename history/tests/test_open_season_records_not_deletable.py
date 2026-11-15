@@ -46,7 +46,7 @@ class _Tree(TestCase):
             )
 
     def _delete_season(self, season=None):
-        return self.client.delete(reverse("histories-detail", args=[(season or self.season).pk]))
+        return self.client.delete(reverse("productions-detail", args=[(season or self.season).pk]))
 
     def _delete_parcel(self):
         url = reverse(

@@ -107,7 +107,7 @@ class BuyerReviewLinkTests(TestCase):
     # -- the public endpoints with review_token ----------------------------
 
     def _public_url(self, token=None):
-        url = f"/api/histories/{self.history.public_id}/public_history/"
+        url = f"/api/productions/{self.history.public_id}/public_history/"
         return f"{url}?review_token={token}" if token else url
 
     def test_unpublished_production_is_404_without_a_token(self):

@@ -388,7 +388,7 @@ class ProductionQuotaAsksTheRightCompany(TestCase):
         # WSGIRequest, which has no `.data`. The permission class reads `request.data`, so an
         # unwrapped request tests nothing but its own AttributeError.
         request = Request(
-            APIRequestFactory().post("/api/histories/start-production/", {"parcel_id": parcel_id}, format="json"),
+            APIRequestFactory().post("/api/productions/start-production/", {"parcel_id": parcel_id}, format="json"),
             parsers=[JSONParser()],
         )
         request.user = self.user

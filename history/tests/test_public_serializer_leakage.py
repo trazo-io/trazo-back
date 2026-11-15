@@ -1071,7 +1071,7 @@ class PublicSerializerOperatorLeakageTests(TestCase):
         self.user.companies.add(self.company)
         client = APIClient()
         client.force_authenticate(self.user)
-        resp = client.get(f"/api/histories/{self.history.public_id}/public_history/")
+        resp = client.get(f"/api/productions/{self.history.public_id}/public_history/")
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         operator = resp.json().get("operator")
         self.assertIsNotNone(operator, "owner (producer dashboard) lost its operator block")

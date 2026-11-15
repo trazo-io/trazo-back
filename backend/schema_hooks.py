@@ -17,7 +17,6 @@ are cleaned up.
 # are fixed.
 INCLUDED_PATH_PREFIXES = (
     # History app: all event CRUD endpoints
-    "/api/histories/",
     "/api/companies/",  # needed for history nested routes
     "/api/parcels/",  # needed for parcel-level event access
     "/api/productions/",  # needed for production-level event access

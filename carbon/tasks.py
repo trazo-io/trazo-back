@@ -265,7 +265,7 @@ def submit_production_to_blockchain(self, production_id):
     """
     Immediately submit a single finalized production to blockchain.
 
-    Triggered by finish_history() when the company has an active blockchain
+    Triggered by finish_production() when the company has an active blockchain
     subscription. This eliminates the gap between production finalization
     and consumer-visible blockchain verification.
 

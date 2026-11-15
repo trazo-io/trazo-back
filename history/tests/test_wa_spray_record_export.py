@@ -39,8 +39,8 @@ from subscriptions.testing import grant_compliance_exports
 from users.models import User, WorksIn
 
 WHEN = datetime(2026, 6, 15, 7, 0, tzinfo=dt_tz.utc)
-URL = "/api/histories/wa-spray-records-export/"
-PUR_URL = "/api/histories/pur-export/"
+URL = "/api/productions/wa-spray-records-export/"
+PUR_URL = "/api/productions/pur-export/"
 
 BOUNDARY = [
     {"lat": 46.6010, "lng": -120.5210},

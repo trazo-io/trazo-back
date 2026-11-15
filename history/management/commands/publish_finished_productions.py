@@ -119,7 +119,7 @@ class Command(BaseCommand):
             if history.qr_code:
                 self.stdout.write(f"      QR Code: ✓ Available")
                 self.stdout.write(
-                    f"      Public URL: http://app.localhost:3000/api/histories/{history.id}/public_history/"
+                    f"      Public URL: http://app.localhost:3000/api/productions/{history.id}/public_history/"
                 )
             else:
                 self.stdout.write(f"      QR Code: ✗ Not generated")

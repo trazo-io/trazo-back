@@ -54,10 +54,8 @@ EXEMPT_ROUTES = {
     # The farm's own data, never withheld from the farm. A QR code is printed on cases and
     # already in the world; the consumer page it points at is deliberately unlimited,
     # not paywalled, and it is the surface that makes a grower want the paid tier at all.
-    "histories-download-qr-code": "consumer QR code — the farm's own, and the demonstration that sells the tier",
-    "parcel-histories-download-qr-code": "same route under the nested router",
-    "productions-download-qr-code": "same route under the model's name (expand step; histories leaves)",
-    "parcel-productions-download-qr-code": "same route under the nested router and the model's name",
+    "productions-download-qr-code": "consumer QR code: the farm's own, and the demonstration that sells the tier",
+    "parcel-productions-download-qr-code": "same route under the nested router",
     # Retrieval of documents ALREADY filed. Every generator that files one is gated, so nothing
     # new lands here for a Starter farm — and refusing a farm its own stored file would be
     # withholding data rather than withholding an artifact.
@@ -229,11 +227,6 @@ class ComplianceExportDoorInventoryTests(SimpleTestCase):
         for expected in (
             "company-establishments-operation-audit-export",
             "company-establishments-export-jobs",
-            "histories-pur-export",
-            "histories-wa-spray-records-export",
-            "histories-audit-export",
-            "audit-export-by-uuid",
-            # The same doors under the model's name: a twin route must carry the gate too.
             "productions-pur-export",
             "productions-wa-spray-records-export",
             "productions-audit-export",

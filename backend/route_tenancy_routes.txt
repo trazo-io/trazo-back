@@ -134,50 +134,6 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/osps\.(?P<format>[a-z0-9]+)/?$	certifications.views.OrganicSystemPlanViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/(?P<pk>[^/.]+)/$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/establishment_reviews_paginated/$	reviews.views.ReviewsViewSet	IsAuthenticated	get=establishment_reviews_paginated
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews/establishment_reviews_paginated\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	get=establishment_reviews_paginated
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<history_pk>[^/.]+)/reviews\.(?P<format>[a-z0-9]+)/?$	reviews.views.ReviewsViewSet	IsAuthenticated	get=list,post=create
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/amend/$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/amend\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-export/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-trail/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/audit-trail\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/download_qr_code/$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/download_qr_code\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/lot-tag/$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/lot-tag\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/post_harvest_facility/$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/post_harvest_facility\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/public_history/$	history.views.HistoryViewSet	AllowAny	get=public_history
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/public_history\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	get=public_history
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan/$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)/$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)/season_plan\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/establishment_scans_paginated/$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/establishment_scans_paginated\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_reviews/$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_reviews\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_scans/$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/my_scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/pur-export/$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/pur-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/recent-inputs/$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/recent-inputs\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/seed-suppliers/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/seed-suppliers\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/start-production/$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/start-production\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/wa-spray-records-export/$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories/wa-spray-records-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops/$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops/(?P<pk>[^/.]+)/$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/planned-crops/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelPlannedCropViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
@@ -223,16 +179,10 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/application/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/application\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/current_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/current_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/current_production/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_production
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/current_production\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_production
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/finish_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/finish_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/finish_production/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_production
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/finish_production\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_production
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/location-disclosure/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/location-disclosure\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<pk>[^/.]+)/transition-status/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=transition_status
@@ -292,8 +242,6 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/export-jobs
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/export-jobs\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=export_jobs
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/get_charts_data/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=get_charts_data
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/get_charts_data\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=get_charts_data
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/histories/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=histories
-api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/histories\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=histories
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/last_reviews/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=last_reviews
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/last_reviews\.(?P<format>[a-z0-9]+)/?$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=last_reviews
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<pk>[^/.]+)/operation-audit-export/$	company.views.EstablishmentViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=operation_audit_export
@@ -353,44 +301,6 @@ api/^field-notes/(?P<public_id>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	fieldnotes.view
 api/^field-notes/channel/$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=channel
 api/^field-notes/channel\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=channel
 api/^field-notes\.(?P<format>[a-z0-9]+)/?$	fieldnotes.views.FieldNoteViewSet	IsAuthenticated,ReadOnlyForViewersGlobal	get=list
-api/^histories/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
-api/^histories/(?P<pk>[^/.]+)/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
-api/^histories/(?P<pk>[^/.]+)/amend/$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
-api/^histories/(?P<pk>[^/.]+)/amend\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=amend,post=amend
-api/^histories/(?P<pk>[^/.]+)/audit-export/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
-api/^histories/(?P<pk>[^/.]+)/audit-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_export
-api/^histories/(?P<pk>[^/.]+)/audit-trail/$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
-api/^histories/(?P<pk>[^/.]+)/audit-trail\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=audit_trail
-api/^histories/(?P<pk>[^/.]+)/download_qr_code/$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
-api/^histories/(?P<pk>[^/.]+)/download_qr_code\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=download_qr_code
-api/^histories/(?P<pk>[^/.]+)/lot-tag/$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
-api/^histories/(?P<pk>[^/.]+)/lot-tag\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=lot_tag
-api/^histories/(?P<pk>[^/.]+)/post_harvest_facility/$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
-api/^histories/(?P<pk>[^/.]+)/post_harvest_facility\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=post_harvest_facility_link
-api/^histories/(?P<pk>[^/.]+)/public_history/$	history.views.HistoryViewSet	AllowAny	get=public_history
-api/^histories/(?P<pk>[^/.]+)/public_history\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	AllowAny	get=public_history
-api/^histories/(?P<pk>[^/.]+)/season_plan/$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
-api/^histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)/$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
-api/^histories/(?P<pk>[^/.]+)/season_plan/(?P<item_id>[0-9]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	patch=season_plan_item
-api/^histories/(?P<pk>[^/.]+)/season_plan\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=season_plan
-api/^histories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
-api/^histories/establishment_scans_paginated/$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
-api/^histories/establishment_scans_paginated\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=establishment_scans_paginated
-api/^histories/my_reviews/$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
-api/^histories/my_reviews\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
-api/^histories/my_scans/$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
-api/^histories/my_scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
-api/^histories/pur-export/$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
-api/^histories/pur-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
-api/^histories/recent-inputs/$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
-api/^histories/recent-inputs\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
-api/^histories/seed-suppliers/$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
-api/^histories/seed-suppliers\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=seed_suppliers
-api/^histories/start-production/$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
-api/^histories/start-production\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated,HasProductionCreationPermission	post=start_production
-api/^histories/wa-spray-records-export/$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
-api/^histories/wa-spray-records-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=wa_spray_records_export
-api/^histories\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=list,post=create
 api/^parcel-crop-history/$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	get=list,post=create
 api/^parcel-crop-history/(?P<pk>[^/.]+)/$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^parcel-crop-history/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelCropHistoryViewSet	IsAuthenticated	delete=destroy,get=retrieve,patch=partial_update,put=update
@@ -399,16 +309,10 @@ api/^parcels/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers A
 api/^parcels/(?P<pk>[^/.]+)/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	delete=destroy,get=retrieve,patch=partial_update,put=update
 api/^parcels/(?P<pk>[^/.]+)/application/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
 api/^parcels/(?P<pk>[^/.]+)/application\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=application,put=application
-api/^parcels/(?P<pk>[^/.]+)/current_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
-api/^parcels/(?P<pk>[^/.]+)/current_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_history
 api/^parcels/(?P<pk>[^/.]+)/current_production/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_production
 api/^parcels/(?P<pk>[^/.]+)/current_production\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=current_production
-api/^parcels/(?P<pk>[^/.]+)/finish_history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
-api/^parcels/(?P<pk>[^/.]+)/finish_history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_history
 api/^parcels/(?P<pk>[^/.]+)/finish_production/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_production
 api/^parcels/(?P<pk>[^/.]+)/finish_production\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	post=finish_production
-api/^parcels/(?P<pk>[^/.]+)/history/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
-api/^parcels/(?P<pk>[^/.]+)/history\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=history
 api/^parcels/(?P<pk>[^/.]+)/location-disclosure/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
 api/^parcels/(?P<pk>[^/.]+)/location-disclosure\.(?P<format>[a-z0-9]+)/?$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=location_disclosure,patch=location_disclosure
 api/^parcels/(?P<pk>[^/.]+)/transition-status/$	product.views.ParcelViewSet	(IsSuperUser OR (ReadOnlyForViewers AND AuthPermission))	get=transition_status
@@ -635,7 +539,6 @@ api/get-presigned-read-url/	common.views.get_presigned_read_url	IsAuthenticated	
 api/get-presigned-read-urls-batch/	common.views.get_presigned_read_urls_batch	IsAuthenticated	-
 api/get-presigned-url/	common.views.get_presigned_url	IsAuthenticated	-
 api/health-check/	common.views.health_check	NON-DRF	-
-api/histories/<uuid:public_id>/audit-export/	history.views.audit_export_by_uuid	IsAuthenticated	-
 api/input-status-preview/	history.claim_preview_views.input_status_preview	IsAuthenticated	-
 api/invitation/<str:invitation_code>/	users.views_invitation.get_invitation_details	AllowAny	-
 api/invitation/<str:invitation_code>/accept/	users.views_invitation.accept_invitation	AllowAny	-

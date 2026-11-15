@@ -253,7 +253,7 @@ class LotTagTests(_Base):
 
     def test_owner_gets_tag_pdf_with_lot(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp["Content-Type"], "application/pdf")
         text = self._pdf_text(resp.content)
@@ -274,7 +274,7 @@ class LotTagTests(_Base):
             expiry_date=(timezone.now() + timedelta(days=200)).date(),
         )
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertIn("Certified organic by CCOF", self._pdf_text(resp.content))
 
         # Prohibited input on the lot -> organic line must disappear.
@@ -285,7 +285,7 @@ class LotTagTests(_Base):
             organic_approved="not_organic",
             date=timezone.now() - timedelta(days=30),
         )
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertNotIn("Certified organic", self._pdf_text(resp.content))
 
     def test_long_certifier_and_farm_names_print_in_full(self):
@@ -311,7 +311,7 @@ class LotTagTests(_Base):
             expiry_date=(timezone.now() + timedelta(days=200)).date(),
         )
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertEqual(resp.status_code, 200)
         # Collapse whitespace: the agent name legitimately wraps across two printed lines.
         text = re.sub(r"\s+", " ", self._pdf_text(resp.content))
@@ -333,7 +333,7 @@ class LotTagTests(_Base):
         self.history.save(update_fields=["lot_id"])
 
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
 
         self.assertEqual(resp.status_code, 400, "a tag with no lot ID must not be generated")
         self.assertEqual(resp.json().get("code"), "lot_id_required")
@@ -346,7 +346,7 @@ class LotTagTests(_Base):
         self.history.save(update_fields=["lot_id"])
 
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertNotEqual(resp.status_code, 200)
         if resp.status_code == 200:  # pragma: no cover - guard for a future regression
             self.assertNotIn("LOT —", self._pdf_text(resp.content))
@@ -374,7 +374,7 @@ class LotTagTests(_Base):
         )
 
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
 
         self.assertEqual(resp.status_code, 200, "the tag must still print — only the organic line is withheld")
         self.assertNotIn("Certified organic", self._pdf_text(resp.content))
@@ -388,7 +388,7 @@ class LotTagTests(_Base):
         # No certificate means § 205.307(a)(1) does not bind, so a tag with no organic line
         # is correct and must NOT nag. Over-warning trains growers to ignore warnings.
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertEqual(resp.status_code, 200)
         self.assertNotIn("Certified organic", self._pdf_text(resp.content))
         self.assertFalse(
@@ -397,7 +397,7 @@ class LotTagTests(_Base):
 
     def test_outsider_denied(self):
         self.client.force_authenticate(self.outsider)
-        resp = self.client.get(f"/api/histories/{self.history.public_id}/lot-tag/")
+        resp = self.client.get(f"/api/productions/{self.history.public_id}/lot-tag/")
         self.assertEqual(resp.status_code, 403)
 
 
@@ -421,7 +421,7 @@ class RecentInputsTests(_Base):
                 date=timezone.now() - timedelta(days=days_ago),
             )
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(f"/api/histories/recent-inputs/?establishment_id={self.establishment.id}")
+        resp = self.client.get(f"/api/productions/recent-inputs/?establishment_id={self.establishment.id}")
         self.assertEqual(resp.status_code, 200)
         products = resp.json()
         names = [p["commercial_name"] for p in products]
@@ -431,7 +431,7 @@ class RecentInputsTests(_Base):
 
     def test_outsider_denied(self):
         self.client.force_authenticate(self.outsider)
-        resp = self.client.get(f"/api/histories/recent-inputs/?establishment_id={self.establishment.id}")
+        resp = self.client.get(f"/api/productions/recent-inputs/?establishment_id={self.establishment.id}")
         self.assertEqual(resp.status_code, 403)
 
 

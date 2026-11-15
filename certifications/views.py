@@ -646,7 +646,7 @@ class SupplierViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     """The farm's seed and planting-stock suppliers and their organic certificates.
 
     Read and write are limited to company admins and farm managers, like
-    `histories/seed-suppliers/`: a supplier list is commercial relationship data, the same class of
+    `productions/seed-suppliers/`: a supplier list is commercial relationship data, the same class of
     counterparty name the consumer payload scrubs. A viewer reads none of it.
 
     A supplier that a record resolves to is archived, never deleted, so a finished season keeps

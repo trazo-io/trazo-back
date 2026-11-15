@@ -152,7 +152,7 @@ class ReadOnlyForViewersGlobal(permissions.BasePermission):
 
     Any authenticated user can read. Only users with CA/FM role in
     at least one company can write. Use this for standalone ViewSets
-    (e.g. /carbon/, /histories/) that don't inherit CompanyNestedViewSet.
+    (e.g. /carbon/, /productions/) that don't inherit CompanyNestedViewSet.
     """
 
     def has_permission(self, request, view):
@@ -191,7 +191,7 @@ def scope_to_caller_companies(queryset, user, company_path):
     """Tenancy floor: only rows that belong to one of the caller's companies.
 
     Every permission class above returns True when `view.company` is None, which is always
-    the case on a route without `company_pk` (the flat `/api/parcels/`, `/api/histories/`,
+    the case on a route without `company_pk` (the flat `/api/parcels/`, `/api/productions/`,
     `/api/scans/` routes, and `CompanyViewSet` itself). On those routes the permission layer
     only proves the caller is signed in, so the queryset has to do the tenancy check. Found
     2026-09-28: any signed-in account could read or edit other companies' seasons, parcels,

@@ -351,18 +351,8 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         status_obj = compute_transition_status(parcel)
         return Response(status_obj.to_dict())
 
-    # The same two actions under the model's name (History is Production since history 0264). Each
-    # delegates to its `*_history` twin; those go once the app has moved over (expand/contract).
     @action(detail=True, methods=["get"])
-    def current_production(self, request, *args, **kwargs):
-        return self.current_history(request, *args, **kwargs)
-
-    @action(detail=True, methods=["post"])
-    def finish_production(self, request, *args, **kwargs):
-        return self.finish_history(request, *args, **kwargs)
-
-    @action(detail=True, methods=["get"])
-    def current_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+    def current_production(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         """
         OPTIMIZED: Get current history with prefetched related data.
         Performance fix: Avoid N+1 queries by prefetching events, albums, and carbon entries.
@@ -447,61 +437,6 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         return Response(HistorySerializer(current_history, context={"request": request}).data)
 
-    @action(detail=True, methods=["get"])
-    def history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
-        """
-        OPTIMIZED: Get parcel history using the optimized serializer to prevent USDA API calls.
-        This endpoint was causing performance issues by using HistorySerializer which triggers
-        expensive carbon calculations and USDA API calls.
-        """
-        from history.serializers import OptimizedHistoryListSerializer
-
-        parcel = self.get_object()
-
-        # Use optimized queryset to prevent N+1 queries
-        histories = (
-            parcel.histories.select_related("product", "parcel", "crop_type")
-            .only(
-                "id",
-                "name",
-                "start_date",
-                "finish_date",
-                "published",
-                "earning",
-                "reputation",
-                "qr_code",
-                "is_outdoor",
-                "age_of_plants",
-                "number_of_plants",
-                "soil_ph",
-                "extra_data",
-                "product__id",
-                "product__name",
-                "parcel__id",
-                "parcel__name",
-                "crop_type__id",
-                "crop_type__name",
-                "crop_type__category",
-                "crop_type__slug",
-            )
-            # Completed seasons for this parcel. This filtered on `published=True` for as
-            # long as finishing a production also published it unconditionally, so the two
-            # were the same set and the flag read as a synonym for "finished". Finishing no
-            # longer implies publishing — the confirm dialog carries a checkbox — and this
-            # is a company-scoped PRODUCER endpoint (CompanyNestedViewSet already enforces
-            # tenancy), so `published` is not doing access control here. Left as-is it would
-            # hide a farmer's own finished season from their own parcel history the moment
-            # they chose not to publish it.
-            .filter(finish_date__isnull=False)
-            .order_by("-id")
-        )
-
-        if parcel.current_history is not None:
-            histories = histories.exclude(id=parcel.current_history.id)
-
-        # Use the optimized serializer that avoids expensive operations
-        return Response(OptimizedHistoryListSerializer(histories, many=True, context={"request": request}).data)
-
     def perform_destroy(self, instance):
         """Refuse to delete a parcel that still carries a production inside retention.
 
@@ -565,7 +500,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     @transaction.atomic
-    def finish_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
+    def finish_production(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         import time
 
         _t0 = time.monotonic()
@@ -627,7 +562,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             _t5 = time.monotonic()
 
             logger.info(
-                "TIMING finish_history: TOTAL %.3fs (get_object=%.3f, finish=%.3f, hash=%.3f, blockchain=%.3f, serialize=%.3f)",
+                "TIMING finish_production: TOTAL %.3fs (get_object=%.3f, finish=%.3f, hash=%.3f, blockchain=%.3f, serialize=%.3f)",
                 _t5 - _t0,
                 _t1 - _t0,
                 _t2 - _t1,

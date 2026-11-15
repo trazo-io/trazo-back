@@ -245,7 +245,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         The frontend routes productions by their UUID (public_id) — e.g.
         /production/<uuid>/ — and passes that same identifier to mutations
-        like partial_update. Without this override, PATCH /histories/<uuid>/
+        like partial_update. Without this override, PATCH /productions/<uuid>/
         would raise 404 because DRF's default lookup tries to coerce the
         UUID into an integer pk.
         """
@@ -406,7 +406,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             parcel_pk = self.kwargs.get("parcel_pk")
             if parcel_pk:
                 queryset = queryset.filter(parcel_id=parcel_pk)
-            # The flat /api/histories/<id>/ route has no company in the URL, so without this
+            # The flat /api/productions/<id>/ route has no company in the URL, so without this
             # any signed-in account could read another farm's unpublished season by id.
             return scope_to_caller_companies(queryset, self.request.user, "parcel__establishment__company")
 
@@ -4750,7 +4750,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {
                     "error": "Event is locked",
                     # No "reopen it" — no such CONTROL exists. (It is still reachable via
-                    # PATCH /histories/<id>/ {"finish_date": null}; see the add-event guard.)
+                    # PATCH /productions/<id>/ {"finish_date": null}; see the add-event guard.)
                     "detail": "This production is finished, so its events are kept as filed. "
                     "If something on this record is wrong, correct it instead — the "
                     "original value is kept alongside the correction for your certifier.",
@@ -5117,7 +5117,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 {
                     "error": "Event is locked",
                     # No "reopen it" — no such CONTROL exists. (It is still reachable via
-                    # PATCH /histories/<id>/ {"finish_date": null}; see the add-event guard.)
+                    # PATCH /productions/<id>/ {"finish_date": null}; see the add-event guard.)
                     # Deletion stays refused regardless: 7 CFR 205.103(b)(4) requires the
                     # record be kept 5 years, which is what History.retention_until enforces.
                     "detail": "This production is finished, so its records must be kept "

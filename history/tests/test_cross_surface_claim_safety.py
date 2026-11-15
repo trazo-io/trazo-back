@@ -701,7 +701,7 @@ class LiveAnonymousPayloadSweepTests(TestCase):
         for name, url in [
             ("transparency", f"/api/transparency/{public_id}/"),
             ("verify-blockchain", f"/api/transparency/{public_id}/verify-blockchain/"),
-            ("public_history", f"/api/histories/{public_id}/public_history/"),
+            ("public_history", f"/api/productions/{public_id}/public_history/"),
         ]:
             resp = self.client.get(url)
             # A 404/405 means the endpoint does not serve this shape; only 200s carry claims.
