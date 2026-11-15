@@ -1,5 +1,5 @@
 """
-Finalization guard for POST .../parcels/{id}/finish_history/ (2026-07-31).
+Finalization guard for POST .../parcels/{id}/finish_production/ (2026-07-31).
 
 `History.finish()` assigns request values straight onto the model and saves, bypassing
 serializer validation — so anything the database rejects surfaced as a 500 DataError at

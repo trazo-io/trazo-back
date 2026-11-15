@@ -17,7 +17,7 @@ from product.models import Parcel
 from users.constants import PRODUCER
 from users.models import User, WorksIn
 
-URL = "/api/histories/establishment_scans_paginated/"
+URL = "/api/productions/establishment_scans_paginated/"
 
 
 def _user(email):

@@ -58,7 +58,7 @@ class OwnerDraftAccessRegressionTests(TestCase):
         self.stranger.companies.add(self.other_company)
 
     def _public_history_url(self, prod):
-        return f"/api/histories/{prod.id}/public_history/"
+        return f"/api/productions/{prod.id}/public_history/"
 
     def _complete_url(self, prod):
         return f"/api/carbon/public/productions/{prod.id}/complete/"

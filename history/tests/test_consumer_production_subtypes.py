@@ -274,7 +274,7 @@ class CleanoutNoteNeverReachesAShopperOverHttpTests(TestCase):
         return self._get(f"/api/transparency/{self.history.public_id}/", user)
 
     def _public_history(self, user=None):
-        return self._get(f"/api/histories/{self.history.public_id}/public_history/", user)
+        return self._get(f"/api/productions/{self.history.public_id}/public_history/", user)
 
     def test_anonymous_shopper_never_receives_the_cleanout_note(self):
         for name, body in (("transparency", self._transparency()), ("public_history", self._public_history())):

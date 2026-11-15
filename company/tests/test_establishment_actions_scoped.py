@@ -25,7 +25,6 @@ from users.models import User, WorksIn
 
 ACTIONS = (
     "products",
-    "histories",
     "get_charts_data",
     "products_reputation",
     "last_reviews",
@@ -102,7 +101,6 @@ class EstablishmentActionsScopedTests(TestCase):
         victim_parcel = self.victim_farm.parcels.get()
         victim_season = History.objects.get(parcel=victim_parcel)
         probes = (
-            ("histories", f"&parcel={victim_parcel.id}"),
             ("get_charts_data", f"&parcel={victim_parcel.id}"),
             ("get_charts_data", f"&production={victim_season.id}"),
             ("products_reputation", f"&production={victim_season.id}"),

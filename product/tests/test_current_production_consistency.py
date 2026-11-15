@@ -65,7 +65,7 @@ class CurrentProductionConsistencyTests(TestCase):
         factory = APIRequestFactory()
         request = factory.get("/")
         force_authenticate(request, user=self.user)
-        view = ParcelViewSet.as_view({"get": "current_history"})
+        view = ParcelViewSet.as_view({"get": "current_production"})
         return view(request, pk=self.parcel.pk, company_pk=self.company.pk)
 
     def test_open_season_is_reported_even_when_the_pointer_was_never_set(self):

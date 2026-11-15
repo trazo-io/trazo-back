@@ -330,7 +330,7 @@ class ExportDoorTests(TestCase):
         )
 
     def test_production_audit_export_refused_on_starter(self):
-        response = self._client(self.starter_user).get(f"/api/histories/{self.starter_production.id}/audit-export/")
+        response = self._client(self.starter_user).get(f"/api/productions/{self.starter_production.id}/audit-export/")
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
 
@@ -338,7 +338,7 @@ class ExportDoorTests(TestCase):
         """The UUID twin produces the identical document, so a farm must not be able to reach
         it around the gate on the numeric route."""
         response = self._client(self.starter_user).get(
-            f"/api/histories/{self.starter_production.public_id}/audit-export/"
+            f"/api/productions/{self.starter_production.public_id}/audit-export/"
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
@@ -383,7 +383,7 @@ class ExportDoorTests(TestCase):
 
     def test_pur_export_refused_on_starter(self):
         response = self._client(self.starter_user).get(
-            f"/api/histories/pur-export/?establishment_id={self.starter_farm.id}&month=7&year=2026"
+            f"/api/productions/pur-export/?establishment_id={self.starter_farm.id}&month=7&year=2026"
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data.get("detail").code, "compliance_exports_required")
@@ -399,7 +399,7 @@ class ExportDoorTests(TestCase):
             name="Gulf Coast Grove", company=self.starter_co, country="US", state="FL"
         )
         response = self._client(self.starter_user).get(
-            f"/api/histories/pur-export/?establishment_id={florida.id}&month=7&year=2026"
+            f"/api/productions/pur-export/?establishment_id={florida.id}&month=7&year=2026"
         )
         self.assertEqual(
             response.status_code,
@@ -412,7 +412,7 @@ class ExportDoorTests(TestCase):
         refusal. The paid farm is in California and the user administers it, so a 403 here has
         no legitimate cause."""
         response = self._client(self.paid_user).get(
-            f"/api/histories/pur-export/?establishment_id={self.paid_farm.id}&month=7&year=2026"
+            f"/api/productions/pur-export/?establishment_id={self.paid_farm.id}&month=7&year=2026"
         )
         self.assertNotEqual(
             response.status_code,

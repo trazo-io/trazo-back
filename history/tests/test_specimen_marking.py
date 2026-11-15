@@ -358,7 +358,7 @@ class SpecimenConsumerSurfaceTests(_PacketFixture):
         return self.client.get(f"/api/transparency/{history.public_id}/")
 
     def _public_history(self, history):
-        return self.client.get(f"/api/histories/{history.public_id}/public_history/")
+        return self.client.get(f"/api/productions/{history.public_id}/public_history/")
 
     def test_fabricated_farm_is_marked_on_the_transparency_payload(self):
         _, history = self._make_published_farm("Specimen Consumer Farm", is_demo=True)

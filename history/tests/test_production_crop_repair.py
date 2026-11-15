@@ -74,7 +74,7 @@ class ProductionCropRepairTests(APITestCase):
         production = self._cropless_production()
         self.client.force_authenticate(self.owner)
         resp = self.client.patch(
-            f"/api/histories/{production.id}/",
+            f"/api/productions/{production.id}/",
             {"crop_type_id": self.crop.id},
             format="json",
         )
@@ -92,7 +92,7 @@ class ProductionCropRepairTests(APITestCase):
 
         self.client.force_authenticate(self.owner)
         resp = self.client.patch(
-            f"/api/histories/{production.id}/",
+            f"/api/productions/{production.id}/",
             {"crop_type_id": self.other_crop.id},
             format="json",
         )
@@ -108,7 +108,7 @@ class ProductionCropRepairTests(APITestCase):
 
         self.client.force_authenticate(self.owner)
         resp = self.client.patch(
-            f"/api/histories/{production.id}/",
+            f"/api/productions/{production.id}/",
             {"crop_type_id": self.crop.id, "name": "Renamed Season"},
             format="json",
         )
@@ -121,7 +121,7 @@ class ProductionCropRepairTests(APITestCase):
         production = self._cropless_production()
         self.client.force_authenticate(self.owner)
         resp = self.client.patch(
-            f"/api/histories/{production.id}/",
+            f"/api/productions/{production.id}/",
             {"crop_type_id": 999999},
             format="json",
         )

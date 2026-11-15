@@ -153,7 +153,7 @@ class SeasonPlanFixture(APITestCase):
         if selected is self._DEFAULT:
             selected = [self.pruning]
         return self.client.post(
-            reverse("histories-start-production"),
+            reverse("productions-start-production"),
             {
                 "name": name,
                 "parcel_id": self.parcel.id,
@@ -285,7 +285,7 @@ class APlanItemCarriesNoValues(SeasonPlanFixture):
     def test_the_payload_carries_no_values_either(self):
         self._start_production()
         history = History.objects.get(name="2026 Walnuts")
-        response = self.client.get(reverse("histories-season-plan", args=[history.id]))
+        response = self.client.get(reverse("productions-season-plan", args=[history.id]))
         self.assertEqual(response.status_code, 200)
 
         item = response.data["items"][0]
@@ -336,10 +336,10 @@ class SeasonPlanEndpoints(SeasonPlanFixture):
         self.item = ProductionPlanItem.objects.get(history=self.history)
 
     def _plan_url(self):
-        return reverse("histories-season-plan", args=[self.history.id])
+        return reverse("productions-season-plan", args=[self.history.id])
 
     def _item_url(self, item_id=None):
-        return reverse("histories-season-plan-item", args=[self.history.id, item_id or self.item.id])
+        return reverse("productions-season-plan-item", args=[self.history.id, item_id or self.item.id])
 
     def test_the_plan_reports_completeness_not_a_score(self):
         response = self.client.get(self._plan_url())
@@ -351,7 +351,7 @@ class SeasonPlanEndpoints(SeasonPlanFixture):
         """ "Log this" posts `history` explicitly. Without it the event endpoint falls back to
         `parcel.current_history`, so a plan item on any other production would write its record
         to the wrong season AND leave the checklist item open."""
-        response = self.client.get(reverse("histories-season-plan", args=[self.history.public_id]))
+        response = self.client.get(reverse("productions-season-plan", args=[self.history.public_id]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["history_id"], self.history.id)
 
@@ -537,7 +537,7 @@ class PlanBuildEdgeCases(SeasonPlanFixture):
         a payload that omitted it pulled arbitrary EventTemplate rows out of the whole
         catalogue by id — every crop's programme, addressable from any production."""
         response = self.client.post(
-            reverse("histories-start-production"),
+            reverse("productions-start-production"),
             {
                 "name": "2026 Walnuts",
                 "parcel_id": self.parcel.id,
@@ -555,7 +555,7 @@ class PlanBuildEdgeCases(SeasonPlanFixture):
     def test_a_garbage_template_id_builds_no_plan_either(self):
         response = self._start_production()
         garbage = self.client.post(
-            reverse("histories-start-production"),
+            reverse("productions-start-production"),
             {
                 "name": "2026 Walnuts C",
                 "parcel_id": self.parcel.id,

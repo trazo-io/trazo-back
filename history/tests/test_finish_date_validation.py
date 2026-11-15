@@ -5,9 +5,9 @@ Found 2026-08-10: the operation dossier printed a production window
 "2026-08-09 – 2026-08-08" because a QA production was saved with its finish
 before its start — nothing validated the pair. Two write paths exist:
 
-1. HistoryWriteSerializer (PATCH /histories/<id>/ — the edit-production form),
+1. HistoryWriteSerializer (PATCH /productions/<id>/, the edit-production form),
    where a partial update may send only one of the two dates.
-2. ParcelViewSet._validate_finalization_fields (POST .../finish_history/),
+2. ParcelViewSet._validate_finalization_fields (POST .../finish_production/),
    which bypasses serializer validation entirely.
 """
 

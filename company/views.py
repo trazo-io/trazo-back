@@ -18,7 +18,6 @@ from rest_framework.response import Response
 from backend.permissions import CALLER_SCOPED, CompanyNestedViewSet, IsCompanyAdmin, scope_to_caller_companies
 from history.models import History, HistoryScan
 from history.retention import assert_deletable
-from history.serializers import HistoryListOptionsSerializer
 from product.models import Parcel, Product
 from product.serializers import ProductListOptionsSerializer
 from reviews.models import Review
@@ -328,37 +327,6 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             products = products.filter(histories__parcel__id=parcel.id)
 
         return Response(ProductListOptionsSerializer(products.distinct(), many=True).data)
-
-    @action(detail=True, methods=["get"])
-    def histories(self, request, pk=None, company_pk=None, establishment_pk=None) -> Response:
-        establishment = self.get_object()
-        parcel = request.query_params.get("parcel", None)
-        product = request.query_params.get("product", None)
-        period = request.query_params.get("period", None)
-        if period is None or period not in ALLOWED_PERIODS:
-            return Response(
-                {"error": "Period is required and must be week, month or year"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Get date kwargs for filter by period
-        filter_kwargs = self._generate_filter_kwargs(period, None, "history_scans__", establishment)
-
-        if parcel is not None:
-            parcel = get_object_or_404(establishment.parcels.all(), pk=parcel)
-            filter_kwargs["parcel__id"] = parcel.id
-
-        if product is not None:
-            product = get_object_or_404(Product, pk=product)
-            filter_kwargs["product__id"] = product.id
-
-        histories = History.objects.filter(
-            parcel__establishment=establishment,
-            published=True,
-            **filter_kwargs,
-        ).distinct()
-
-        return Response(HistoryListOptionsSerializer(histories, many=True).data)
 
     @action(detail=True, methods=["get"], url_path="parcel-geometry")
     def parcel_geometry(self, request, pk=None, company_pk=None) -> Response:

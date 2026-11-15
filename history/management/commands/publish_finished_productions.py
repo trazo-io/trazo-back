@@ -2,6 +2,7 @@
 Management command to publish all finished productions for public transparency
 """
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -118,9 +119,8 @@ class Command(BaseCommand):
             # Show QR code info
             if history.qr_code:
                 self.stdout.write(f"      QR Code: ✓ Available")
-                self.stdout.write(
-                    f"      Public URL: http://app.localhost:3000/api/histories/{history.id}/public_history/"
-                )
+                # The page the QR code opens, as `History.generate_qr_code` builds it.
+                self.stdout.write(f"      Consumer page: {settings.BASE_CONSUMER_URL}production/{history.public_id}")
             else:
                 self.stdout.write(f"      QR Code: ✗ Not generated")
 

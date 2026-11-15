@@ -16,9 +16,8 @@ from .views import (
 
 router = routers.DefaultRouter()
 
-router.register(r"histories", HistoryViewSet, basename="histories")
-# The same viewset under the model's name (History is Production since history 0264). Both prefixes
-# serve until the app has moved to `productions/`; then `histories` is removed (expand/contract).
+# History is Production since history 0264. The API served it as `histories/` until 2026-11-15, when
+# `productions/` was added beside it; `histories/` was removed once the app had moved over.
 router.register(r"productions", HistoryViewSet, basename="productions")
 router.register(r"events", EventViewSet, basename="events")
 router.register(r"scans", HistoryScanViewSet, basename="scans")
@@ -28,12 +27,7 @@ router.register(r"sales_records", SalesRecordViewSet, basename="sales-records")
 
 urlpatterns = [
     # Audit export by UUID — MUST be before router include
-    # (router's regex histories/(?P<pk>[^/.]+) would match UUIDs first)
-    path(
-        "histories/<uuid:public_id>/audit-export/",
-        audit_export_by_uuid,
-        name="audit-export-by-uuid",
-    ),
+    # (router's regex productions/(?P<pk>[^/.]+) would match UUIDs first)
     path(
         "productions/<uuid:public_id>/audit-export/",
         audit_export_by_uuid,

@@ -68,11 +68,11 @@ class CrossTenantRouteTests(TestCase):
     # Seasons ---------------------------------------------------------------------------------
 
     def test_season_retrieve_by_id_and_uuid(self):
-        self.assertBlocked(self.client.get(f"/api/histories/{self.victim_season.id}/"))
-        self.assertBlocked(self.client.get(f"/api/histories/{self.victim_season.public_id}/"))
+        self.assertBlocked(self.client.get(f"/api/productions/{self.victim_season.id}/"))
+        self.assertBlocked(self.client.get(f"/api/productions/{self.victim_season.public_id}/"))
 
     def test_season_list_shows_only_own(self):
-        response = self.client.get("/api/histories/")
+        response = self.client.get("/api/productions/")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn("Outsider 2026", body)  # proves the list was read
@@ -80,7 +80,7 @@ class CrossTenantRouteTests(TestCase):
 
     def test_owner_still_reads_own_season(self):
         self.client.force_authenticate(self.victim)
-        response = self.client.get(f"/api/histories/{self.victim_season.id}/")
+        response = self.client.get(f"/api/productions/{self.victim_season.id}/")
         self.assertEqual(response.status_code, 200, response.content[:300])
 
     # Parcels ---------------------------------------------------------------------------------

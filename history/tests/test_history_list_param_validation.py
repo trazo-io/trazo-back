@@ -1,5 +1,5 @@
 """
-GET /api/histories/ query-param validation.
+GET /api/productions/ query-param validation.
 
 A frontend that stringifies an object sends `?establishment=[object Object]`. Before
 2026-08-17 that value went straight into `.filter(parcel__establishment_id=...)`, where
@@ -51,23 +51,23 @@ class HistoryListParamValidationTests(TestCase):
         return [row["id"] for row in rows]
 
     def test_valid_establishment_filter_returns_the_farm_rows(self):
-        response = self.client.get(f"/api/histories/?establishment={self.establishment.id}")
+        response = self.client.get(f"/api/productions/?establishment={self.establishment.id}")
         self.assertEqual(response.status_code, 200)
         # Proves the happy path actually READ a row — a 400-only test would pass
         # even if the filter had been deleted outright.
         self.assertIn(self.history.id, self._ids(response))
 
     def test_stringified_object_establishment_is_a_400_not_a_500(self):
-        response = self.client.get("/api/histories/?establishment=[object Object]")
+        response = self.client.get("/api/productions/?establishment=[object Object]")
         self.assertEqual(response.status_code, 400)
         self.assertIn("establishment", response.json())
 
     def test_stringified_object_product_is_a_400_not_a_500(self):
-        response = self.client.get("/api/histories/?product=[object Object]")
+        response = self.client.get("/api/productions/?product=[object Object]")
         self.assertEqual(response.status_code, 400)
         self.assertIn("product", response.json())
 
     def test_empty_establishment_param_is_ignored(self):
-        response = self.client.get("/api/histories/?establishment=")
+        response = self.client.get("/api/productions/?establishment=")
         self.assertEqual(response.status_code, 200)
         self.assertIn(self.history.id, self._ids(response))

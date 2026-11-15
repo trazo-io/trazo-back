@@ -394,7 +394,7 @@ class PlantingFormPickerTests(_Base):
         archived = self.supplier("Old Nursery")
         archived.archived_at = timezone.now()
         archived.save()
-        rows = self.client.get(f"/api/histories/seed-suppliers/?establishment_id={self.est.id}").json()
+        rows = self.client.get(f"/api/productions/seed-suppliers/?establishment_id={self.est.id}").json()
         self.assertEqual(rows[0]["supplier_name"], "Columbia Nursery")
         self.assertEqual(rows[0]["sources"], ["register", "purchase"])
         self.assertEqual([r["supplier_name"] for r in rows].count("columbia nursery"), 0)

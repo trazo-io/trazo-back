@@ -189,7 +189,7 @@ class SeasonHeaderAmendmentAPITests(TestCase):
             lot_id="CBF-25-HFE-01",
         )
         self.history.refresh_from_db()
-        self.url = f"/api/histories/{self.history.id}/amend/"
+        self.url = f"/api/productions/{self.history.id}/amend/"
 
     def test_get_lists_the_correctable_header_fields(self):
         self.client.force_authenticate(user=self.user)
@@ -213,7 +213,7 @@ class SeasonHeaderAmendmentAPITests(TestCase):
         self.client.force_authenticate(user=self.user)
 
         refused = self.client.patch(
-            f"/api/histories/{self.history.id}/", {"production_amount": "118750"}, format="json"
+            f"/api/productions/{self.history.id}/", {"production_amount": "118750"}, format="json"
         )
         self.assertEqual(refused.status_code, 400, refused.content)
 

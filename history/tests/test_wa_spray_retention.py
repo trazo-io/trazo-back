@@ -301,7 +301,7 @@ class SeasonsClosedBeforeTheFloorTests(_Season):
         history = self.closed_before_the_floor("WA")
         client = APIClient()
         client.force_authenticate(user=self.owner(history))
-        response = client.delete(f"/api/histories/{history.id}/")
+        response = client.delete(f"/api/productions/{history.id}/")
         self.assertEqual(response.status_code, 409, response.content)
         self.assertEqual(response.data["retention_until"], "2033-06-15")
         self.assertIn("WAC 16-228-1320(3)", response.data["detail"])

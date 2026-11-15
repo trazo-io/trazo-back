@@ -3,7 +3,7 @@
 `History.production_method` reaches the database down two different paths, and only one of
 them ever validated:
 
-  * PATCH /histories/<id>/ goes through HistorySerializer, a ModelSerializer with
+  * PATCH /productions/<id>/ goes through HistorySerializer, a ModelSerializer with
     `production_method` in `Meta.fields`. DRF builds a ChoiceField from the model field, so
     the vocabulary is enforced.
   * POST /histories/start-production/ built the row with a raw `History(...)` kwarg — no

@@ -43,7 +43,7 @@ class BothCreatePathsStoreUnstatedAsNull(SeasonPlanFixture):
 
     def test_start_production_without_a_method(self):
         response = self.client.post(
-            reverse("histories-start-production"),
+            reverse("productions-start-production"),
             {
                 "name": "2026 Walnuts",
                 "parcel_id": self.parcel.id,
@@ -57,7 +57,7 @@ class BothCreatePathsStoreUnstatedAsNull(SeasonPlanFixture):
 
     def test_start_production_keeps_a_stated_method(self):
         response = self.client.post(
-            reverse("histories-start-production"),
+            reverse("productions-start-production"),
             {
                 "name": "2026 Walnuts",
                 "parcel_id": self.parcel.id,
@@ -72,7 +72,7 @@ class BothCreatePathsStoreUnstatedAsNull(SeasonPlanFixture):
 
     def test_the_nested_create(self):
         url = reverse(
-            "parcel-histories-list",
+            "parcel-productions-list",
             kwargs={
                 "company_pk": self.company.id,
                 "establishment_pk": self.establishment.id,

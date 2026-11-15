@@ -126,7 +126,7 @@ class ConsumerEndpointCompressionTests(TestCase):
 
     def test_public_history_is_gzipped_when_the_client_accepts_it(self):
         res = self._client().get(
-            f"/api/histories/{self.history.public_id}/public_history/", HTTP_ACCEPT_ENCODING="gzip"
+            f"/api/productions/{self.history.public_id}/public_history/", HTTP_ACCEPT_ENCODING="gzip"
         )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.headers.get("Content-Encoding"), "gzip")
@@ -140,12 +140,12 @@ class ConsumerEndpointCompressionTests(TestCase):
         # Without Vary, a shared cache can hand a gzipped body to a client that cannot
         # decode it. Django's gzip_page sets this; assert it so it cannot regress.
         res = self._client().get(
-            f"/api/histories/{self.history.public_id}/public_history/", HTTP_ACCEPT_ENCODING="gzip"
+            f"/api/productions/{self.history.public_id}/public_history/", HTTP_ACCEPT_ENCODING="gzip"
         )
         self.assertIn("Accept-Encoding", res.headers.get("Vary", ""))
 
     def test_client_that_does_not_accept_gzip_still_gets_plain_json(self):
-        res = self._client().get(f"/api/histories/{self.history.public_id}/public_history/")
+        res = self._client().get(f"/api/productions/{self.history.public_id}/public_history/")
         self.assertEqual(res.status_code, 200)
         self.assertNotEqual(res.headers.get("Content-Encoding"), "gzip")
         self.assertEqual(json.loads(res.content)["events_count"], 0)
@@ -154,6 +154,6 @@ class ConsumerEndpointCompressionTests(TestCase):
         import gzip as _gzip
 
         c = self._client()
-        gz = c.get(f"/api/histories/{self.history.public_id}/public_history/", HTTP_ACCEPT_ENCODING="gzip")
-        plain = c.get(f"/api/histories/{self.history.public_id}/public_history/")
+        gz = c.get(f"/api/productions/{self.history.public_id}/public_history/", HTTP_ACCEPT_ENCODING="gzip")
+        plain = c.get(f"/api/productions/{self.history.public_id}/public_history/")
         self.assertEqual(_gzip.decompress(gz.content), plain.content)

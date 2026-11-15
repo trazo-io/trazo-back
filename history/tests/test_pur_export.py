@@ -452,7 +452,7 @@ class PURExportStateGateTests(TestCase):
         # plan every case below would 403 before reaching the STATE check these tests are about,
         # and the two 404 cases would pass for the wrong reason.
         grant_compliance_exports(self.company)
-        self.url = "/api/histories/pur-export/"
+        self.url = "/api/productions/pur-export/"
 
     def _establishment(self, state):
         est = Establishment.objects.create(name=f"Farm {state or 'blank'}", company=self.company, state=state)
