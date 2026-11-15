@@ -41,3 +41,6 @@ questions:
     O1 asks the mailing address, the billing address and the primary location to be inspected (B-1),
     never a registered legal business address; CCOF's Contract A2 does. The physical location prints on
     the packet cover.
+  certification_contract.organic_business_summary: >-
+    CCOF Contract B1's summary of the organic business and its plans. OTCO's O1 asks no summary in prose;
+    it asks the scopes, products and land item by item.

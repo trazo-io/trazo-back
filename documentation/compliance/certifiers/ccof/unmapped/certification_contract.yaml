@@ -33,3 +33,8 @@ questions:
     OTCO O1 C-6. CCOF's Contract asks adverse organic certification history only (D5, D6).
   certification_contract.regulatory_reports_upload: >-
     OTCO O1 C-6, the reports and responses. CCOF's Contract asks for none.
+  certification_contract.history_certified_by_this_agency: >-
+    OTCO O1 D-1: whether the agency the plan is filed with certifies the operation today, for its most
+    recent certificate. CCOF's Contract asks for another agency's certificate (D4), not its own.
+  certification_contract.history_this_agency_certificate_upload: >-
+    The certificate itself, on `history_certified_by_this_agency`; same reason.

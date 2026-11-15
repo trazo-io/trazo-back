@@ -3236,12 +3236,14 @@ class StateOrganicRegistration(models.Model):
     Modeled generically (``state`` field) so other state programs reuse it;
     California (CDFA) is the only one enforced today.
 
-    Scope note — CDFA vs CDPH: this registration is the CDFA producer/raw-ag
-    *handler* registration. On-farm operations that turn a crop into a PROCESSED
-    organic product (roasting, grinding to butter/flour, oil pressing, blanching,
-    adding ingredients) cross into CDPH's "processed product" domain and require a
-    SEPARATE CDPH registration — Trazo's "handler" type here means CDFA raw-ag
-    handling (hull/shell/wash/sort/pack), not CDPH processing.
+    Scope note, CDFA vs CDPH: California registers an organic operation with one of two
+    agencies. CDFA takes crops, raw-ag handling (hull/shell/wash/sort/pack) and produce
+    brokers; CDPH takes processed products (roasting, grinding to butter/flour, oil
+    pressing, blanching, adding ingredients). CCOF's Certification Contract (E1, E2) and
+    OTCO's O1 (E-1, E-2) ask both numbers, and CCOF's says an operation holds one.
+    2026-11-15: each row names its agency (`registering_agency`), and the packet cover
+    prints the latest row of each agency on file, so a CDPH number is never printed under
+    CDFA's name and an operation that does hold both shows both.
     """
 
     OPERATION_TYPE_CHOICES = [
@@ -3251,7 +3253,18 @@ class StateOrganicRegistration(models.Model):
         ("handler", "Handler (CDFA raw-ag handling)"),
         ("producer_handler", "Producer & Handler"),
         ("retailer", "Retailer"),
+        ("processor", "Processor (CDPH processed products)"),
     ]
+    AGENCY_CHOICES = [
+        ("cdfa", "CDFA California Organic Program (crops, post-harvest handling, produce brokers)"),
+        ("cdph", "CDPH organic registration (processed products)"),
+    ]
+    #: The program each agency's row is filed under. Kept in step by `save()` for a California
+    #: row, so the audit dossier's "Program" line can never name the other agency.
+    CA_PROGRAM_NAMES = {
+        "cdfa": "CDFA State Organic Program",
+        "cdph": "CDPH Organic Processed Product Registration",
+    }
     STATUS_CHOICES = [
         ("registered", "Registered"),
         ("pending", "Pending"),
@@ -3280,6 +3293,12 @@ class StateOrganicRegistration(models.Model):
         max_length=120,
         default="CDFA State Organic Program",
         help_text="State Organic Program name (e.g. 'CDFA State Organic Program')",
+    )
+    registering_agency = models.CharField(
+        max_length=4,
+        choices=AGENCY_CHOICES,
+        default="cdfa",
+        help_text="California agency the registration is held with: CDFA, or CDPH for processed products",
     )
     operation_type = models.CharField(
         max_length=20,
@@ -3355,6 +3374,33 @@ class StateOrganicRegistration(models.Model):
         indexes = [
             models.Index(fields=["establishment", "state"]),
         ]
+
+    @classmethod
+    def latest_per_agency(cls, establishment, state=None) -> list:
+        """The latest row of each agency on file, CDFA first, then CDPH.
+
+        One reader for the packet cover and the audit dossier (PDF and CSV): a single
+        `.order_by("-registration_date").first()` let a pending CDPH row with no date yet sort first
+        (Postgres puts NULL first in a descending sort) and print under CDFA's name, flagged as not
+        current, for an operation validly registered with CDFA (review of back #433). Undated rows
+        sort after dated ones, and each agency is read on its own.
+        """
+        from django.db.models import F
+
+        rows = cls.objects.filter(establishment=establishment)
+        if state:
+            rows = rows.filter(state=state)
+        latest: dict = {}
+        for reg in rows.order_by(F("registration_date").desc(nulls_last=True), "-pk"):
+            latest.setdefault(reg.registering_agency, reg)
+        return [latest[agency] for agency, _label in cls.AGENCY_CHOICES if agency in latest]
+
+    def save(self, *args, **kwargs):
+        # A California row's program follows its agency. A name typed by hand for another program is
+        # left alone; only the two names this model writes are kept in step.
+        if self.state == "CA" and (not self.program_name or self.program_name in self.CA_PROGRAM_NAMES.values()):
+            self.program_name = self.CA_PROGRAM_NAMES[self.registering_agency]
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.program_name} — {self.establishment.name} ({self.registration_number or 'unregistered'})"

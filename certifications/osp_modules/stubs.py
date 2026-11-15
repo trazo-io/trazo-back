@@ -2054,6 +2054,31 @@ CERTIFICATION_CONTRACT = Module(
                         Option("fungi", text("Mushrooms and other fungi", "Hongos y setas")),
                     ),
                 ),
+                # 2026-11-15: CCOF Contract B1, "describe or attach a summary description of your organic business
+                # or plans". `contract_notes` answers naming, not this.
+                Question(
+                    key="organic_business_summary",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Describe your organic business in a few sentences, and any plans to change it.",
+                        "Describe tu negocio orgánico en pocas frases, y cualquier plan de cambiarlo.",
+                    ),
+                    coaching=text(
+                        "What you grow or handle, on how much land and where, who buys it, and anything new for the "
+                        "coming season. The details are in the rest of this plan.",
+                        "Qué cultivas o manejas, en cuánta tierra y dónde, quién lo compra, y cualquier novedad para "
+                        "la próxima temporada. Los detalles están en el resto de este plan.",
+                    ),
+                    placeholder=text(
+                        "e.g. 40 acres of certified organic walnuts in Butte County, sold in-shell to one huller. "
+                        "We plan to add 10 acres of almonds next year.",
+                        "p. ej. 40 acres de nogales orgánicos certificados en el condado de Butte, vendidos con cáscara "
+                        "a una descascaradora. Planeamos sumar 10 acres de almendros el próximo año.",
+                    ),
+                    nop_cite="§ 205.401(a)",
+                    compiles_to=CompileRule(template="Organic operation summary: {answer}"),
+                ),
                 Question(
                     key="contract_upload",
                     kind="upload",
@@ -2144,6 +2169,36 @@ CERTIFICATION_CONTRACT = Module(
                     placeholder=text(
                         "e.g. Oregon Tilth, March 2015 to June 2021; CCOF since 2022",
                         "p. ej. Oregon Tilth, de marzo de 2015 a junio de 2021; CCOF desde 2022",
+                    ),
+                ),
+                # 2026-11-15: OTCO O1 D-1 asks a currently certified operation for its most recent certificate. The
+                # agency the plan is filed with issued it; another agency's certificate is asked just below. A shown
+                # upload with no file reads as missing, so the yes or no comes first.
+                Question(
+                    key="history_certified_by_this_agency",
+                    kind="boolean",
+                    required=False,
+                    visible_when=(Condition("history_ever_certified", "truthy"),),
+                    label=text(
+                        "Is the operation certified organic today by the agency you file this plan with?",
+                        "¿La operación tiene hoy una certificación orgánica de la agencia ante la que presentas este "
+                        "plan?",
+                    ),
+                    coaching=text(
+                        "Yes for a renewal. Some agencies ask for a copy of the most recent certificate with it.",
+                        "Sí, si es una renovación. Algunas agencias piden con ella una copia del certificado más "
+                        "reciente.",
+                    ),
+                    nop_cite="§ 205.404",
+                ),
+                Question(
+                    key="history_this_agency_certificate_upload",
+                    kind="upload",
+                    required=False,
+                    visible_when=(Condition("history_certified_by_this_agency", "truthy"),),
+                    label=text(
+                        "Attach the most recent organic certificate that agency issued.",
+                        "Adjunta el certificado orgánico más reciente que emitió esa agencia.",
                     ),
                 ),
                 # 2026-11-13: OTCO O1 D-1A, D-1B and the certificate it asks attached; CCOF Contract D4, whose

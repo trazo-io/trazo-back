@@ -2106,6 +2106,12 @@ class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
         # makes is_current() meaningless — it was rendering that way on a live record.
         if registration and renewal and renewal <= registration:
             raise serializers.ValidationError({"renewal_date": "Renewal date must be after the registration date."})
+        # CDPH is a California agency: a CDPH row filed under another state would print a California
+        # agency's name on that state's packet.
+        agency = attrs.get("registering_agency") or getattr(self.instance, "registering_agency", "cdfa")
+        state = attrs.get("state") or getattr(self.instance, "state", "CA")
+        if agency == "cdph" and state != "CA":
+            raise serializers.ValidationError({"registering_agency": "CDPH registers California operations only."})
         return attrs
 
     """Producer-dashboard CRUD for State Organic Program registration (CDFA SOP).
@@ -2117,6 +2123,7 @@ class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
 
     operation_type_display = serializers.CharField(source="get_operation_type_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    registering_agency_display = serializers.CharField(source="get_registering_agency_display", read_only=True)
     is_current = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -2127,6 +2134,8 @@ class StateOrganicRegistrationSerializer(serializers.ModelSerializer):
             "establishment",
             "state",
             "program_name",
+            "registering_agency",
+            "registering_agency_display",
             "operation_type",
             "operation_type_display",
             "status",

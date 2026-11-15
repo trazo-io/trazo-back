@@ -66,6 +66,13 @@ GOLDEN_ANSWER_CASES = {
         "vermicompost": {"materials_applied": ["vermicompost"], "compost_method": "vermicompost"},
         "method_unanswered": {"materials_applied": ["on_farm_compost"]},
     },
+    # The certificate of the agency the plan is filed with opens on a yes, under ever certified (2026.12.11).
+    "certification_contract": {
+        "unanswered": {},
+        "never_certified": {"history_ever_certified": False, "history_certified_by_this_agency": True},
+        "renewal": {"history_ever_certified": True, "history_certified_by_this_agency": True},
+        "not_by_this_agency": {"history_ever_certified": True, "history_certified_by_this_agency": False},
+    },
     # The residue questions open on product testing (2026.11.24, WSDA AGR 2121 P 4a/4b).
     "g2_0_fraud_prevention": {
         "unanswered": {},

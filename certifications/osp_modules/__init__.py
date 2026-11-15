@@ -365,7 +365,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   often records are reviewed and staff evaluated, when staff are trained on the plan, internal audits, written SOPs
 #   and a notes field (OFPP 4-1, WSDA P 1 to 3a and 7, OTCO C12 12.3-1). New page D asks the supply chain as a map or a
 #   description and the critical control points, each with its prevention and monitoring (OFPP 2-1, 3-1).
-CONTENT_VERSION = "2026.12.10"
+# 2026.12.11: the Operation module asks a short summary of the organic business and its plans (CCOF Contract B1),
+#   and on page B whether the agency the plan is filed with certifies the operation today, with that agency's most
+#   recent certificate attached (OTCO O1 D-1).
+CONTENT_VERSION = "2026.12.11"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

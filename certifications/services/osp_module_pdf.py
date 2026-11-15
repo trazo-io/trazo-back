@@ -3208,51 +3208,63 @@ def _changed_only_cover_flowables(scope, styles) -> list:
 
 
 CA_REGISTRATION_LABEL = "California organic registration (CDFA)"
+CDPH_REGISTRATION_LABEL = "California organic registration (CDPH)"
+_CA_REGISTRATION_LABELS = {"cdfa": CA_REGISTRATION_LABEL, "cdph": CDPH_REGISTRATION_LABEL}
 
 
 def _state_registration_cover_lines(est, kv, styles) -> list:
-    """CCOF Certification Contract E1 and OTCO O1 E-1 ask a California operation for its CDFA
-    organic registration number. The number was recorded (`StateOrganicRegistration`) and printed
-    in the audit dossier, but never in the renewal packet, so both agents' forms went out without
-    it. Printed for a California operation, or for any operation that has one on file; nothing for
-    an operation elsewhere with none, because the requirement is California's alone.
-    """
-    from django.db.models import F
+    """CCOF Certification Contract E1 and E2, and OTCO O1 E-1 and E-2, ask a California operation for its
+    organic registration number: CDFA's for crops and raw-ag handling, CDPH's for processed products. The
+    number was recorded (`StateOrganicRegistration`) and printed in the audit dossier, but never in the
+    renewal packet, so both agents' forms went out without it. Printed for a California operation, or for
+    any operation that has one on file; nothing for an operation elsewhere with none, because the
+    requirement is California's alone.
 
+    One line per agency, from that agency's latest row (2026-11-15): a CDPH number printed under CDFA's
+    name would put it in the wrong box of both forms.
+    """
     from certifications.models import StateOrganicRegistration
     from common.us_states import resolve_establishment_state
 
-    reg = (
-        StateOrganicRegistration.objects.filter(establishment=est, state="CA")
-        .order_by(F("registration_date").desc(nulls_last=True), "-pk")
-        .first()
-    )
-    if reg is None:
+    latest = {reg.registering_agency: reg for reg in StateOrganicRegistration.latest_per_agency(est, state="CA")}
+    if not latest:
         if resolve_establishment_state(est) != "CA":
             return []
         return [
             kv(CA_REGISTRATION_LABEL, "none on file"),
             Paragraph(
-                "[REVIEW] CCOF's and Oregon Tilth's forms ask a California operation for its CDFA organic "
-                "registration number. Add it under State Organic Program Registration (CDFA) on the "
-                "Organic System Plan page.",
+                "[REVIEW] CCOF's and Oregon Tilth's forms ask a California operation for its organic "
+                "registration number: CDFA's, or CDPH's for processed products. Add it under State Organic "
+                "Program Registration on the Organic System Plan page.",
                 styles["meta"],
             ),
         ]
-    details = [reg.get_status_display()]
-    if reg.county:
-        details.append(f"{reg.county} County")
-    if reg.renewal_date:
-        details.append(f"renewal date {reg.renewal_date.isoformat()}")
-    lines = [kv(CA_REGISTRATION_LABEL, reg.registration_number or "number not recorded", note=", ".join(details))]
-    # The model's own reason first (one wording with the audit dossier); a registered row with no
-    # number is current there but still leaves both agents' forms blank.
-    problem = reg.not_current_reason or (
-        "The registration number is not recorded." if not reg.registration_number else None
-    )
-    if problem is None:
-        return lines
-    lines.append(Paragraph(_escape(f"[REVIEW] {problem} Update it before the forms are filed."), styles["meta"]))
+    lines = []
+    for agency in ("cdfa", "cdph"):
+        reg = latest.get(agency)
+        if reg is None:
+            continue
+        details = [reg.get_status_display()]
+        if reg.county:
+            details.append(f"{reg.county} County")
+        if reg.renewal_date:
+            details.append(f"renewal date {reg.renewal_date.isoformat()}")
+        lines.append(
+            kv(
+                _CA_REGISTRATION_LABELS[agency],
+                reg.registration_number or "number not recorded",
+                note=", ".join(details),
+            )
+        )
+        # The model's own reason first (one wording with the audit dossier); a registered row with no
+        # number is current there but still leaves both agents' forms blank.
+        problem = reg.not_current_reason or (
+            "The registration number is not recorded." if not reg.registration_number else None
+        )
+        if problem is not None:
+            lines.append(
+                Paragraph(_escape(f"[REVIEW] {problem} Update it before the forms are filed."), styles["meta"])
+            )
     return lines
 
 
