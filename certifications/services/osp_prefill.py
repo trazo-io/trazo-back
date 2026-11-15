@@ -358,9 +358,15 @@ def _seed_treatment_names(events) -> list:
 
 
 def _tank_mix_names(events) -> list:
-    """(event, name) for each tank-mix partner an application record names."""
+    """(event, name) for each tank-mix partner an application record names: a legacy `tank_mix_partners`
+    entry, or the record of an adjuvant sprayed from the tank (`tank_mix_role="adjuvant"`, its own
+    ChemicalEvent under the tank-mix service)."""
     out = []
     for e in events:
+        if getattr(e, "tank_mix_role", "") == "adjuvant":
+            adjuvant = (getattr(e, "commercial_name", "") or "").strip()
+            if adjuvant:
+                out.append((e, adjuvant))
         for partner in getattr(e, "tank_mix_partners", None) or []:
             if isinstance(partner, dict):
                 out.append((e, (partner.get("commercial_name") or "").strip()))
@@ -406,6 +412,8 @@ def logged_category_names(establishment, question_key) -> list[str]:
     """The product names the records show for one Materials Application row, read straight from the
     event tables: the attestation gate runs on every module write and status read, and an
     `EvidenceBundle` loads every production with six event relations to answer it."""
+    from django.db.models import Q
+
     from history.models import ChemicalEvent, ProductionEvent, SoilManagementEvent
 
     question_key = materials_category(question_key)
@@ -418,13 +426,20 @@ def logged_category_names(establishment, question_key) -> list[str]:
         planting = (
             ProductionEvent.objects.filter(**scope).exclude(seed_treatment__isnull=True).exclude(seed_treatment="")
         )
-        applied = ChemicalEvent.objects.filter(**scope).exclude(tank_mix_partners=[])
+        applied = ChemicalEvent.objects.filter(**scope).filter(Q(tank_mix_role="adjuvant") | ~Q(tank_mix_partners=[]))
         named = _seed_treatment_names(planting) + _tank_mix_names(applied)
         return sorted({n for _e, n in named if n})
     if question_key == "post_harvest_contact_listed":
         names = ProductionEvent.objects.filter(type="PH", **scope).values_list("sanitizer_name", flat=True)
     else:
-        names = list(ChemicalEvent.objects.filter(type__in=types, **scope).values_list("commercial_name", flat=True))
+        # An adjuvant sprayed from a tank is its own record carrying the pass's chemical type (PE, for one)
+        # under `tank_mix_role="adjuvant"`. It is a production aid, counted above, never a pesticide or a
+        # fertilizer, or the gate would ask for it on two lists.
+        names = list(
+            ChemicalEvent.objects.filter(type__in=types, **scope)
+            .exclude(tank_mix_role="adjuvant")
+            .values_list("commercial_name", flat=True)
+        )
         if question_key == "fertilizers_listed":
             names += list(SoilManagementEvent.objects.filter(**scope).values_list("amendment_product_name", flat=True))
     return sorted({(n or "").strip() for n in names if (n or "").strip()})

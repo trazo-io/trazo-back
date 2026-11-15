@@ -150,6 +150,24 @@ def notes_in_pdf(data: bytes) -> list:
                     continue
                 used.add((number, k))
                 parts, at = [segment.text], (number, k)
+                # Upward first: a note whose mark sits on a wrapped line starts on the lines above it, and
+                # those name the item the note is about ("Calcium chloride ... reason for use: Foliar spray
+                # for bitter pit on Honeycrisp. in use [REVIEW] restricted use: ...").
+                above_at = (number, k)
+                # Only a mark line that starts mid-sentence (lowercase) continues a cell from above. A line
+                # that starts with its own subject begins its row, and the line above it belongs to the
+                # previous row, which must never be glued onto this note.
+                starts_mid_sentence = segment.text[:1].islower()
+                while starts_mid_sentence:
+                    above = _line_above(above_at, segments)
+                    if above is None or (number, above) in used:
+                        break
+                    line = segments(number)[above]
+                    if MARK in line.text or not _wraps_onto(line, segments(number)[above_at[1]], segments(number)):
+                        break
+                    used.add((number, above))
+                    parts.insert(0, line.text)
+                    above_at = (number, above)
                 while True:
                     below = _line_below(at, segments, len(pdf))
                     if below is None or below in used:
@@ -163,7 +181,15 @@ def notes_in_pdf(data: bytes) -> list:
                 notes += split_notes(" ".join(parts))
     finally:
         pdf.close()
-    return list(dict.fromkeys(notes))
+    return _without_repeats(notes)
+
+
+def _without_repeats(notes) -> list:
+    """The notes once each, in order. A fragment (a note starting mid-sentence, in lowercase) that is the
+    tail of another note is the same row read from a wrapped line, so the longer is kept. A note that starts
+    as a sentence of its own is never dropped, even when another note happens to end with its words."""
+    kept = list(dict.fromkeys(notes))
+    return [n for n in kept if not (n[:1].islower() and any(other != n and other.endswith(n) for other in kept))]
 
 
 def _read_page(pdf, number, read):
@@ -264,6 +290,21 @@ def _line_below(at, segments, page_count):
         return None
     top = [(other.bottom, index) for index, other in enumerate(segments(number + 1)) if _same_column(current, other)]
     return (number + 1, max(top)[1]) if top else None
+
+
+def _line_above(at, segments):
+    """Index of the segment a line spacing above the one at `at`, at its left edge and in its size, on the
+    same page, or None. The mirror of `_line_below` without the page-break case."""
+    number, k = at
+    current = segments(number)[k]
+    best, best_step = None, None
+    for index, other in enumerate(segments(number)):
+        if index == k or not _same_column(current, other):
+            continue
+        step = other.bottom - current.bottom
+        if 0.9 * current.height <= step <= 1.4 * current.height and (best_step is None or step < best_step):
+            best, best_step = index, step
+    return best
 
 
 def _wraps_onto(current, below, segments) -> bool:

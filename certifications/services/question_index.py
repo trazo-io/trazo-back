@@ -394,7 +394,9 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
                     )
                 )
             else:
-                row.open_parts.append(OpenPart(part_state, part_detail, parcel, question_key))
+                row.open_parts.append(
+                    OpenPart(part_state, part_detail, parcel, question_key, subjects=(_question_label(question_key),))
+                )
         if state.state == "partial":
             row.open_parts.append(OpenPart("partial"))
         # Two register questions decided by the same trigger print one line per parcel, not two

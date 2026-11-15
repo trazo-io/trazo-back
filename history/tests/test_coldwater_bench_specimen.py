@@ -203,6 +203,17 @@ class ColdwaterBenchSpecimenTests(TestCase):
         self.assertIsNone(block_3.finish_date)
         self.assertFalse(ProductionEvent.objects.filter(history=block_3, type="HA").exists())
 
+    def test_the_dispenser_records_carry_no_invented_clock_time_and_name_no_k_gap(self):
+        dispensers = list(self._sprays().filter(commercial_name="Isomate CM Flex II"))
+        self.assertTrue(dispensers)
+        for event in dispensers:
+            self.assertTrue(event.time_not_recorded, "the sheet gives a date and no time for the dispensers")
+        passes = [p for p in WASprayRecordService.for_year(self.est, 2026).build() if p.events[0] in dispensers]
+        self.assertTrue(passes)
+        for application in passes:
+            self.assertNotIn("k", application.blank_items())
+            self.assertIn("c", application.blank_items())
+
     def test_the_washington_export_builds_and_names_its_blank_items(self):
         export = WASprayRecordService.for_year(self.est, 2026)
         passes = export.build()

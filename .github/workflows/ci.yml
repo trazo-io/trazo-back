@@ -839,6 +839,7 @@ jobs:
             history.tests.test_blue_oak_osp_answers \
             history.tests.test_calapooia_renewal_specimen \
             history.tests.test_coldwater_bench_specimen \
+            history.tests.test_field_history_and_land_use \
             certifications.tests.test_certified_parcel_branch \
             certifications.tests.test_verification_note_is_for_the_grower \
             certifications.tests.test_certifier_page_reads_findings_only \
@@ -1110,6 +1111,7 @@ jobs:
             backend.tests.test_secrets_client_is_bounded \
             backend.tests.test_private_records_storage \
             backend.tests.test_route_tenancy_declared \
+            history.tests.test_productions_routes \
             backend.tests.test_flat_routes_fail_closed \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \

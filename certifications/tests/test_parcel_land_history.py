@@ -103,7 +103,9 @@ class CoverageTests(SimpleTestCase):
         c = coverage(self._parcel(date(2025, 9, 1)), [_prior(date(2019, 1, 1), date(2025, 8, 31))], today=TODAY)
         self.assertTrue(c.complete, c.text)
         self.assertEqual(c.gaps, ())
-        self.assertIn("every day of the window is accounted for", c.text)
+        self.assertIn("Every day of the window is accounted for", c.text)
+        # Joined to the sentence before it: a lowercase start after a full stop read as a typo.
+        self.assertNotIn(". every day", c.text)
 
     def test_a_partial_affidavit_leaves_exactly_the_uncovered_days(self):
         c = coverage(self._parcel(date(2025, 9, 1)), [_prior(date(2024, 1, 1), date(2025, 8, 31))], today=TODAY)
@@ -166,6 +168,18 @@ class ManagerRowsTests(TestCase):
         self.assertEqual(row.declared, "1 year(s) listed")
         self.assertFalse(row.contradiction)
         self.assertEqual(row.attachment, "")
+
+    def test_an_explicit_no_to_no_materials_with_no_table_is_not_printed_as_not_answered(self):
+        self._affidavit(no_materials_applied=False)
+        # Printed as the answer it is, never as a statement that materials were applied (local review
+        # of back #437); the dossier prints the same words.
+        self.assertEqual(
+            prior_manager_rows(self.parcel)[0].declared, '"No materials applied" answered No; no materials listed'
+        )
+        # Never answered stays "Not answered".
+        LandownerAffidavit.objects.all().delete()
+        self._affidavit()
+        self.assertEqual(prior_manager_rows(self.parcel)[0].declared, "Not answered")
 
     def test_declared_none_over_a_row_naming_an_input_is_flagged_not_hidden(self):
         self._affidavit(no_materials_applied=True, yearly_history=[{"year": 2023, "inputs": "2,4-D"}])
@@ -377,6 +391,8 @@ class ParcelPagePrintsTheEvidenceTests(TestCase):
         text = self._page()
         self.assertIn("No certificate is on file", text)
         self.assertNotIn("Certificate of record:", text)
+        # The line that follows used to read "This is the operation's certificate" under the absence.
+        self.assertNotIn("This is the operation's certificate", text)
 
     def test_the_operators_declaration_prints_and_a_contradiction_is_flagged(self):
         self._answer(currently_certified="no", dlpm_none_within_tenure=True)

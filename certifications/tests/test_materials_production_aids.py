@@ -175,6 +175,37 @@ class StatementsTests(_Farm):
         lines = none_used_contradictions(self.osp, {"crop_production_aids_none_used": True})
         self.assertTrue(any("Rhizobium inoculant XL" in line and line.startswith("[REVIEW]") for line in lines))
 
+    def test_none_used_is_flagged_for_an_adjuvant_logged_as_its_own_tank_record(self):
+        # The tank-mix service stores an adjuvant as its own ChemicalEvent, not in tank_mix_partners.
+        self.spray(name="Dyne-Amic", tank_mix_role="adjuvant")
+        lines = none_used_contradictions(self.osp, {"crop_production_aids_none_used": True})
+        self.assertTrue(any("Dyne-Amic" in line and line.startswith("[REVIEW]") for line in lines), lines)
+
+    def test_an_adjuvant_tank_record_is_a_production_aid_and_never_a_pesticide(self):
+        """Local review of back #437: an adjuvant record carries the pass's type (PE), so it was also read
+        as a pesticide and the gate asked for it on two lists."""
+        from certifications.services.osp_prefill import logged_category_names
+
+        self.spray(name="Entrust SC")
+        self.spray(name="Dyne-Amic", tank_mix_role="adjuvant")
+        self.assertEqual(logged_category_names(self.est, "crop_production_aids_listed"), ["Dyne-Amic"])
+        self.assertEqual(logged_category_names(self.est, "pest_disease_weed_listed"), ["Entrust SC"])
+
+    def test_none_used_is_flagged_against_the_plans_own_production_aid_rows(self):
+        self.list_it("Nu-Film P")
+        lines = none_used_contradictions(self.osp, {"crop_production_aids_none_used": True})
+        self.assertTrue(any("Nu-Film P" in line and line.startswith("[REVIEW]") for line in lines), lines)
+        # A row of another category is not a production aid.
+        self.osp.plan_material_entries.all().delete()
+        self.list_it("Compost", category="fertilizer")
+        self.assertEqual(none_used_contradictions(self.osp, {"crop_production_aids_none_used": True}), [])
+
+    def test_none_used_prints_the_contradiction_on_the_page_beside_an_adjuvant_row(self):
+        self.list_it("Dyne-Amic")
+        self.store("materials_application", {"crop_production_aids_none_used": True})
+        page = _text(generate_module_pdf(self.osp, "materials_application"))
+        self.assertIn("[REVIEW] The plan states that no seed treatments, growing media or adjuvants are used", page)
+
     def test_the_listed_rows_print_under_their_own_heading(self):
         self.list_it("Sunshine Mix #4")
         page = _text(generate_module_pdf(self.osp, "materials_application"))
