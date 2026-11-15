@@ -84,6 +84,36 @@ def basis_question_applies(osp) -> bool:
     return is_first_version(osp) and osp.status != "draft"
 
 
+def is_draft_first_version(osp) -> bool:
+    return is_first_version(osp) and osp.status == "draft"
+
+
+def derived_draft_basis(osp) -> str:
+    """The `prior_plan_basis` of a filing continuing `osp`, a first version still in draft.
+
+    Never asked: a draft was never sent, so the certifier cannot hold it. Whether a certifier holds a
+    plan filed before Trazo at all is read from positive evidence only (`certification_on_record`):
+    `agent_file` with a certificate or approval on record, blank without one, so a first-time
+    applicant's packet claims no plan on file (reviews of app #389 and back #434).
+    """
+    from certifications.models import OSPAnnualUpdate
+    from certifications.services.operation_certificate import certification_on_record
+
+    return OSPAnnualUpdate.PRIOR_BASIS_AGENT_FILE if certification_on_record(osp.establishment_id) else ""
+
+
+def _rederive_draft_basis(filing) -> None:
+    """At signing, a draft first version's answer is read again: a certificate recorded after the
+    filing was saved, or a PATCH that blanked the stored answer, must not be signed as it stood."""
+    prior = filing.prior_osp
+    if not is_draft_first_version(prior):
+        return
+    expected = derived_draft_basis(prior)
+    if filing.prior_plan_basis != expected:
+        filing.prior_plan_basis = expected
+        filing.save(update_fields=["prior_plan_basis", "updated_at"])
+
+
 def release_server_answered_basis(osp) -> int:
     """`osp`, a first plan version, has just left draft: forget the answer the server gave for it.
 
@@ -280,6 +310,7 @@ def sign_filing(filing, user, signer_title: str = "", *, compare_plan_versions: 
     if filing.withdrawn_at is not None:
         raise FilingStateError("A withdrawn revision cannot be signed.")
     if compare_plan_versions:
+        _rederive_draft_basis(filing)
         _refuse_unstated_basis(filing)
         _refuse_attestation_that_differs(filing)
     filing.signed_by = user

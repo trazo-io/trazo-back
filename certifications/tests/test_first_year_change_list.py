@@ -171,6 +171,38 @@ class AnsweredByTheServerTests(_FirstYear):
             self.assertNotIn("first plan version in Trazo", text, name)
             self.assertNotIn("holds the plan the operation filed with it before Trazo", text, name)
 
+    def test_an_applicants_second_filing_still_claims_nothing(self):
+        """Review of back #434: the operation's own earlier filing is not evidence of a certificate."""
+        v1 = self._plan(status_="draft")
+        self.assertEqual(self._created(v1).prior_plan_basis, "")
+        self.assertEqual(self._created(v1, reporting_year=2028).prior_plan_basis, "")
+
+    def test_an_applicant_cannot_be_said_to_have_a_plan_on_file(self):
+        res = self._create(self._plan(status_="draft"), prior_plan_basis=AGENT_FILE)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        self.assertIn("Nothing in Trazo shows this operation is certified", str(res.json()["prior_plan_basis"]))
+
+    def test_a_certificate_recorded_after_saving_is_read_at_signing(self):
+        v1 = self._plan(status_="draft")
+        filing = self._created(v1)
+        self.assertEqual(filing.prior_plan_basis, "")
+        self._certified()
+
+        self.assertEqual(self._sign(filing).status_code, status.HTTP_200_OK)
+
+        filing.refresh_from_db()
+        self.assertEqual(filing.prior_plan_basis, AGENT_FILE)
+        self.assertEqual(filing.signed_content()["prior_plan_basis"], AGENT_FILE)
+        self.assertEqual(filing.content_sha256(), filing.signed_content_sha256)
+
+    def test_a_patch_cannot_blank_a_certified_drafts_answer(self):
+        self._certified()
+        filing = self._created(self._plan(status_="draft"))
+        res = self.client.patch(f"{self._base()}{filing.pk}/", {"prior_plan_basis": ""}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:500])
+        filing.refresh_from_db()
+        self.assertEqual(filing.prior_plan_basis, AGENT_FILE)
+
     def test_a_draft_first_version_cannot_be_called_the_plan_the_certifier_received(self):
         res = self._create(self._plan(status_="draft"), prior_plan_basis=TRAZO_VERSION)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
