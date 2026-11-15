@@ -4519,10 +4519,13 @@ class AuditExportService:
                 "REVIEW",
                 f"{missing_text} Pathway: {_compost_pathway_summary()}",
             )
-            if missing_parts:
+            if not missing_parts:
+                compost_row += (said("compost.supplier_documents_missing", count=compost_supplier_docs_missing),)
+            else:
                 compost_row += (
                     said(
                         "compost.fields_missing",
+                        purchased=compost_supplier_docs_missing,
                         cn=compost_missing_cn,
                         method=compost_missing_method,
                         temperature=compost_missing_temp_or_duration,
@@ -4920,7 +4923,14 @@ class AuditExportService:
             # No SalesRecord row and nothing on the legacy fields: no sale was recorded for this
             # lot (bins that went to the packer, for one). Asking for a buyer on a sale that
             # does not exist reads as a gap in a record the operation has no reason to keep.
-            snapshot_rows.append(("Sales documentation (§ 205.103)", "REVIEW", "No sale recorded for this lot"))
+            snapshot_rows.append(
+                (
+                    "Sales documentation (§ 205.103)",
+                    "REVIEW",
+                    "No sale recorded for this lot",
+                    said("sales_documentation.no_sale"),
+                )
+            )
         else:
             snapshot_rows.append(
                 (
@@ -5178,10 +5188,16 @@ class AuditExportService:
                 (
                     "OFPP (§ 205.201(a)(3))",
                     "PASS",
-                    (
-                        f"Written in Trazo {ofpp_flags['date_str']} (OSP module G2.0)"
+                    *(
+                        (
+                            f"Written in Trazo {ofpp_flags['date_str']} (OSP module G2.0)",
+                            said("ofpp.written_in_trazo", date=ofpp_flags["date_str"]),
+                        )
                         if ofpp_flags.get("authored_in_trazo")
-                        else f"Uploaded {ofpp_flags['date_str']}: {ofpp_flags['doc_name']}"
+                        else (
+                            f"Uploaded {ofpp_flags['date_str']}: {ofpp_flags['doc_name']}",
+                            said("ofpp.uploaded", date=ofpp_flags["date_str"], filename=ofpp_flags["doc_name"]),
+                        )
                     ),
                 )
             )
