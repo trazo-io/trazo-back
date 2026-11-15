@@ -79,6 +79,8 @@ class _Renewal(APITestCase):
                 "prior_osp": self.v1.pk,
                 "reporting_year": 2027,
                 "changes_summary": "Started a conventional block next to the pears.",
+                # v1 went to the certifier from Trazo, so the two Trazo versions are the comparison.
+                "prior_plan_basis": OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
                 "sections_unchanged_attestation": attestation,
             },
             format="json",

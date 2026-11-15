@@ -1085,6 +1085,9 @@ class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
             "id",
             "public_id",
             "version_number",
+            # The annual-update card asks what the certifier holds only of a first version in
+            # Trazo (`annual_update_filing.basis_question_applies`), before any filing exists.
+            "previous_version",
             "status",
             "status_display",
             "effective_date",
@@ -1497,6 +1500,14 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
     # returns None when the source traversal hits a null relation, which is the normal case
     # here — a "no material changes" attestation creates no new version.
     new_osp_version = serializers.IntegerField(source="new_osp.version_number", read_only=True)
+    # Whether this filing must say what the certifier holds (`prior_plan_basis`): its plan is the
+    # operation's first version in Trazo and has left draft. The card asks only then.
+    basis_question_applies = serializers.SerializerMethodField()
+
+    def get_basis_question_applies(self, obj) -> bool:
+        from certifications.services.annual_update_filing import basis_question_applies
+
+        return basis_question_applies(obj.prior_osp)
 
     class Meta:
         model = OSPAnnualUpdate
@@ -1505,6 +1516,8 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
             "public_id",
             "prior_osp",
             "prior_osp_version",
+            "prior_plan_basis",
+            "basis_question_applies",
             "new_osp",
             "new_osp_version",
             "reporting_year",
@@ -1676,6 +1689,7 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
                     code="year_already_has_update",
                 )
         self._validate_sales_period(attrs)
+        self._validate_prior_plan_basis(attrs, prior if prior is not None else self.instance.prior_osp)
         docs = attrs.get("supporting_documents")
         if docs:
             establishment_id = prior.establishment_id if prior is not None else self.instance.establishment_id
@@ -1685,6 +1699,44 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
                     code="supporting_document_other_farm",
                 )
         return attrs
+
+    def _validate_prior_plan_basis(self, attrs, prior):
+        """What the certifier holds, asked only of a filing that continues a first plan version.
+
+        A later version came from an earlier one in Trazo, so the comparison between versions is the
+        change list and the question is refused rather than stored. A first version still in draft
+        was never submitted, so the certifier holds a plan filed before Trazo: the answer is set here,
+        not asked, and the opposite answer is refused. Otherwise the operation answers it, by the
+        time it signs (`annual_update_filing._refuse_unstated_basis`).
+        """
+        from certifications.services.annual_update_filing import is_first_version
+
+        basis = attrs.get("prior_plan_basis", getattr(self.instance, "prior_plan_basis", ""))
+        if not is_first_version(prior):
+            if basis:
+                raise serializers.ValidationError(
+                    {
+                        "prior_plan_basis": (
+                            f"Plan v{prior.version_number} came from an earlier plan version in Trazo, so the "
+                            "changes are compared between those versions. This is asked only of a filing that "
+                            "continues the first plan version in Trazo."
+                        )
+                    },
+                    code="prior_plan_basis_not_asked",
+                )
+            return
+        if prior.status == "draft":
+            if basis == OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION:
+                raise serializers.ValidationError(
+                    {
+                        "prior_plan_basis": (
+                            f"Plan v{prior.version_number} is a draft that has not been submitted, so your certifier "
+                            "does not hold it yet. Your certifier holds the plan you filed with it before Trazo."
+                        )
+                    },
+                    code="prior_plan_basis_draft",
+                )
+            attrs["prior_plan_basis"] = OSPAnnualUpdate.PRIOR_BASIS_AGENT_FILE
 
     def _validate_sales_period(self, attrs):
         """Both ends or neither, in order, at most a year long, and already over.

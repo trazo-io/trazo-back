@@ -54,7 +54,12 @@ class _Step(APITestCase):
         self.osp = OrganicSystemPlan.objects.create(
             establishment=self.est, version_number=1, status="active", created_by=self.admin
         )
-        self.filing = OSPAnnualUpdate.objects.create(prior_osp=self.osp, reporting_year=2026, created_by=self.admin)
+        self.filing = OSPAnnualUpdate.objects.create(
+            prior_osp=self.osp,
+            reporting_year=2026,
+            created_by=self.admin,
+            prior_plan_basis=OSPAnnualUpdate.PRIOR_BASIS_TRAZO_VERSION,
+        )
         self.client.force_authenticate(user=self.admin)
 
     def _url(self, filing=None, company=None, est=None):

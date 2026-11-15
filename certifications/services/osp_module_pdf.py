@@ -2966,6 +2966,28 @@ def _other_filing_sentence(other) -> str:
     )
 
 
+def _agent_name(osp, *, starts_sentence: bool = False) -> str:
+    from certifications.services.packet_coverage import packet_agent
+
+    name = packet_agent(osp).name or "the certifying agent"
+    return name[:1].upper() + name[1:] if starts_sentence else name
+
+
+def _agent_file_sentence(filing, osp, *, then: str = "so this packet lists no changes against it.") -> str:
+    """The year one statement: the agent holds a plan filed before Trazo, and Trazo has no copy.
+
+    Overall review 2026-11 (OV-PK-C01/W03/O02): a first year in Trazo compared nothing against the
+    plan the agent holds and never said so, so an empty change list read as "nothing changed". Printed
+    only when the operation stated it (`prior_plan_basis`), never inferred for a filing signed before
+    the question existed.
+    """
+    return (
+        f"Plan v{filing.prior_osp.version_number} is the operation's first plan version in Trazo. "
+        f"{_agent_name(osp, starts_sentence=True)} holds the plan the operation filed with it before Trazo, and Trazo has no copy "
+        f"of that plan, {then}"
+    )
+
+
 def _renewal_context(osp) -> dict:
     """The facts a renewal cover is read for, gathered once for the cover and the filing PDF.
 
@@ -3514,6 +3536,8 @@ def _packet_cover_pdf(osp, review_notes=None) -> bytes:
                 styles["meta"],
             ),
         ]
+        if filing.holds_no_agent_copy:
+            story.append(Paragraph(_escape(_agent_file_sentence(filing, osp)), styles["meta"]))
     else:
         story.append(
             Paragraph(
@@ -3898,6 +3922,31 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
             styles["body"],
         )
     )
+    # What the changes below are measured against, as the operation stated it (signed with the rest).
+    if filing.holds_no_agent_copy:
+        story.append(
+            Paragraph(
+                _escape(
+                    _agent_file_sentence(
+                        filing,
+                        osp,
+                        then="so the changes below are the operation's own account against that plan, not a "
+                        "comparison Trazo made.",
+                    )
+                ),
+                styles["body"],
+            )
+        )
+    elif filing.prior_plan_basis == filing.PRIOR_BASIS_TRAZO_VERSION:
+        story.append(
+            Paragraph(
+                _escape(
+                    f"{_agent_name(osp, starts_sentence=True)} received plan v{filing.prior_osp.version_number} from Trazo "
+                    "(the operation's statement)."
+                ),
+                styles["body"],
+            )
+        )
     # 🔴 2026-09-30 (audit T20): a filed update in Trazo is the operation's record of its
     # § 205.406(a) changes. The agent's renewal is its own form (OTCO's OSP Update Application
     # & Agreement, WSDA AGR 2516, CCOF's annual renewal), signed and filed with the agent.
@@ -3977,7 +4026,8 @@ def render_filing_pdf(filing, freezing: bool = False) -> bytes:
     ]
     if attested:
         order = list(SECTION_LABELS)
-        story += [Spacer(1, 8), Paragraph("Sections attested unchanged since the prior plan", styles["header"])]
+        since = f"the plan on file with {_agent_name(osp)}" if filing.holds_no_agent_copy else "the prior plan"
+        story += [Spacer(1, 8), Paragraph(_escape(f"Sections attested unchanged since {since}"), styles["header"])]
         for key in sorted(attested, key=lambda k: (order.index(k) if k in order else len(order), k)):
             clause, label = SECTION_LABELS.get(key, (None, key.replace("_", " ")))
             line = f"• § 205.201{clause} — {label}" if clause else f"• {label}"
@@ -4207,6 +4257,32 @@ def _routing_question(row) -> str:
     return f"{row.ref}: {row.asks}"
 
 
+def _agent_file_flowables(filing, osp, styles) -> list:
+    """The year one statement on 02s, for every agent: the plan the changes are measured against is
+    one Trazo has never seen, so no section list is computed against it.
+
+    Printed for every agent, not only those whose renewal form asks for a list
+    (`packet_coverage._SECTION_LIST_AGENTS`): CCOF asks for changed sections on its own forms and WSDA
+    for section updates to its living plan, and a packet that says nothing about either reads as
+    "nothing changed" (overall review 2026-11, OV-PK-C01, OV-PK-W03).
+    """
+    if filing is None or not filing.holds_no_agent_copy:
+        return []
+    agent = _agent_name(osp)
+    return [
+        Spacer(1, 10),
+        Paragraph(_escape(f"Changes against the plan on file with {agent}"), styles["header"]),
+        Paragraph(
+            _escape(
+                _agent_file_sentence(filing, osp, then="so this packet cannot list which sections changed against it.")
+                + f" The year's changes are the ones the operation states on its annual update (document 02). Send "
+                f"the changed sections the way {agent}'s renewal asks, on {agent}'s own forms."
+            ),
+            styles["body"],
+        ),
+    ]
+
+
 def _changed_sections_flowables(osp, styles) -> list:
     """Oregon Tilth's OSP Update Step 4: which plan sections changed, by the agent's form codes.
 
@@ -4228,6 +4304,17 @@ def _changed_sections_flowables(osp, styles) -> list:
         story.append(
             Paragraph(
                 "No annual update is linked to this plan, so there are no two plan versions to compare.",
+                styles["body"],
+            )
+        )
+        return story
+    if result.state == "first_version":
+        story.append(
+            Paragraph(
+                _escape(
+                    f"None listed from Trazo: the plan on file with {agent} predates plan v{result.prior_version}, "
+                    "the first plan version in Trazo (see above). List the updated sections on the form yourself."
+                ),
                 styles["body"],
             )
         )
@@ -4724,6 +4811,7 @@ def _renewal_status_pdf(osp) -> bytes:
     story += _unchanged_but_changed_flowables(ctx["filing"], osp, styles)
     story += _renewal_routing_flowables(osp, styles)
     story += _certifier_inspection_flowables(osp, styles)
+    story += _agent_file_flowables(ctx["filing"], osp, styles)
     story += _changed_sections_flowables(osp, styles)
     story += _land_table_flowables(osp, styles)
     spec = is_specimen(getattr(osp, "establishment", None))
