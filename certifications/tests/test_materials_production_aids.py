@@ -181,6 +181,16 @@ class StatementsTests(_Farm):
         lines = none_used_contradictions(self.osp, {"crop_production_aids_none_used": True})
         self.assertTrue(any("Dyne-Amic" in line and line.startswith("[REVIEW]") for line in lines), lines)
 
+    def test_an_adjuvant_tank_record_is_a_production_aid_and_never_a_pesticide(self):
+        """Local review of back #437: an adjuvant record carries the pass's type (PE), so it was also read
+        as a pesticide and the gate asked for it on two lists."""
+        from certifications.services.osp_prefill import logged_category_names
+
+        self.spray(name="Entrust SC")
+        self.spray(name="Dyne-Amic", tank_mix_role="adjuvant")
+        self.assertEqual(logged_category_names(self.est, "crop_production_aids_listed"), ["Dyne-Amic"])
+        self.assertEqual(logged_category_names(self.est, "pest_disease_weed_listed"), ["Entrust SC"])
+
     def test_none_used_is_flagged_against_the_plans_own_production_aid_rows(self):
         self.list_it("Nu-Film P")
         lines = none_used_contradictions(self.osp, {"crop_production_aids_none_used": True})

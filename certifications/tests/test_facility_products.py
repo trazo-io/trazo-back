@@ -252,6 +252,13 @@ class OnThePageTests(_Farm):
             self.assertIn("Products, as the operation describes them: Hulled almonds; field bins.", page)
             self.assertNotIn("field bins..", page)
 
+    def test_every_detail_line_ending_in_a_full_stop_loses_it_before_the_join(self):
+        self.facility.products_detail = "Apples, packed.\nPears."
+        self.facility.save(update_fields=["products_detail"])
+        page = self.g6_1(self.plan())
+        self.assertIn("Products, as the operation describes them: Apples, packed; Pears.", page)
+        self.assertNotIn(".;", page)
+
     def test_a_multi_ingredient_product_with_no_statement_prints_a_review(self):
         self.product(category="Almond butter", multi_ingredient="yes")
         self.assertIn(

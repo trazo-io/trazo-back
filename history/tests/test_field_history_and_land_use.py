@@ -236,6 +236,16 @@ class FieldHistoryPacketTests(TestCase):
         self.assertIn("Not answered", text)
         self.assertIn("2019-01-01 – 2022-12-31", text)
 
+    def test_an_explicit_no_with_no_table_prints_the_answer_as_the_packet_does(self):
+        """Local review of back #437: the packet's land-history table and this table must say the same
+        thing about one affidavit, and neither turns a No into "materials were applied"."""
+        LandownerAffidavit.objects.create(
+            parcel=self.parcel, previous_manager_name="L. Said No", no_materials_applied=False
+        )
+        text = self._text()
+        self.assertIn('"No materials applied" answered No; no materials listed', " ".join(text.split()))
+        self.assertNotIn("Materials applied (declared)", text)
+
     def test_an_affidavit_that_contradicts_itself_is_flagged_not_silently_resolved(self):
         """Declared "none applied" over a table that lists applications.
 

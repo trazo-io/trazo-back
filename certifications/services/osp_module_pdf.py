@@ -1107,7 +1107,9 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
         if detail:
             out.append(
                 Paragraph(
-                    _escape("Products, as the operation describes them: " + "; ".join(detail).rstrip(".") + "."),
+                    _escape(
+                        "Products, as the operation describes them: " + "; ".join(d.rstrip(".") for d in detail) + "."
+                    ),
                     styles["meta"],
                 )
             )
@@ -1184,7 +1186,9 @@ def _own_facility_flowables(osp, styles) -> list:
         if detail:
             out.append(
                 Paragraph(
-                    _escape("Products, as the operation describes them: " + "; ".join(detail).rstrip(".") + "."),
+                    _escape(
+                        "Products, as the operation describes them: " + "; ".join(d.rstrip(".") for d in detail) + "."
+                    ),
                     styles["meta"],
                 )
             )
@@ -4212,12 +4216,23 @@ def _renewal_routing_flowables(osp, styles, filing=None) -> list:
     if basis:
         # Run 4, R4-04: stated here, on the page that changes with the export, because 02 is frozen as
         # filed and may name no agent at all. 02 prints its sales subtotal only when a filing exists.
-        lead = (
-            "the subtotal printed on 02 is a subtotal of the operation's sales records, not reconciled to its "
-            "books and not this agent's fee figure."
-            if filing is not None
-            else "No annual update is on file, so 02 carries no sales subtotal."
-        )
+        # 02 prints a subtotal only for a filing whose sales year is over and whose every sale carries
+        # an amount (`_annual_update`); otherwise it says why it gives none. This line cites the subtotal
+        # only when 02 prints one. "Filed against this plan version", because an update linked to another
+        # version can be on file and named on 02 without its sales section (`other_filing`).
+        if filing is None:
+            lead = "No annual update is filed against this plan version, so 02 carries no sales subtotal."
+        else:
+            from certifications.services.renewal_sales import organic_sales_subtotal
+
+            sales = organic_sales_subtotal(osp.establishment, filing)
+            if not sales.running and sales.n_sales and sales.n_priced == sales.n_sales:
+                lead = (
+                    "the subtotal printed on 02 is a subtotal of the operation's sales records, not reconciled to "
+                    "its books and not this agent's fee figure."
+                )
+            else:
+                lead = "02 gives no sales subtotal for this filing; its sales section says why."
         story.append(Paragraph(_escape(f"Sales figure: {lead} {basis}"), styles["meta"]))
     for form in forms:
         heading = _RENEWAL_ROLE_HEADINGS.get(form.role, form.role)

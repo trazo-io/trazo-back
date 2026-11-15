@@ -834,6 +834,7 @@ jobs:
             history.tests.test_blue_oak_osp_answers \
             history.tests.test_calapooia_renewal_specimen \
             history.tests.test_coldwater_bench_specimen \
+            history.tests.test_field_history_and_land_use \
             certifications.tests.test_certified_parcel_branch \
             certifications.tests.test_verification_note_is_for_the_grower \
             certifications.tests.test_certifier_page_reads_findings_only \

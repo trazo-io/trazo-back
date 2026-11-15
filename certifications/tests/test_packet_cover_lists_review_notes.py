@@ -317,3 +317,22 @@ class NoteStartsOnTheLinesAboveTheMarkTests(SimpleTestCase):
         full = f"Calcium chloride, reason for use: foliar spray for bitter pit {MARK} restricted use."
         tail = f"bitter pit {MARK} restricted use."
         self.assertEqual(packet_review_notes._without_repeats([tail, full, "other"]), [full, "other"])
+
+    def test_a_note_that_starts_as_its_own_sentence_is_kept_even_as_another_notes_tail(self):
+        """Local review of back #437: a distinct note whose words end another note was dropped."""
+        long = f"Block 3: {MARK} not answered"
+        short = f"{MARK} not answered"
+        self.assertEqual(packet_review_notes._without_repeats([long, short]), [long, short])
+
+    def test_a_row_whose_mark_is_on_its_own_first_line_takes_nothing_from_the_row_above(self):
+        """Local review of back #437: the upward walk could glue the previous row's last line onto a
+        note. Only a mark line that starts mid-sentence walks up."""
+        above = (
+            "Entrust SC, Corteva, OMRI listed, reason for use: codling moth control on the Gala and Honeycrisp "
+            "blocks through the first and second generation flights and the late summer cover sprays on"
+        )
+        row = f"Gypsum {MARK} restricted use: confirm the source before the next application this season."
+        data = self._pdf([above + " " + row])
+        notes = packet_review_notes.notes_in_pdf(data)
+        self.assertEqual(len(notes), 1, notes)
+        self.assertNotIn("Entrust", notes[0])

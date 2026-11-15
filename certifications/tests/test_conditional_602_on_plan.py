@@ -198,6 +198,25 @@ class ConditionalRowPrintsItsConditionTests(_PlanSetup, TestCase):
                 _, line = self._line()
                 self.assertIn(f"[REVIEW] restricted use: {CALCIUM_NOTE}", line)
 
+    def test_a_post_harvest_calcium_chloride_row_keeps_its_review_line(self):
+        """Local review of back #437: G4.0 answers field foliar use; a post-harvest dip is handling, so a
+        row filed under post-harvest is not answered by G4.0."""
+        self.osp.approved_national_list_substances.add(self.calcium)
+        PlanMaterialEntry.objects.create(
+            osp=self.osp,
+            product_name="Calcium chloride (brine process)",
+            listing_basis="national_list",
+            national_list_substance=self.calcium,
+            reason_for_use="Post-harvest dip",
+            category="post_harvest",
+        )
+        self._g4(applies_calcium_chloride=True, calcium_chloride_foliar=True, calcium_chloride_disorder="bitter pit")
+        rows = [r for r in plan_materials(self.osp) if "calcium chloride" in r.name.lower()]
+        self.assertEqual(len(rows), 1, [r.display() for r in rows])
+        line = rows[0].display(stated_absences=True)
+        self.assertIn(f"[REVIEW] restricted use: {CALCIUM_NOTE}", line)
+        self.assertNotIn("answered in G4.0", line)
+
     def test_the_condition_survives_the_fold_into_the_operator_entry(self):
         # The operator lists the product with its own reason; the catalogue row folds into it. The
         # condition is the one thing the reviewer must see, so it travels with the fold.

@@ -464,10 +464,12 @@ def _with_g4_answers(osp, rows: list) -> list:
         and disorder
     ):
         return rows
+    # G4.0 asks about field use; its own coaching calls a post-harvest calcium chloride dip handling.
+    # A row the operator filed under post-harvest keeps its review line.
     return [
         (
             replace(r, condition_answered=disorder)
-            if r.condition and _CALCIUM_CONDITION_WORDS in r.condition.lower()
+            if r.condition and _CALCIUM_CONDITION_WORDS in r.condition.lower() and r.category != "post_harvest"
             else r
         )
         for r in rows

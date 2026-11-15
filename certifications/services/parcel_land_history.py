@@ -46,7 +46,7 @@ PRIOR_MANAGER = "prior manager"
 #: wording so the two artifacts agree about the same affidavit.
 DECLARED_NONE = "None applied (declared)"
 DECLARED_NOT_ANSWERED = "Not answered"
-DECLARED_APPLIED_NONE_LISTED = "Materials applied (declared); none listed"
+DECLARED_APPLIED_NONE_LISTED = '"No materials applied" answered No; no materials listed'
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,8 @@ def _declared(affidavit) -> Tuple[str, bool]:
     if affidavit.yearly_history:
         return f"{len(affidavit.yearly_history)} year(s) listed", False
     if affidavit.no_materials_applied is False:
-        # An explicit No to "no materials applied" is an answer, not a blank.
+        # An explicit No to "no materials applied" is an answer, not a blank. It is printed as the answer
+        # it is, never turned into a statement that materials were applied.
         return DECLARED_APPLIED_NONE_LISTED, False
     return DECLARED_NOT_ANSWERED, False
 

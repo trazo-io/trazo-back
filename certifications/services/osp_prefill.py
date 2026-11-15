@@ -432,7 +432,14 @@ def logged_category_names(establishment, question_key) -> list[str]:
     if question_key == "post_harvest_contact_listed":
         names = ProductionEvent.objects.filter(type="PH", **scope).values_list("sanitizer_name", flat=True)
     else:
-        names = list(ChemicalEvent.objects.filter(type__in=types, **scope).values_list("commercial_name", flat=True))
+        # An adjuvant sprayed from a tank is its own record carrying the pass's chemical type (PE, for one)
+        # under `tank_mix_role="adjuvant"`. It is a production aid, counted above, never a pesticide or a
+        # fertilizer, or the gate would ask for it on two lists.
+        names = list(
+            ChemicalEvent.objects.filter(type__in=types, **scope)
+            .exclude(tank_mix_role="adjuvant")
+            .values_list("commercial_name", flat=True)
+        )
         if question_key == "fertilizers_listed":
             names += list(SoilManagementEvent.objects.filter(**scope).values_list("amendment_product_name", flat=True))
     return sorted({(n or "").strip() for n in names if (n or "").strip()})

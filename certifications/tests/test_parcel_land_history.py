@@ -171,7 +171,11 @@ class ManagerRowsTests(TestCase):
 
     def test_an_explicit_no_to_no_materials_with_no_table_is_not_printed_as_not_answered(self):
         self._affidavit(no_materials_applied=False)
-        self.assertEqual(prior_manager_rows(self.parcel)[0].declared, "Materials applied (declared); none listed")
+        # Printed as the answer it is, never as a statement that materials were applied (local review
+        # of back #437); the dossier prints the same words.
+        self.assertEqual(
+            prior_manager_rows(self.parcel)[0].declared, '"No materials applied" answered No; no materials listed'
+        )
         # Never answered stays "Not answered".
         LandownerAffidavit.objects.all().delete()
         self._affidavit()

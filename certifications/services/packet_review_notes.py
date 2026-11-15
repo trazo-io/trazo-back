@@ -154,7 +154,11 @@ def notes_in_pdf(data: bytes) -> list:
                 # those name the item the note is about ("Calcium chloride ... reason for use: Foliar spray
                 # for bitter pit on Honeycrisp. in use [REVIEW] restricted use: ...").
                 above_at = (number, k)
-                while True:
+                # Only a mark line that starts mid-sentence (lowercase) continues a cell from above. A line
+                # that starts with its own subject begins its row, and the line above it belongs to the
+                # previous row, which must never be glued onto this note.
+                starts_mid_sentence = segment.text[:1].islower()
+                while starts_mid_sentence:
                     above = _line_above(above_at, segments)
                     if above is None or (number, above) in used:
                         break
@@ -181,10 +185,11 @@ def notes_in_pdf(data: bytes) -> list:
 
 
 def _without_repeats(notes) -> list:
-    """The notes once each, in order. A note that is the tail of another (the same table row printed on two
-    pages, one read from its first line and one from a wrapped line) is the same note: the longer is kept."""
+    """The notes once each, in order. A fragment (a note starting mid-sentence, in lowercase) that is the
+    tail of another note is the same row read from a wrapped line, so the longer is kept. A note that starts
+    as a sentence of its own is never dropped, even when another note happens to end with its words."""
     kept = list(dict.fromkeys(notes))
-    return [n for n in kept if not any(other != n and other.endswith(n) for other in kept)]
+    return [n for n in kept if not (n[:1].islower() and any(other != n and other.endswith(n) for other in kept))]
 
 
 def _read_page(pdf, number, read):
