@@ -775,7 +775,7 @@ def agent_form_sheet(osp) -> dict | None:
         # A first year: the list is the operation's statement on its annual update, never a comparison
         # (Trazo has no copy of the plan the agent holds). An empty list is its "nothing changed".
         sections = [{"label": label, "files": list(files)} for label, files in step4.forms]
-        sections += [{"label": label, "files": [path]} for label, path in step4.unmapped]
+        sections += [{"label": label, "files": [path] if path else []} for label, path in step4.unmapped]
         rows.append(
             SheetRow(
                 "4",

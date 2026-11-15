@@ -503,3 +503,81 @@ class StatedChangesSheetTests(_FirstYear):
         rows = {row["item"]: row for row in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
         self.assertEqual((rows["osp_changes"]["kind"], rows["osp_changes"]["value"]), ("value", []))
         self.assertTrue(rows["osp_changes"]["extra"]["stated"])
+
+
+class StatedChangesEdgeTests(_FirstYear):
+    """Review of back #439: what the statement may not say, and when it stops counting."""
+
+    _packet = PrintedTests._packet
+
+    def test_a_packet_built_from_v1_never_points_a_stated_section_at_v1s_files(self):
+        v1 = self._plan()
+        v2 = self._plan(status_="draft", version=2, previous=v1)
+        filing = self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g5_0_pest"])
+        OSPAnnualUpdate.objects.filter(pk=filing.pk).update(new_osp=v2)
+
+        supplement = self._packet(v1)["02s-renewal-status-and-routing.pdf"]
+        self.assertIn("G5.0", supplement)
+        self.assertNotIn("current answers in modules/G5_0.pdf", supplement)
+        self.assertNotIn("Management: modules/G5_0.pdf", supplement)
+        self.assertIn("in the module files of the packet built from plan v2", supplement)
+        self.assertIn(
+            "The sections the operation states changed are listed in the packet built from plan v2", supplement
+        )
+
+        rows = {row["item"]: row for row in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
+        self.assertEqual(
+            (rows["osp_changes"]["kind"], rows["osp_changes"]["extra"]["state"]), ("yours", "newer_version")
+        )
+
+    def test_the_cover_does_not_say_no_changes_are_listed_beside_a_statement(self):
+        v1 = self._plan(certifier=CCOF)
+        self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g5_0_pest"])
+        cover = self._packet(v1)["00-cover.pdf"]
+        self.assertNotIn("lists no changes against it", cover)
+        self.assertIn("the operation's own statement on its annual update", cover)
+
+    def test_a_statement_the_basis_no_longer_asks_for_is_not_signed_and_refuses_no_save(self):
+        self._certified()
+        v1 = self._plan(status_="draft")
+        filing = self._created(v1, agent_file_changed_modules=["g5_0_pest"])
+        self.assertEqual(filing.prior_plan_basis, AGENT_FILE)
+
+        from certifications.models import Certification
+
+        Certification.objects.all().delete()
+        # A save that does not send the statement is not refused for it.
+        res = self.client.patch(f"{self._base()}{filing.pk}/", {"changes_summary": "Reworded."}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.content[:500])
+        # Sending it under a basis that does not ask for it still is.
+        res = self.client.patch(
+            f"{self._base()}{filing.pk}/", {"agent_file_changed_modules": ["g9_0_facility_pest"]}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+        self.assertEqual(self._sign(filing).status_code, status.HTTP_200_OK)
+        filing.refresh_from_db()
+        self.assertEqual(filing.prior_plan_basis, "")
+        self.assertNotIn("agent_file_changed_modules", filing.signed_content())
+        self.assertNotIn("G5.0", self._packet(v1)["02-annual-update.pdf"])
+
+    def test_an_empty_value_that_is_not_a_list_is_refused(self):
+        for value in ({}, "", 0):
+            with self.subTest(value=value):
+                res = self._create(self._plan(), prior_plan_basis=AGENT_FILE, agent_file_changed_modules=value)
+                self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content[:500])
+                self.assertIn("agent_file_changed_modules", res.json())
+                OrganicSystemPlan.objects.all().delete()
+
+    def test_a_key_the_registry_no_longer_knows_is_printed_never_read_as_nothing_changed(self):
+        v1 = self._plan()
+        filing = self._created(v1, prior_plan_basis=AGENT_FILE, agent_file_changed_modules=["g5_0_pest"])
+        OSPAnnualUpdate.objects.filter(pk=filing.pk).update(agent_file_changed_modules=["g5_0_pest_retired"])
+
+        docs = self._packet(v1)
+        for name in ("02-annual-update.pdf", "02s-renewal-status-and-routing.pdf"):
+            with self.subTest(document=name):
+                self.assertIn("g5_0_pest_retired", docs[name])
+                self.assertIn("not a section of the plan in Trazo today", docs[name])
+                self.assertNotIn("nothing in the plan on file", docs[name].lower())
+        rows = {row["item"]: row for row in agent_form_sheet(OrganicSystemPlan.objects.get(pk=v1.pk))["rows"]}
+        self.assertEqual(rows["osp_changes"]["value"], [{"label": "g5_0_pest_retired", "files": []}])

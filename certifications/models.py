@@ -2154,9 +2154,12 @@ class OSPAnnualUpdate(models.Model):
         # Added 2026-11-14, hashed only when stated, for the same reason.
         if self.prior_plan_basis:
             content["prior_plan_basis"] = self.prior_plan_basis
-        if self.agent_file_changed_modules:
+        # The statement is hashed only while the basis asks for it: a statement left stored after the
+        # basis moved off `agent_file` is printed nowhere, so a signature must not cover it (review of
+        # back #439).
+        if self.holds_no_agent_copy and self.agent_file_changed_modules:
             content["agent_file_changed_modules"] = list(self.agent_file_changed_modules)
-        if self.agent_file_nothing_changed is not None:
+        if self.holds_no_agent_copy and self.agent_file_nothing_changed is not None:
             content["agent_file_nothing_changed"] = self.agent_file_nothing_changed
         return content
 

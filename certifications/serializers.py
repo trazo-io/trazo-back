@@ -1765,14 +1765,31 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
         def current(name, default):
             return attrs.get(name, getattr(self.instance, name, default) if self.instance is not None else default)
 
-        modules = current("agent_file_changed_modules", []) or []
+        modules = current("agent_file_changed_modules", [])
+        # Checked before anything reads it as empty: `{}`, `""` or `0` is not "no sections" (review of
+        # back #439), and would otherwise be stored and served back as sent.
+        if not isinstance(modules, list) or any(not isinstance(key, str) for key in modules):
+            raise serializers.ValidationError(
+                {"agent_file_changed_modules": "A list of plan section keys."}, code="agent_file_modules_shape"
+            )
         nothing = current("agent_file_nothing_changed", None)
         if nothing is False:
             attrs["agent_file_nothing_changed"] = nothing = None
         if not modules and nothing is not True:
             return
-        field = "agent_file_changed_modules" if modules else "agent_file_nothing_changed"
         if current("prior_plan_basis", "") != OSPAnnualUpdate.PRIOR_BASIS_AGENT_FILE:
+            sent = bool(attrs.get("agent_file_changed_modules")) or attrs.get("agent_file_nothing_changed") is True
+            if not sent:
+                # Stored while the basis was `agent_file`, which the operation or the server has since
+                # moved (`_rederive_draft_basis`, `release_server_answered_basis`). It is inert until the
+                # basis is `agent_file` again (never printed, hashed or carried as a statement), so a save
+                # that does not send it is not refused for it (review of back #439).
+                return
+            field = (
+                "agent_file_changed_modules"
+                if attrs.get("agent_file_changed_modules")
+                else "agent_file_nothing_changed"
+            )
             raise serializers.ValidationError(
                 {
                     field: (
@@ -1781,10 +1798,6 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
                     )
                 },
                 code="agent_file_statement_not_asked",
-            )
-        if not isinstance(modules, list) or any(not isinstance(key, str) for key in modules):
-            raise serializers.ValidationError(
-                {"agent_file_changed_modules": "A list of plan section keys."}, code="agent_file_modules_shape"
             )
         unknown = sorted({key for key in modules if key not in MODULES_BY_KEY})
         if unknown:

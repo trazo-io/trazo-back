@@ -157,6 +157,20 @@ def stated_modules(filing) -> list:
     return [module for module in MODULE_REGISTRY if module.key in keys]
 
 
+def stated_keys_not_in_registry(filing) -> list[str]:
+    """Keys `filing` states changed that the module registry no longer knows, as stored.
+
+    The serializer refuses an unknown key, so this is empty unless a module was renamed or retired
+    after the statement was saved. Readers print these as stored: dropping them would turn a list of
+    changes into what reads as the operation's "nothing changed" (review of back #439).
+    """
+    from certifications.osp_modules import MODULES_BY_KEY
+
+    if filing is None or not filing.holds_no_agent_copy:
+        return []
+    return sorted({key for key in filing.agent_file_changed_modules or [] if key not in MODULES_BY_KEY})
+
+
 def section_differences(prior, new) -> dict[str, dict]:
     """{section key: {"differs": [...], "modules": [Module, ...]}} for every § 205.201(a) section
     whose content differs between `prior` and `new`, in regulation order.

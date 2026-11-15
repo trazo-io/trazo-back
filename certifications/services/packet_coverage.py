@@ -749,8 +749,11 @@ class ChangedSections:
     new_version: int | None = None
     #: (agent form label, changed module files) for each agent form that maps a changed module.
     forms: tuple = ()
-    #: (module label, file) for a changed module no form of the agent maps.
+    #: (module label, file) for a changed module no form of the agent maps. The file is "" for a
+    #: stated key the module registry no longer knows.
     unmapped: tuple = ()
+    #: True when the list is the operation's statement ("stated", or "newer_version" in a first year).
+    stated: bool = False
     #: (§ 205.201(a) section label, file) for each section whose operator-written content changed.
     narratives: tuple = ()
     #: Codes of the agent's forms answered per parcel, which the comparison cannot see.
@@ -791,6 +794,7 @@ def changed_sections(osp) -> ChangedSections | None:
         changed_section_keys,
         parcels_begun_since,
         plan_reference_date,
+        stated_keys_not_in_registry,
         stated_modules,
     )
 
@@ -812,7 +816,15 @@ def changed_sections(osp) -> ChangedSections | None:
         }
         if not filing.states_agent_file_changes:
             return ChangedSections(agent_name, "first_version", **versions)
+        if new is not None and new.pk != osp.pk:
+            # The same rule as the comparison below (review of back #216, and of back #439): this
+            # packet's module files hold `osp`'s answers, so pointing a stated section at them would
+            # name a file that does not hold the year's change.
+            return ChangedSections(agent_name, "newer_version", stated=True, **versions)
         _forms, listed, unmapped = _forms_for_modules(agent, [m.key for m in stated_modules(filing)])
+        # A stored key the registry no longer knows is still part of what the operation signed: it is
+        # listed as stored, never dropped (an empty list here reads as its "nothing changed").
+        unmapped += tuple((key, "") for key in stated_keys_not_in_registry(filing))
         return ChangedSections(agent_name, "stated", forms=listed, unmapped=unmapped, **versions)
     if new is None:
         return ChangedSections(agent_name, "no_new_version", prior_version=prior.version_number)
