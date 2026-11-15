@@ -34,75 +34,68 @@ items:
   trazo:
     questions:
     - g4_2_natural_resources.conservation_plan_agency
+    - g4_2_natural_resources.conservation_plan_agency_other
     prints: modules/G4_2.pdf §B; narrative § 205.200
 - ref: A2a
-  asks: If yes, list the conservation practices that are being implemented and be prepared to show your
-    plan at inspection.
-  status: partial
-  severity: P3
+  asks: If yes, list the conservation practices that are being implemented and be prepared to show your plan at
+    inspection.
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.conservation_plan_detail
-    prints: modules/G4_2.pdf §A
-  gap: The field is a single-line text input where CCOF invites a list of practices to be shown at inspection;
-    there is no optional upload for the plan itself.
-  fix: Change the question `kind` from `text` to `textarea`; add an optional `conservation_plan_upload`.
+    prints: modules/G4_2.pdf §B
+  note: Closed 2026-11-15. `conservation_plan_detail` is a textarea for the list of practices. CCOF asks the plan
+    shown at inspection, not attached, so no upload is asked.
 - ref: A3
-  asks: How do you maintain or improve your water resources (quantity and quality)? Efficient irrigation
-    use (quantity, timing, technology) / allocate water to non-crop areas for wildlife and habitat / target
-    and meter fertilizer use to prevent nutrient runoff / manage excess water towards on-site retention
-    and infiltration / vegetative cover filters for sediments and other pollutants / use fish screens
-    / other (describe).
-  status: partial
-  severity: P2
+  asks: How do you maintain or improve your water resources (quantity and quality)? Efficient irrigation use (quantity,
+    timing, technology) / allocate water to non-crop areas for wildlife and habitat / target and meter fertilizer
+    use to prevent nutrient runoff / manage excess water towards on-site retention and infiltration / vegetative
+    cover filters for sediments and other pollutants / use fish screens / other (describe).
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.soil_water_practices
     - g4_2_natural_resources.soil_water_practices_other
-    prints: modules/G4_2.pdf §A; narrative § 205.200
-  gap: 3 of CCOF's 6 options are absent (allocate water to non-crop areas for wildlife/habitat; target
-    and meter fertilizer to prevent nutrient runoff; use fish screens — relevant where WA/OR surface-water
-    diversions require state-mandated screening); `tailwater_management` is narrower than CCOF's 'manage
-    excess water toward on-site retention and infiltration'.
-  fix: Add the 3 missing options to `soil_water_practices`.
+    - g4_2_natural_resources.waterway_practices
+    - g4_2_natural_resources.waterway_practices_other
+    prints: modules/G4_2.pdf §A
+  note: Closed 2026-11-15. `fertilizer_metering` and `water_for_wildlife` join `soil_water_practices`; fish screens
+    are on `waterway_practices`, asked where streams or channels run by the land; on-site retention and infiltration
+    is `infiltration`.
 - ref: A4
-  asks: How do you improve and/or maintain natural resources in non-crop areas, such as borders, fallow
-    ag land, and non-ag habitats? Preserve/restore wetlands and riparian areas / increase and protect
-    native plants/wildlife / minimize erosion / preserve/restore wildlife corridors / leave areas as undisturbed
-    habitat refuge / wildlife friendly fences / establish legal conservation areas / restore degraded
-    areas / native habitats not converted to farmland since certification / other (describe).
-  status: partial
-  severity: P2
+  asks: How do you improve and/or maintain natural resources in non-crop areas, such as borders, fallow ag land,
+    and non-ag habitats? Preserve/restore wetlands and riparian areas / increase and protect native plants/wildlife
+    / minimize erosion / preserve/restore wildlife corridors / leave areas as undisturbed habitat refuge / wildlife
+    friendly fences / establish legal conservation areas / restore degraded areas / native habitats not converted
+    to farmland since certification / other (describe).
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.habitat_biodiversity_practices
     - g4_2_natural_resources.habitat_biodiversity_practices_other
     - g4_2_natural_resources.soil_water_practices
+    - g4_2_natural_resources.soil_water_practices_other
+    - g4_2_natural_resources.waterway_practices
+    - g4_2_natural_resources.waterway_practices_other
     - g4_2_natural_resources.wildlife_habitat_pressure
-    prints: modules/G4_2.pdf §A; narrative § 205.2
-  gap: 4 of CCOF's 9 options are absent or reachable only after wildlife pressure is already flagged (leave
-    areas as undisturbed habitat refuge; wildlife-friendly fences; establish legal conservation areas;
-    restore degraded areas — the last two exist today only inside the gated `wildlife_habitat_mitigation`
-    battery, unusable as a plain non-crop-area practice).
-  fix: Add the 4 options directly to `habitat_biodiversity_practices` so they do not require the wildlife-pressure
-    gate first.
+    prints: modules/G4_2.pdf §A, §B
+  note: Closed 2026-11-15. Undisturbed refuge, wildlife-friendly fences, legal conservation areas, restored degraded
+    areas and native habitat not converted are options of `habitat_biodiversity_practices`, no longer behind the
+    wildlife-pressure gate.
 - ref: A5
-  asks: How are you managing habitat for pollinators, natural enemy insects and other wildlife throughout
-    the production season? Hedgerows / windbreaks / raptor perches or trees at field edge / bird or bat
-    boxes / ensure a clean water source / plant flowers interspersed with crops / implement measures to
-    support a variety of bee species / allow non-invasive plants in non-cropped, fallow, and border areas
-    / provide extended food supply / other (describe).
-  status: partial
-  severity: P2
+  asks: How are you managing habitat for pollinators, natural enemy insects and other wildlife throughout the production
+    season? Hedgerows / windbreaks / raptor perches or trees at field edge / bird or bat boxes / ensure a clean
+    water source / plant flowers interspersed with crops / implement measures to support a variety of bee species
+    / allow non-invasive plants in non-cropped, fallow, and border areas / provide extended food supply / other
+    (describe).
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.habitat_biodiversity_practices
-    - g4_2_natural_resources.soil_water_practices
+    - g4_2_natural_resources.habitat_biodiversity_practices_other
     prints: modules/G4_2.pdf §A
-  gap: 4 of CCOF's 9 options are absent (ensure a clean water source; measures to support a variety of
-    bee species; allow non-invasive plants in non-cropped/fallow/border areas; provide extended food supply);
-    bird boxes are reachable only via 'other' (only `bat_boxes` is a named option).
-  fix: Add the 4 missing options; add a `bird_boxes` option or relabel `bat_boxes` to cover both.
+  note: Closed 2026-11-15. A clean water source, bee diversity, non-invasive plants in border areas, an extended
+    food supply and bird boxes are options of `habitat_biodiversity_practices`; `bat_boxes` keeps its meaning.
 - ref: A6
   asks: What actions do you take to prevent or control invasive plant/animal species, especially those
     threatening natural areas? Learn to identify invasive species / monitor for new introductions and
@@ -128,22 +121,27 @@ items:
     - g4_2_natural_resources.wildlife_habitat_mitigation_other
     prints: modules/G4_2.pdf §B; narrative § 205.200
 - ref: A8
-  asks: 'Operations producing crops within enclosed structures/buildings (greenhouses, sprout or mushroom
-    production, etc.): describe additional conservation measures implemented. Not applicable / water conservation
-    / energy conservation / recycling / composting / diverse outdoor plantings / surrounding habitat restoration
-    / sustainable packaging / crop rotation within greenhouses / other (describe).'
-  status: not_covered
-  severity: P3
-  gap: No question captures enclosed-structure conservation measures. Out of scope for a field-only orchard,
-    but real for the substrate/tunnel berry growers and nurseries within the ICP's WA/CA footprint.
-  fix: Add `enclosed_structures_present` boolean and `enclosed_structure_measures` checkbox_group (8 options);
-    the better long-term home is the still-missing G3.1 module, which already gates on the same structures.
+  asks: 'Operations producing crops within enclosed structures/buildings (greenhouses, sprout or mushroom production,
+    etc.): describe additional conservation measures implemented. Not applicable / water conservation / energy conservation
+    / recycling / composting / diverse outdoor plantings / surrounding habitat restoration / sustainable packaging
+    / crop rotation within greenhouses / other (describe).'
+  status: covered
+  trazo:
+    questions:
+    - g3_1_container_greenhouse.enclosed_structure_conservation
+    - g3_1_container_greenhouse.enclosed_structure_conservation_other
+    prints: modules/G3_1.pdf §A
+  note: Closed 2026-11-15. Asked on G3.1, where the structures are, with CCOF's eight measures, other, and none;
+    an operation with no structures answers G3.1 not applicable.
 - ref: A9
   asks: Describe any additional measures taken to conserve natural resources. Not applicable.
-  status: not_covered
-  severity: P3
-  gap: No optional field exists for measures that fall outside the A3-A8 batteries.
-  fix: Add an optional `additional_conservation_measures` textarea, or fold it into the A1 narrative fix.
+  status: covered
+  trazo:
+    questions:
+    - g4_2_natural_resources.other_conservation_measures
+    - g4_2_natural_resources.other_conservation_measures_detail
+    prints: modules/G4_2.pdf §A
+  note: Closed 2026-11-15. `other_conservation_measures`, a No for CCOF's "Not applicable", and its detail.
 - ref: B1
   asks: How do you verify the effectiveness of your conservation measures and document whether they improve
     or maintain the natural resources of your operation? Photograph logs / document fertility and pest

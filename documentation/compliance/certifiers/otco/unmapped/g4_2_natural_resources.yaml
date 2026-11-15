@@ -34,3 +34,8 @@ questions:
     (2b), never whether streams or channels are present.
   g4_2_natural_resources.natural_resources_description: >-
     A description of the operation's natural resources and biodiversity. Asked by CCOF G4.2 A1. OTCO C6 asks which practices maintain or improve natural resources and, at its end, for additional measures; it never asks for a description of the resources themselves.
+  g4_2_natural_resources.permanent_ground_cover_90pct: >-
+    Permanent ground cover on at least 90% of the ground. Asked by WSDA AGR 2121 E 4, which uses it with E
+    5 to skip its soil stability list; OTCO asks no such threshold.
+  g4_2_natural_resources.slope_under_10pct: >-
+    Land slope under 10% at all certified sites. Asked by WSDA AGR 2121 E 5, with E 4; OTCO asks no slope.

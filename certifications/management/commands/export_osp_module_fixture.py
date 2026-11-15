@@ -73,6 +73,14 @@ GOLDEN_ANSWER_CASES = {
         "renewal": {"history_ever_certified": True, "history_certified_by_this_agency": True},
         "not_by_this_agency": {"history_ever_certified": True, "history_certified_by_this_agency": False},
     },
+    # Conservation in enclosed structures: the other box opens on other (2026.12.12, CCOF G4.2 A8).
+    "g3_1_container_greenhouse": {
+        "unanswered": {},
+        "greenhouse_other": {
+            "structure_production_types": ["annual_seedlings"],
+            "enclosed_structure_conservation": ["other"],
+        },
+    },
     # The residue questions open on product testing (2026.11.24, WSDA AGR 2121 P 4a/4b).
     "g2_0_fraud_prevention": {
         "unanswered": {},
@@ -91,6 +99,13 @@ GOLDEN_ANSWER_CASES = {
     },
     "g4_2_natural_resources": {
         "unanswered": {},
+        # The waterway list opens on streams or channels by the land; the agency's other box on other (2026.12.12).
+        "streams_adjacent": {"streams_or_channels_adjacent": True, "waterway_practices": ["fish_screens", "other"]},
+        "no_streams_stale": {"streams_or_channels_adjacent": False, "waterway_practices": ["fish_screens"]},
+        "other_agency_and_measures": {
+            "conservation_plan_agency": ["nrcs", "other"],
+            "other_conservation_measures": True,
+        },
         "not_irrigated": {"irrigation_source_types": ["not_irrigated"]},
         "district_shared": {
             "irrigation_source_types": ["irrigation_district", "well"],
@@ -99,6 +114,7 @@ GOLDEN_ANSWER_CASES = {
     },
     "g4_0_rotation_soil": {
         "unanswered": {},
+        "annual_with_fertilizer": {"system_type": ["annual"], "applies_fertilizers": True},
         "annual_only": {"system_type": ["annual"]},
         "perennial_with_other": {
             "system_type": ["perennial"],

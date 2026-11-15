@@ -95,6 +95,41 @@ G4_2_NATURAL_RESOURCES = Module(
                         section_key="practices_procedures",
                     ),
                 ),
+                # 2026-11-15: WSDA AGR 2121 E 4 and 5. WSDA reads them together as the low erosion risk that lets an
+                # operation skip its soil stability list; Trazo asks the list of everyone and states both facts.
+                Question(
+                    key="permanent_ground_cover_90pct",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is permanent ground cover, such as sod, established on at least 90% of the ground at all "
+                        "certified sites?",
+                        "¿Hay cobertura permanente del suelo, como césped, en al menos el 90% del terreno de todos los "
+                        "sitios certificados?",
+                    ),
+                    nop_cite="§ 205.203(a)",
+                    compiles_to=CompileRule(
+                        template="Permanent ground cover on at least 90% of the ground at all certified sites ({answer}).",
+                        template_false="Permanent ground cover is not on at least 90% of the ground at every certified "
+                        "site.",
+                        section_key="practices_procedures",
+                    ),
+                ),
+                Question(
+                    key="slope_under_10pct",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is the slope of the land less than 10% at all certified sites?",
+                        "¿La pendiente del terreno es menor al 10% en todos los sitios certificados?",
+                    ),
+                    nop_cite="§ 205.203(a)",
+                    compiles_to=CompileRule(
+                        template="Land slope under 10% at all certified sites ({answer}).",
+                        template_false="Some certified ground slopes 10% or more.",
+                        section_key="practices_procedures",
+                    ),
+                ),
                 Question(
                     key="soil_water_practices",
                     kind="checkbox_group",
@@ -179,6 +214,175 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Microirrigación (goteo o microaspersión)",
                             ),
                         ),
+                        # 2026-11-15: WSDA AGR 2121 E 6, 13, 15 and 17 name these NRCS practices for soil stability and water quality; CCOF G4.2 A3 the last two. Appended, so stored answers keep their options.
+                        Option(
+                            "no_till",
+                            text(
+                                "No-till",
+                                "Siembra directa (sin labranza)",
+                            ),
+                        ),
+                        Option(
+                            "ridge_till",
+                            text(
+                                "Ridge till",
+                                "Labranza en camellones",
+                            ),
+                        ),
+                        Option(
+                            "seasonal_till",
+                            text(
+                                "Seasonal till",
+                                "Labranza estacional",
+                            ),
+                        ),
+                        Option(
+                            "mulching",
+                            text(
+                                "Mulching",
+                                "Acolchado (mulch)",
+                            ),
+                        ),
+                        Option(
+                            "strip_cropping",
+                            text(
+                                "Strip-cropping",
+                                "Cultivo en franjas",
+                            ),
+                        ),
+                        Option(
+                            "conservation_cover",
+                            text(
+                                "Conservation cover (perennial)",
+                                "Cobertura de conservación (perenne)",
+                            ),
+                        ),
+                        Option(
+                            "contour_buffer_strips",
+                            text(
+                                "Contour buffer strips",
+                                "Franjas de amortiguamiento en contorno",
+                            ),
+                        ),
+                        Option(
+                            "critical_area_planting",
+                            text(
+                                "Critical area planting",
+                                "Siembra en áreas críticas",
+                            ),
+                        ),
+                        Option(
+                            "cross_wind_ridges",
+                            text(
+                                "Cross wind ridges",
+                                "Camellones transversales al viento",
+                            ),
+                        ),
+                        Option(
+                            "cross_wind_trap_strips",
+                            text(
+                                "Cross wind trap strips",
+                                "Franjas de captura transversales al viento",
+                            ),
+                        ),
+                        Option(
+                            "herbaceous_wind_barriers",
+                            text(
+                                "Herbaceous wind barriers",
+                                "Barreras herbáceas contra el viento",
+                            ),
+                        ),
+                        Option(
+                            "vegetative_barriers",
+                            text(
+                                "Vegetative barriers",
+                                "Barreras vegetativas",
+                            ),
+                        ),
+                        Option(
+                            "row_arrangement",
+                            text(
+                                "Row arrangement",
+                                "Disposición de las hileras",
+                            ),
+                        ),
+                        Option(
+                            "filter_strip",
+                            text(
+                                "Filter strips",
+                                "Franjas filtrantes",
+                            ),
+                        ),
+                        Option(
+                            "lined_waterway",
+                            text(
+                                "Lined waterway or outlet",
+                                "Canal o desagüe revestido",
+                            ),
+                        ),
+                        Option(
+                            "pond",
+                            text(
+                                "Pond",
+                                "Estanque",
+                            ),
+                        ),
+                        Option(
+                            "water_sediment_basin",
+                            text(
+                                "Water and sediment control basin",
+                                "Cuenca de control de agua y sedimentos",
+                            ),
+                        ),
+                        Option(
+                            "heavy_use_area_protection",
+                            text(
+                                "Heavy use area protection",
+                                "Protección de áreas de uso intensivo",
+                            ),
+                        ),
+                        Option(
+                            "nutrient_management",
+                            text(
+                                "Nutrient management",
+                                "Manejo de nutrientes",
+                            ),
+                        ),
+                        Option(
+                            "fertilizer_metering",
+                            text(
+                                "Fertilizer targeted and metered to prevent nutrient runoff",
+                                "Fertilizante dirigido y dosificado para evitar el escurrimiento de nutrientes",
+                            ),
+                        ),
+                        Option(
+                            "integrated_pest_management",
+                            text(
+                                "Integrated pest management",
+                                "Manejo integrado de plagas",
+                            ),
+                        ),
+                        Option(
+                            "agrichemical_handling_facility",
+                            text(
+                                "Agrichemical handling facility",
+                                "Instalación para el manejo de agroquímicos",
+                            ),
+                        ),
+                        Option(
+                            "prescribed_grazing",
+                            text(
+                                "Prescribed grazing",
+                                "Pastoreo prescrito",
+                            ),
+                        ),
+                        Option(
+                            "water_for_wildlife",
+                            text(
+                                "Water allocated to non-crop areas for wildlife and habitat",
+                                "Agua destinada a áreas sin cultivo para la fauna y el hábitat",
+                            ),
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -250,6 +454,84 @@ G4_2_NATURAL_RESOURCES = Module(
                         template="Streams, shorelines, gullies or irrigation channels on or next to certified land: {answer}.",
                     ),
                 ),
+                # 2026-11-15: WSDA AGR 2121 E 2's adjacent waterway group, OTCO C6 2b (sharing water with native
+                # species), and the waterway practices WSDA E 13, 15 and 17 list for water quality. Asked where water
+                # runs on or next to the land.
+                Question(
+                    key="waterway_practices",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which practices protect the streams, shorelines and channels on or next to your land?",
+                        "¿Qué prácticas protegen los arroyos, las orillas y los canales en tu tierra o junto a ella?",
+                    ),
+                    visible_when=(Condition("streams_or_channels_adjacent", "truthy"),),
+                    nop_cite="§ 205.200",
+                    compiles_to=CompileRule(
+                        template="Practices protecting streams, shorelines and channels on or next to the land: {answer}.",
+                        section_key="practices_procedures",
+                    ),
+                    options=(
+                        Option(
+                            "channel_bank_vegetation",
+                            text("Channel bank vegetation", "Vegetación en las márgenes de los canales"),
+                        ),
+                        Option("riparian_forest_buffer", text("Riparian forest buffer", "Franja ribereña forestal")),
+                        Option(
+                            "riparian_herbaceous_cover",
+                            text("Riparian herbaceous cover", "Cobertura herbácea ribereña"),
+                        ),
+                        Option(
+                            "streambank_shoreline_protection",
+                            text("Streambank and shoreline protection", "Protección de riberas y orillas"),
+                        ),
+                        Option(
+                            "stream_habitat_improvement",
+                            text("Stream habitat improvement and management", "Mejora y manejo del hábitat del arroyo"),
+                        ),
+                        Option("stream_crossing", text("Designated stream crossings", "Cruces de arroyo designados")),
+                        Option(
+                            "shallow_water_management",
+                            text("Shallow water development and management", "Desarrollo y manejo de aguas someras"),
+                        ),
+                        Option("spring_development", text("Spring development", "Acondicionamiento de manantiales")),
+                        Option(
+                            "wetland_wildlife_habitat",
+                            text("Wetland wildlife habitat management", "Manejo del hábitat de fauna en humedales"),
+                        ),
+                        Option(
+                            "fish_screens",
+                            text("Fish screens on water diversions", "Rejillas para peces en las derivaciones de agua"),
+                        ),
+                        Option(
+                            "priority_species_water",
+                            text(
+                                "Water managed for priority species (rare fish, reptiles, amphibians, birds, beavers)",
+                                "Agua manejada para especies prioritarias (peces raros, reptiles, anfibios, aves, castores)",
+                            ),
+                        ),
+                        Option(
+                            "riparian_hydrology",
+                            text(
+                                "Natural hydrology and ecological function of riparian areas protected or improved",
+                                "Hidrología natural y función ecológica de las zonas ribereñas protegidas o mejoradas",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option("none", text("None of these", "Ninguna de estas"), exclusive=True),
+                    ),
+                ),
+                Question(
+                    key="waterway_practices_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other waterway practice", "Describe la otra práctica en cursos de agua"),
+                    visible_when=(Condition("waterway_practices", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Additional waterway practice: {answer}.",
+                        section_key="practices_procedures",
+                    ),
+                ),
                 Question(
                     key="habitat_biodiversity_practices",
                     kind="checkbox_group",
@@ -302,6 +584,189 @@ G4_2_NATURAL_RESOURCES = Module(
                             "wildlife_corridors",
                             text("Wildlife corridors", "Corredores de vida silvestre"),
                         ),
+                        # 2026-11-15: WSDA AGR 2121 E 2 (in-field and landscape), CCOF G4.2 A4 and A5, OTCO C6 3 and 4. Appended.
+                        Option(
+                            "alley_cropping",
+                            text(
+                                "Alley cropping",
+                                "Cultivo en callejones",
+                            ),
+                        ),
+                        Option(
+                            "field_border",
+                            text(
+                                "Field borders",
+                                "Bordes de campo",
+                            ),
+                        ),
+                        Option(
+                            "tree_shrub_establishment",
+                            text(
+                                "Tree or shrub establishment",
+                                "Establecimiento de árboles o arbustos",
+                            ),
+                        ),
+                        Option(
+                            "brush_management",
+                            text(
+                                "Brush management",
+                                "Manejo de matorrales",
+                            ),
+                        ),
+                        Option(
+                            "early_successional_habitat",
+                            text(
+                                "Early successional habitat",
+                                "Hábitat de sucesión temprana",
+                            ),
+                        ),
+                        Option(
+                            "upland_wildlife_habitat",
+                            text(
+                                "Upland wildlife habitat management",
+                                "Manejo del hábitat de fauna en tierras altas",
+                            ),
+                        ),
+                        Option(
+                            "rare_habitat_restoration",
+                            text(
+                                "Restoration of rare or declining habitats",
+                                "Restauración de hábitats raros o en declive",
+                            ),
+                        ),
+                        Option(
+                            "wildlife_structures",
+                            text(
+                                "Structures for wildlife",
+                                "Estructuras para la fauna silvestre",
+                            ),
+                        ),
+                        Option(
+                            "bird_boxes",
+                            text(
+                                "Bird boxes",
+                                "Cajas nido para aves",
+                            ),
+                        ),
+                        Option(
+                            "brush_piles",
+                            text(
+                                "Brush piles",
+                                "Pilas de ramas",
+                            ),
+                        ),
+                        Option(
+                            "standing_deadwood",
+                            text(
+                                "Standing deadwood and fallen or rotting trees left in place",
+                                "Árboles muertos en pie y troncos caídos o en descomposición que se dejan en su lugar",
+                            ),
+                        ),
+                        Option(
+                            "clean_water_source",
+                            text(
+                                "A clean water source for wildlife",
+                                "Una fuente de agua limpia para la fauna",
+                            ),
+                        ),
+                        Option(
+                            "bee_diversity",
+                            text(
+                                "Measures that support a variety of bee species",
+                                "Medidas que favorecen variedad de especies de abejas",
+                            ),
+                        ),
+                        Option(
+                            "extended_food_supply",
+                            text(
+                                "Food for pollinators and wildlife through the season",
+                                "Alimento para polinizadores y fauna durante toda la temporada",
+                            ),
+                        ),
+                        Option(
+                            "non_invasive_borders",
+                            text(
+                                "Non-invasive plants allowed in non-cropped, fallow and border areas",
+                                "Plantas no invasoras permitidas en áreas sin cultivo, en barbecho y en los bordes",
+                            ),
+                        ),
+                        Option(
+                            "layered_native_habitat",
+                            text(
+                                "Short, medium and tall native habitat",
+                                "Hábitat nativo bajo, medio y alto",
+                            ),
+                        ),
+                        Option(
+                            "field_activity_timing",
+                            text(
+                                "Field work timed around wildlife, such as delayed mowing near nesting birds",
+                                "Labores de campo programadas según la fauna, como retrasar la siega cerca de aves que anidan",
+                            ),
+                        ),
+                        Option(
+                            "undisturbed_refuge",
+                            text(
+                                "Areas left as undisturbed habitat refuge",
+                                "Áreas que se dejan como refugio de hábitat sin perturbar",
+                            ),
+                        ),
+                        Option(
+                            "wildlife_friendly_fences",
+                            text(
+                                "Wildlife-friendly fences",
+                                "Cercas aptas para la fauna",
+                            ),
+                        ),
+                        Option(
+                            "legal_conservation_areas",
+                            text(
+                                "Legal conservation areas, such as conservation easements",
+                                "Áreas de conservación legal, como servidumbres de conservación",
+                            ),
+                        ),
+                        Option(
+                            "restore_degraded",
+                            text(
+                                "Degraded areas restored",
+                                "Áreas degradadas restauradas",
+                            ),
+                        ),
+                        Option(
+                            "recolonize_degraded",
+                            text(
+                                "Degraded areas left to be recolonized by non-invasive plants and wildlife",
+                                "Áreas degradadas que se dejan recolonizar por plantas no invasoras y fauna",
+                            ),
+                        ),
+                        Option(
+                            "grassland_protection",
+                            text(
+                                "Grasslands preserved or restored",
+                                "Pastizales preservados o restaurados",
+                            ),
+                        ),
+                        Option(
+                            "replace_weedy_areas",
+                            text(
+                                "Weedy areas replaced with native plants",
+                                "Áreas con malezas reemplazadas por plantas nativas",
+                            ),
+                        ),
+                        Option(
+                            "habitat_not_converted",
+                            text(
+                                "Native habitat not converted to farmland since certification",
+                                "Hábitat nativo no convertido en tierra de cultivo desde la certificación",
+                            ),
+                        ),
+                        Option(
+                            "priority_species_plan",
+                            text(
+                                "Priority species and habitat identified, with a protection plan",
+                                "Especies y hábitats prioritarios identificados, con un plan de protección",
+                            ),
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -315,6 +780,31 @@ G4_2_NATURAL_RESOURCES = Module(
                     visible_when=(Condition("habitat_biodiversity_practices", "includes", "other"),),
                     compiles_to=CompileRule(
                         template="Additional habitat or biodiversity practice: {answer}.",
+                        section_key="practices_procedures",
+                    ),
+                ),
+                # 2026-11-15: WSDA AGR 2121 E 3 and 3a (any other practice, yes or no, then described), CCOF G4.2 A9
+                # and OTCO C6 7 (additional measures). A No answers all three: none of them requires a measure.
+                Question(
+                    key="other_conservation_measures",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you take any other measures to conserve natural resources or biodiversity, beyond those "
+                        "above?",
+                        "¿Tomas alguna otra medida para conservar los recursos naturales o la biodiversidad, además de "
+                        "las anteriores?",
+                    ),
+                    nop_cite="§ 205.200",
+                ),
+                Question(
+                    key="other_conservation_measures_detail",
+                    kind="textarea",
+                    required=False,
+                    label=text("Describe those measures", "Describe esas medidas"),
+                    visible_when=(Condition("other_conservation_measures", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Other measures to conserve natural resources and biodiversity: {answer}",
                         section_key="practices_procedures",
                     ),
                 ),
@@ -350,12 +840,26 @@ G4_2_NATURAL_RESOURCES = Module(
                         section_key="practices_procedures",
                     ),
                     options=(
+                        # 2026-11-15: OTCO C6 1a asks NRCS and FSA apart, Salmon Safe and other. The joint option is
+                        # retired (shown only while a stored answer holds it), never remapped: it does not say which.
                         Option(
                             "federal_agency",
                             text(
                                 "Federal conservation agency (NRCS, FSA)",
                                 "Agencia federal de conservación (NRCS, FSA)",
                             ),
+                            retired=True,
+                        ),
+                        Option(
+                            "nrcs",
+                            text(
+                                "USDA Natural Resources Conservation Service (NRCS)",
+                                "Servicio de Conservación de Recursos Naturales del USDA (NRCS)",
+                            ),
+                        ),
+                        Option(
+                            "fsa",
+                            text("USDA Farm Service Agency (FSA)", "Agencia de Servicios Agrícolas del USDA (FSA)"),
                         ),
                         Option(
                             "local_district",
@@ -378,6 +882,8 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Programa de certificación o custodia ambiental",
                             ),
                         ),
+                        Option("salmon_safe", text("Salmon Safe", "Salmon Safe")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
                         Option(
                             "none",
                             text(
@@ -389,8 +895,21 @@ G4_2_NATURAL_RESOURCES = Module(
                     ),
                 ),
                 Question(
-                    key="conservation_plan_detail",
+                    key="conservation_plan_agency_other",
                     kind="text",
+                    required=False,
+                    label=text("Which other agency or program?", "¿Qué otra agencia o programa?"),
+                    visible_when=(Condition("conservation_plan_agency", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other conservation agency or program: {answer}.",
+                        section_key="practices_procedures",
+                    ),
+                ),
+                # 2026-11-15: a textarea (CCOF G4.2 A2a, OTCO C6 1a ask the plan's practices listed); a string either way,
+                # so stored answers read the same.
+                Question(
+                    key="conservation_plan_detail",
+                    kind="textarea",
                     label=text(
                         "Name the agency or program and what the plan covers",
                         "Nombra la agencia o el programa y qué cubre el plan",
@@ -399,7 +918,16 @@ G4_2_NATURAL_RESOURCES = Module(
                         Condition(
                             "conservation_plan_agency",
                             "includes_any",
-                            ["federal_agency", "local_district", "land_trust", "stewardship_program"],
+                            [
+                                "federal_agency",
+                                "nrcs",
+                                "fsa",
+                                "local_district",
+                                "land_trust",
+                                "stewardship_program",
+                                "salmon_safe",
+                                "other",
+                            ],
                         ),
                     ),
                     compiles_to=CompileRule(

@@ -203,6 +203,53 @@ G3_1_CONTAINER_GREENHOUSE = Module(
                         ),
                     ),
                 ),
+                # 2026-11-15: CCOF G4.2 A8 asks an operation growing in enclosed structures what it does to conserve
+                # resources there. Asked here, where the structures are; a module answered not applicable has none.
+                Question(
+                    key="enclosed_structure_conservation",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "What do you do to conserve resources in and around these structures?",
+                        "¿Qué haces para conservar recursos en estas estructuras y a su alrededor?",
+                    ),
+                    nop_cite="§ 205.200",
+                    compiles_to=CompileRule(
+                        template="Conservation measures for production in enclosed structures: {answer}."
+                    ),
+                    options=(
+                        Option("water_conservation", text("Water conservation", "Conservación del agua")),
+                        Option("energy_conservation", text("Energy conservation", "Conservación de energía")),
+                        Option("recycling", text("Recycling", "Reciclaje")),
+                        Option("composting", text("Composting", "Compostaje")),
+                        Option(
+                            "outdoor_plantings",
+                            text("Diverse outdoor plantings", "Plantaciones diversas al aire libre"),
+                        ),
+                        Option(
+                            "surrounding_habitat",
+                            text("Surrounding habitat restoration", "Restauración del hábitat circundante"),
+                        ),
+                        Option("sustainable_packaging", text("Sustainable packaging", "Empaques sostenibles")),
+                        Option(
+                            "greenhouse_rotation",
+                            text(
+                                "Crop rotation within the greenhouses",
+                                "Rotación de cultivos dentro de los invernaderos",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option("none", text("None of these", "Ninguna de estas"), exclusive=True),
+                    ),
+                ),
+                Question(
+                    key="enclosed_structure_conservation_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other measure", "Describe la otra medida"),
+                    visible_when=(Condition("enclosed_structure_conservation", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other conservation measure in enclosed structures: {answer}."),
+                ),
             ),
         ),
         ModulePage(

@@ -3300,6 +3300,14 @@
        "fertility_testing_frequency": {
         "at": "2026-11-02T15:00:00+00:00",
         "value": "annually"
+       },
+       "rotation_records_kept": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": "Each season in Trazo names the crop on each parcel and when it was planted, so the rotation above reads from the planting records; the table is checked against them every winter."
+       },
+       "applies_fertilizers": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": true
        }
       },
       "completed_at": "2026-08-21T11:28:45.951264+00:00",
@@ -3385,9 +3393,9 @@
      "g4_2_natural_resources": {
       "answers": {
        "conservation_plan_agency": {
-        "at": "2026-08-21T11:28:46.043714+00:00",
+        "at": "2026-11-15T09:00:00+00:00",
         "value": [
-         "federal_agency"
+         "nrcs"
         ]
        },
        "conservation_plan_detail": {
@@ -3476,6 +3484,24 @@
        "natural_resources_description": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": "Silt loam terraces above the Calapooia River; a riparian strip of Oregon ash and willow along the river; a hedgerow of native shrubs on the north line of the Bottom Ground blocks; owls and raptors use the boxes on the field edges. Problem areas: winter ponding and some streambank erosion on Bottom Ground B, and Himalayan blackberry along the river."
+       },
+       "permanent_ground_cover_90pct": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": false
+       },
+       "slope_under_10pct": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": true
+       },
+       "waterway_practices": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": [
+         "riparian_forest_buffer"
+        ]
+       },
+       "other_conservation_measures": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": false
        }
       },
       "completed_at": "2026-08-21T11:28:46.083078+00:00",
