@@ -140,7 +140,7 @@ class TheParcelPagePrintsIt(_Parcel):
         for words in (
             "Stated by Dale Ruiz:",
             "Knows the parcel's history because they managed the parcel and controlled activities there.",
-            "Signer: Orchard manager, Ruiz Orchards; dale@ruiz.example; 509-555-0199.",
+            "Signer: Dale Ruiz, Orchard manager, Ruiz Orchards; dale@ruiz.example; 509-555-0199.",
             "Site as the signer names it: Fuji Blocks 28-35.",
             "Site acreage stated by the signer: 6 acres.",
             "Signer's last organic inspection of the site: 2025-08-14.",
@@ -148,6 +148,20 @@ class TheParcelPagePrintsIt(_Parcel):
             "No treated seed was planted during the signer's management (stated).",
         ):
             self.assertIn(words, page)
+
+    def test_a_phone_never_stands_in_for_the_signers_name(self):
+        from certifications.services.parcel_land_history import affidavit_signer_lines
+
+        a = LandownerAffidavit(previous_manager_name="", previous_manager_phone="(509) 555-0188")
+        self.assertEqual(affidavit_signer_lines(a), ["Signer's contact: (509) 555-0188."])
+        a = LandownerAffidavit(
+            previous_manager_name="", signer_company="Sample Ridge Orchard Co.", previous_manager_phone="(509) 555-0188"
+        )
+        self.assertEqual(
+            affidavit_signer_lines(a), ["Signer: Sample Ridge Orchard Co.", "Signer's contact: (509) 555-0188."]
+        )
+        a = LandownerAffidavit(previous_manager_name="Dale Ruiz", previous_manager_phone="(509) 555-0188")
+        self.assertEqual(affidavit_signer_lines(a), ["Signer: Dale Ruiz; (509) 555-0188."])
 
     def test_treated_seed_in_the_signers_period_is_a_review_line(self):
         self.affidavit(treated_seed_planted="yes")

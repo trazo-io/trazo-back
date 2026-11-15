@@ -1107,7 +1107,10 @@ def _post_harvest_facility_flowables(osp, styles) -> list:
         if detail:
             out.append(
                 Paragraph(
-                    _escape("Products, as the operation describes them: " + "; ".join(detail) + "."), styles["meta"]
+                    _escape(
+                        "Products, as the operation describes them: " + "; ".join(d.rstrip(".") for d in detail) + "."
+                    ),
+                    styles["meta"],
                 )
             )
         products = _facility_product_table(facility, styles)
@@ -1183,7 +1186,10 @@ def _own_facility_flowables(osp, styles) -> list:
         if detail:
             out.append(
                 Paragraph(
-                    _escape("Products, as the operation describes them: " + "; ".join(detail) + "."), styles["meta"]
+                    _escape(
+                        "Products, as the operation describes them: " + "; ".join(d.rstrip(".") for d in detail) + "."
+                    ),
+                    styles["meta"],
                 )
             )
         out.extend(_facility_product_table(facility, styles))
@@ -2169,6 +2175,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     _style(styles, "meta"),
                 )
             )
+            out.append(
+                Paragraph(
+                    "This is the operation's certificate. The parcels it covers are listed on the certificate "
+                    "itself.",
+                    _style(styles, "meta"),
+                )
+            )
         else:
             out.append(
                 Paragraph(
@@ -2177,12 +2190,6 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     styles["body"],
                 )
             )
-        out.append(
-            Paragraph(
-                "This is the operation's certificate. The parcels it covers are listed on the certificate " "itself.",
-                _style(styles, "meta"),
-            )
-        )
 
     elif embed == "adjoining_land_affidavit":
         rows = list(parcel.adjoining_land_affidavits.all().order_by("border_side", "id"))
@@ -4167,7 +4174,7 @@ _RENEWAL_ROLE_HEADINGS = {
 }
 
 
-def _renewal_routing_flowables(osp, styles) -> list:
+def _renewal_routing_flowables(osp, styles, filing=None) -> list:
     """The agent's own renewal forms, each row with where its answer is in this packet.
 
     These forms are filed with the agent, on its paper or its site. Nothing here completes one: the
@@ -4208,16 +4215,25 @@ def _renewal_routing_flowables(osp, styles) -> list:
     basis = _fee_basis_sentence(osp)
     if basis:
         # Run 4, R4-04: stated here, on the page that changes with the export, because 02 is frozen as
-        # filed and may name no agent at all.
-        story.append(
-            Paragraph(
-                _escape(
-                    "Sales figure: the subtotal printed on 02 is a subtotal of the operation's sales records, not "
-                    f"reconciled to its books and not this agent's fee figure. {basis}"
-                ),
-                styles["meta"],
-            )
-        )
+        # filed and may name no agent at all. 02 prints its sales subtotal only when a filing exists.
+        # 02 prints a subtotal only for a filing whose sales year is over and whose every sale carries
+        # an amount (`_annual_update`); otherwise it says why it gives none. This line cites the subtotal
+        # only when 02 prints one. "Filed against this plan version", because an update linked to another
+        # version can be on file and named on 02 without its sales section (`other_filing`).
+        if filing is None:
+            lead = "No annual update is filed against this plan version, so 02 carries no sales subtotal."
+        else:
+            from certifications.services.renewal_sales import organic_sales_subtotal
+
+            sales = organic_sales_subtotal(osp.establishment, filing)
+            if not sales.running and sales.n_sales and sales.n_priced == sales.n_sales:
+                lead = (
+                    "the subtotal printed on 02 is a subtotal of the operation's sales records, not reconciled to "
+                    "its books and not this agent's fee figure."
+                )
+            else:
+                lead = "02 gives no sales subtotal for this filing; its sales section says why."
+        story.append(Paragraph(_escape(f"Sales figure: {lead} {basis}"), styles["meta"]))
     for form in forms:
         heading = _RENEWAL_ROLE_HEADINGS.get(form.role, form.role)
         name = form.title + (f" ({form.document_id})" if form.document_id and form.document_id != form.title else "")
@@ -4821,7 +4837,7 @@ def _renewal_status_pdf(osp) -> bytes:
                 story.append(Paragraph(_escape(f"• {detail}"), styles["body"]))
             story.append(Spacer(1, 6))
     story += _unchanged_but_changed_flowables(ctx["filing"], osp, styles)
-    story += _renewal_routing_flowables(osp, styles)
+    story += _renewal_routing_flowables(osp, styles, filing=ctx["filing"])
     story += _certifier_inspection_flowables(osp, styles)
     story += _agent_file_flowables(ctx["filing"], osp, styles)
     story += _changed_sections_flowables(osp, styles)

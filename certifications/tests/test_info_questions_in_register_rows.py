@@ -102,6 +102,21 @@ class QuestionIndexNamesTheHiddenQuestionTests(SimpleTestCase):
         self.assertEqual(part.subjects, (self._label("custom_harvester_records"),))
         self.assertIn("answered Our own crew", part.detail)
 
+    def test_an_unanswered_part_names_its_question_beside_an_answered_one(self):
+        # "Answered at Block 3 ..." then "Block 3 Honeycrisp: not yet answered" named no question.
+        state = RowState(
+            "1",
+            "partial",
+            parts=(
+                (f"{G61}.who_harvests", "Block 3 Honeycrisp", "answered", ""),
+                (f"{G61}.custom_harvester_records", "Block 3 Honeycrisp", "not_answered", ""),
+            ),
+        )
+        row = index_row(state, None, Recorder(), None, {})
+        unanswered = [p for p in row.open_parts if p.state == "not_answered"]
+        self.assertEqual(len(unanswered), 1)
+        self.assertEqual(unanswered[0].subjects, (self._label("custom_harvester_records"),))
+
     def test_two_questions_hidden_by_one_answer_print_one_line_naming_both(self):
         detail = "who_harvests = ['own_crew']"
         state = RowState(

@@ -14740,6 +14740,9 @@ class AuditExportService:
                     declared = "None applied (declared)"
                 elif history_rows:
                     declared = f"{len(history_rows)} year(s) listed"
+                elif aff.no_materials_applied is False:
+                    # Same wording as the packet's land-history table (`parcel_land_history._declared`).
+                    declared = '"No materials applied" answered No; no materials listed'
                 else:
                     declared = "Not answered"
                 aff_data.append(

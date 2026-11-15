@@ -262,6 +262,17 @@ class Run3RenewalMeaningTests(_Farm):
                 filing.delete()
                 osp.delete()
 
+    def test_without_a_filing_02s_does_not_cite_a_subtotal_that_02_does_not_print(self):
+        for agent in ("Washington State Department of Agriculture", "Oregon Tilth Certified Organic"):
+            with self.subTest(agent=agent):
+                osp = self._plan(agent)
+                text = self._supplement(osp)
+                self.assertIn(
+                    "No annual update is filed against this plan version, so 02 carries no sales subtotal.", text
+                )
+                self.assertNotIn("the subtotal printed on 02", text)
+                osp.delete()
+
     def test_a_neutral_frozen_filing_exported_for_otco_gets_otcos_caveat_on_02s(self):
         """Run 4, R4-04: 02 is frozen as filed and may name no agent; the routing page, which follows
         the export, carries the agent's sales-figure caveat."""
@@ -281,7 +292,10 @@ class Run3RenewalMeaningTests(_Farm):
         filed = _pdf_text(packet.read("02-annual-update.pdf"))
         self.assertNotIn("Step 6", filed, "the frozen filing is not rewritten")
         routing = _pdf_text(packet.read("02s-renewal-status-and-routing.pdf"))
-        self.assertIn("Sales figure: the subtotal printed on 02", routing)
+        # 2026 is not over and no sale is recorded, so 02 prints no subtotal and 02s does not cite one
+        # (local review of back #437: the line cited "the subtotal printed on 02" whenever a filing existed).
+        self.assertIn("Sales figure: 02 gives no sales subtotal for this filing; its sales section says why.", routing)
+        self.assertNotIn("the subtotal printed on 02", routing)
         self.assertIn("including products not sold as organic", routing)
         self.assertIn("written petition", routing)
         self.assertNotIn("AGR 2521", routing)
