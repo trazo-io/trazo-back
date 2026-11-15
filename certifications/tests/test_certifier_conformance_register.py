@@ -109,6 +109,23 @@ class RegisterSchemaTests(SimpleTestCase):
             f"These rows name a model field or property that does not exist: {broken}",
         )
 
+    def test_a_model_our_app_no_longer_has_is_reported_not_skipped(self):
+        """Review of #428: a lookup error was skipped as "not necessarily ours", so a renamed
+        model made every row that named it pass unchecked. An app that is not installed is still
+        skipped; a model missing from one of ours is a broken reference."""
+        from types import SimpleNamespace
+
+        def form(*refs):
+            item = SimpleNamespace(ref="1", models=list(refs))
+            return SimpleNamespace(certifier="test", code="F", document_id="F", items=[item])
+
+        self.assertEqual(broken_model_references([form("vendor.Thing.field")]), [])
+        self.assertEqual(broken_model_references([form("history.Production.retention_until")]), [])
+        self.assertEqual(
+            broken_model_references([form("history.NoSuchModel.retention_until")]),
+            ["test:F 1 -> history.NoSuchModel.retention_until (no model)"],
+        )
+
     def test_no_question_key_hides_in_the_free_text_models_field(self):
         """`models` is free text; `questions` is validated. Real keys were parked in the free one.
 

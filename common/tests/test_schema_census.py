@@ -67,7 +67,8 @@ class SchemaCensusTests(TransactionTestCase):
     def test_every_concrete_table_is_covered_including_audit_and_m2m(self):
         census = svc.take_census()
         for label in (
-            "history.History",
+            "history.Production",
+            "history.ProductionPostHarvestFacility",
             "history.GeneralEvent",
             "history.ChemicalEvent",
             "history.EquipmentEvent",
@@ -172,15 +173,24 @@ class SchemaCensusTests(TransactionTestCase):
         self.assertIn("history.Activity", svc.compare(before, after)["new_tables"])
 
     def test_a_declared_rename_is_not_a_missing_table(self):
+        """The census of a database before history 0264, built from today's by putting the old
+        label back: RenameModel renames the table's label and the ContentType row, nothing else."""
         before = svc.take_census()
         after = svc.take_census()
-        after["tables"]["history.Production"] = after["tables"].pop("history.History")
-        # RenameModel also renames the ContentType row (Django injects RenameContentType).
-        counts = after["domain"]["audit_trail"]["auditlog_entries_by_content_type"]
-        if "history.history" in counts:
-            counts["history.production"] = counts.pop("history.history")
+        before["tables"]["history.History"] = before["tables"].pop("history.Production")
+        # The automatic link table was labelled after the model; it became an explicit model.
+        before["tables"]["history.History_post_harvest_facilities"] = before["tables"].pop(
+            "history.ProductionPostHarvestFacility"
+        )
+        counts = before["domain"]["audit_trail"]["auditlog_entries_by_content_type"]
+        if "history.production" in counts:
+            counts["history.history"] = counts.pop("history.production")
+        renames = {
+            "history.History": "history.Production",
+            "history.History_post_harvest_facilities": "history.ProductionPostHarvestFacility",
+        }
         self.assertFalse(svc.compare(before, after)["ok"])
-        self.assertTrue(svc.compare(before, after, renames={"history.History": "history.Production"})["ok"])
+        self.assertTrue(svc.compare(before, after, renames=renames)["ok"])
 
     def test_canonical_values_keep_null_distinct_from_empty(self):
         self.assertNotEqual(svc._sha(svc.canonical(None)), svc._sha(svc.canonical("")))
@@ -234,8 +244,8 @@ class SchemaCensusTests(TransactionTestCase):
         before = svc.take_census()
         before["domain"]["audit_trail"]["auditlog_entries_by_content_type"] = {"history.history": 3}
         before["domain"]["loose_pairs"]["history.EventAmendment"]["orphans"]["count"] = 0
+        before["tables"]["history.History"] = before["tables"].pop("history.Production")
         after = svc.take_census()
-        after["tables"]["history.Production"] = after["tables"].pop("history.History")
         after["domain"]["audit_trail"]["auditlog_entries_by_content_type"] = {"history.production": 3}
         pairs = after["domain"]["loose_pairs"].pop("history.EventAmendment")
         pairs["orphans"]["count"] = 2

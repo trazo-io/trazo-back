@@ -759,7 +759,7 @@ def compare(before: Dict[str, Any], after: Dict[str, Any], renames: Optional[Dic
     b_ct = before["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
     a_ct = after["domain"]["audit_trail"].get("auditlog_entries_by_content_type", {})
     # Content types are keyed "<app_label>.<model>" in LOWER case (ContentType.model), while
-    # `renames` uses model labels ("history.History"). Compare in one case, or a declared rename
+    # `renames` uses model labels ("history.History": "history.Production"). Compare in one case, or a declared rename
     # reads as the whole audit trail vanishing (review of back #289).
     ct_renames = {k.lower(): v.lower() for k, v in renames.items()}
     for ct, n in b_ct.items():

@@ -95,7 +95,7 @@ class GeneratedDocument(models.Model):
         "product.Parcel", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
     )
     history = models.ForeignKey(
-        "history.History", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
+        "history.Production", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
     )
 
     # The one requirement a file answers (OSP alignment audit 2026-10, T19). `linked_section`

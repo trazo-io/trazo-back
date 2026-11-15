@@ -91,7 +91,7 @@ items:
     severity: P2
     trazo:
       questions: [g2_0_fraud_prevention.fraud_risk_areas, g3_0_seeds.seeds_used, g6_5_sales_soe.sales_soe_supplier_verification, g7_0_labeling.product_leaves_as]
-      models: [history.History.post_harvest_facilities]
+      models: [history.Production.post_harvest_facilities]
       prints: "modules/G2_0.pdf §A (risk areas only — no scenario checklist)"
     gap: "Each scenario is answerable only implicitly, from the presence or absence of data across four different modules (G3.0 seed purchases, G6.5 supplier verification, `PostHarvestFacility` relations, G7.0's brand-owner gate) plus G2.0's own general `fraud_risk_areas` checklist. There is no single yes/no scenario map matching CCOF's D1. Each scenario's verification follow-up is asked where its records live (G2.0 §B, G6.1 §D, G7.0 §C)."
     fix: "Derive a D1-style checklist from the four source modules and print it in G8.0 §D / G2.0, rather than requiring the certifier to infer it from four unrelated pages."

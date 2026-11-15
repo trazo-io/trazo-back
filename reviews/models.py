@@ -9,7 +9,7 @@ class Review(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     rating = models.IntegerField()
     user = models.ForeignKey("users.User", related_name="reviews", on_delete=models.CASCADE, null=True, blank=True)
-    production = models.ForeignKey("history.History", related_name="reviews", on_delete=models.CASCADE)
+    production = models.ForeignKey("history.Production", related_name="reviews", on_delete=models.CASCADE)
     scan = models.ForeignKey(
         "history.HistoryScan",
         related_name="reviews",

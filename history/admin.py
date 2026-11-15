@@ -17,6 +17,7 @@ from .models import (
     HistoryScan,
     LabelImage,
     ProductionEvent,
+    ProductionPostHarvestFacility,
     SoilManagementEvent,
     WeatherEvent,
 )
@@ -123,6 +124,20 @@ class HistoryAdminForm(forms.ModelForm):
         fields = "__all__"
 
 
+class PostHarvestFacilityLinkInline(admin.TabularInline):
+    """The off-farm handlers a lot was sent to. An inline since 2026-11-14: the link table became an
+    explicit model (the History -> Production rename), and admin cannot edit such a relation as a
+    plain many-to-many field."""
+
+    model = ProductionPostHarvestFacility
+    extra = 0
+    verbose_name = "Post-harvest facility this lot was sent to"
+    verbose_name_plural = (
+        "Audit records (CCOF G6.1): off-farm post-harvest handlers this lot was sent to. A lot with "
+        "a fresh grade and a process grade has two. Create each facility under Certifications first."
+    )
+
+
 class HistoryAdmin(admin.ModelAdmin):
     form = HistoryAdminForm
     list_display = (
@@ -154,8 +169,8 @@ class HistoryAdmin(admin.ModelAdmin):
         ProductionEventInline,
         SoilManagementEventInline,
         LabelImageInline,
+        PostHarvestFacilityLinkInline,
     ]
-    filter_horizontal = ("post_harvest_facilities",)
 
     # Trust metrics and analytics in readonly fields
     readonly_fields = (
@@ -172,20 +187,6 @@ class HistoryAdmin(admin.ModelAdmin):
         ("Basic Information", {"fields": ("name", "public_id", "type", "description", "published")}),
         ("Timeline", {"fields": ("start_date", "finish_date")}),
         ("Production Details", {"fields": ("product", "parcel", "production_amount", "earning")}),
-        (
-            "Audit Records (CCOF)",
-            {
-                "fields": ("post_harvest_facilities",),
-                "description": (
-                    "Off-farm post-harvest handlers (huller / dryer / cold storage / packer) this lot "
-                    "was sent to (CCOF G6.1) — a lot with a fresh grade and a process grade has TWO. "
-                    "Create each facility first under "
-                    "Certifications &gt; Post-harvest facilities, then link it here. Surfaces in "
-                    "the audit export's Post-Harvest section. Container labels (G7.0) are added "
-                    "in the inline below."
-                ),
-            },
-        ),
         (
             "Trust Metrics & Analytics",
             {

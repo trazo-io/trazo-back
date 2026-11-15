@@ -100,7 +100,7 @@ items:
     where: 'modules/G6_1.pdf §D and modules/G6_2.pdf §A: Off-farm handlers and storage facilities'
     models:
     - certifications.PostHarvestFacility.products_detail
-    - history.History (crops on the production records linked to the facility)
+    - history.Production (crops on the production records linked to the facility)
     prints: copy sheet (AGR 2519, each facility)
   note: 'The products and their detail the operator gave for the facility (`products_detail`), beside the crops
     read from the production records linked to it (`facility_crops`).'

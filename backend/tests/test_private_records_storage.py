@@ -33,7 +33,7 @@ POLICY = REPO / "infra" / "s3" / "trazo-media-bucket-policy.json"
 PUBLIC_FIELDS = {
     "common.GalleryImage.image",
     "company.Company.logo",
-    "history.History.qr_code",
+    "history.Production.qr_code",
     "product.Product.image",
     "users.User.image",
 }

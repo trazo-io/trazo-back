@@ -76,7 +76,7 @@ class DatabaseOptimizer:
                     "carbon.CarbonEntry",
                     "carbon.CropType",
                     "carbon.ProductionTemplate",
-                    "history.History",
+                    "history.Production",
                     "company.Company",
                     "company.Establishment",
                     "product.Parcel",
@@ -366,7 +366,7 @@ class DatabaseOptimizer:
                 }
             )
 
-        elif model_name == "history":
+        elif model_name == "production":
             # History often filtered by parcel and date
             recommendations.append(
                 {
@@ -460,7 +460,7 @@ class DatabaseOptimizer:
                         {"pattern": "aggregate by establishment", "frequency": "medium"},
                     ]
                 )
-            elif model_name == "history":
+            elif model_name == "production":
                 queries.extend(
                     [
                         {"pattern": "filter by parcel", "frequency": "high"},

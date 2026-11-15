@@ -130,7 +130,12 @@ def _parse_publish_flag(raw):
     return str(raw).strip().lower() not in _FALSEY_PUBLISH_VALUES
 
 
-class History(models.Model):
+class Production(models.Model):
+    # Schema remodel Phase 3 (2026-11-14): the model was `History`. It is a production season; the
+    # name `History` described the table, not the thing. Renamed in Django state only:
+    # `Meta.db_table` pins the table name, the app label stays `history`, and the ContentType row
+    # is renamed in place by the migration (same id, so the audit trail is untouched). `History`
+    # below stays as an alias until every import has moved.
     ORCHARD = "OR"
     GARDEN = "GA"
 
@@ -258,7 +263,15 @@ class History(models.Model):
         help_text="Method used for harvesting",
     )
     qr_code = models.ImageField(upload_to="qr_codes", blank=True)
-    album = models.ForeignKey("common.Gallery", on_delete=models.CASCADE, blank=True, null=True)
+    # The reverse names are pinned to what the model name gave them before the rename.
+    album = models.ForeignKey(
+        "common.Gallery",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="history_set",
+        related_query_name="history",
+    )
     # Off-farm post-harvest handlers (huller / dryer / cold storage / packer) this
     # lot was sent to. CCOF G6.1 / 7 CFR 205.272 — each handler's organic certificate
     # is surfaced in the audit export's Post-Harvest section.
@@ -275,6 +288,7 @@ class History(models.Model):
         "certifications.PostHarvestFacility",
         blank=True,
         related_name="productions",
+        through="ProductionPostHarvestFacility",
     )
     cover_image_url = models.URLField(
         max_length=1000,
@@ -966,6 +980,33 @@ class History(models.Model):
         # tests key presence). `date` and `index` are never null, so the sort below is unaffected.
         events = [{key: value for key, value in event.items() if value is not None} for event in events]
         return sorted(events, key=lambda event: (event["date"], event["index"]))
+
+    class Meta:
+        db_table = "history_history"
+
+
+#: The model's name until 2026-11-14. Kept so existing imports and `History.objects` keep working;
+#: new code says `Production`.
+History = Production
+
+
+class ProductionPostHarvestFacility(models.Model):
+    """The link table behind `Production.post_harvest_facilities`, made explicit (2026-11-14).
+
+    Django created it automatically, and an automatic link table names its columns after the model:
+    renaming `History` to `Production` would have renamed `history_id` to `production_id` while the
+    previous release, still serving during the deploy, read the old name. Declared here with the
+    table, columns and uniqueness it already has, so the rename changes nothing in the database.
+    The field keeps the name `history` for the same reason: `crops_by_facility` filters on it.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    history = models.ForeignKey(Production, on_delete=models.CASCADE, db_column="history_id")
+    postharvestfacility = models.ForeignKey("certifications.PostHarvestFacility", on_delete=models.CASCADE)
+
+    class Meta:
+        db_table = "history_history_post_harvest_facilities"
+        unique_together = [("history", "postharvestfacility")]
 
 
 class Activity(models.Model):
@@ -5472,7 +5513,7 @@ class LabelImage(models.Model):
         ("tag", "Tag / PLU"),
     ]
 
-    history = models.ForeignKey("history.History", on_delete=models.CASCADE, related_name="label_images")
+    history = models.ForeignKey("history.Production", on_delete=models.CASCADE, related_name="label_images")
     label_type = models.CharField(max_length=20, choices=LABEL_TYPE_CHOICES, default="nonretail")
     container_type = models.CharField(max_length=20, choices=CONTAINER_TYPE_CHOICES, blank=True, null=True)
     gallery_image = models.ForeignKey(
@@ -5572,7 +5613,7 @@ class EventAmendment(models.Model):
     # the amendment survives its event being deleted and the certifier packet can gather a
     # season's corrections in one query rather than eight; for a header amendment it IS the
     # corrected record.
-    history = models.ForeignKey("history.History", on_delete=models.CASCADE, related_name="amendments")
+    history = models.ForeignKey("history.Production", on_delete=models.CASCADE, related_name="amendments")
 
     field_name = models.CharField(max_length=100)
     field_label = models.CharField(

@@ -130,7 +130,7 @@ class AccountClosureTests(TestCase):
         self.assertEqual(report["published_seasons"], 1)
         self.assertEqual(report["recordings_at_provider"], 1)
         self.assertGreaterEqual(report["files"], 3)
-        self.assertIn("history.History", report["rows"])
+        self.assertIn("history.Production", report["rows"])
         self.assertTrue(report["protected_rows_included"], "the filed annual update was not reached")
         self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
         # The dry run is logged nowhere and carries no personal data on screen.

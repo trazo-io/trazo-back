@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from rest_framework import serializers
 
+from certifications.models import PostHarvestFacility
 from common.field_registry import NO_TREATMENT_ANSWERS, NON_ORGANIC_SEED_STATUSES, SEED_SOURCED_SUBTYPES
 from common.models import Gallery
 from common.serializers import GallerySerializer
@@ -3251,6 +3252,13 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
     # Product row the same way start_production does); refuses to CHANGE an
     # existing crop — events, templates, and PUR rows are keyed to it.
     crop_type_id = serializers.IntegerField(write_only=True, required=False)
+
+    # Declared, not generated: since the link table became an explicit model (2026-11-14), DRF makes
+    # a generated field for a many-to-many with a `through` model READ-ONLY, so a PATCH would answer
+    # 200 and drop the facilities silently. `set()` works on this link table (no extra columns).
+    post_harvest_facilities = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=PostHarvestFacility.objects.all()
+    )
 
     def validate_post_harvest_facilities(self, facilities):
         """A lot may only be sent to handlers this establishment actually registered.

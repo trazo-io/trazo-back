@@ -43,7 +43,7 @@ FIXTURE = Path(apps.get_app_config("history").path) / "management" / "commands" 
 SECTION_MODEL = {
     "establishment": ("company", "Establishment"),
     "parcels": ("product", "Parcel"),
-    "seasons": ("history", "History"),
+    "seasons": ("history", "Production"),
     "certifications": ("certifications", "Certification"),
     "post_harvest_facilities": ("certifications", "PostHarvestFacility"),
     "production_equipment": ("certifications", "ProductionEquipment"),
