@@ -130,6 +130,12 @@ parcel_router.register(
     HistoryViewSet,
     basename="parcel-histories",
 )
+# Same viewset under the model's name; `histories` goes once the app has moved (expand/contract).
+parcel_router.register(
+    r"productions",
+    HistoryViewSet,
+    basename="parcel-productions",
+)
 # The crops a parcel grows now or is planned to grow, with acres (CCOF ORGB49 A8, WSDA AGR 2264 ref 8,
 # OTCO C2 2.1 10).
 parcel_router.register(r"planned-crops", ParcelPlannedCropViewSet, basename="parcel-planned-crops")

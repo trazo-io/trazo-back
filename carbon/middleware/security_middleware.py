@@ -39,6 +39,7 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
         "/api/carbon/certificates/",
         "/events/",
         "/histories/",
+        "/productions/",
     ]
 
     # Public endpoints excluded from critical security checks (no auth required)
@@ -102,7 +103,7 @@ class CarbonSecurityMiddleware(MiddlewareMixin):
 
     def _is_carbon_endpoint(self, path: str) -> bool:
         """Check if the endpoint is carbon or event-related"""
-        protected_paths = ["/api/carbon/", "/carbon/", "/events/", "/histories/"]
+        protected_paths = ["/api/carbon/", "/carbon/", "/events/", "/histories/", "/productions/"]
         return any(p in path for p in protected_paths)
 
     def _is_critical_endpoint(self, path: str) -> bool:
@@ -373,7 +374,7 @@ class CarbonAuditMiddleware(MiddlewareMixin):
 
     def _should_audit(self, request) -> bool:
         """Determine if request should be audited"""
-        audited_paths = ["/api/carbon/", "/carbon/", "/events/", "/histories/"]
+        audited_paths = ["/api/carbon/", "/carbon/", "/events/", "/histories/", "/productions/"]
         return any(path in request.path for path in audited_paths)
 
     def _is_critical_operation(self, request, response) -> bool:
@@ -385,6 +386,7 @@ class CarbonAuditMiddleware(MiddlewareMixin):
             "/api/carbon/purchases/",
             "/events/",
             "/histories/",
+            "/productions/",
         ]
 
         return any(path in request.path for path in critical_paths) and request.method in [

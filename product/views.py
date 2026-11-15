@@ -351,6 +351,16 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         status_obj = compute_transition_status(parcel)
         return Response(status_obj.to_dict())
 
+    # The same two actions under the model's name (History is Production since history 0264). Each
+    # delegates to its `*_history` twin; those go once the app has moved over (expand/contract).
+    @action(detail=True, methods=["get"])
+    def current_production(self, request, *args, **kwargs):
+        return self.current_history(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"])
+    def finish_production(self, request, *args, **kwargs):
+        return self.finish_history(request, *args, **kwargs)
+
     @action(detail=True, methods=["get"])
     def current_history(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         """
