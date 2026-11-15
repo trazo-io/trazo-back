@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("certifications", "0080_operation_contacts"),
+        ("certifications", "0081_annual_update_prior_plan_basis"),
     ]
 
     operations = [
