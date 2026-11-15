@@ -17,6 +17,9 @@ from .views import (
 router = routers.DefaultRouter()
 
 router.register(r"histories", HistoryViewSet, basename="histories")
+# The same viewset under the model's name (History is Production since history 0264). Both prefixes
+# serve until the app has moved to `productions/`; then `histories` is removed (expand/contract).
+router.register(r"productions", HistoryViewSet, basename="productions")
 router.register(r"events", EventViewSet, basename="events")
 router.register(r"scans", HistoryScanViewSet, basename="scans")
 router.register(r"public_scans", PublicHistoryScanViewSet, basename="public-scans")
@@ -30,6 +33,11 @@ urlpatterns = [
         "histories/<uuid:public_id>/audit-export/",
         audit_export_by_uuid,
         name="audit-export-by-uuid",
+    ),
+    path(
+        "productions/<uuid:public_id>/audit-export/",
+        audit_export_by_uuid,
+        name="production-audit-export-by-uuid",
     ),
     # Dry run of the buyer-page input claim for a draft the wizard has not saved yet.
     # BEFORE the router include: `events/<pk>/` would otherwise swallow any path under it, and
