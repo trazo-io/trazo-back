@@ -235,6 +235,23 @@ class OnThePageTests(_Farm):
         table = page[page.index("Product Almonds") : page.index("How do you make sure")]
         self.assertEqual(table.count("Not stated"), 4, table)
 
+    def test_a_detail_line_ending_in_a_full_stop_does_not_double_it(self):
+        self.facility.products_detail = "Hulled almonds\nfield bins."
+        self.facility.save(update_fields=["products_detail"])
+        # The off-farm facility table (G6.1), then the operation's own facility table (G6.4).
+        pages = [self.g6_1(self.plan())]
+        self.facility.operated_by = "this_operation"
+        self.facility.save(update_fields=["operated_by"])
+        own = self.plan()
+        own.module_responses["modules"]["g6_4_handling"] = {
+            "answers": {"handling_activities": {"at": AT, "value": ["packing"]}}
+        }
+        own.save(update_fields=["module_responses"])
+        pages.append(_text(generate_module_pdf(own, "g6_4_handling")))
+        for page in pages:
+            self.assertIn("Products, as the operation describes them: Hulled almonds; field bins.", page)
+            self.assertNotIn("field bins..", page)
+
     def test_a_multi_ingredient_product_with_no_statement_prints_a_review(self):
         self.product(category="Almond butter", multi_ingredient="yes")
         self.assertIn(

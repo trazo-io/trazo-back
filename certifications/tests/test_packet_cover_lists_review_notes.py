@@ -273,3 +273,47 @@ class ReviewOfBack387Tests(SimpleTestCase):
         self.assertIn("address", cut[0])
         self.assertNotIn("address", cut[1])
         self.assertEqual(cut[2], "")
+
+
+class NoteStartsOnTheLinesAboveTheMarkTests(SimpleTestCase):
+    """Back #387 walked only downward from the mark, so a note whose mark sat on a wrapped line started
+    mid-sentence ("bitter pit on Honeycrisp. in use [REVIEW] ...") and never named the material."""
+
+    @staticmethod
+    def _pdf(paragraphs) -> bytes:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+        out = io.BytesIO()
+        body = getSampleStyleSheet()["BodyText"]
+        story = []
+        for text in paragraphs:
+            story += [Paragraph(text, body), Spacer(1, 14)]
+        SimpleDocTemplate(out, pagesize=letter, leftMargin=72, rightMargin=72).build(story)
+        return out.getvalue()
+
+    ROW = (
+        "Calcium chloride, manufacturer not stated, National List substance, reason for use: foliar spray for "
+        "bitter pit on Honeycrisp and Gala blocks, applied again by the crew in three passes through the season, "
+        "in use {mark} restricted use: Prohibited for use except as a foliar spray to treat a physiological "
+        "disorder associated with calcium uptake, as the annotation for this substance states it."
+    )
+
+    def test_the_note_names_the_material_that_the_lines_above_the_mark_name(self):
+        data = self._pdf(["An unrelated paragraph that ends before the row.", self.ROW.format(mark=MARK)])
+        notes = packet_review_notes.notes_in_pdf(data)
+        self.assertEqual(len(notes), 1, notes)
+        self.assertTrue(notes[0].startswith("Calcium chloride, manufacturer not stated"), notes[0])
+        self.assertTrue(notes[0].endswith("states it."), notes[0])
+        self.assertNotIn("unrelated", notes[0])
+
+    def test_the_same_row_printed_twice_is_one_note(self):
+        row = self.ROW.format(mark=MARK)
+        data = self._pdf(["Intro line.", row, "Second section opens here.", row])
+        self.assertEqual(len(packet_review_notes.notes_in_pdf(data)), 1)
+
+    def test_a_note_that_is_the_tail_of_another_is_dropped(self):
+        full = f"Calcium chloride, reason for use: foliar spray for bitter pit {MARK} restricted use."
+        tail = f"bitter pit {MARK} restricted use."
+        self.assertEqual(packet_review_notes._without_repeats([tail, full, "other"]), [full, "other"])

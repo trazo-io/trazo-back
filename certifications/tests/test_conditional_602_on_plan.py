@@ -143,6 +143,61 @@ class ConditionalRowPrintsItsConditionTests(_PlanSetup, TestCase):
         self.assertNotIn("PROHIBITED", line)
         self.assertIn(f"[REVIEW] restricted use: {CALCIUM_NOTE}", line)
 
+    def _g4(self, **answers):
+        self.osp.module_responses = {
+            "schema_version": 1,
+            "modules": {
+                "g4_0_rotation_soil": {
+                    "answers": {k: {"at": "2026-11-09T10:00:00Z", "value": v} for k, v in answers.items()}
+                }
+            },
+        }
+        self.osp.save(update_fields=["module_responses"])
+
+    def test_g4_answers_to_the_restriction_move_the_line_off_review(self):
+        self.osp.approved_national_list_substances.add(self.calcium)
+        self._g4(applies_calcium_chloride=True, calcium_chloride_foliar=True, calcium_chloride_disorder="bitter pit")
+        _, line = self._line()
+        self.assertNotIn("[REVIEW]", line)
+        self.assertIn(f"restricted use: {CALCIUM_NOTE}", line)
+        self.assertIn(
+            "The restriction is answered in G4.0: applied as a foliar spray, disorder stated as bitter pit.", line
+        )
+        for word in ("complies", "satisfies", "permitted use"):
+            self.assertNotIn(word, line)
+
+    def test_a_disorder_answer_ending_in_a_full_stop_is_not_doubled(self):
+        self.osp.approved_national_list_substances.add(self.calcium)
+        self._g4(
+            applies_calcium_chloride=True,
+            calcium_chloride_foliar=True,
+            calcium_chloride_disorder="Bitter pit on Honeycrisp: foliar sprays in June.",
+        )
+        _, line = self._line()
+        self.assertIn("disorder stated as Bitter pit on Honeycrisp: foliar sprays in June.", line)
+        self.assertNotIn("..", line)
+
+    def test_an_incomplete_or_negative_g4_answer_leaves_the_review_line(self):
+        self.osp.approved_national_list_substances.add(self.calcium)
+        for answers in (
+            {},
+            {"applies_calcium_chloride": True, "calcium_chloride_foliar": True},
+            {
+                "applies_calcium_chloride": True,
+                "calcium_chloride_foliar": False,
+                "calcium_chloride_disorder": "bitter pit",
+            },
+            {
+                "applies_calcium_chloride": False,
+                "calcium_chloride_foliar": True,
+                "calcium_chloride_disorder": "bitter pit",
+            },
+        ):
+            with self.subTest(answers=answers):
+                self._g4(**answers)
+                _, line = self._line()
+                self.assertIn(f"[REVIEW] restricted use: {CALCIUM_NOTE}", line)
+
     def test_the_condition_survives_the_fold_into_the_operator_entry(self):
         # The operator lists the product with its own reason; the catalogue row folds into it. The
         # condition is the one thing the reviewer must see, so it travels with the fold.

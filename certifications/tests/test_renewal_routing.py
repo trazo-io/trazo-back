@@ -262,6 +262,15 @@ class Run3RenewalMeaningTests(_Farm):
                 filing.delete()
                 osp.delete()
 
+    def test_without_a_filing_02s_does_not_cite_a_subtotal_that_02_does_not_print(self):
+        for agent in ("Washington State Department of Agriculture", "Oregon Tilth Certified Organic"):
+            with self.subTest(agent=agent):
+                osp = self._plan(agent)
+                text = self._supplement(osp)
+                self.assertIn("No annual update is on file, so 02 carries no sales subtotal.", text)
+                self.assertNotIn("the subtotal printed on 02", text)
+                osp.delete()
+
     def test_a_neutral_frozen_filing_exported_for_otco_gets_otcos_caveat_on_02s(self):
         """Run 4, R4-04: 02 is frozen as filed and may name no agent; the routing page, which follows
         the export, carries the agent's sales-figure caveat."""

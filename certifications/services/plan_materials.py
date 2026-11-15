@@ -76,6 +76,11 @@ class PlanMaterial:
     #: certifier checks the recorded use against this text (2026-11-06; until then every one of
     #: the three printed "PROHIBITED ... remove from this plan").
     condition: str = ""
+    #: The plan's own G4.0 answer to a calcium chloride condition: the physiological disorder the operation
+    #: states it treats, set only when G4.0 also says the material is applied as a foliar spray. "" otherwise.
+    #: It moves the line from a question for the operation to a statement of where the answer is; it does
+    #: not say the use meets the rule.
+    condition_answered: str = ""
     #: Edition date on which OMRI's published list stopped carrying this product, as ISO text;
     #: "" while it is still listed. OMRI listings lapse: 6 of the 9,230 products on the
     #: 2026-09-05 edition were gone from the 2026-09-26 one, all six returning HTTP 404 at
@@ -156,6 +161,11 @@ class PlanMaterial:
         line = " — ".join(bits)
         if self.prohibited:
             line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
+        elif self.condition and self.condition_answered:
+            line += (
+                f" restricted use: {self.condition} The restriction is answered in G4.0: applied as a foliar "
+                f"spray, disorder stated as {self.condition_answered}."
+            )
         elif self.condition:
             line += f" [REVIEW] restricted use: {self.condition}"
         if self.delisted_on:
@@ -427,7 +437,41 @@ def plan_materials(osp) -> list[PlanMaterial]:
         _fold_into_entry(entry, folded.get(_norm(entry.product_name), []), linked_conditions) for entry in entries
     ]
 
-    return national_list + omri + operator + wsda
+    return _with_g4_answers(osp, national_list + omri + operator + wsda)
+
+
+#: The words of § 205.602(c)'s condition that G4.0's calcium chloride questions ask about.
+_CALCIUM_CONDITION_WORDS = "calcium uptake"
+
+
+def _with_g4_answers(osp, rows: list) -> list:
+    """Mark a calcium chloride row whose restriction the plan's own G4.0 answers address.
+
+    G4.0 asks whether calcium chloride is applied as a foliar spray (`calcium_chloride_foliar`) and which
+    physiological disorder it treats (`calcium_chloride_disorder`), the two halves of § 205.602(c). With both
+    answered the row stops being an open question; a missing or negative answer leaves it a review line.
+    """
+    if not any(r.condition and _CALCIUM_CONDITION_WORDS in r.condition.lower() for r in rows):
+        return rows
+    from certifications.osp_modules.conditions import answer_value
+
+    answers = ((osp.module_responses or {}).get("modules") or {}).get("g4_0_rotation_soil", {}).get("answers") or {}
+    disorder = answer_value(answers, "calcium_chloride_disorder")
+    disorder = " ".join(disorder.split()).rstrip(".") if isinstance(disorder, str) else ""
+    if not (
+        answer_value(answers, "applies_calcium_chloride") is True
+        and answer_value(answers, "calcium_chloride_foliar") is True
+        and disorder
+    ):
+        return rows
+    return [
+        (
+            replace(r, condition_answered=disorder)
+            if r.condition and _CALCIUM_CONDITION_WORDS in r.condition.lower()
+            else r
+        )
+        for r in rows
+    ]
 
 
 def logged_material_names(establishment) -> list[str]:
@@ -688,12 +732,27 @@ def none_used_contradictions(osp, answers: dict) -> list[str]:
         from certifications.services.osp_prefill import logged_category_names
 
         aids = logged_category_names(osp.establishment, "crop_production_aids_listed")
-        if aids:
-            shown = ", ".join(aids[:6]) + (f", and {len(aids) - 6} more" if len(aids) > 6 else "")
+        listed = sorted(
+            {
+                (e.product_name or "").strip()
+                for e in osp.plan_material_entries.filter(category="production_aid")
+                if (e.product_name or "").strip()
+            }
+        )
+        if aids or listed:
+            bits = []
+            if listed:
+                bits.append(f"this plan's own list holds {len(listed)} ({', '.join(listed[:6])})")
+            if aids:
+                shown = ", ".join(aids[:6]) + (f", and {len(aids) - 6} more" if len(aids) > 6 else "")
+                bits.append(
+                    f"the records name {len(aids)} ({shown}) as a seed treatment on a planting or a tank-mix "
+                    "partner or adjuvant on an application"
+                )
             out.append(
-                "[REVIEW] The plan states that no seed treatments, growing media or adjuvants are used, but the "
-                f"records name {len(aids)} ({shown}) as a seed treatment on a planting or a tank-mix partner on "
-                "an application. Both are shown; the records are not reconciled here."
+                "[REVIEW] The plan states that no seed treatments, growing media or adjuvants are used, but "
+                + " and ".join(bits)
+                + ". Both are shown; the records are not reconciled here."
             )
 
     if answer_value(answers, "post_harvest_contact_none_used") is True:

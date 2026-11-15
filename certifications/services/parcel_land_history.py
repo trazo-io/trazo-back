@@ -46,6 +46,7 @@ PRIOR_MANAGER = "prior manager"
 #: wording so the two artifacts agree about the same affidavit.
 DECLARED_NONE = "None applied (declared)"
 DECLARED_NOT_ANSWERED = "Not answered"
+DECLARED_APPLIED_NONE_LISTED = "Materials applied (declared); none listed"
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +168,9 @@ def _declared(affidavit) -> Tuple[str, bool]:
         return DECLARED_NONE, False
     if affidavit.yearly_history:
         return f"{len(affidavit.yearly_history)} year(s) listed", False
+    if affidavit.no_materials_applied is False:
+        # An explicit No to "no materials applied" is an answer, not a blank.
+        return DECLARED_APPLIED_NONE_LISTED, False
     return DECLARED_NOT_ANSWERED, False
 
 
@@ -476,7 +480,7 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None, 
     if gaps:
         bits.append("[REVIEW] not accounted for: " + ", ".join(f"{a.isoformat()} to {b.isoformat()}" for a, b in gaps))
     else:
-        bits.append("every day of the window is accounted for")
+        bits.append("Every day of the window is accounted for")
     return Coverage(
         window_start, today, complete=not gaps, gaps=tuple(gaps), unplaced=unplaced, text=". ".join(bits) + "."
     )
@@ -677,10 +681,18 @@ def affidavit_signer_lines(affidavit) -> list[str]:
         lines.append(f"Knows the parcel's history through: {affidavit.signer_basis_other or 'other (not described)'}.")
     elif basis:
         lines.append(f"Knows the parcel's history because they {basis[0].lower() + basis[1:]}.")
+    name = (affidavit.previous_manager_name or "").strip()
     who = [x for x in (affidavit.signer_title, affidavit.signer_company) if x]
     contact = [x for x in (affidavit.signer_email, affidavit.previous_manager_phone) if x]
-    if who or contact:
-        lines.append("Signer: " + "; ".join(([", ".join(who)] if who else []) + contact) + ".")
+    if name and (who or contact):
+        # The name leads only when something else was stated: a name alone is the row's own label.
+        lines.append("Signer: " + "; ".join([", ".join([name, *who])] + contact).rstrip(".") + ".")
+    else:
+        # Contact details never stand in for a name: with none stored they are labelled as contact.
+        if who:
+            lines.append("Signer: " + ", ".join(who).rstrip(".") + ".")
+        if contact:
+            lines.append("Signer's contact: " + "; ".join(contact).rstrip(".") + ".")
     if affidavit.field_name:
         lines.append(f"Site as the signer names it: {affidavit.field_name}.")
     if affidavit.field_acres:
