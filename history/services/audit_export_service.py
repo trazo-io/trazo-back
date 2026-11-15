@@ -13770,9 +13770,7 @@ class AuditExportService:
         except AttributeError:
             est = None
 
-        reg = None
-        if est is not None:
-            reg = StateOrganicRegistration.objects.filter(establishment=est).order_by("-registration_date").first()
+        regs = StateOrganicRegistration.latest_per_agency(est) if est is not None else []
 
         # The producer-registration requirement is California state law (CA Food & Ag
         # Code §§ 46000-46029). Only fire the missing-registration REVIEW flag for a CA
@@ -13782,7 +13780,7 @@ class AuditExportService:
         est_state = resolve_establishment_state(est)
         ca_requirement_applies = est_state in ("CA", None)
 
-        if reg is None:
+        if not regs:
             if ca_requirement_applies:
                 elements.append(
                     self._body(
@@ -13816,60 +13814,65 @@ class AuditExportService:
                 )
             return elements
 
-        commodities = reg.commodities if isinstance(reg.commodities, list) else []
-        gross = reg.prior_year_organic_gross_sales
-        rows = [
-            ("Program", reg.program_name),
-            ("State", reg.state),
-            ("Operation Type", reg.get_operation_type_display()),
-            ("Status", reg.get_status_display()),
-            ("Registration #", reg.registration_number),
-            ("County", reg.county),
-            ("Registration Date", reg.registration_date.isoformat() if reg.registration_date else None),
-            ("Renewal Date", reg.renewal_date.isoformat() if reg.renewal_date else None),
-            ("Prior-Year Organic Gross Sales", f"${gross:,.2f}" if gross is not None else None),
-            ("Commodities", ", ".join(str(c) for c in commodities) if commodities else None),
-        ]
-        data = [[self._hdr("Field"), self._hdr("Value")]]
-        for label, value in rows:
-            data.append([self._cell(label, 32), self._cell(_val(value))])
-        t = Table(data, colWidths=[2.0 * inch, 4.0 * inch], repeatRows=1)
-        t.setStyle(self._base_table_style())
-        elements.append(t)
+        # One block per agency on file: CDFA's and CDPH's are separate registrations (review of back #433).
+        for reg in regs:
+            if len(regs) > 1:
+                elements.append(self._body(f"<b>{reg.get_registering_agency_display()}</b>"))
+                elements.append(self._spacer(0.04))
+            commodities = reg.commodities if isinstance(reg.commodities, list) else []
+            gross = reg.prior_year_organic_gross_sales
+            rows = [
+                ("Program", reg.program_name),
+                ("State", reg.state),
+                ("Operation Type", reg.get_operation_type_display()),
+                ("Status", reg.get_status_display()),
+                ("Registration #", reg.registration_number),
+                ("County", reg.county),
+                ("Registration Date", reg.registration_date.isoformat() if reg.registration_date else None),
+                ("Renewal Date", reg.renewal_date.isoformat() if reg.renewal_date else None),
+                ("Prior-Year Organic Gross Sales", f"${gross:,.2f}" if gross is not None else None),
+                ("Commodities", ", ".join(str(c) for c in commodities) if commodities else None),
+            ]
+            data = [[self._hdr("Field"), self._hdr("Value")]]
+            for label, value in rows:
+                data.append([self._cell(label, 32), self._cell(_val(value))])
+            t = Table(data, colWidths=[2.0 * inch, 4.0 * inch], repeatRows=1)
+            t.setStyle(self._base_table_style())
+            elements.append(t)
 
-        if not reg.is_current:
-            from xml.sax.saxutils import escape as xml_escape
+            if not reg.is_current:
+                from xml.sax.saxutils import escape as xml_escape
 
-            elements.append(self._spacer(0.1))
-            elements.append(
-                Paragraph(
-                    "<b>[REVIEW] CDFA State Organic Program:</b> "
-                    f"{xml_escape(reg.not_current_reason)} Update the registration before the first "
-                    "organic sale of the cycle.",
-                    self._warning_style(),
+                elements.append(self._spacer(0.1))
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] {xml_escape(reg.program_name)}:</b> "
+                        f"{xml_escape(reg.not_current_reason)} Update the registration before the first "
+                        "organic sale of the cycle.",
+                        self._warning_style(),
+                    )
                 )
-            )
 
-        # $5,000 threshold: the "exempt" status means exempt from CERTIFICATION, which holds
-        # only below $5,000 of organic sales (7 CFR 205.101(a)(1)); registration is required
-        # either way (CA Food & Ag Code § 46013.1(a)). Above $5,000 while still marked
-        # exempt, the operation must also be certified. Passive audit flag, not a reminder.
-        try:
-            over_threshold = gross is not None and gross > Decimal("5000")
-        except (TypeError, InvalidOperation):
-            over_threshold = False
-        if reg.status == "exempt" and over_threshold:
-            elements.append(self._spacer(0.1))
-            elements.append(
-                Paragraph(
-                    "<b>[REVIEW] $5,000 exemption exceeded:</b> prior-year organic gross sales "
-                    f"of ${gross:,.2f} are above the $5,000 exemption, but the registration is "
-                    "still marked exempt from certification. Above $5,000 the operation "
-                    "must hold a current CDFA State Organic Program registration and USDA organic "
-                    "certification. Update the registration status.",
-                    self._warning_style(),
+            # $5,000 threshold: the "exempt" status means exempt from CERTIFICATION, which holds
+            # only below $5,000 of organic sales (7 CFR 205.101(a)(1)); registration is required
+            # either way (CA Food & Ag Code § 46013.1(a)). Above $5,000 while still marked
+            # exempt, the operation must also be certified. Passive audit flag, not a reminder.
+            try:
+                over_threshold = gross is not None and gross > Decimal("5000")
+            except (TypeError, InvalidOperation):
+                over_threshold = False
+            if reg.status == "exempt" and over_threshold:
+                elements.append(self._spacer(0.1))
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] $5,000 exemption exceeded:</b> prior-year organic gross sales "
+                        f"of ${gross:,.2f} are above the $5,000 exemption, but the registration is "
+                        "still marked exempt from certification. Above $5,000 the operation "
+                        "must hold a current state organic registration and USDA organic "
+                        "certification. Update the registration status.",
+                        self._warning_style(),
+                    )
                 )
-            )
         return elements
 
     # ------------------------------------------------------------------
@@ -18968,12 +18971,9 @@ class AuditExportService:
                 from certifications.models import StateOrganicRegistration
 
                 establishment = self.production.parcel.establishment
-                reg = (
-                    StateOrganicRegistration.objects.filter(establishment=establishment)
-                    .order_by("-registration_date")
-                    .first()
-                )
-                if reg is None:
+                # The PDF's reader: each agency's latest row, undated ones last (review of back #433).
+                regs = StateOrganicRegistration.latest_per_agency(establishment)
+                if not regs:
                     # 🔴 2026-08-20 — this row asserted the California requirement flatly, for
                     # every operation in every state. The PDF sibling
                     # (_build_state_organic_registration_section) has gated on the operation's
@@ -19005,36 +19005,38 @@ class AuditExportService:
                             ]
                         )
                 else:
-                    gross = reg.prior_year_organic_gross_sales
-                    commodities = reg.commodities if isinstance(reg.commodities, list) else []
                     writer.writerow(["Field", "Value"])
-                    for label, value in [
-                        ("Program", reg.program_name),
-                        ("State", reg.state),
-                        ("Operation Type", reg.get_operation_type_display()),
-                        ("Status", reg.get_status_display()),
-                        ("Registration #", reg.registration_number),
-                        ("County", reg.county),
-                        ("Registration Date", _fmt_date(reg.registration_date)),
-                        ("Renewal Date", _fmt_date(reg.renewal_date)),
-                        ("Prior-Year Organic Gross Sales", f"${gross:,.2f}" if gross is not None else ""),
-                        ("Commodities", ", ".join(str(c) for c in commodities) if commodities else ""),
-                    ]:
-                        writer.writerow([label, _val(value)])
-                    if not reg.is_current:
-                        writer.writerow(["[REVIEW]", f"Registration not current. {reg.not_current_reason}"])
-                    try:
-                        over_threshold = gross is not None and gross > Decimal("5000")
-                    except (TypeError, InvalidOperation):
-                        over_threshold = False
-                    if reg.status == "exempt" and over_threshold:
-                        writer.writerow(
-                            [
-                                "[REVIEW]",
-                                f"$5,000 exemption exceeded (${gross:,.2f}) but status still 'exempt' — "
-                                "operation must register with CDFA SOP and be certified.",
-                            ]
-                        )
+                    for reg in regs:
+                        gross = reg.prior_year_organic_gross_sales
+                        commodities = reg.commodities if isinstance(reg.commodities, list) else []
+                        for label, value in [
+                            ("Program", reg.program_name),
+                            ("State", reg.state),
+                            ("Operation Type", reg.get_operation_type_display()),
+                            ("Status", reg.get_status_display()),
+                            ("Registration #", reg.registration_number),
+                            ("County", reg.county),
+                            ("Registration Date", _fmt_date(reg.registration_date)),
+                            ("Renewal Date", _fmt_date(reg.renewal_date)),
+                            ("Prior-Year Organic Gross Sales", f"${gross:,.2f}" if gross is not None else ""),
+                            ("Commodities", ", ".join(str(c) for c in commodities) if commodities else ""),
+                        ]:
+                            writer.writerow([label, _val(value)])
+                        if not reg.is_current:
+                            # Under its own block's "Program" row, so the flag names its registration.
+                            writer.writerow(["[REVIEW]", f"Registration not current. {reg.not_current_reason}"])
+                        try:
+                            over_threshold = gross is not None and gross > Decimal("5000")
+                        except (TypeError, InvalidOperation):
+                            over_threshold = False
+                        if reg.status == "exempt" and over_threshold:
+                            writer.writerow(
+                                [
+                                    "[REVIEW]",
+                                    f"$5,000 exemption exceeded (${gross:,.2f}) but status still 'exempt': "
+                                    "the operation must keep its state registration and be certified.",
+                                ]
+                            )
             except Exception as exc:
                 logger.warning("CSV state organic registration section error: %s", exc)
                 writer.writerow(["Error loading state organic registration data"])

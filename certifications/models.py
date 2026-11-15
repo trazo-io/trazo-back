@@ -3351,6 +3351,26 @@ class StateOrganicRegistration(models.Model):
             models.Index(fields=["establishment", "state"]),
         ]
 
+    @classmethod
+    def latest_per_agency(cls, establishment, state=None) -> list:
+        """The latest row of each agency on file, CDFA first, then CDPH.
+
+        One reader for the packet cover and the audit dossier (PDF and CSV): a single
+        `.order_by("-registration_date").first()` let a pending CDPH row with no date yet sort first
+        (Postgres puts NULL first in a descending sort) and print under CDFA's name, flagged as not
+        current, for an operation validly registered with CDFA (review of back #433). Undated rows
+        sort after dated ones, and each agency is read on its own.
+        """
+        from django.db.models import F
+
+        rows = cls.objects.filter(establishment=establishment)
+        if state:
+            rows = rows.filter(state=state)
+        latest: dict = {}
+        for reg in rows.order_by(F("registration_date").desc(nulls_last=True), "-pk"):
+            latest.setdefault(reg.registering_agency, reg)
+        return [latest[agency] for agency, _label in cls.AGENCY_CHOICES if agency in latest]
+
     def save(self, *args, **kwargs):
         # A California row's program follows its agency. A name typed by hand for another program is
         # left alone; only the two names this model writes are kept in step.

@@ -187,13 +187,14 @@ class TheRegisterReadsThem(_Plan):
                 self.assertEqual(self.row("otco", "O1", ref).state, "answered")
 
     def test_certified_elsewhere_needs_that_certificate(self):
-        self.plan(ANSWERS)
+        # An operation moving agents: certified today by another agency only. Since 2026-11-15 D-1 also asks the
+        # filing agency's certificate (`history_certified_by_this_agency`), so the row closes on the other
+        # agency's file once that is answered No.
+        self.plan({**ANSWERS, "history_certified_by_this_agency": False})
         before = self.row("otco", "O1", "D-1 (certificate attachment)")
         self.assertEqual(before.state, "attachment_missing")
         self.upload("history_current_certificate_upload")
-        # The other agency's certificate answers what was asked; the row stays partial for the register's own
-        # gap (the certificate of the agency the plan is filed with does not travel), never "answered".
-        self.assertEqual(self.row("otco", "O1", "D-1 (certificate attachment)").state, "partial")
+        self.assertEqual(self.row("otco", "O1", "D-1 (certificate attachment)").state, "answered")
 
     def test_the_signature_needs_the_signed_form_and_the_signer(self):
         self.plan({"contract_signed_by": "Ann Vos, managing member", "contract_signed_on": "2026-10-30"})

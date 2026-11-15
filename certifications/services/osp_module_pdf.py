@@ -3201,16 +3201,10 @@ def _state_registration_cover_lines(est, kv, styles) -> list:
     One line per agency, from that agency's latest row (2026-11-15): a CDPH number printed under CDFA's
     name would put it in the wrong box of both forms.
     """
-    from django.db.models import F
-
     from certifications.models import StateOrganicRegistration
     from common.us_states import resolve_establishment_state
 
-    latest: dict = {}
-    for reg in StateOrganicRegistration.objects.filter(establishment=est, state="CA").order_by(
-        F("registration_date").desc(nulls_last=True), "-pk"
-    ):
-        latest.setdefault(reg.registering_agency, reg)
+    latest = {reg.registering_agency: reg for reg in StateOrganicRegistration.latest_per_agency(est, state="CA")}
     if not latest:
         if resolve_establishment_state(est) != "CA":
             return []
