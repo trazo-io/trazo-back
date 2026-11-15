@@ -35,6 +35,14 @@ questions:
     material of any kind was applied, which is a different statement; until 2026-09-30 the register
     cited this declaration there (OSP alignment audit 2026-10, T17). WSDA's land history is the dated
     list of inputs itself, which ref 13 maps to the land-history years.
+  parcel_application.dlpm_in_tenure_date: >-
+    The date of the last prohibited material the operation applied itself, asked of an operator who
+    answers No to the no-prohibited-material declaration (CCOF ORGB49 F4; OTCO C2 2.4 starts the land
+    history the day after it). WSDA does not ask for that date: AGR 2264 ref 13 lists every input applied
+    under the operator's management with its date, which the land-history years answer.
+  parcel_application.dlpm_none_since_in_tenure_date: >-
+    The operator's statement that no prohibited material followed that date. Same reason: WSDA's land
+    history is the dated list of inputs itself, and it asks for no declaration about prohibited material.
   parcel_application.transition_card: >-
     A display of what Trazo's records show about the 36-month window, not an answer. WSDA's nearest
     question, AGR 2264 ref 4, asks which status the operator is APPLYING for (organic or

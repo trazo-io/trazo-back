@@ -379,7 +379,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   that is not a district's, with the measures taken (CCOF G6.0 D3, D5); materials put through the irrigation system,
 #   their types, whether all are approved, and how certified crops are kept from those that are not (CCOF D6; WSDA AGR
 #   2121 E 8, 8a, 8b).
-CONTENT_VERSION = "2026.12.13"
+# 2026.12.14: the Parcel Application asks an operator who answered No to "no prohibited material since I began
+#   managing it" for the date of the last one it applied and whether any followed (CCOF ORGB49 F4). The 36-month
+#   accounting runs from that date, and the transition clock reads it.
+CONTENT_VERSION = "2026.12.14"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
