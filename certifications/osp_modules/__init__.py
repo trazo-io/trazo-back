@@ -374,7 +374,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   (WSDA E 4, 5); other measures (WSDA E 3, CCOF A9, OTCO C6 7); NRCS, FSA, Salmon Safe and other as agencies (OTCO C6
 #   1a; the joint federal option retired). G4.0 asks rotation records (WSDA E 1b) and whether fertilizer is applied
 #   (E 11); G3.1 conservation in enclosed structures (CCOF G4.2 A8).
-CONTENT_VERSION = "2026.12.12"
+# 2026.12.13: irrigation. G4.2 page C asks how irrigation water is verified free of contaminants and what it is tested for
+#   (OTCO C9 9.2-1a); the district plan's materials, timing and advance notice (9.2-1b); prohibited additives in water
+#   that is not a district's, with the measures taken (CCOF G6.0 D3, D5); materials put through the irrigation system,
+#   their types, whether all are approved, and how certified crops are kept from those that are not (CCOF D6; WSDA AGR
+#   2121 E 8, 8a, 8b).
+CONTENT_VERSION = "2026.12.13"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

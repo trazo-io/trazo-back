@@ -136,54 +136,41 @@ items:
     prints: modules/G4_2.pdf §C (source types, named)
   # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: 9.2-1a
-  asks: How do you verify that the water source is free of contaminants (prohibited substances, pathogenic
-    microorganisms, etc.)?
-  status: partial
-  severity: P2
+  asks: How do you verify that the water source is free of contaminants (prohibited substances, pathogenic microorganisms,
+    etc.)?
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.water_quality_tested
     - g4_2_natural_resources.water_quality_test_frequency
-    prints: modules/G4_2.pdf §C; narrative § 205.200
-  gap: 'A fresh OTCO ask — neither CCOF nor WSDA asks how irrigation water is verified clean, and both registers
-    carry these two fields as unmapped for that reason. Trazo captures whether the water is tested (`water_quality_tested`,
-    a boolean) and how often (`water_quality_test_frequency`), and both print. OTCO asks for the verification
-    METHOD and what it covers: a yes/no plus a frequency says nothing about what is tested for (prohibited
-    substances versus pathogens), by whom, or against what threshold, and an operation that verifies by the
-    nature of the source rather than by sampling — a municipal supply with the utility''s own reports, a deep
-    well with a one-time baseline — has no way to say so and reads as "not tested".'
-  fix: Add `water_verification_method` [checkbox_group] {lab_testing, municipal_utility_reports, district_statement,
-    source_assessment, other} with an `other` text, and `water_contaminants_tested` [checkbox_group] {prohibited_substances,
-    pathogens, heavy_metals, other}, visible when the operation irrigates; cite § 205.202(c) / § 205.200.
+    - g4_2_natural_resources.water_verification_method
+    - g4_2_natural_resources.water_verification_method_other
+    - g4_2_natural_resources.water_contaminants_tested
+    - g4_2_natural_resources.water_contaminants_tested_other
+    prints: modules/G4_2.pdf §C
+  note: 'Closed 2026-11-15. `water_verification_method` asks how: laboratory testing, a municipal utility''s reports,
+    the district''s statement, an assessment of the source, other, or not verified (which prints a [REVIEW] line).
+    `water_contaminants_tested` asks what a laboratory test covers.'
 - ref: 9.2-1b
-  asks: For water supplied by an irrigation district, does the district periodically add any substances to
-    the water system that are prohibited in organic production (e.g., algicide)? (No substances added — attach
-    verifiable documentation / Yes — provide your plan.)
-  status: partial
-  severity: P2
+  asks: For water supplied by an irrigation district, does the district periodically add any substances to the water
+    system that are prohibited in organic production (e.g., algicide)? (No substances added — attach verifiable
+    documentation / Yes — provide your plan.)
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.water_from_irrigation_district
     - g4_2_natural_resources.irrigation_district_additives
     - g4_2_natural_resources.irrigation_district_documentation
     - g4_2_natural_resources.irrigation_district_mitigation
-    prints: modules/G4_2.pdf §C; narrative § 205.201(a)(5)
-  gap: '(9.2-4 (documentation)) Same packet half as CCOF G6.0 D5: the upload question exists ("Attach the district''s
-    written statement or treatment schedule") and is visible whenever district water is used, but no module
-    upload of any kind currently reaches the generated packet — `osp_module_pdf` skips `kind in ("info", "upload")`
-    and `generate_osp_packet` writes only parcel maps and the `receipts/` folder. OTCO''s "No" is conditional
-    on that documentation, so the packet carries the claim without its evidence. (9.2-4 (plan)) The plan field
-    exists, is gated exactly as OTCO gates it (visible when the district answer is "yes") and prints — CCOF
-    G6.0 D5''s gating objection does not apply here. What OTCO adds is structure: four named elements the plan
-    must contain. `irrigation_district_mitigation` is one textarea; its coaching names the district''s treatment
-    calendar and advance notices, head-gate closure, an alternate source and water testing, but nothing prompts
-    the type of material added or the explicit confirmation that the district will notify the operation first,
-    so whether the printed plan contains all four is up to the operator.'
-  fix: Wire `generate_osp_packet` to pull module uploads (tagged by `linked_section`) into `attachments/<module>/`
-    and name the file on the module page — the same fix CCOF G6.0 A2 and D5 already ask for. Split the textarea
-    into `district_additive_types` [text], `district_additive_timing` [text], `district_contamination_prevention`
-    [textarea] and `district_notifies_before_treatment` [boolean], all visible on the same condition; compile
-    them as one paragraph so the module PDF and the (a)(5) narrative still read as a plan.
+    - g4_2_natural_resources.district_additive_types
+    - g4_2_natural_resources.district_additive_timing
+    - g4_2_natural_resources.district_notifies_before_treatment
+    prints: modules/G4_2.pdf §C
+  note: 'Closed 2026-11-15. OTCO''s four plan elements: the materials added (`district_additive_types`), their frequency
+    and timing (`district_additive_timing`), prevention (`irrigation_district_mitigation`), and whether the district
+    gives notice first (`district_notifies_before_treatment`). The district''s statement or treatment schedule is
+    asked of every district user and rides in the packet; a Yes plan with no file reads as an attachment missing,
+    the cautious reading. The old gap that uploads never reach the packet went stale on 2026-10-01.'
 - ref: 9.3-1
   asks: Is there any risk of drift of prohibited materials from neighboring non-organic producers onto your
     organic land? (No / Yes — describe your plan to mitigate the drift risk.) Note that complete buffer descriptions

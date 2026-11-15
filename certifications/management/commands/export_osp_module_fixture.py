@@ -102,6 +102,20 @@ GOLDEN_ANSWER_CASES = {
         # The waterway list opens on streams or channels by the land; the agency's other box on other (2026.12.12).
         "streams_adjacent": {"streams_or_channels_adjacent": True, "waterway_practices": ["fish_screens", "other"]},
         "no_streams_stale": {"streams_or_channels_adjacent": False, "waterway_practices": ["fish_screens"]},
+        # Irrigation (2026.12.13): a well opens the non-district additives question; a district's yes opens its plan
+        # elements; materials not all approved open the prevention practices; lab testing opens what is tested.
+        "well_with_materials": {
+            "irrigation_source_types": ["well"],
+            "materials_via_irrigation": True,
+            "irrigation_materials_all_approved": False,
+            "water_verification_method": ["lab_testing"],
+        },
+        "district_adds_prohibited": {
+            "irrigation_source_types": ["irrigation_district"],
+            "water_from_irrigation_district": True,
+            "irrigation_district_additives": "yes",
+        },
+        "not_irrigated_stale": {"irrigation_source_types": ["not_irrigated"], "materials_via_irrigation": True},
         "other_agency_and_measures": {
             "conservation_plan_agency": ["nrcs", "other"],
             "other_conservation_measures": True,
