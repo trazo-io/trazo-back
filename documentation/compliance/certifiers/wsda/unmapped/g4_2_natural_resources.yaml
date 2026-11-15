@@ -93,3 +93,5 @@ questions:
     The same diagram when the district adds materials to the water (CCOF G6.0 D5); same reason.
   g4_2_natural_resources.natural_resources_description: >-
     A description of the operation's natural resources and biodiversity. Asked by CCOF G4.2 A1. WSDA AGR 2121 §E asks which conservation and biodiversity practices are used (NRCS practice names) and about streams and channels, never for a description of the resources themselves.
+  g4_2_natural_resources.conservation_plan_agency_other: >-
+    The other agency or program of `conservation_plan_agency`, unmapped with its parent above.

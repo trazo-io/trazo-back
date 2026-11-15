@@ -110,6 +110,25 @@ G4_0_ROTATION_SOIL = Module(
                     visible_when=(Condition("system_type", "includes", "annual"),),
                     compiles_to=CompileRule(template="Crop rotation plan (annual crops): {answer}"),
                 ),
+                # 2026-11-15: WSDA AGR 2121 E 1b asks the records kept of the rotation, apart from the plan itself.
+                Question(
+                    key="rotation_records_kept",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "What records do you keep of your crop rotation?",
+                        "¿Qué registros llevas de tu rotación de cultivos?",
+                    ),
+                    placeholder=text(
+                        "e.g. the seasons in Trazo show what was planted in each block and when; a field map for each "
+                        "year",
+                        "p. ej. las temporadas en Trazo muestran qué se sembró en cada bloque y cuándo; un mapa de campo "
+                        "de cada año",
+                    ),
+                    visible_when=(Condition("system_type", "includes", "annual"),),
+                    nop_cite="§ 205.205",
+                    compiles_to=CompileRule(template="Records kept of the crop rotation: {answer}"),
+                ),
                 Question(
                     key="in_lieu_practices",
                     kind="checkbox_group",
@@ -160,6 +179,22 @@ G4_0_ROTATION_SOIL = Module(
             key="b_fertility",
             title=text("B. Soil fertility & nutrient management", "B. Fertilidad del suelo y manejo de nutrientes"),
             questions=(
+                # 2026-11-15: WSDA AGR 2121 E 11 asks it as a yes or no before its nutrient water-quality list; the
+                # components below include practices (rotation, fallow) that apply nothing, so they cannot say it.
+                Question(
+                    key="applies_fertilizers",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you apply fertilizers or other nutrients to the certified land?",
+                        "¿Aplicas fertilizantes u otros nutrientes en la tierra certificada?",
+                    ),
+                    nop_cite="§ 205.203",
+                    compiles_to=CompileRule(
+                        template="Fertilizers or other nutrients are applied to the certified land ({answer}).",
+                        template_false="No fertilizer or other nutrient is applied to the certified land.",
+                    ),
+                ),
                 Question(
                     key="fertility_components",
                     kind="checkbox_group",

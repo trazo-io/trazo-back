@@ -34,3 +34,9 @@ questions:
     OTCO's C4 asks about micronutrients only (4.5-1). Magnesium sulfate, calcium chloride and potassium chloride are read off the C11 Crop Materials List. Asked by WSDA AGR 2121 D4-D6a; superset for an OTCO plan, added 2026-11-05 (restricted-materials slice).
   g4_0_rotation_soil.chloride_accumulation_other: >-
     OTCO's C4 asks about micronutrients only (4.5-1). Magnesium sulfate, calcium chloride and potassium chloride are read off the C11 Crop Materials List. Asked by WSDA AGR 2121 D4-D6a; superset for an OTCO plan, added 2026-11-05 (restricted-materials slice).
+  g4_0_rotation_soil.rotation_records_kept: >-
+    The records kept of the crop rotation. Asked by WSDA AGR 2121 E 1b; OTCO's rotation question asks the
+    plan, not its records.
+  g4_0_rotation_soil.applies_fertilizers: >-
+    Whether fertilizer or other nutrients are applied, as a yes or no. Asked by WSDA AGR 2121 E 11 ahead
+    of its nutrient water-quality list; OTCO reads the fertility components instead.

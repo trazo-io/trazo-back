@@ -51,24 +51,18 @@ items:
     prints: modules/G4_2.pdf §B; narrative § 205.200
   note: The exclusive none option answers No; any agency answers Yes.
 - ref: 1a
-  asks: 'If Yes, select the agency(ies) and describe the conservation and management practices below: NRCS
-    / FSA / Salmon Safe / Soil Conservation District / Land trust / Other.'
-  status: partial
-  severity: P3
+  asks: 'If Yes, select the agency(ies) and describe the conservation and management practices below: NRCS / FSA
+    / Salmon Safe / Soil Conservation District / Land trust / Other.'
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.conservation_plan_agency
+    - g4_2_natural_resources.conservation_plan_agency_other
     - g4_2_natural_resources.conservation_plan_detail
-    prints: modules/G4_2.pdf §B; narrative § 205.200
-  gap: 'CCOF G4.2 A2 asks only the yes/no and is `covered` by this field; OTCO asks the agency by name, and
-    Trazo''s option set is one level coarser: NRCS and FSA share `federal_agency`, Salmon Safe is reachable
-    only as `stewardship_program`, Soil Conservation District is `local_district`, and there is no `other`.
-    `conservation_plan_detail` (6.1-2) can name the agency in prose, so the fact reaches the packet — as text
-    a reviewer must read rather than a box they can see. (6.1-2) Reuses CCOF G4.2 A2a: a single-line `text`
-    where OTCO, like CCOF, invites a description of the plan''s practices, and no optional upload for the plan
-    itself.'
-  fix: 'Split `federal_agency` into `nrcs` and `fsa`; add `salmon_safe` (the WA/OR ICP''s programme) and `other`.
-    Same fix as CCOF A2a: change `kind` to `textarea`; add an optional `conservation_plan_upload`.'
+    prints: modules/G4_2.pdf §B
+  note: Closed 2026-11-15. NRCS, FSA, Salmon Safe and other are options of their own; the joint federal option is
+    retired (shown only while a stored answer holds it, never remapped). Soil Conservation District is `local_district`.
+    `conservation_plan_detail` is a textarea.
 - ref: '2'
   kind: instruction
   asks: How do you manage water for the needs of crops, livestock, native species, and riparian ecosystems?
@@ -85,70 +79,59 @@ items:
     prints: "modules/G4_2.pdf §A; narrative § 205.200"
   # Closed 2026-11-02 by the monitoring slice.
 - ref: 2b
-  asks: 'b) I do the following to share my water resources: Use fish screens / Provide clean water sources
-    for drinking, bathing, nest building / Manage water for priority species (rare fish, reptiles, amphibians,
-    birds, beavers) / Retain or restore vegetated riparian buffers and wetlands / Protect or improve natural
-    hydrology and ecological function of riparian areas / Other.'
-  status: partial
-  severity: P2
+  asks: 'b) I do the following to share my water resources: Use fish screens / Provide clean water sources for drinking,
+    bathing, nest building / Manage water for priority species (rare fish, reptiles, amphibians, birds, beavers)
+    / Retain or restore vegetated riparian buffers and wetlands / Protect or improve natural hydrology and ecological
+    function of riparian areas / Other.'
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.soil_water_practices
+    - g4_2_natural_resources.soil_water_practices_other
     - g4_2_natural_resources.habitat_biodiversity_practices
-    prints: modules/G4_2.pdf §A; narrative § 205.200
-  gap: 'Reuses CCOF G4.2 A3''s absentees: fish screens (state-mandated on WA/OR surface diversions — Salmon
-    Safe territory) and allocating water to wildlife have no option. `riparian_buffers` and `wetland_woodland_protection`
-    answer the two riparian boxes; managing water for priority species and clean water sources for wildlife
-    do not exist as options, and OTCO''s framing of water as a resource SHARED with native species has no counterpart
-    on either Trazo battery.'
-  fix: 'Same fix as CCOF A3: add `fish_screens` and `water_for_wildlife`; add `priority_species_water`.'
+    - g4_2_natural_resources.habitat_biodiversity_practices_other
+    - g4_2_natural_resources.waterway_practices
+    - g4_2_natural_resources.waterway_practices_other
+    prints: modules/G4_2.pdf §A
+  note: Closed 2026-11-15. Fish screens, water for priority species and riparian hydrology are on `waterway_practices`;
+    a clean water source for wildlife on `habitat_biodiversity_practices`; riparian buffers and wetlands keep their
+    options.
 - ref: '3'
   asks: In non-crop, fallow, border and adjacent areas, how are you improving and/or maintaining natural resources?
-    Manage native plants and wildlife specific to the site / Wildlife-friendly fences / Preserve or restore
-    wildlife corridors / Leave areas as undisturbed habitat refuge / Preserve or restore wetlands and riparian
-    areas / Preserve or restore grasslands and woodlands / Native habitats not converted to farmland since
-    certification / Establish legal conservation areas / Replace weedy areas with native plants / Minimize
-    erosion / Standing deadwood, fallen or rotting trees / Allow degraded areas to be recolonized by non-invasive
-    plants and wildlife / Recognize priority species and habitat and create protection plans / Other.
-  status: partial
-  severity: P2
+    Manage native plants and wildlife specific to the site / Wildlife-friendly fences / Preserve or restore wildlife
+    corridors / Leave areas as undisturbed habitat refuge / Preserve or restore wetlands and riparian areas / Preserve
+    or restore grasslands and woodlands / Native habitats not converted to farmland since certification / Establish
+    legal conservation areas / Replace weedy areas with native plants / Minimize erosion / Standing deadwood, fallen
+    or rotting trees / Allow degraded areas to be recolonized by non-invasive plants and wildlife / Recognize priority
+    species and habitat and create protection plans / Other.
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.habitat_biodiversity_practices
     - g4_2_natural_resources.habitat_biodiversity_practices_other
     - g4_2_natural_resources.soil_water_practices
+    - g4_2_natural_resources.soil_water_practices_other
+    - g4_2_natural_resources.waterway_practices
+    - g4_2_natural_resources.waterway_practices_other
     - g4_2_natural_resources.wildlife_habitat_pressure
-    prints: modules/G4_2.pdf §A, §B; narrative § 205.2, § 205.200
-  gap: Reuses CCOF G4.2 A4 — the same nine options, in the same order, open this list. Trazo answers corridors,
-    wetlands and woodlands and native plantings directly, erosion through `soil_water_practices`, and 'not
-    converted since certification' through `wildlife_habitat_pressure`'s `habitat_converted`; undisturbed refuge,
-    wildlife-friendly fences, legal conservation areas and restoring degraded areas remain reachable only through
-    `other` or behind the wildlife-pressure gate. OTCO adds five practices CCOF does not list — grasslands,
-    standing deadwood, replacing weedy areas, allowing recolonisation, priority-species protection plans —
-    none with an option.
-  fix: Same fix as CCOF A4 (add the four gated or missing options directly to `habitat_biodiversity_practices`)
-    plus `standing_deadwood`, `grassland_woodland_restoration` and `priority_species_plan`.
+    prints: modules/G4_2.pdf §A, §B
+  note: Closed 2026-11-15. CCOF A4's options plus grasslands, standing deadwood, replacing weedy areas, recolonizing
+    degraded areas and priority-species plans are options of `habitat_biodiversity_practices`.
 - ref: '4'
-  asks: How do you manage habitat for pollinators, natural enemy insects, and other wildlife throughout the
-    production season? Hedgerows / Windbreaks / Raptor perches or trees at field edge / Bird or bat boxes /
-    Ensure a clean water source / Plant flowers interspersed with crops / Brush piles / Implement measures
-    to support a variety of bee species / Provide extended food supply / Allow non-invasive plants in non-cropped,
-    fallow and border areas / Short, medium and tall native habitat / Timing of field activities (e.g., delayed
-    mowing to avoid disturbing nesting birds) / Other.
-  status: partial
-  severity: P2
+  asks: How do you manage habitat for pollinators, natural enemy insects, and other wildlife throughout the production
+    season? Hedgerows / Windbreaks / Raptor perches or trees at field edge / Bird or bat boxes / Ensure a clean
+    water source / Plant flowers interspersed with crops / Brush piles / Implement measures to support a variety
+    of bee species / Provide extended food supply / Allow non-invasive plants in non-cropped, fallow and border
+    areas / Short, medium and tall native habitat / Timing of field activities (e.g., delayed mowing to avoid disturbing
+    nesting birds) / Other.
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.habitat_biodiversity_practices
-    - g4_2_natural_resources.soil_water_practices
-    prints: modules/G4_2.pdf §A; narrative § 205.2
-  gap: Reuses CCOF G4.2 A5 — OTCO's list is CCOF's nine plus brush piles, layered native habitat and timing
-    of field activities. Hedgerows, windbreaks, raptor perches, bat boxes and pollinator habitat are answered;
-    clean water source, bee-diversity measures, non-invasive plants in border areas, extended food supply and
-    OTCO's three additions have no option; bird boxes reach the packet only as `other` (`owl_raptor_boxes`
-    and `bat_boxes` are the named boxes). Delayed mowing is logged as a practice nowhere — HD/NS habitat events
-    record structures planted or installed, not the timing of field operations.
-  fix: Same fix as CCOF A5, plus `brush_piles`, `layered_native_habitat` and `field_activity_timing`.
+    - g4_2_natural_resources.habitat_biodiversity_practices_other
+    prints: modules/G4_2.pdf §A
+  note: Closed 2026-11-15. CCOF A5's options plus brush piles, layered native habitat and field work timed around
+    wildlife are options of `habitat_biodiversity_practices`.
 - ref: '5'
   asks: What actions do you take to prevent or control invasive plant/animal species, especially those threatening
     natural areas? Learn to identify invasive plants and animals / Monitor for new introductions and control
@@ -175,11 +158,13 @@ items:
     prints: modules/G4_2.pdf §B; narrative § 205.200
 - ref: '7'
   asks: Describe additional measures taken to conserve natural resources and enhance biodiversity.
-  status: not_covered
-  severity: P3
-  gap: 'Reuses CCOF G4.2 A9 / WSDA E18: no optional free-text field exists for measures outside the checklists.'
-  fix: 'Same fix as CCOF A9: an optional `additional_conservation_measures` textarea, or fold it into the natural-resources
-    narrative CCOF A1''s register row already proposes.'
+  status: covered
+  trazo:
+    questions:
+    - g4_2_natural_resources.other_conservation_measures
+    - g4_2_natural_resources.other_conservation_measures_detail
+    prints: modules/G4_2.pdf §A
+  note: Closed 2026-11-15. `other_conservation_measures` and its detail.
 - ref: '8'
   asks: How do you monitor farm biodiversity? Before and after photos / Plant, animal, insect surveys / Maintain
     conservation maps / Farm logs and journals / Periodic expert evaluation and report (such as NRCS) / Other.

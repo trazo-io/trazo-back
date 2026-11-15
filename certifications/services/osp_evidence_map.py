@@ -178,6 +178,13 @@ OSP_EVIDENCE_MAP: dict = {
         NOT_EVIDENCED,
         note="How resold planting stock is labeled; no planting stock sale or label record is kept in Trazo.",
     ),
+    # --- G4.0 rotation and soil -------------------------------------------------
+    "rotation_records_kept": EvidenceEntry(
+        EVIDENCED,
+        source="history.Production.product",
+        note="WSDA AGR 2121 E 1b. Each season is a production (season) row naming its parcel, crop and start date, so the "
+        "rotation reads from the seasons logged per parcel; the operator's answer names any other record kept.",
+    ),
     # --- G4.1 compost and manure ------------------------------------------------
     "compost_temp_logs_kept": EvidenceEntry(
         EVIDENCED,

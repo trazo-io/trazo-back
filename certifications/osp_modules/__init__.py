@@ -368,7 +368,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.12.11: the Operation module asks a short summary of the organic business and its plans (CCOF Contract B1),
 #   and on page B whether the agency the plan is filed with certifies the operation today, with that agency's most
 #   recent certificate attached (OTCO O1 D-1).
-CONTENT_VERSION = "2026.12.11"
+# 2026.12.12: natural resources. G4.2's soil and water list gains the NRCS practices WSDA AGR 2121 E 6, 13, 15 and 17
+#   name (and CCOF A3's two); its habitat list the in-field and landscape practices of WSDA E 2, CCOF A4 and A5, OTCO C6 3
+#   and 4; a waterway list where streams or channels run by the land (WSDA E 2, OTCO C6 2b); permanent cover and slope
+#   (WSDA E 4, 5); other measures (WSDA E 3, CCOF A9, OTCO C6 7); NRCS, FSA, Salmon Safe and other as agencies (OTCO C6
+#   1a; the joint federal option retired). G4.0 asks rotation records (WSDA E 1b) and whether fertilizer is applied
+#   (E 11); G3.1 conservation in enclosed structures (CCOF G4.2 A8).
+CONTENT_VERSION = "2026.12.12"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

@@ -12,3 +12,8 @@ questions:
     WSDA AGR 2121 section E ref 16 asks whether streams, shorelines, gullies or irrigation channels are
     on or adjacent to the certified sites. CCOF G4.2 asks how riparian areas and wetlands are protected,
     never whether streams or channels are present.
+  g4_2_natural_resources.permanent_ground_cover_90pct: >-
+    Permanent ground cover on at least 90% of the ground. Asked by WSDA AGR 2121 E 4, which uses it with E
+    5 to skip its soil stability list; CCOF asks no such threshold.
+  g4_2_natural_resources.slope_under_10pct: >-
+    Land slope under 10% at all certified sites. Asked by WSDA AGR 2121 E 5, with E 4; CCOF asks no slope.
