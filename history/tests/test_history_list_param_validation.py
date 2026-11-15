@@ -1,5 +1,5 @@
 """
-GET /api/histories/ query-param validation.
+GET /api/productions/ query-param validation.
 
 A frontend that stringifies an object sends `?establishment=[object Object]`. Before
 2026-08-17 that value went straight into `.filter(parcel__establishment_id=...)`, where

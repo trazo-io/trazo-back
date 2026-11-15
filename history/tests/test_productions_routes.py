@@ -34,7 +34,9 @@ from users.models import User, WorksIn
 
 # An old name as a whole route segment. Route strings mix path converters and regexes
 # (`api/^productions/(?P<pk>[^/.]+)/$`), so a segment may follow `/` or `^` and end at `/` or `$`.
-_OLD_SEGMENT = re.compile(r"(?:^|[/^])(?:histories|current_history|finish_history)(?=[/$]|\Z)")
+# `history` counts too: outside `admin/` (Django's own per-object history view, and the app label)
+# the only route that had it was the deleted `parcels/<id>/history/`.
+_OLD_SEGMENT = re.compile(r"(?:^|[/^])(?:history|histories|current_history|finish_history)(?=[/$]|\Z)")
 _OLD_ACTIONS = {"history", "histories", "current_history", "finish_history"}
 
 _PARCEL = "/api/companies/1/establishments/2/parcels/3"
@@ -63,6 +65,8 @@ class TheOldNamesAreGoneTests(SimpleTestCase):
             "(?P<pk>[^/.]+)/current_history/$",
             "api/^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/"
             "(?P<pk>[^/.]+)/finish_history/$",
+            "api/^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/"
+            "(?P<pk>[^/.]+)/history/$",
         ):
             with self.subTest(route=route):
                 self.assertTrue(_OLD_SEGMENT.search(route))
@@ -71,13 +75,21 @@ class TheOldNamesAreGoneTests(SimpleTestCase):
                 self.assertFalse(_OLD_SEGMENT.search(route))
 
     def test_no_viewset_keeps_an_action_named_after_the_old_model(self):
-        from company.views import EstablishmentViewSet
-        from product.views import ParcelViewSet
-
-        for viewset in (ParcelViewSet, EstablishmentViewSet):
-            with self.subTest(viewset=viewset.__name__):
-                names = {a.__name__ for a in viewset.get_extra_actions()}
-                self.assertEqual(names & _OLD_ACTIONS, set())
+        """Every viewset the resolver reaches, not only the two that had one."""
+        viewsets = {
+            cls
+            for cls in (getattr(p.callback, "cls", None) for p in _routes().values())
+            if cls is not None and hasattr(cls, "get_extra_actions")
+        }
+        self.assertGreater(len(viewsets), 50, "the walk found too few viewsets to prove anything")
+        self.assertIn("ParcelViewSet", {cls.__name__ for cls in viewsets})
+        found = sorted(
+            f"{cls.__module__}.{cls.__name__}.{a.__name__}"
+            for cls in viewsets
+            for a in cls.get_extra_actions()
+            if a.__name__ in _OLD_ACTIONS
+        )
+        self.assertEqual(found, [])
 
     def test_the_old_paths_do_not_resolve(self):
         for path in (

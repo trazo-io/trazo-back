@@ -6498,17 +6498,6 @@ class PublicHistorySerializer(serializers.ModelSerializer):
             return []
 
 
-class HistoryListOptionsSerializer(serializers.ModelSerializer):
-    period = serializers.SerializerMethodField()
-
-    class Meta:
-        model = History
-        fields = ["id", "period"]
-
-    def get_period(self, history):
-        return f"{history.start_date.strftime('%m/%d/%Y')} - {history.finish_date.strftime('%m/%d/%Y')}"
-
-
 # Equipment Event Serializers
 class UpdateEquipmentEventSerializer(CustomFieldsMixin, serializers.ModelSerializer):
     class Meta:

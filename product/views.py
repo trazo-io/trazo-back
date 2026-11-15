@@ -354,7 +354,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def current_production(self, request, pk=None, parcel_pk=None, company_pk=None, establishment_pk=None):
         """
-        OPTIMIZED: Get current history with prefetched related data.
+        OPTIMIZED: Get the parcel's current production with prefetched related data.
         Performance fix: Avoid N+1 queries by prefetching events, albums, and carbon entries.
         """
         from django.db.models import Prefetch
