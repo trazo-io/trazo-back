@@ -17,3 +17,28 @@ questions:
     5 to skip its soil stability list; CCOF asks no such threshold.
   g4_2_natural_resources.slope_under_10pct: >-
     Land slope under 10% at all certified sites. Asked by WSDA AGR 2121 E 5, with E 4; CCOF asks no slope.
+  g4_2_natural_resources.water_verification_method: >-
+    How irrigation water is verified free of contaminants. Asked by OTCO C9 9.2-1a; CCOF G6.0 section D
+    asks the source and its additives, not how it is verified.
+  g4_2_natural_resources.water_verification_method_other: >-
+    The other way of `water_verification_method`; same reason.
+  g4_2_natural_resources.water_contaminants_tested: >-
+    What a laboratory test of the irrigation water covers, under OTCO C9 9.2-1a; same reason as
+    `water_verification_method`.
+  g4_2_natural_resources.water_contaminants_tested_other: >-
+    The other contaminant of `water_contaminants_tested`; same reason.
+  g4_2_natural_resources.district_additive_types: >-
+    OTCO C9 9.2-1b's plan element: the materials the district adds. CCOF G6.0 D5 asks the measures taken,
+    answered by `irrigation_district_mitigation`.
+  g4_2_natural_resources.district_additive_timing: >-
+    OTCO C9 9.2-1b's plan element: their frequency and timing. CCOF G6.0 D5 asks the measures taken,
+    answered by `irrigation_district_mitigation`.
+  g4_2_natural_resources.district_notifies_before_treatment: >-
+    OTCO C9 9.2-1b's plan element: that the district gives notice before it applies. CCOF does not ask it.
+  g4_2_natural_resources.irrigation_materials_all_approved: >-
+    Whether every material put through the irrigation system is approved for organic production. Asked by
+    WSDA AGR 2121 E 8b; CCOF G6.0 D6 asks each material listed on the Materials Application, where each is
+    reviewed.
+  g4_2_natural_resources.irrigation_contamination_prevention: >-
+    How certified crops are kept from unapproved materials in the irrigation system, on WSDA AGR 2121 E
+    8b's No; same reason as `irrigation_materials_all_approved`.

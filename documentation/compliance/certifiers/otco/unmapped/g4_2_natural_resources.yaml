@@ -39,3 +39,27 @@ questions:
     5 to skip its soil stability list; OTCO asks no such threshold.
   g4_2_natural_resources.slope_under_10pct: >-
     Land slope under 10% at all certified sites. Asked by WSDA AGR 2121 E 5, with E 4; OTCO asks no slope.
+  g4_2_natural_resources.non_district_water_additives: >-
+    Prohibited additives in irrigation water that is not a district's. Asked by CCOF G6.0 D3 (and D5 for
+    the measures); OTCO C9 9.2-1b asks additives of district water only, and 9.2-1a how any source is
+    verified clean.
+  g4_2_natural_resources.water_additive_mitigation: >-
+    The measures on a yes to `non_district_water_additives` (CCOF G6.0 D5); same reason.
+  g4_2_natural_resources.materials_via_irrigation: >-
+    Whether any material is put through the irrigation system. Asked by CCOF G6.0 D6 and WSDA AGR 2121 E 8
+    to 8b; OTCO's C9 asks no question about materials put through the irrigation system, and its materials
+    list (C11) lists each material.
+  g4_2_natural_resources.irrigation_material_types: >-
+    The types of material put through the irrigation system. Asked by CCOF G6.0 D6 and WSDA AGR 2121 E 8
+    to 8b; OTCO's C9 asks no question about materials put through the irrigation system, and its materials
+    list (C11) lists each material.
+  g4_2_natural_resources.irrigation_material_types_other: >-
+    The other type of `irrigation_material_types`; same reason.
+  g4_2_natural_resources.irrigation_materials_all_approved: >-
+    Whether every material put through the irrigation system is approved. Asked by CCOF G6.0 D6 and WSDA
+    AGR 2121 E 8 to 8b; OTCO's C9 asks no question about materials put through the irrigation system, and
+    its materials list (C11) lists each material.
+  g4_2_natural_resources.irrigation_contamination_prevention: >-
+    How certified crops are kept from unapproved materials in the irrigation system. Asked by CCOF G6.0 D6
+    and WSDA AGR 2121 E 8 to 8b; OTCO's C9 asks no question about materials put through the irrigation
+    system, and its materials list (C11) lists each material.

@@ -3502,6 +3502,37 @@
        "other_conservation_measures": {
         "at": "2026-11-15T09:00:00+00:00",
         "value": false
+       },
+       "water_verification_method": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": [
+         "lab_testing"
+        ]
+       },
+       "water_contaminants_tested": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": [
+         "pathogens",
+         "nitrates"
+        ]
+       },
+       "non_district_water_additives": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": false
+       },
+       "materials_via_irrigation": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": true
+       },
+       "irrigation_material_types": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": [
+         "fertilizers"
+        ]
+       },
+       "irrigation_materials_all_approved": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": true
        }
       },
       "completed_at": "2026-08-21T11:28:46.083078+00:00",
