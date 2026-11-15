@@ -345,7 +345,9 @@ class TheAuditExhibitTests(_Farm):
         rows = {row.name: row for row in document_table(self.est, self.osp)}
         self.assertIn("Invoice number + Lot ID", rows["Settlement statements"].linking_element)
         text = _text(_audit_trail_exhibit_pdf(self.osp))
-        self.assertNotIn("History.lot_id", text)
+        # Any model field name, under whatever the model is called (`History.lot_id` until
+        # 2026-11-15, `Production.lot_id`, or the evidence map's `history.Production.lot_id`).
+        self.assertNotIn(".lot_id", text)
         self.assertNotIn("one real lot", text)
 
 

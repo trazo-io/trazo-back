@@ -12,54 +12,42 @@ are called "Field History"), and migrations keep the model's name at the time th
 To fix a failure: poetry run python scripts/rename_history_alias.py && poetry run isort .
 """
 
-import io
-import os
-import tokenize
+import importlib.util
 from pathlib import Path
 
 from django.test import SimpleTestCase
 
 ROOT = Path(__file__).resolve().parents[2]
-SKIP_DIRS = {".git", ".venv", "node_modules", "migrations", "__pycache__"}
-OLD = "History"
-# The alias itself, until the PR that deletes it.
-ALIAS = ("history/models.py", "History = Production")
-
-
-def _python_files():
-    for dirpath, dirnames, filenames in os.walk(ROOT):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
-        for name in sorted(filenames):
-            if name.endswith(".py"):
-                yield Path(dirpath, name)
-
-
-def _old_names(source: str) -> list[tuple[int, str]]:
-    """(row, line) of every NAME token spelled `History`."""
-    lines = source.splitlines()
-    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-    return [(t.start[0], lines[t.start[0] - 1]) for t in tokens if t.type == tokenize.NAME and t.string == OLD]
+_spec = importlib.util.spec_from_file_location("rename_history_alias", ROOT / "scripts" / "rename_history_alias.py")
+script = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(script)
+# The fix and this check share one walker and one tokenizer, so they cannot disagree about scope.
+ALIAS = ("history/models.py", script.ALIAS_LINE)
 
 
 class TheModelIsCalledProductionTests(SimpleTestCase):
     def test_no_code_uses_the_name_history(self):
         hits = []
-        for path in _python_files():
+        for path in script.python_files():
             rel = path.relative_to(ROOT).as_posix()
-            for row, line in _old_names(path.read_text()):
-                if (rel, line.strip()) != ALIAS:
-                    hits.append(f"{rel}:{row}: {line.strip()}")
+            source = path.read_text()
+            lines = source.splitlines()
+            for row, _ in script.old_name_positions(source):
+                if (rel, lines[row - 1].strip()) != ALIAS:
+                    hits.append(f"{rel}:{row}: {lines[row - 1].strip()}")
         self.assertEqual(hits, [], "run `poetry run python scripts/rename_history_alias.py && poetry run isort .`")
 
     def test_the_walk_reads_the_tree_it_is_about(self):
-        """Guards the test above: a walk that read nothing, or a tokenizer that saw nothing, passes it."""
-        files = {path.relative_to(ROOT).as_posix() for path in _python_files()}
+        """Guards the test above: a walk that read nothing, or a tokenizer that saw nothing, passes it.
+        The walk is `git ls-files`, so a local virtualenv or a nested worktree is never in it."""
+        files = {path.relative_to(ROOT).as_posix() for path in script.python_files()}
         self.assertGreater(len(files), 700, f"only {len(files)} files read")
         self.assertIn("history/models.py", files)
         self.assertIn("scripts/rename_history_alias.py", files)
         self.assertFalse([f for f in files if "/migrations/" in f])
 
     def test_the_tokenizer_finds_code_and_skips_words(self):
+        """Needs Python 3.12+ (PEP 701): on 3.11 the f-string row is missed and this fails, loudly."""
         source = "\n".join(
             [
                 "from history.models import History",
@@ -70,4 +58,19 @@ class TheModelIsCalledProductionTests(SimpleTestCase):
                 "x = models.History",
             ]
         )
-        self.assertEqual([row for row, _ in _old_names(source)], [1, 3, 6])
+        self.assertEqual([row for row, _ in script.old_name_positions(source)], [1, 3, 6])
+
+    def test_the_script_leaves_a_different_history_alone(self):
+        """Another library's `History`, or a class of its own, is reported, never renamed."""
+        cases = (
+            ("from history.models import History", "certifications/views.py", []),
+            ("from .models import History", "history/views.py", []),
+            ("from ..models import History", "history/services/example.py", []),
+            # Same words, another module: `history.services.models` is not the model's.
+            ("from .models import History", "history/services/example.py", [1]),
+            ("from prompt_toolkit.history import History", "history/views.py", [1]),
+            ("class History:\n    pass", "product/tests/test_example.py", [1]),
+        )
+        for source, rel, expected in cases:
+            with self.subTest(source=source, rel=rel):
+                self.assertEqual(script.other_bindings(source, rel), expected)

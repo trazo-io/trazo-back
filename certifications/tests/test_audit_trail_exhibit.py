@@ -85,7 +85,9 @@ class DocumentTableTests(_ExhibitBase):
         self.assertIn("Harvest records", text)
         # A model field name on a certifier's page (2026-09-11). The link is the lot, said plainly.
         self.assertIn("Lot ID on the season record", text)
-        self.assertNotIn("History.lot_id", text)
+        # Any model field name, under whatever the model is called (`History.lot_id` until
+        # 2026-11-15, `Production.lot_id`, or the evidence map's `history.Production.lot_id`).
+        self.assertNotIn(".lot_id", text)
 
     def test_a_record_trazo_cannot_hold_leaves_the_link_for_the_operator(self):
         common_osp_records.confirm(self.osp, ["weigh_tickets"], user=self.user)

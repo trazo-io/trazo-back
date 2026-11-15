@@ -322,8 +322,11 @@ class MeterMatchesTheGateTests(TestCase):
         self.assertNotIn("start_date", code)
         # The model under either name. The code switched from `History` to `Production` on 2026-11-15,
         # and a check for one name alone goes blind on the day the code switches to the other.
-        for model_name in ("History", "Production"):
-            self.assertNotIn(model_name, code)
+        # Compared as identifiers, not substrings: `ProductionPlanItem` is not the model.
+        names = {node.id for stmt in body for node in ast.walk(stmt) if isinstance(node, ast.Name)}
+        names |= {node.attr for stmt in body for node in ast.walk(stmt) if isinstance(node, ast.Attribute)}
+        self.assertTrue(names, "read no identifiers: the check below would pass on anything")
+        self.assertEqual(names & {"History", "Production"}, set())
 
 
 class EstablishmentLimitTests(TestCase):
