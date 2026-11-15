@@ -7,9 +7,12 @@ a different action map or permission signature, would turn that move into a beha
 nobody reviewed. These tests compare every twin with its original, so the contract step can
 delete `histories` knowing each call the app moved lands where it landed before.
 
-Out of scope on purpose, because the app never calls them (they leave with `histories`): the
-reviews route nested under `parcels/<id>/histories/<id>/reviews/` (the app uses the flat
-`reviews/` route) and `establishments/<id>/histories/` (`FARM_HISTORIES_URL` has no caller).
+Out of scope on purpose, because the app never calls them (the contract step deletes them):
+- the reviews route nested under `parcels/<id>/histories/<id>/reviews/` (the app uses the flat
+  `reviews/` route). Its router is built on the parcel router's `histories` registration, so
+  the contract step must delete both together or company/urls.py fails at import;
+- `establishments/<id>/histories/` (`FARM_HISTORIES_URL` had no caller);
+- `parcels/<id>/history/` (`ParcelViewSet.history`, no caller).
 Payload keys (`history`, `history_id`) are a separate change.
 """
 
@@ -33,16 +36,29 @@ _OLD_PREFIX = re.compile(r"(?<![a-z_-])histories/")
 _NESTED_REVIEWS = "(?P<history_pk>"
 # Parcel actions named after the old model, and the names they are also served under.
 _PARCEL_ACTIONS = {"current_history": "current_production", "finish_history": "finish_production"}
+# Parcel actions named after the old model that get no twin, because nothing calls them.
+_PARCEL_NO_CALLER = {"history"}
+# initkwargs that only name the route; everything else (permission, parser, throttle classes set
+# on the @action) changes what a caller gets and must match between twins.
+_NAMING_KWARGS = {"name", "basename", "suffix", "description"}
 _PARCEL_VIEW = "product.views.ParcelViewSet"
 _NO_CALLER = {"company.views.EstablishmentViewSet"}
 
 
 def _signature(pattern):
-    """View, HTTP methods, and permission classes: what a caller of the route actually gets."""
+    """View, HTTP methods, permission classes and per-action overrides: what a caller gets."""
     # DRF adds `head` to the shared actions dict on the first GET it serves; it mirrors `get`.
     actions = getattr(pattern.callback, "actions", None) or {}
     _, permissions = _view_identity(pattern)
-    return _view_key(pattern.callback), {m: a for m, a in actions.items() if m != "head"}, tuple(permissions)
+    overrides = {
+        k: v for k, v in (getattr(pattern.callback, "initkwargs", None) or {}).items() if k not in _NAMING_KWARGS
+    }
+    return (
+        _view_key(pattern.callback),
+        {m: a for m, a in actions.items() if m != "head"},
+        tuple(permissions),
+        overrides,
+    )
 
 
 def _routes():
@@ -73,16 +89,25 @@ class ProductionsRoutesMirrorHistoriesTests(SimpleTestCase):
             if new not in routes:
                 problems.append(f"no twin: {new}")
                 continue
-            old_view, old_actions, old_perms = _signature(routes[old])
-            new_view, new_actions, new_perms = _signature(routes[new])
+            old_view, old_actions, old_perms, old_overrides = _signature(routes[old])
+            new_view, new_actions, new_perms, new_overrides = _signature(routes[new])
             if old_view != new_view:
                 problems.append(f"{new} serves {new_view}, {old} serves {old_view}")
             if old_perms != new_perms:
                 problems.append(f"{new} checks {new_perms}, {old} checks {old_perms}")
+            if old_overrides != new_overrides:
+                problems.append(f"{new} overrides {new_overrides}, {old} overrides {old_overrides}")
             renamed = {m: _PARCEL_ACTIONS.get(a, a) for m, a in old_actions.items()}
             if new_actions != renamed:
                 problems.append(f"{new} maps {new_actions}, {old} maps {old_actions}")
         self.assertEqual(problems, [])
+
+    def test_every_parcel_action_named_after_the_old_model_is_classified(self):
+        """A new `*_history` action would otherwise ship with no twin and no test noticing."""
+        from product.views import ParcelViewSet
+
+        named = {a.__name__ for a in ParcelViewSet.get_extra_actions() if "history" in a.__name__}
+        self.assertEqual(named, set(_PARCEL_ACTIONS) | _PARCEL_NO_CALLER)
 
     def test_the_walk_found_the_routes_it_is_about(self):
         """Guards the guard: a walk that matched nothing would pass the test above."""
