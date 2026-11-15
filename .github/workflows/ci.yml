@@ -927,6 +927,7 @@ jobs:
             certifications.tests.test_wsda_agr_2196 \
             certifications.tests.test_materials_print_polish \
             history.tests.test_phi_check \
+            history.tests.test_manure_harvest_check \
             certifications.tests.test_contradicted_answers \
             certifications.tests.test_packet_truth \
             certifications.tests.test_required_records_attestation \

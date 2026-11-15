@@ -4555,7 +4555,37 @@ class AuditExportService:
         # would read it as a category mismatch / regulatory misanchor.
         manure_interval_rule = self._manure_interval_rule_for_crop()
         manure_row_label = f"Raw manure interval ({manure_interval_rule['cite']})"
-        if not manure_events and compost_manure_notes:
+        # The recorded picks against raw manure on the parcel (OV-RK-C02): manure spread under an earlier
+        # season counts, so this can fire with no manure record on this production. An interval missing
+        # from this production's own manure records stays the FAIL below; it is the more serious gap.
+        from .manure_check import season_conflicts as manure_season_conflicts
+
+        manure_harvest_conflicts = manure_season_conflicts(p)
+        manure_interval_unrecorded = bool(manure_events) and manure_with_interval != len(manure_events)
+        if manure_harvest_conflicts and not manure_interval_unrecorded:
+            first = manure_harvest_conflicts[0]
+            # Picks, not (application, pick) pairs, as the PHI row counts them.
+            pick_count = len({c.pick_id for c in manure_harvest_conflicts})
+            snapshot_rows.append(
+                (
+                    manure_row_label,
+                    "REVIEW",
+                    (
+                        f"{pick_count} pick(s) on this production came sooner after raw manure on the parcel than "
+                        f"the harvest interval. The first: manure applied {first.applied.isoformat()}, picked "
+                        f"{first.picked.isoformat()}, {first.days} day(s) after (interval {first.interval_days} days)."
+                    ),
+                    said(
+                        "raw_manure_interval.harvest_inside",
+                        count=pick_count,
+                        applied=first.applied.isoformat(),
+                        picked=first.picked.isoformat(),
+                        days=first.days,
+                        interval=first.interval_days,
+                    ),
+                )
+            )
+        elif not manure_events and compost_manure_notes:
             # Run 7 (R7-09): never "N/A" after the compost row raised the interval question.
             snapshot_rows.append(
                 (
