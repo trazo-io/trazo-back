@@ -882,13 +882,13 @@ class Command(BaseCommand):
             dict(
                 key="isomate-b3",
                 blocks=["B3"],
-                when="2026-04-10T08:00:00",
+                when="2026-04-10",
                 body=self._dispensers("Block 3 (21.6 acres per the FSA map; the farm also says 22)."),
             ),
             dict(
                 key="isomate-b124",
                 blocks=["B1", "B2", "B4"],
-                when="2026-04-11T08:00:00",
+                when="2026-04-11",
                 body=self._dispensers(
                     "Blocks 1, 2 and 4 (the sheet's 27.2 acres for these blocks does not add up "
                     "to the blocks' 26.8)."
@@ -1037,6 +1037,8 @@ class Command(BaseCommand):
         return {
             "type": "PE",
             "commercial_name": "Isomate CM Flex II",
+            # The rehearsal sheet gives a date and no clock time for the dispenser rows.
+            "time_not_recorded": True,
             "volume_unit": "dispensers",
             "target_pest_disease": "Codling moth (mating disruption)",
             "application_method": "hand_dispenser",

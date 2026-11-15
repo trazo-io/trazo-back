@@ -76,6 +76,22 @@ class SalesDisclosurePrecedenceTests(TestCase):
         self.assertEqual(row["status"], "PASS")
         self.assertIn("Legacy Buyer", row["detail"])
 
+    def test_a_lot_with_no_sale_at_all_says_so_instead_of_asking_for_a_buyer(self):
+        row = self._snapshot()
+        self.assertEqual(row["detail"], "No sale recorded for this lot")
+        self.assertNotIn("Add buyer", row["detail"])
+
+    def test_a_sale_row_with_no_buyer_still_asks_for_the_buyer(self):
+        SalesRecord.objects.create(
+            production=self.production,
+            sale_date=date(2026, 8, 1),
+            buyer_name="",
+            quantity=100,
+            quantity_unit="lb",
+            organic_on_invoice=True,
+        )
+        self.assertIn("Add buyer", self._snapshot()["detail"])
+
     def test_sales_records_win_over_stale_legacy_fields(self):
         self.production.sold_to = "Stale Legacy Buyer"
         self.production.save(update_fields=["sold_to"])

@@ -22,7 +22,7 @@ import pdfplumber
 
 from certifications.models import Certification, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import History, ProductionEvent, SalesRecord, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -266,3 +266,54 @@ class DossierTellsTheTruthTests(TestCase):
         self.assertNotIn("value-add", text)
         self.assertIn("not signed by the producer", text)
         self.assertIn("at least five years after the season", text)
+
+    # -- Orchard batch 2b: what the dossier asks of the operator -----------------------------
+    def _snapshot_detail(self, history, label_part):
+        rows = AuditExportService(history, certification_type="organic").compliance_snapshot_rows()
+        return next(r for r in rows if label_part in r["label"])["detail"]
+
+    def _compost(self, history, **fields):
+        fields.setdefault("type", "OM")
+        return SoilManagementEvent.objects.create(
+            history=history,
+            date=timezone.now() - timedelta(days=100),
+            description="compost",
+            amendment_type="compost",
+            created_by=self.user,
+            **fields,
+        )
+
+    def test_a_purchased_compost_asks_for_the_suppliers_documentation_not_the_operators_figures(self):
+        history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
+        self._compost(
+            history,
+            amendment_product_name="Compost from the county yard",
+            amendment_quantity_purchased=240,
+            amendment_quantity_purchased_unit="tons",
+        )
+        detail = self._snapshot_detail(history, "Compost")
+        self.assertNotIn("missing C:N", detail)
+        self.assertNotIn("add before inspection", detail)
+        self.assertIn("supplier's process documentation (C:N, temperatures, turnings) not on file", detail)
+        text = self._full_text(history)
+        self.assertNotIn("Composting must document peak temperature", text)
+        self.assertIn("supplier's process documentation (C:N, temperatures, turnings) not on file", text)
+
+    def test_an_on_farm_compost_still_asks_the_operator_for_the_figures(self):
+        history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
+        self._compost(history, type="CO")
+        detail = self._snapshot_detail(history, "Compost")
+        self.assertIn("1 missing C:N", detail)
+        self.assertNotIn("supplier's process documentation", detail)
+
+    def test_a_fraud_prevention_plan_written_in_trazo_is_not_called_an_upload(self):
+        history = self._production(100000, [(100000, "One pick, 100,000 lb.")])
+        OrganicSystemPlan.objects.create(
+            establishment=self.establishment,
+            version_number=1,
+            status="active",
+            created_by=self.user,
+            module_responses={"modules": {"g2_0_fraud_prevention": {"completed_at": "2026-11-15T10:00:00Z"}}},
+        )
+        detail = self._snapshot_detail(history, "OFPP")
+        self.assertEqual(detail, "Written in Trazo 2026-11-15 (OSP module G2.0)")

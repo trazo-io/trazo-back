@@ -424,6 +424,19 @@ class BlankItemTests(_WAFarm):
         self.assertEqual(self.row("Air temperature"), ("e", "Not applicable (Drip / fertigation)", "not_applicable"))
         self.assertIn("Not applicable (Drip / fertigation)", self.pdf_text())
 
+    def test_a_hand_placed_dispenser_states_no_apparatus_for_k_instead_of_naming_it_blank(self):
+        # WAC 16-228-1320(1)(k) has no method exemption: not "not applicable", a stated fact.
+        self.spray(application_method_structured="hand_dispenser", apparatus_license_plate="")
+        record = self._pass()
+        self.assertNotIn("k", record.blank_items())
+        self.assertEqual(
+            self.row("Apparatus license plate"), ("k", "None: hand-placed dispensers, no apparatus", "value")
+        )
+
+    def test_a_stored_plate_on_a_dispenser_record_still_prints_as_recorded(self):
+        self.spray(application_method_structured="hand_dispenser", apparatus_license_plate="WA-FARM-1234")
+        self.assertEqual(self.row("Apparatus license plate"), ("k", "WA-FARM-1234", "value"))
+
     def test_air_blast_without_wind_names_item_e(self):
         self.spray(wind_from="", wind_speed_mph=None)
         self.assertIn("e", self._pass().blank_items())

@@ -69,6 +69,7 @@ from common.specimen import SPECIMEN_BODY, SPECIMEN_LINE, SPECIMEN_TITLE, is_spe
 from history.constants import CHEMICAL_EVENT_TYPE
 from history.services.application_conditions import (
     air_temperature_text,
+    application_method_code,
     carrier_text,
     conditions_not_applicable,
     wind_text,
@@ -165,6 +166,18 @@ def _num(value) -> str:
         return text
     out = format(number.normalize(), "f")
     return "0" if out in ("-0", "") else out
+
+
+def _license_plate(event):
+    """Item (k). A stored plate prints as recorded. WAC 16-228-1320(1)(k) has no method exemption,
+    so a hand-placed dispenser is not marked not applicable: the record states that no apparatus
+    was used."""
+    plate = _s(event.apparatus_license_plate)
+    if plate:
+        return plate, VALUE
+    if application_method_code(event).lower() == "hand_dispenser":
+        return "None: hand-placed dispensers, no apparatus", VALUE
+    return NOT_RECORDED, BLANK
 
 
 def _or_blank(text):
@@ -775,7 +788,7 @@ class WASprayRecordService:
             _shared(events, "e", "Air temperature", self._temperature),
             carrier,
             self._crop(events, history, parcel),
-            _shared(events, "k", "Apparatus license plate", lambda e: _or_blank(e.apparatus_license_plate)),
+            _shared(events, "k", "Apparatus license plate", _license_plate),
             *self._applicator_rows(events),
             _shared(events, "m", "Acres treated", self._area),
             *self._firm_rows(events),

@@ -779,6 +779,21 @@ def _compost_cn_is_initial(ev):
     return ev.type == "CO" and not purchased
 
 
+def _compost_is_purchased(ev):
+    """True when the compost was bought: a product or supplier is named, or a purchase quantity is stored.
+
+    A bought compost's C:N, temperatures and turnings are the supplier's process figures, so the
+    operator is not asked to add their own."""
+    return bool(
+        (getattr(ev, "amendment_product_name", None) or "").strip()
+        or (getattr(ev, "amendment_supplier_name", None) or "").strip()
+        or getattr(ev, "amendment_quantity_purchased", None) is not None
+    )
+
+
+_COMPOST_SUPPLIER_DOCS_NOTE = "supplier's process documentation (C:N, temperatures, turnings) not on file"
+
+
 def _compost_out_of_range_assessment(ev, harvest_dates, rule_days):
     """(branch, sentence) for a compost record whose C:N is outside § 205.203(c)(2)(i)'s 25:1-40:1.
 
@@ -3951,6 +3966,7 @@ class AuditExportService:
         compost_cn_out_of_range = 0
         compost_missing_method = 0
         compost_missing_temp_or_duration = 0
+        compost_supplier_docs_missing = 0
         # Pathway tracking — § 205.203(c)(2) has three pathways: (i) C:N
         # precondition 25:1–40:1, (ii) in-vessel 131–170°F × 3+ days, (iii)
         # windrow 131–170°F × 15+ days with 5+ turnings. Static-aerated piles
@@ -3968,17 +3984,27 @@ class AuditExportService:
             if method_key not in compost_pathway_counts:
                 method_key = "unspecified"
             compost_pathway_counts[method_key] = compost_pathway_counts.get(method_key, 0) + 1
+            purchased = _compost_is_purchased(ev)
             if cn is None:
-                compost_missing_cn += 1
+                if purchased:
+                    compost_supplier_docs_missing += 1
+                else:
+                    compost_missing_cn += 1
                 continue
             if not (25.0 <= cn <= 40.0):
                 compost_cn_out_of_range += 1
                 continue
             if not ev.compost_method:
-                compost_missing_method += 1
+                if purchased:
+                    compost_supplier_docs_missing += 1
+                else:
+                    compost_missing_method += 1
                 continue
             if ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None:
-                compost_missing_temp_or_duration += 1
+                if purchased:
+                    compost_supplier_docs_missing += 1
+                else:
+                    compost_missing_temp_or_duration += 1
                 continue
             temp_ok = 131 <= float(ev.compost_peak_temp_f) <= 170
             if ev.compost_method == "windrow":
@@ -4467,7 +4493,12 @@ class AuditExportService:
                     said("compost.cn_out_of_range", count=compost_cn_out_of_range, total=len(compost_events)),
                 )
             )
-        elif compost_missing_cn > 0 or compost_missing_method > 0 or compost_missing_temp_or_duration > 0:
+        elif (
+            compost_missing_cn > 0
+            or compost_missing_method > 0
+            or compost_missing_temp_or_duration > 0
+            or compost_supplier_docs_missing > 0
+        ):
             missing_parts = []
             if compost_missing_cn > 0:
                 missing_parts.append(f"{compost_missing_cn} missing C:N")
@@ -4475,11 +4506,21 @@ class AuditExportService:
                 missing_parts.append(f"{compost_missing_method} missing method")
             if compost_missing_temp_or_duration > 0:
                 missing_parts.append(f"{compost_missing_temp_or_duration} missing temp/duration")
-            snapshot_rows.append(
-                (
-                    "Compost (§ 205.203(c)(2))",
-                    "REVIEW",
-                    f"{' · '.join(missing_parts)} — add before inspection. " f"Pathway: {_compost_pathway_summary()}",
+            if missing_parts:
+                missing_text = f"{' · '.join(missing_parts)}, add before inspection."
+                if compost_supplier_docs_missing > 0:
+                    missing_text += (
+                        f" {compost_supplier_docs_missing} purchased compost: {_COMPOST_SUPPLIER_DOCS_NOTE}."
+                    )
+            else:
+                missing_text = f"{compost_supplier_docs_missing} purchased compost: {_COMPOST_SUPPLIER_DOCS_NOTE}."
+            compost_row = (
+                "Compost (§ 205.203(c)(2))",
+                "REVIEW",
+                f"{missing_text} Pathway: {_compost_pathway_summary()}",
+            )
+            if missing_parts:
+                compost_row += (
                     said(
                         "compost.fields_missing",
                         cn=compost_missing_cn,
@@ -4487,7 +4528,7 @@ class AuditExportService:
                         temperature=compost_missing_temp_or_duration,
                     ),
                 )
-            )
+            snapshot_rows.append(compost_row)
         elif compost_compliant == len(compost_events):
             snapshot_rows.append(
                 (
@@ -4875,6 +4916,11 @@ class AuditExportService:
                     f"organic on invoice = {'Yes' if sales_disclosure.organic_on_invoice else 'No'}",
                 )
             )
+        elif sales_disclosure.source == "legacy" and not sales_disclosure.sale_date and not sales_disclosure.quantity:
+            # No SalesRecord row and nothing on the legacy fields: no sale was recorded for this
+            # lot (bins that went to the packer, for one). Asking for a buyer on a sale that
+            # does not exist reads as a gap in a record the operation has no reason to keep.
+            snapshot_rows.append(("Sales documentation (§ 205.103)", "REVIEW", "No sale recorded for this lot"))
         else:
             snapshot_rows.append(
                 (
@@ -5132,7 +5178,11 @@ class AuditExportService:
                 (
                     "OFPP (§ 205.201(a)(3))",
                     "PASS",
-                    f"Uploaded {ofpp_flags['date_str']}: {ofpp_flags['doc_name']}",
+                    (
+                        f"Written in Trazo {ofpp_flags['date_str']} (OSP module G2.0)"
+                        if ofpp_flags.get("authored_in_trazo")
+                        else f"Uploaded {ofpp_flags['date_str']}: {ofpp_flags['doc_name']}"
+                    ),
                 )
             )
 
@@ -8947,8 +8997,24 @@ class AuditExportService:
 
             # Warning if any compost event is missing temperature data
             missing_temp = any(
-                ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None for ev in compost_events
+                (ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None)
+                and not _compost_is_purchased(ev)
+                for ev in compost_events
             )
+            purchased_missing_temp = any(
+                (ev.compost_peak_temp_f is None or ev.compost_duration_days_at_temp is None)
+                and _compost_is_purchased(ev)
+                for ev in compost_events
+            )
+            if purchased_missing_temp:
+                elements.append(
+                    Paragraph(
+                        "<b>[NOTE] NOP 7 CFR 205.203(c)(2):</b> Purchased compost: "
+                        + _COMPOST_SUPPLIER_DOCS_NOTE
+                        + ".",
+                        self._warning_style(),
+                    )
+                )
             if missing_temp:
                 elements.append(
                     Paragraph(
