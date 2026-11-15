@@ -532,6 +532,7 @@ class EventSerializer(serializers.ModelSerializer):
         """
         try:
             from carbon.models import CarbonEntry
+            from carbon.services.verified_emission_factors import VERIFICATION_STATUS_ESTIMATE
 
             if hasattr(event, "history") and event.history:
                 event_class_name = event.__class__.__name__
@@ -561,16 +562,27 @@ class EventSerializer(serializers.ModelSerializer):
                     # Run 8 (R8-04): an estimate from the recorded area is not a reported-fuel
                     # figure, so it never reads as EPA/USDA-sourced.
                     area_estimate = carbon_entry.verification_status == "area_estimate"
-                    factors_based = bool(carbon_entry.usda_factors_based) and not area_estimate
+                    # 2026-11-13: nor is an input figure with any part estimated or left out. Its
+                    # reasons travel with it, so the detail can say which part.
+                    estimate = carbon_entry.verification_status == VERIFICATION_STATUS_ESTIMATE
+                    factors_based = bool(carbon_entry.usda_factors_based) and not (area_estimate or estimate)
+                    baseline = carbon_entry.baseline_data if isinstance(carbon_entry.baseline_data, dict) else {}
                     return {
                         "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
                         "usda_factors_based": factors_based,
-                        "calculation_basis": "area_estimate" if area_estimate else "reported_or_factor",
+                        "calculation_basis": (
+                            "area_estimate" if area_estimate else ("estimate" if estimate else "reported_or_factor")
+                        ),
                         "verification_status": (
                             "area_estimate"
                             if area_estimate
-                            else ("epa_usda_sourced" if factors_based else "calculated")
+                            else (
+                                VERIFICATION_STATUS_ESTIMATE
+                                if estimate
+                                else ("epa_usda_sourced" if factors_based else "calculated")
+                            )
                         ),
+                        "estimate_reasons": list(baseline.get("estimate_reasons") or []) if estimate else [],
                         "calculation_method": carbon_entry.data_source or "calculated",
                         "data_source": carbon_entry.data_source or "CarbonEntry",
                         "recommendations": [],

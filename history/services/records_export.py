@@ -61,6 +61,9 @@ FACTOR_BASIS = _FACTOR_BASIS = {
     "no_factor_applied": "No factor applied",
     "estimated": "Estimated; no published factor applied",
     "area_estimate": "Estimated from the area recorded on the activity (per-hectare factor); no fuel recorded",
+    # An input figure with any part estimated or left out (2026-11-13). These rows read
+    # "Published factor applied" before, application fuel estimated from the area included.
+    "estimate": "Estimate: part of the figure is a Trazo estimate, or was left out for a missing input",
     "not_estimated": "Not estimated: no fuel, energy or area recorded",
 }
 

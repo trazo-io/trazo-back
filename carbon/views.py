@@ -95,6 +95,7 @@ from .serializers import (
     QuickEventTemplateSerializer,
 )
 from .services.enhanced_usda_factors import EnhancedUSDAFactors
+from .services.verified_emission_factors import VERIFICATION_STATUS_ESTIMATE, verification_status_for
 
 # `from .services.blockchain import blockchain_service` used to live in the block above, for
 # BlockchainVerificationViewSet — deleted 2026-09-08 with the rest of the blockchain routes.
@@ -104,6 +105,22 @@ from .services.enhanced_usda_factors import EnhancedUSDAFactors
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def _npk_from_percentage_fields(event_data):
+    """A fertilizer's N-P-K as "N-P-K" text from the form's three percentage fields, or None.
+
+    The save reads `nitrogen_percentage`, `phosphorus_percentage` and `potassium_percentage`
+    before the ratio text; the form preview read only the text, and filled a blank one with
+    "10-10-10" (2026-11-13). All three must be present: a partial set is not an analysis.
+    """
+    values = [event_data.get(name) for name in ("nitrogen_percentage", "phosphorus_percentage", "potassium_percentage")]
+    if any(value in (None, "") for value in values):
+        return None
+    try:
+        return "-".join(f"{float(value):g}" for value in values)
+    except (TypeError, ValueError):
+        return None
 
 
 # Custom permission for company admin/manager
@@ -902,7 +919,10 @@ class OptimizedCarbonCalculator:
         is_summary_event = is_summary is True or str(is_summary).lower() == "true"
         active_ingredient_total_kg = processed_event.get("active_ingredient_total_kg")
 
-        if is_summary_event and active_ingredient_total_kg:
+        # A fertilizer summary is not priced from an active-ingredient total: no such factor exists
+        # for a fertilizer, and this path charged it a generic 1.0 kg CO2e per kg until 2026-11-13.
+        # It goes to the standard calculation, which states what the record lacks.
+        if is_summary_event and active_ingredient_total_kg and chemical_type.lower() not in ("fe", "fertilizer"):
             try:
                 active_ingredient_kg = float(active_ingredient_total_kg)
                 chemical_subtype = processed_event.get("chemical_subtype", "")
@@ -951,14 +971,11 @@ class OptimizedCarbonCalculator:
                         factor = VerifiedEmissionFactors.EPA_CHEMICAL_FACTORS["herbicide_manufacturing"]
                         factor_label = "synthetic herbicide"
                 else:
-                    # Fertilizer summary — use NPK-based calculation
-                    factor = None
-                    factor_label = "fertilizer"
+                    # Unreachable for the four chemical types; the except below falls back to the
+                    # standard calculation rather than invent a factor.
+                    raise ValueError(f"no active-ingredient factor for chemical type {chemical_type!r}")
 
-                if factor:
-                    manufacturing_emissions = active_ingredient_kg * factor.value
-                else:
-                    manufacturing_emissions = active_ingredient_kg * 1.0  # Generic fallback
+                manufacturing_emissions = active_ingredient_kg * factor.value
 
                 # Application fuel emissions (with proper unit conversion)
                 # SUMMARY MODE FIX: Use fuel_consumption_total (aggregate) instead of
@@ -1002,6 +1019,10 @@ class OptimizedCarbonCalculator:
                         application_emissions = fuel_gallons * app_factor.value
 
                 total_co2e = manufacturing_emissions + application_emissions
+                # What the summary rests on, by the rule the save applies (2026-11-13).
+                from carbon.services.event_carbon_calculator import EventCarbonCalculator
+
+                basis = EventCarbonCalculator._aggregate_basis([factor], fuel_for_calc, app_fuel_type)
 
                 # Include original user input for display in CarbonImpactPreview
                 original_volume = processed_event.get("original_volume", volume_liters)
@@ -1025,16 +1046,18 @@ class OptimizedCarbonCalculator:
                     "is_aggregate": True,
                     "event_count": event_count,
                     "active_ingredient_total_kg": active_ingredient_kg,
-                    "emission_factor_used": f"{factor.value if factor else 1.0} kg CO2/kg AI ({factor_label})",
+                    "emission_factor_used": f"{factor.value} kg CO2/kg AI ({factor_label})",
                     "manufacturing_emissions_kg_co2e": round(manufacturing_emissions, 3),
                     "application_emissions_kg_co2e": round(application_emissions, 3),
                     "chemical_type": chemical_type,
-                    # Fields matching individual event structure for CarbonImpactPreview
-                    "active_ingredient_percentage": concentration_percentage if concentration_percentage else 100.0,
+                    # Fields matching individual event structure for CarbonImpactPreview. The
+                    # percentage only when the form gave one: it printed an assumed 100% when it
+                    # did not (2026-11-13). The summary's active-ingredient total is what was recorded.
+                    "active_ingredient_percentage": concentration_percentage,
                     "active_ingredient_kg": round(active_ingredient_kg, 3),
-                    "emission_factor_kg_co2_per_kg": factor.value if factor else 1.0,
+                    "emission_factor_kg_co2_per_kg": factor.value,
                     "chemical_subtype_used": chemical_subtype or factor_label,
-                    "confidence_level": factor.confidence_level if factor else 0.85,
+                    "confidence_level": factor.confidence_level,
                     "concentration_source": "aggregate_summary",
                     # Fuel details for "Application Equipment" breakdown row
                     "application_fuel_type": app_fuel_type if fuel_for_calc > 0 else None,
@@ -1050,6 +1073,8 @@ class OptimizedCarbonCalculator:
                     "volume_applied_liters": original_volume,
                     "area_treated_hectares": original_area,
                     "application_method": processed_event.get("application_method", "broadcast"),
+                    "figure_basis": basis["figure_basis"],
+                    "estimate_reasons": basis["estimate_reasons"],
                 }
                 # Add dynamic subtype field (e.g. "fungicide_subtype": "copper")
                 breakdown.update(subtype_fields)
@@ -1058,7 +1083,9 @@ class OptimizedCarbonCalculator:
                     "co2e": round(total_co2e, 3),
                     "calculation_method": f"summary_aggregate_{factor_label.replace(' ', '_')}",
                     "breakdown": breakdown,
-                    "verification_status": "aggregate_summary",
+                    "verification_status": verification_status_for(basis, "aggregate_summary"),
+                    "figure_basis": basis["figure_basis"],
+                    "estimate_reasons": basis["estimate_reasons"],
                     # Top-level display fields for CarbonImpactPreview
                     "original_volume_applied": original_volume,
                     "original_volume_unit": original_volume_unit,
@@ -1127,7 +1154,14 @@ class OptimizedCarbonCalculator:
             result = {
                 "co2e": round(co2e, 3),
                 "calculation_method": f"optimized_{calculation_method}",
-                "verification_status": "epa_usda_verified",
+                # Follows the basis, as the save does (2026-11-13): "estimate" when any part is
+                # estimated or left out, never "epa_usda_verified" for every input figure.
+                "verification_status": verification_status_for(calculation_result, "factors_verified"),
+                "figure_basis": calculation_result.get("figure_basis"),
+                "estimate_reasons": calculation_result.get("estimate_reasons") or [],
+                # A zero built from left-out parts is not an answer: the form says "not estimated"
+                # and why, never "no emissions to estimate" (nothing is stored for it either).
+                "not_estimated": round(co2e, 3) == 0 and calculation_result.get("figure_basis") == "estimate",
                 "breakdown": breakdown,
                 "npk_content": npk_content,
                 "manufacturing_emissions_kg_co2e": breakdown.get("manufacturing_emissions_kg_co2e", 0),
@@ -1685,16 +1719,18 @@ class OptimizedEventProcessor:
         # This allows us to use appropriate defaults based on chemical type
         chemical_type = event_data.get("type", "FE")
 
-        # FIX (2025-12-24): Use appropriate default based on chemical type
-        # - Fertilizers (FE): Use NPK format "10-10-10" as default
-        # - Pesticides/Herbicides/Fungicides (PE/HE/FU): Use None (let calculation use its own defaults)
+        # The concentration as entered, and no stand-in for a blank (2026-11-13). A fertilizer with
+        # no N-P-K was previewed as "10-10-10", so the form showed nitrogen manufacturing the record
+        # never named. A fertilizer's three percentage fields win over the ratio text, in the order
+        # the save reads them (`_get_structured_npk_content`): with "46% N" typed and N 46 / P 0 /
+        # K 0 filled, the save prices the urea and the preview must too (review of back #426). The
+        # text is read only when the three fields are not all filled; with neither, the calculator
+        # omits the nutrient figure and says so.
         concentration_raw = event_data.get("concentration")
-        if concentration_raw is not None and str(concentration_raw).strip():
-            concentration = concentration_raw
-        elif chemical_type == "FE":
-            concentration = "10-10-10"  # NPK default for fertilizers
+        npk_from_fields = _npk_from_percentage_fields(event_data) if chemical_type == "FE" else None
+        if npk_from_fields is not None:
+            concentration = npk_from_fields
         else:
-            # For PE/HE/FU, pass the actual value (None or empty) to let calculation handle defaults
             concentration = concentration_raw
 
         # CRITICAL FIX: Parse combined strings like "400 kg/ha" into numeric + unit
@@ -2400,18 +2436,14 @@ def calculate_event_carbon_impact(request):
                 if event_type == "chemical":
                     self.type = event_data.get("type", "FE")  # Use actual type from form
                     self.commercial_name = event_data.get("commercial_name", "")
-                    # V5 (2026-06): NPK concentration is only meaningful for fertilizers (FE).
-                    # Do NOT inject an NPK "10-10-10" guess for PE/FU/HE — it is nonsensical for a
-                    # pesticide/fungicide/herbicide and fed a bogus N-manufacturing term into carbon.
-                    # For FE with no stated grade, keep a conservative mid-range estimate (over-counts
-                    # rather than under-counts emissions); for everything else pass the real value.
-                    _conc = event_data.get("concentration")
-                    if _conc not in (None, "") and str(_conc).strip():
-                        self.concentration = _conc
-                    elif self.type == "FE":
-                        self.concentration = "10-10-10"  # conservative NPK estimate, fertilizer only
-                    else:
-                        self.concentration = _conc
+                    # The concentration as entered. A fertilizer with no stated grade was given
+                    # "10-10-10" here, a nitrogen figure nobody recorded (2026-11-13); the
+                    # calculator now omits the nutrient figure and says why. The three percentage
+                    # fields go through as the save reads them, ahead of the ratio text.
+                    self.concentration = event_data.get("concentration")
+                    for npk_field in ("nitrogen_percentage", "phosphorus_percentage", "potassium_percentage"):
+                        value = event_data.get(npk_field)
+                        setattr(self, npk_field, None if value in (None, "") else value)
                     # Volume and area numbers only, and no stand-ins: a blank amount stays blank
                     # (it read "10" L and "1.0" ha until 2026-11-12).
                     self.volume = event_data.get("volume")
@@ -2706,7 +2738,19 @@ def calculate_event_carbon_impact(request):
             calculation_result["verification_level"] = "not_applicable"
             calculation_result["verification_sources"] = None
             calculation_result["confidence_percentage"] = None
-        elif calculation_result.get("calculation_method") in ["verified_epa_factors", "verified_epa_usda_factors"]:
+        elif calculation_result.get("verification_status") == VERIFICATION_STATUS_ESTIMATE:
+            # An input figure with any part estimated or left out (2026-11-13). It read "Published
+            # factors" whenever the factors it named were published, even when the fuel they
+            # multiplied was a per-hectare estimate. Its reasons are in `estimate_reasons`.
+            calculation_result["verification_badge"] = "Estimate"
+            calculation_result["verification_level"] = "estimate"
+            calculation_result["verification_sources"] = calculation_result.get("data_sources")
+            calculation_result["confidence_percentage"] = None
+        elif calculation_result.get("calculation_method") in [
+            "verified_epa_factors",
+            "verified_epa_usda_factors",
+            "per_input_factors",
+        ]:
             # "Published factors" only when every factor applied is a published one; a P2O5/K2O
             # or organic/biological product factor is a Trazo estimate (carbon-methodology.md).
             provenance = set(calculation_result.get("factor_provenance") or [])

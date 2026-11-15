@@ -20,8 +20,9 @@ class CarbonCalculatorService:
     #: reach a consumer figure (recordkeeping review F-02, 2026-10-07). An ALLOWLIST, not a
     #: denylist (review of back #132): `verification_status` is free text, and "estimated"
     #: (a per-hour guess for a repair), "area_estimate" (a per-hectare guess with no fuel
-    #: recorded), "insufficient_data" and the error statuses must all fail closed. The farmer's
-    #: own dashboard total keeps every row.
+    #: recorded), "estimate" (an input figure with a part estimated or left out, 2026-11-13),
+    #: "insufficient_data" and the error statuses must all fail closed. The farmer's own
+    #: dashboard total keeps every row.
     RECORDED_BASIS_STATUSES = frozenset(
         {
             "factors_verified",
