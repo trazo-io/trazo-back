@@ -86,8 +86,9 @@ items:
     - certification_contract.dba_registration
     - certification_contract.dba_use
     - certification_contract.dba_use_detail
+    - certification_contract.contract_notes
     prints: >-
-      modules/operation_profile.pdf §D
+      modules/operation_profile.pdf §D; §A (name differences between the certificate and sales documents)
   note: >-
     Closed 2026-11-13. Where each DBA is registered (state, county or city, not registered) and whether
     it appears in the records for all products and markets, some (which), or none.
@@ -173,21 +174,16 @@ items:
   reason: Sets how CCOF itself contacts the operation — a CCOF account setting, not a fact about the operation's
     organic system that a packet or certifier review needs.
 - ref: B1
-  asks: Help us understand your organic operation. Describe or attach a summary description of your organic
-    business or plans.
-  status: partial
+  asks: Help us understand your organic operation. Describe or attach a summary description of your organic business
+    or plans.
+  status: covered
   trazo:
     questions:
-    - certification_contract.contract_notes
-    prints: 00-cover.pdf; 01-organic-system-plan.pdf (§ 205.201(a)(1)-(6) narrative)
-  severity: P2
-  gap: 'CCOF asks for a summary description of the organic business or its plans. `certification_contract.contract_notes`
-    asks something else — legal name, business structure and name differences between the certificate
-    and sales documents — and compiles as "Legal identity and naming: …" into § 205.201(a)(6). No question
-    in any of the 19 modules asks for a business summary. (downgraded from `covered` 2026-08-28 by an
-    adversarial re-read of every covered row.)'
-  fix: Add an `organic_business_summary` textarea to the certification-contract module, compiling into
-    (a)(6) beside the naming answer.
+    - certification_contract.organic_business_summary
+    prints: modules/operation_profile.pdf §A
+  note: 'Closed 2026-11-15. `organic_business_summary` (Operation module page A, optional) asks a few sentences
+    on what the operation grows or handles, where, who buys it and its plans, as CCOF''s section B; `contract_notes`
+    keeps answering naming. CCOF''s "or attach" is not offered: the rest of the plan is the detail CCOF says follows.'
 - ref: B2
   asks: How frequently do you review your entire Organic System Plan to verify it is effectively implemented and
     accurately reflects your practices? Annually / Quarterly / Monthly / Other (describe).
@@ -382,13 +378,20 @@ items:
   # line is printed only for a California operation or one with a registration on file.
 - ref: E2
   asks: CDPH Department of Health Services Organic Registration number (processing), e.g. 12345.
-  status: not_covered
-  severity: P3
+  status: covered
   trazo:
-    prints: —
-  gap: '`StateOrganicRegistration`''s own docstring explicitly scopes out CDPH; no CDPH field exists anywhere.
-    CDPH applies to on-farm processing, outside the ICP''s wholesale-orchard profile.'
-  fix: Add a CDPH registration field only if a pilot farm does on-farm processing; low priority.
+    models:
+    - certifications.StateOrganicRegistration.registering_agency
+    - certifications.StateOrganicRegistration.registration_number
+    - certifications.StateOrganicRegistration.status
+    - certifications.StateOrganicRegistration.renewal_date
+    prints: '00-cover.pdf: "California organic registration (CDPH)", the number with its status and renewal date;
+      a missing number or a lapsed registration prints a [REVIEW] line'
+    where: '00-cover.pdf: California organic registration (CDPH)'
+  note: Closed 2026-11-15. `StateOrganicRegistration.registering_agency` names the agency a row is held with, CDFA
+    or CDPH (processed products), with a `processor` operation type. The cover prints the latest row of each agency
+    on file, so a CDPH number never prints under CDFA's name. Entered on the State Organic Program Registration
+    card.
 - ref: F1
   asks: What is your current or expected total value of certified organic production/sales/services (gross,
     next 12 months)?

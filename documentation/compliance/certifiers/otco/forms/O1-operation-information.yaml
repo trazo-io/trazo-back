@@ -421,27 +421,22 @@ items:
     Closed 2026-11-13. Shown only on a yes to D-1A, as the form asks it.
 - ref: D-1 (certificate attachment)
   asks: If you are currently certified, attach a copy of your most recent organic certificate(s) — Attached.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    where: >-
-      attachments/certification_contract/history_current_certificate_upload/ (another agency's
-      certificate)
     questions:
     - certification_contract.history_ever_certified
+    - certification_contract.history_certified_by_this_agency
+    - certification_contract.history_this_agency_certificate_upload
     - certification_contract.history_certified_elsewhere_now
     - certification_contract.history_current_certificate_upload
-    models:
-    - certifications.OrganicSystemPlan.approval_document
-    prints: >-
-      attachments/certification_contract/history_current_certificate_upload/; 00-cover.pdf (the number and
-      agent of the certificate of record)
-  gap: >-
-    Another agency's current certificate is asked on a yes to D-1A and rides in the packet. The
-    certificate of the agency the plan is filed with (`approval_document`, which that agency issued)
-    does not travel; only its number and agent print on the cover.
-  fix: >-
-    Write the OSP's `approval_document` into the ZIP under attachments/certification_contract/.
+    prints: attachments/certification_contract/history_this_agency_certificate_upload/ and attachments/certification_contract/history_current_certificate_upload/
+      in the packet ZIP; modules/operation_profile.pdf §B
+  note: Closed 2026-11-15. A currently certified operation holds the certificate of the agency it files with, of
+    another agency, or both. `history_certified_by_this_agency` asks the first, with its most recent certificate
+    attached on the yes (`history_this_agency_certificate_upload`); D-1A's `history_certified_elsewhere_now` asks
+    the second, with its certificate. A yes with no file reads as an attachment missing. The plan's `approval_document`
+    is the approval letter the activation gate asks for, not necessarily the certificate, so it is not offered as
+    the answer.
 - ref: D-1C
   asks: By which agency(ies) were/are you certified?
   status: covered
@@ -600,17 +595,22 @@ items:
   # Closed 2026-11-06 with the CCOF Contract E1. The N/A box: the line is printed only for a California
   # operation or one with a registration on file.
 - ref: E-2
-  asks: >-
-    California Department of Public Health Organic Registration number (all other organic products
-    — contact the Department of Public Health before offering product for sale).
-  status: not_covered
-  severity: P3
+  asks: California Department of Public Health Organic Registration number (all other organic products — contact
+    the Department of Public Health before offering product for sale).
+  status: covered
   trazo:
-    prints: "—"
-  gap: >-
-    Reused from the CCOF Contract E2 (P3). `StateOrganicRegistration`'s docstring scopes out CDPH;
-    no CDPH field exists. CDPH applies to on-farm processing, outside the wholesale-orchard profile.
-  fix: Reuse E2 — a CDPH field only if a pilot farm does on-farm processing.
+    models:
+    - certifications.StateOrganicRegistration.registering_agency
+    - certifications.StateOrganicRegistration.registration_number
+    - certifications.StateOrganicRegistration.status
+    - certifications.StateOrganicRegistration.renewal_date
+    prints: '00-cover.pdf: "California organic registration (CDPH)", the number with its status and renewal date;
+      a missing number or a lapsed registration prints a [REVIEW] line'
+    where: '00-cover.pdf: California organic registration (CDPH)'
+  note: Closed 2026-11-15. `StateOrganicRegistration.registering_agency` names the agency a row is held with, CDFA
+    or CDPH (processed products), with a `processor` operation type. The cover prints the latest row of each agency
+    on file, so a CDPH number never prints under CDFA's name. Entered on the State Organic Program Registration
+    card.
 - ref: F-1
   kind: instruction
   asks: Fees for Handlers, Processors or Farm Processors (a lead-in to a) and b)).

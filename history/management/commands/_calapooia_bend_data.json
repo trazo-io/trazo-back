@@ -2678,6 +2678,10 @@
     "modules": {
      "certification_contract": {
       "answers": {
+       "billing_address_is": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "mailing"
+       },
        "contract_notes": {
         "at": "2026-08-21T11:42:20.329229+00:00",
         "value": "Brandt Family Farms LLC, an Oregon limited liability company, trading as Calapooia Bend Farm. The certificate is issued to Brandt Family Farms LLC; Calapooia Bend Farm is the farm name that appears on our bills of lading and on the buyer-facing pages, and both names are on file with Oregon Tilth. Laurel Brandt is the member-manager and the person responsible for this organic system plan. The operation holds 138.6 acres in Linn County, of which 86.9 acres across six parcels are in certified organic production — 37.7 acres of blueberries (Home Field East 12.5, Home Field West 14.0, River Block 11.2) and 49.2 acres of rotation ground (Bottom Ground A 18.6, Bottom Ground B 16.4, Upper Terrace 14.2). The balance is the riparian corridor along the Calapooia, the native hedgerows, the farmstead, the packing shed and the equipment yard; none of it is cropped. The only non-organic product is the fruit off buffer rows 1 and 2 on Home Field East and Home Field West, kept separate and sold as conventional process fruit as section G6.0 describes; no other crop on the operation is grown for the conventional market."
@@ -2689,53 +2693,13 @@
          "handling"
         ]
        },
-       "history_ever_certified": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": true
+       "contract_signed_by": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": "Laurel Brandt, member-manager"
        },
-       "history_prior_agents": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": "Oregon Tilth, 2006 to date."
-       },
-       "history_suspended": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": false
-       },
-       "history_revoked": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": false
-       },
-       "history_surrendered_outstanding": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": false
-       },
-       "history_outstanding_noncompliances": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": false
-       },
-       "history_denied": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": false
-       },
-       "history_withdrew_outstanding": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": false
-       },
-       "legally_registered": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": true
-       },
-       "legal_structure": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": "llc"
-       },
-       "state_of_incorporation": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": "Oregon"
-       },
-       "uses_dba": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": true
+       "contract_signed_on": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": "2026-08-21"
        },
        "dba_names": {
         "at": "2026-11-11T09:00:00+00:00",
@@ -2751,37 +2715,85 @@
         "at": "2026-11-11T09:00:00+00:00",
         "value": "all"
        },
+       "history_certified_by_this_agency": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": true
+       },
+       "history_certified_elsewhere_now": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": false
+       },
+       "history_denied": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_ever_certified": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
+       },
+       "history_outstanding_noncompliances": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_prior_agents": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "Oregon Tilth, 2006 to date."
+       },
+       "history_revoked": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_surrendered_outstanding": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_suspended": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
+       "history_withdrew_outstanding": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": false
+       },
        "legal_address_is": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "physical"
        },
-       "mailing_address_is": {
+       "legal_structure": {
         "at": "2026-11-11T09:00:00+00:00",
-        "value": "other"
+        "value": "llc"
        },
-       "mailing_address_street": {
+       "legally_registered": {
         "at": "2026-11-11T09:00:00+00:00",
-        "value": "PO Box 412"
+        "value": true
        },
        "mailing_address_city": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "Tangent"
        },
+       "mailing_address_country": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "United States"
+       },
+       "mailing_address_is": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "other"
+       },
        "mailing_address_state": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "OR"
+       },
+       "mailing_address_street": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "PO Box 412"
        },
        "mailing_address_zip": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "97389"
        },
-       "mailing_address_country": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": "United States"
-       },
-       "billing_address_is": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": "mailing"
+       "organic_business_summary": {
+        "at": "2026-11-13T09:00:00+00:00",
+        "value": "Certified organic blueberries on six parcels along the Calapooia River in Linn County, Oregon, picked by our own crew and hauled in our own reefer to two buyers: Organically Grown Company for fresh and Willamette Valley Fruit for processing. No change planned for the coming season."
        },
        "public_contact_shared": {
         "at": "2026-11-11T09:00:00+00:00",
@@ -2790,23 +2802,13 @@
          "email"
         ]
        },
-       "public_phone": {
-        "at": "2026-11-11T09:00:00+00:00",
-        "value": "(541) 555-0142"
-       },
        "public_email": {
         "at": "2026-11-11T09:00:00+00:00",
         "value": "farm@calapooiabend.example"
        },
-       "history_certified_elsewhere_now": {
-        "at": "2026-11-13T09:00:00+00:00",
-        "value": false
-       },
-       "standards_requested": {
-        "at": "2026-11-13T09:00:00+00:00",
-        "value": [
-         "usda_nop"
-        ]
+       "public_phone": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "(541) 555-0142"
        },
        "regulatory_agencies": {
         "at": "2026-11-13T09:00:00+00:00",
@@ -2816,13 +2818,19 @@
         "at": "2026-11-13T09:00:00+00:00",
         "value": false
        },
-       "contract_signed_by": {
+       "standards_requested": {
         "at": "2026-11-13T09:00:00+00:00",
-        "value": "Laurel Brandt, member-manager"
+        "value": [
+         "usda_nop"
+        ]
        },
-       "contract_signed_on": {
-        "at": "2026-11-13T09:00:00+00:00",
-        "value": "2026-08-21"
+       "state_of_incorporation": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": "Oregon"
+       },
+       "uses_dba": {
+        "at": "2026-11-11T09:00:00+00:00",
+        "value": true
        }
       },
       "completed_at": "2026-08-21T11:42:20.378188+00:00",
