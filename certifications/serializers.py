@@ -1518,6 +1518,8 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
             "prior_osp_version",
             "prior_plan_basis",
             "basis_question_applies",
+            "agent_file_changed_modules",
+            "agent_file_nothing_changed",
             "new_osp",
             "new_osp_version",
             "reporting_year",
@@ -1690,6 +1692,7 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
                 )
         self._validate_sales_period(attrs)
         self._validate_prior_plan_basis(attrs, prior if prior is not None else self.instance.prior_osp)
+        self._validate_agent_file_statement(attrs)
         docs = attrs.get("supporting_documents")
         if docs:
             establishment_id = prior.establishment_id if prior is not None else self.instance.establishment_id
@@ -1746,6 +1749,92 @@ class OSPAnnualUpdateSerializer(CallerScopedRelatedFields, serializers.ModelSeri
                 )
             raise serializers.ValidationError({"prior_plan_basis": message}, code=code)
         attrs["prior_plan_basis"] = expected
+
+    def _validate_agent_file_statement(self, attrs):
+        """What changed against the plan the agent holds, stated only when that plan predates Trazo.
+
+        Module keys from the registry, kept in registry order, or "nothing changed"; never both. A
+        module stated changed whose default § 205.201(a) section is also ticked unchanged is refused,
+        naming both: the filing would say the section changed and did not. Only the default section is
+        checked, because a module-level statement does not say which of its questions moved (G6.0
+        writes to (a)(1) and (a)(5)). "Not changed" is only ever True; False is stored as not stated.
+        """
+        from certifications.osp_modules import MODULE_REGISTRY, MODULES_BY_KEY
+        from certifications.services.osp_pdf_snapshot import SECTION_LABELS
+
+        def current(name, default):
+            return attrs.get(name, getattr(self.instance, name, default) if self.instance is not None else default)
+
+        modules = current("agent_file_changed_modules", [])
+        # Checked before anything reads it as empty: `{}`, `""` or `0` is not "no sections" (review of
+        # back #439), and would otherwise be stored and served back as sent.
+        if not isinstance(modules, list) or any(not isinstance(key, str) for key in modules):
+            raise serializers.ValidationError(
+                {"agent_file_changed_modules": "A list of plan section keys."}, code="agent_file_modules_shape"
+            )
+        nothing = current("agent_file_nothing_changed", None)
+        if nothing is False:
+            attrs["agent_file_nothing_changed"] = nothing = None
+        if not modules and nothing is not True:
+            return
+        if current("prior_plan_basis", "") != OSPAnnualUpdate.PRIOR_BASIS_AGENT_FILE:
+            sent = bool(attrs.get("agent_file_changed_modules")) or attrs.get("agent_file_nothing_changed") is True
+            if not sent:
+                # Stored while the basis was `agent_file`, which the operation or the server has since
+                # moved (`_rederive_draft_basis`, `release_server_answered_basis`). It is inert until the
+                # basis is `agent_file` again (never printed, hashed or carried as a statement), so a save
+                # that does not send it is not refused for it (review of back #439).
+                return
+            field = (
+                "agent_file_changed_modules"
+                if attrs.get("agent_file_changed_modules")
+                else "agent_file_nothing_changed"
+            )
+            raise serializers.ValidationError(
+                {
+                    field: (
+                        "What changed against the plan on file is stated only when your certifier holds a plan "
+                        "filed before Trazo."
+                    )
+                },
+                code="agent_file_statement_not_asked",
+            )
+        unknown = sorted({key for key in modules if key not in MODULES_BY_KEY})
+        if unknown:
+            raise serializers.ValidationError(
+                {"agent_file_changed_modules": f"Not a section of the plan: {', '.join(unknown)}."},
+                code="agent_file_unknown_module",
+            )
+        if modules and nothing is True:
+            raise serializers.ValidationError(
+                {
+                    "agent_file_nothing_changed": (
+                        "Choose either the sections that changed or nothing changed, not both."
+                    )
+                },
+                code="agent_file_statement_exclusive",
+            )
+        stated = set(modules)
+        modules = [module.key for module in MODULE_REGISTRY if module.key in stated]
+        attrs["agent_file_changed_modules"] = modules
+        attestation = current("sections_unchanged_attestation", {}) or {}
+        clashes = []
+        for key in modules:
+            module = MODULES_BY_KEY[key]
+            section = module.default_section_key
+            if isinstance(attestation, dict) and attestation.get(section) is True:
+                clause, label = SECTION_LABELS.get(section, ("", section))
+                clashes.append(f"{module.code} {module.title.get('en', key)} (§ 205.201{clause} {label})".strip())
+        if clashes:
+            raise serializers.ValidationError(
+                {
+                    "agent_file_changed_modules": (
+                        "These sections are stated changed, and the section of the plan each belongs to is also "
+                        f"ticked unchanged: {'; '.join(clashes)}. Untick that section, or leave the module out."
+                    )
+                },
+                code="stated_changed_but_attested_unchanged",
+            )
 
     def _validate_sales_period(self, attrs):
         """Both ends or neither, in order, at most a year long, and already over.

@@ -742,14 +742,18 @@ class ChangedSections:
     #: "compared", "no_new_version" (the update reaffirmed the plan), "newer_version" (this packet
     #: is built from the prior plan while the update moves to a later one), "first_version" (the
     #: update continues the first plan version in Trazo and the agent holds a plan filed before
-    #: Trazo) or "no_filing".
+    #: Trazo), "stated" (the same, with what the operation states changed against that plan in
+    #: `forms` / `unmapped`; empty when it states nothing changed) or "no_filing".
     state: str
     prior_version: int | None = None
     new_version: int | None = None
     #: (agent form label, changed module files) for each agent form that maps a changed module.
     forms: tuple = ()
-    #: (module label, file) for a changed module no form of the agent maps.
+    #: (module label, file) for a changed module no form of the agent maps. The file is "" for a
+    #: stated key the module registry no longer knows.
     unmapped: tuple = ()
+    #: True when the list is the operation's statement ("stated", or "newer_version" in a first year).
+    stated: bool = False
     #: (§ 205.201(a) section label, file) for each section whose operator-written content changed.
     narratives: tuple = ()
     #: Codes of the agent's forms answered per parcel, which the comparison cannot see.
@@ -762,46 +766,9 @@ class ChangedSections:
     parcels_unstated: tuple = ()
 
 
-def changed_sections(osp) -> ChangedSections | None:
-    """The Step 4 list for this packet, or None when the packet's agent does not ask for one."""
-    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
-    from certifications.services.annual_update_filing import renewal_packet_filing
-    from certifications.services.osp_pdf_snapshot import SECTION_LABELS
-    from certifications.services.plan_version_changes import (
-        changed_module_keys,
-        changed_section_keys,
-        parcels_begun_since,
-        plan_reference_date,
-    )
-
-    agent, own = packet_certifier(osp)
-    if not own or agent not in _SECTION_LIST_AGENTS:
-        return None
-    agent_name = packet_agent(osp).name or agent.upper()
-    filing = renewal_packet_filing(osp)
-    if filing is None:
-        return ChangedSections(agent_name, "no_filing")
-    prior, new = filing.prior_osp, filing.new_osp
-    if filing.holds_no_agent_copy:
-        # The agent holds a plan filed before Trazo, so a comparison between Trazo versions is not a
-        # list of what changed against it (overall review 2026-11, OV-PK-O02).
-        return ChangedSections(
-            agent_name,
-            "first_version",
-            prior_version=prior.version_number,
-            new_version=new.version_number if new is not None else None,
-        )
-    if new is None:
-        return ChangedSections(agent_name, "no_new_version", prior_version=prior.version_number)
-    if new.pk != osp.pk:
-        # The filing was matched through `prior_osp=osp`: this packet's module files are rendered
-        # from `osp`, so a list of what changed in `new` would point at files that do not hold it
-        # (review of back #216).
-        return ChangedSections(
-            agent_name, "newer_version", prior_version=prior.version_number, new_version=new.version_number
-        )
-
-    changed = changed_module_keys(prior, new)
+def _forms_for_modules(agent: str, changed) -> tuple:
+    """(the agent's forms, (form label, module files) for each form a changed module maps to, in the
+    agent's numeric order, (module label, file) for each changed module no form maps)."""
     forms, _loaded = _load_forms(agent)
     mapped: set[str] = set()
     listed = []
@@ -814,6 +781,63 @@ def changed_sections(osp) -> ChangedSections | None:
     # The register loads in file order, which puts C11 before C2. The agent's own order is numeric.
     listed.sort(key=lambda row: [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", row[0].split(" ")[0])])
     unmapped = tuple((_module_label(key), _module_location(key)) for key in changed if key not in mapped)
+    return forms, tuple(listed), unmapped
+
+
+def changed_sections(osp) -> ChangedSections | None:
+    """The Step 4 list for this packet, or None when the packet's agent does not ask for one."""
+    from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
+    from certifications.services.annual_update_filing import renewal_packet_filing
+    from certifications.services.osp_pdf_snapshot import SECTION_LABELS
+    from certifications.services.plan_version_changes import (
+        changed_module_keys,
+        changed_section_keys,
+        parcels_begun_since,
+        plan_reference_date,
+        stated_keys_not_in_registry,
+        stated_modules,
+    )
+
+    agent, own = packet_certifier(osp)
+    if not own or agent not in _SECTION_LIST_AGENTS:
+        return None
+    agent_name = packet_agent(osp).name or agent.upper()
+    filing = renewal_packet_filing(osp)
+    if filing is None:
+        return ChangedSections(agent_name, "no_filing")
+    prior, new = filing.prior_osp, filing.new_osp
+    if filing.holds_no_agent_copy:
+        # The agent holds a plan filed before Trazo, so a comparison between Trazo versions is not a
+        # list of what changed against it (overall review 2026-11, OV-PK-O02). What the operation states
+        # changed is listed instead, by the agent's form codes, and named as its statement.
+        versions = {
+            "prior_version": prior.version_number,
+            "new_version": new.version_number if new is not None else None,
+        }
+        if not filing.states_agent_file_changes:
+            return ChangedSections(agent_name, "first_version", **versions)
+        if new is not None and new.pk != osp.pk:
+            # The same rule as the comparison below (review of back #216, and of back #439): this
+            # packet's module files hold `osp`'s answers, so pointing a stated section at them would
+            # name a file that does not hold the year's change.
+            return ChangedSections(agent_name, "newer_version", stated=True, **versions)
+        _forms, listed, unmapped = _forms_for_modules(agent, [m.key for m in stated_modules(filing)])
+        # A stored key the registry no longer knows is still part of what the operation signed: it is
+        # listed as stored, never dropped (an empty list here reads as its "nothing changed").
+        unmapped += tuple((key, "") for key in stated_keys_not_in_registry(filing))
+        return ChangedSections(agent_name, "stated", forms=listed, unmapped=unmapped, **versions)
+    if new is None:
+        return ChangedSections(agent_name, "no_new_version", prior_version=prior.version_number)
+    if new.pk != osp.pk:
+        # The filing was matched through `prior_osp=osp`: this packet's module files are rendered
+        # from `osp`, so a list of what changed in `new` would point at files that do not hold it
+        # (review of back #216).
+        return ChangedSections(
+            agent_name, "newer_version", prior_version=prior.version_number, new_version=new.version_number
+        )
+
+    changed = changed_module_keys(prior, new)
+    forms, listed, unmapped = _forms_for_modules(agent, changed)
     narratives = tuple(
         ("§ 205.201" + " ".join(SECTION_LABELS.get(key, ("", key))), "01-organic-system-plan.pdf")
         for key in changed_section_keys(prior, new)
@@ -829,7 +853,7 @@ def changed_sections(osp) -> ChangedSections | None:
         "compared",
         prior_version=prior.version_number,
         new_version=new.version_number,
-        forms=tuple(listed),
+        forms=listed,
         unmapped=unmapped,
         narratives=narratives,
         parcel_forms=parcel_forms,
