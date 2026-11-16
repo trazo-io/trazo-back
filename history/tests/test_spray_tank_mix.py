@@ -295,6 +295,14 @@ class TankWriteTests(_Orchard):
         self.assertEqual({(start.minute, end.hour) for start, end in south}, {(15, 9)})
         self.assertEqual(east, {(None, None)})
 
+    def test_a_tank_window_split_between_shared_and_a_target_is_refused(self):
+        targets = self._three_targets()
+        targets[1]["application_end"] = WHEN.replace(hour=9).isoformat()
+        res = self._post(self._tank(targets, application_start=WHEN.replace(hour=6).isoformat()))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+        self.assertIn("either", res.json())
+        self.assertFalse(ChemicalEvent.objects.exists())
+
     def test_one_parcel_tank_uses_the_same_path_with_one_target(self):
         body = self._one_target()
         res = self._post(body)

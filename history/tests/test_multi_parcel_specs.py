@@ -139,6 +139,14 @@ class SpecMatchesTheCodeTests(SimpleTestCase):
         chemical = json.loads(SPEC_PATH.read_text(encoding="utf-8"))["types"]["2"]["ui"]
         self.assertEqual(chemical["time_keys"], ["application_start", "application_end"])
 
+    def test_a_group_that_travels_together_is_made_of_either_keys(self):
+        for event_type, spec in SPECS.items():
+            with self.subTest(event_type=event_type):
+                for group in spec.either_together:
+                    self.assertGreaterEqual(len(group), 2)
+                    self.assertLessEqual(group, spec.either)
+        self.assertIn(frozenset({"application_start", "application_end"}), SPECS[2].either_together)
+
     def test_excluded_subtypes_are_not_in_the_spec(self):
         for event_type, codes in EXCLUDED.items():
             with self.subTest(event_type=event_type):

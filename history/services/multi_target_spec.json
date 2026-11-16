@@ -1,5 +1,5 @@
 {
-  "_about": "One activity on several parcels: what is shared, what differs per parcel, what is refused. Read by history/services/multi_target.py and, through a parity test, by trazo-app src/config/events/multiParcel.ts. Keys are REQUEST keys (what the serializer accepts), not columns. 'refused_values' refuses a shared key only when it holds one of the listed values: a carrier volume per acre is the same on every parcel, a total for the tank is not. 'ui' is for the frontend only; the server ignores it. 'ui.time_keys' are the start and stop times a card may ask when the grower says they differ by parcel; each is an 'either' key.",
+  "_about": "One activity on several parcels: what is shared, what differs per parcel, what is refused. Read by history/services/multi_target.py and, through a parity test, by trazo-app src/config/events/multiParcel.ts. Keys are REQUEST keys (what the serializer accepts), not columns. 'refused_values' refuses a shared key only when it holds one of the listed values: a carrier volume per acre is the same on every parcel, a total for the tank is not. 'ui' is for the frontend only; the server ignores it. 'ui.time_keys' are the start and stop times a card may ask when the grower says they differ by parcel; each is an 'either' key. 'either_together' groups 'either' keys that describe one fact (a start and its stop): all shared or all per target, never split.",
   "version": 1,
   "types": {
     "2": {
@@ -29,6 +29,12 @@
         "application_fuel_unit",
         "application_start",
         "application_end"
+      ],
+      "either_together": [
+        [
+          "application_start",
+          "application_end"
+        ]
       ],
       "refused": [
         "tank_mix_partners",

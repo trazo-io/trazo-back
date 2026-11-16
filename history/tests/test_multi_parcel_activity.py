@@ -380,6 +380,22 @@ class MultiParcelActivityTests(APITestCase):
         self.assertIn("application_start", res.json()["either"][0])
         self.assertFalse(ChemicalEvent.objects.exists())
 
+    def test_a_window_split_between_shared_and_per_parcel_is_refused(self):
+        """A shared start beside one parcel's own stop would store a window nobody stated (07:00
+        from the job, 12:00 from the parcel sprayed 11:00 to 12:00). The pair travels together."""
+        targets = self._three_blocks()
+        targets[2]["application_end"] = self.when.replace(hour=12).isoformat()
+        res = self._post(self._spray(targets, application_start=self.when.replace(hour=7).isoformat()))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+        self.assertIn("application_end, application_start", " ".join(res.json()["either"]))
+        self.assertFalse(ChemicalEvent.objects.exists())
+
+    def test_a_parcel_may_send_only_its_start_when_nothing_is_shared(self):
+        targets = self._three_blocks()
+        targets[0]["application_start"] = self.when.replace(hour=7).isoformat()
+        res = self._post(self._spray(targets))
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content)
+
     def test_time_not_on_the_record_refuses_a_parcels_own_time(self):
         """The grower's "the time is not on my record" covers every parcel of the job, so a time on
         one card contradicts it there just as it would on the shared form."""
