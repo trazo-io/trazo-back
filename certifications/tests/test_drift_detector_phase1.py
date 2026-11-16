@@ -259,6 +259,30 @@ class SeedSourceDriftTests(TransactionTestCase):
         self.assertIsNotNone(ev.drift_warning)
         self.assertEqual(ev.drift_warning["resolved_via"], "seed_search_incomplete")
 
+    def test_seed_reasons_state_the_rule_and_the_guidance_apart(self):
+        """§ 205.204(a)(1) names no supplier count and § 205.204 has no recordkeeping clause.
+        The three-source figure is NOP 5029 § 4.2 b.1, guidance (overall review 2026-11,
+        OV-PK-CIT15; the dossier's seed section already says so)."""
+        searched = self._make_pl_event(
+            seed_certification_status="non_organic_untreated",
+            variety="Romaine",
+            seed_search_attempts=[{"supplier": "A"}],
+        )
+        unstated = self._make_pl_event(variety="Carrot")
+        treated = self._make_pl_event(seed_certification_status="non_organic_treated", variety="Corn")
+        reasons = {}
+        for name, event in (("searched", searched), ("unstated", unstated), ("treated", treated)):
+            event.refresh_from_db()
+            reasons[name] = event.drift_warning["reason"]
+
+        self.assertIn("1 supplier search recorded", reasons["searched"])
+        self.assertIn("certifier guidance (NOP 5029)", reasons["searched"])
+        self.assertIn("§ 205.204 sets which seed a planting may use", reasons["unstated"])
+        for name, reason in reasons.items():
+            with self.subTest(reason=name):
+                self.assertNotRegex(reason, r"(?i)\brequire[sd]?\b")
+                self.assertNotIn("disqualif", reason)
+
     def test_non_organic_untreated_with_3_searches_clears(self):
         ev = self._make_pl_event(
             seed_certification_status="non_organic_untreated",
