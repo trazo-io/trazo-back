@@ -19,7 +19,7 @@ from django.utils import timezone
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from carbon.services.verified_emission_factors import VerifiedEmissionFactors as VEF
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent, WeatherEvent
+from history.models import ChemicalEvent, Production, ProductionEvent, WeatherEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -31,7 +31,7 @@ class CarbonGapTestBase(TestCase):
         establishment = Establishment.objects.create(name="GAP1", company=company, state="CA")
         self.parcel = Parcel.objects.create(name="gap-parcel", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Gap Production",
             start_date=timezone.now(),
             product=product,

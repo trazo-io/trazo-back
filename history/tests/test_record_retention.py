@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from history.models import History, compute_retention_until
+from history.models import Production, compute_retention_until
 from history.retention import RecordLocked, assert_child_record_deletable
 from product.models import Product
 
@@ -60,7 +60,7 @@ class RetentionDeletionGuardTests(TestCase):
     """The product must not be the reason a record disappears early."""
 
     def _production(self, retention_until=None):
-        return History.objects.create(
+        return Production.objects.create(
             name="Retention test production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Avocado"),
@@ -74,7 +74,7 @@ class RetentionDeletionGuardTests(TestCase):
 
         self.assertIn("205.103(b)(4)", str(ctx.exception))
         self.assertTrue(
-            History.objects.filter(pk=production.pk).exists(),
+            Production.objects.filter(pk=production.pk).exists(),
             "The row must still be there — a guard that raises AFTER deleting is not a guard.",
         )
 
@@ -83,7 +83,7 @@ class RetentionDeletionGuardTests(TestCase):
         production = self._production(retention_until=timezone.now().date() - timedelta(days=1))
         pk = production.pk
         production.delete()
-        self.assertFalse(History.objects.filter(pk=pk).exists())
+        self.assertFalse(Production.objects.filter(pk=pk).exists())
 
     def test_no_retention_date_does_not_block_deletion(self):
         """An unfinished production has no retention floor yet; blocking it would strand
@@ -91,7 +91,7 @@ class RetentionDeletionGuardTests(TestCase):
         production = self._production(retention_until=None)
         pk = production.pk
         production.delete()
-        self.assertFalse(History.objects.filter(pk=pk).exists())
+        self.assertFalse(Production.objects.filter(pk=pk).exists())
 
 
 class SalesRecordIsInsideTheAuditTrailTests(TestCase):
@@ -107,7 +107,7 @@ class SalesRecordIsInsideTheAuditTrailTests(TestCase):
     """
 
     def _production(self, **kwargs):
-        return History.objects.create(
+        return Production.objects.create(
             name="Sales retention production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Walnut"),

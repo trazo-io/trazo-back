@@ -28,7 +28,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, SoilManagementEvent
+from history.models import Production, SoilManagementEvent
 from history.services.manure_interval import (
     below_minimum,
     edible_part_touches_soil,
@@ -92,7 +92,7 @@ class _Production(TestCase):
         self.lettuce = _crop("Lettuce (floor test)", "lettuce_floor_test", "vegetable", True)
 
     def _history(self, crop):
-        return History.objects.create(
+        return Production.objects.create(
             name=f"{crop.name} season",
             start_date=timezone.now() - timedelta(days=200),
             product=self.product,

@@ -27,7 +27,7 @@ from rest_framework.test import APIClient
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SoilManagementEvent
+from history.models import Production, ProductionEvent, SoilManagementEvent
 from history.services.manure_check import parcel_conflicts, season_conflicts
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -62,7 +62,7 @@ class _Farm(TestCase):
         self.season = self._season("Apples 2026", self.apples)
 
     def _season(self, name, crop, parcel=None):
-        return History.objects.create(
+        return Production.objects.create(
             parcel=parcel or self.parcel,
             product=Product.objects.create(name=name),
             name=name,

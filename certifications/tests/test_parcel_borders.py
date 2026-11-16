@@ -24,7 +24,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History
+from history.models import GeneralEvent, Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel
 from product.services.buffer_zones import BufferZoneError, normalize_buffer_row
@@ -110,7 +110,7 @@ class SectionDSaysTheNoAnswers(_Farm):
         self.assertEqual(page.count("no crop grown in the buffer"), 1)
 
     def test_the_audit_export_says_the_same(self):
-        history = History.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
+        history = Production.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
         els = AuditExportService(history, certification_type="organic")._build_buffer_zone_section()
         text = " ".join(getattr(e, "text", "") for e in els if hasattr(e, "text"))
         self.assertIn("adjoining land is not certified organic", text)
@@ -122,7 +122,7 @@ class SectionDSaysTheNoAnswers(_Farm):
         self.parcel.buffer_zones = [normalize_buffer_row({"direction": "West", "buffer_crop_grown": True})]
         self.parcel.save(update_fields=["buffer_zones"])
         self.assertIn("a crop is grown in the buffer (crop not named)", self.page())
-        history = History.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
+        history = Production.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
         els = AuditExportService(history, certification_type="organic")._build_buffer_zone_section()
         text = " ".join(getattr(e, "text", "") for e in els if hasattr(e, "text"))
         self.assertIn("a crop is grown in the buffer (crop not named)", text)
@@ -156,7 +156,7 @@ class WizardShowsWhatSectionDPrints(_Farm):
     def test_the_payload_carries_both_lists_as_codes(self):
         user = User.objects.create_user(email="borders@test.com", password="x")
         WorksIn.objects.create(user=user, company=self.company, role=WorksIn.COMPANY_ADMIN)
-        history = History.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
+        history = Production.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
         OSPChangeNotification.objects.create(
             osp=self.osp,
             parcel=self.parcel,

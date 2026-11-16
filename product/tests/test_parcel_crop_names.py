@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from company.models import Company, Establishment
 from company.serializers import EstablishmentSerializer, RetrieveEstablishmentSerializer
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelPlannedCrop, Product
 
 
@@ -30,7 +30,7 @@ class ParcelCropNamesTests(TestCase):
         self.this_year = now - timedelta(days=200)
 
     def season(self, product, start, finished=True):
-        return History.objects.create(
+        return Production.objects.create(
             parcel=self.parcel,
             product=product,
             name=f"{product.name} {start.year}",
@@ -78,7 +78,7 @@ class ParcelCropNamesTests(TestCase):
 
         for i in range(4):
             parcel = Parcel.objects.create(name=f"Block {i}", establishment=self.est, area=2.0)
-            History.objects.create(parcel=parcel, product=self.walnuts, name=f"S{i}", start_date=self.this_year)
+            Production.objects.create(parcel=parcel, product=self.walnuts, name=f"S{i}", start_date=self.this_year)
         with CaptureQueriesContext(connection) as ctx:
             rows = EstablishmentSerializer(self.est).get_parcels(self.est)
         sqls = [q["sql"] for q in ctx.captured_queries]
@@ -94,7 +94,7 @@ class ParcelCropNamesTests(TestCase):
     def test_a_season_with_no_start_date_does_not_outrank_a_dated_one(self):
         """PostgreSQL sorts NULL first under DESC; the fallback orders NULLS LAST."""
         self.season(self.walnuts, self.this_year)
-        History.objects.create(
+        Production.objects.create(
             parcel=self.parcel, product=Product.objects.create(name="Almonds"), name="Undated", start_date=None
         )
         self.assertEqual(self.row()["crop_names"], ["Walnuts"])
@@ -108,7 +108,7 @@ class ParcelCropNamesTests(TestCase):
         for i in range(3):
             parcel = Parcel.objects.create(name=f"Block {i}", establishment=self.est, area=2.0)
             # An open season, so get_crop_names dereferences current_history.product.
-            parcel.current_history = History.objects.create(
+            parcel.current_history = Production.objects.create(
                 parcel=parcel, product=self.walnuts, name=f"S{i}", start_date=self.this_year
             )
             parcel.save(update_fields=["current_history"])

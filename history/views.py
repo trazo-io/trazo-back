@@ -56,9 +56,9 @@ from .models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     HistoryScan,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     ProductionPlanItem,
     SalesRecord,
@@ -120,7 +120,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 def _background_generate_qr(history_id):
     """Generate QR code in background when no template events are needed."""
     try:
-        history = History.objects.get(id=history_id)
+        history = Production.objects.get(id=history_id)
         history.generate_qr_code(is_new=True)
         logger.info("Background QR code generated for history %s", history_id)
     except Exception as e:
@@ -221,7 +221,7 @@ def _season_type_error(data):
     never assumed (2026-11-13).
     """
     value = data.get("type") if hasattr(data, "get") else None
-    valid = [code for code, _label in History.HISTORY_TYPES]
+    valid = [code for code, _label in Production.HISTORY_TYPES]
     if value in (None, "") or value in valid:
         return None
     return {"type": [f'"{value}" is not a valid choice. Valid options: {", ".join(valid)}.']}
@@ -325,7 +325,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 if _buyer_link is not None:
                     _visibility = _visibility | Q(parcel__establishment=_buyer_link.establishment)
             return (
-                History.objects.filter(_visibility)
+                Production.objects.filter(_visibility)
                 .select_related(
                     "product",
                     "parcel__establishment__company",
@@ -374,7 +374,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
         elif self.action == "my_scans":
             return (
-                History.objects.filter(history_scans__user=self.request.user)
+                Production.objects.filter(history_scans__user=self.request.user)
                 .select_related("product", "parcel__establishment")
                 .prefetch_related(
                     "history_weatherevent_events",
@@ -402,7 +402,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             )
         else:
             # For other actions, apply parcel filtering if parcel_pk is provided
-            queryset = History.objects.all()
+            queryset = Production.objects.all()
             parcel_pk = self.kwargs.get("parcel_pk")
             if parcel_pk:
                 queryset = queryset.filter(parcel_id=parcel_pk)
@@ -423,7 +423,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from django.db.models import Count
 
         queryset = (
-            History.objects.select_related("product", "parcel", "crop_type")
+            Production.objects.select_related("product", "parcel", "crop_type")
             .only(
                 # Only fetch absolutely essential fields for the dashboard
                 "id",
@@ -665,7 +665,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             "soil_ph": data.get("soil_ph"),
             "is_outdoor": data.get("is_outdoor"),
         }
-        history = History.objects.create(
+        history = Production.objects.create(
             start_date=start_date,
             parcel=parcel,
             product=obj,
@@ -722,7 +722,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # page and the certifier packet both read. Validate at the door instead.
             submitted_method = data.get("production_method")
             if submitted_method:
-                valid_methods = [c[0] for c in History.PRODUCTION_METHOD_CHOICES]
+                valid_methods = [c[0] for c in Production.PRODUCTION_METHOD_CHOICES]
                 if submitted_method not in valid_methods:
                     return Response(
                         {
@@ -822,7 +822,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # skip_qr=True: QR code generation + S3 upload takes ~30-40s on managed
             # infra. Defer to background thread so the response returns in <1s.
             with transaction.atomic():
-                history = History(
+                history = Production(
                     name=data["name"],
                     start_date=start_date,
                     expected_harvest=expected_harvest,
@@ -1301,7 +1301,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Support UUID lookup (frontend uses public_id/UUID)
             try:
                 public_uuid = uuid_module.UUID(str(pk))
-                history = get_object_or_404(History, public_id=public_uuid)
+                history = get_object_or_404(Production, public_id=public_uuid)
             except (ValueError, AttributeError):
                 history = self.get_object()
 
@@ -1361,7 +1361,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(
-                History.objects.select_related("parcel__establishment__company"),
+                Production.objects.select_related("parcel__establishment__company"),
                 public_id=public_uuid,
             )
         except (ValueError, AttributeError):
@@ -1596,7 +1596,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(
-                History.objects.select_related("parcel__establishment__company").prefetch_related(
+                Production.objects.select_related("parcel__establishment__company").prefetch_related(
                     "post_harvest_facilities"
                 ),
                 public_id=public_uuid,
@@ -1658,7 +1658,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         try:
             public_uuid = uuid_module.UUID(str(pk))
             history = get_object_or_404(
-                History.objects.select_related("product", "parcel__establishment__company"),
+                Production.objects.select_related("product", "parcel__establishment__company"),
                 public_id=public_uuid,
             )
         except (ValueError, AttributeError):
@@ -2233,7 +2233,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from carbon.models import CarbonEntry
 
         production = (
-            History.objects.select_related(
+            Production.objects.select_related(
                 "product",
                 "parcel__establishment__company",
                 "parcel__establishment",
@@ -2465,7 +2465,7 @@ def audit_export_by_uuid(request, public_id):
 
     from .services.audit_export_service import AuditExportService, OFPPMissingError, PhotoEmbedMisconfigurationError
 
-    production = get_object_or_404(History, public_id=public_id)
+    production = get_object_or_404(Production, public_id=public_id)
 
     # Permission check: user must belong to the production's company
     from users.models import WorksIn
@@ -2519,7 +2519,7 @@ def audit_export_by_uuid(request, public_id):
     from carbon.models import CarbonEntry
 
     production = (
-        History.objects.select_related(
+        Production.objects.select_related(
             "product",
             "parcel__establishment__company",
             "parcel__establishment",
@@ -2701,9 +2701,9 @@ class PublicHistoryScanViewSet(viewsets.GenericViewSet):
             try:
                 try:
                     pid = int(production_id)
-                    history = History.objects.select_related("parcel__establishment__company", "product").get(id=pid)
+                    history = Production.objects.select_related("parcel__establishment__company", "product").get(id=pid)
                 except (ValueError, TypeError):
-                    history = History.objects.select_related("parcel__establishment__company", "product").get(
+                    history = Production.objects.select_related("parcel__establishment__company", "product").get(
                         public_id=production_id
                     )
 
@@ -2711,7 +2711,7 @@ class PublicHistoryScanViewSet(viewsets.GenericViewSet):
                 if not history.published:
                     return Response({"error": "Production not publicly accessible"}, status=status.HTTP_403_FORBIDDEN)
 
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Bot detection and security checks
@@ -3835,7 +3835,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # (`parcel__establishment__...` vs the event path) and two gates that must agree about
             # ownership while spelling it differently is how they drift apart.
             history_parcel_id = (
-                History.objects.filter(id=explicit_history_id).values_list("parcel_id", flat=True).first()
+                Production.objects.filter(id=explicit_history_id).values_list("parcel_id", flat=True).first()
             )
             if history_parcel_id:
                 parcels = [history_parcel_id]
@@ -3902,10 +3902,10 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     history = None
                     raw = str(explicit_history_id).strip()
                     if raw.isdigit():
-                        history = History.objects.filter(id=int(raw), parcel=parcel).first()
+                        history = Production.objects.filter(id=int(raw), parcel=parcel).first()
                     else:
                         try:
-                            history = History.objects.filter(public_id=raw, parcel=parcel).first()
+                            history = Production.objects.filter(public_id=raw, parcel=parcel).first()
                         except (ValueError, ValidationError, DjangoValidationError):
                             history = None
                     if history is None:
@@ -3936,7 +3936,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     # ambiguous, REFUSE rather than guess — the same rule the numeric parser
                     # follows: a wrong record is worse than a rejected one.
                     open_seasons = list(
-                        History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date")
+                        Production.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date")
                     )
                     if len(open_seasons) > 1:
                         raise ValidationError(
@@ -4204,16 +4204,16 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             raw = str(raw_history).strip()
             history = None
             if raw.isdigit():
-                history = History.objects.filter(id=int(raw), parcel=parcel).first()
+                history = Production.objects.filter(id=int(raw), parcel=parcel).first()
             else:
                 try:
-                    history = History.objects.filter(public_id=raw, parcel=parcel).first()
+                    history = Production.objects.filter(public_id=raw, parcel=parcel).first()
                 except (ValueError, ValidationError, DjangoValidationError):
                     history = None
             if history is None:
                 raise ValidationError({"history": [f"No production {raw_history!r} on this parcel."]})
             return history
-        open_seasons = list(History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
+        open_seasons = list(Production.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
         if not open_seasons:
             raise ValidationError(
                 {
@@ -4331,7 +4331,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # raced its own original past the replay check above, so look again under it.
             locked = {
                 history.id: history
-                for history in History.objects.select_for_update()
+                for history in Production.objects.select_for_update()
                 .filter(id__in=sorted({history.id for _, history, _, _ in resolved}))
                 .order_by("id")
             }
@@ -4700,7 +4700,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # One query, and `company` is never reassigned after a note is created, so reading it here
         # and updating below cannot race.
         record_company_id = (
-            History.objects.filter(pk=event.history_id)
+            Production.objects.filter(pk=event.history_id)
             .values_list("parcel__establishment__company_id", flat=True)
             .first()
         )
@@ -5459,10 +5459,10 @@ class BuyerDocRequestViewSet(viewsets.GenericViewSet):
             return Response({"error": "Request blocked"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         try:
-            production = History.objects.select_related("parcel__establishment__company").get(
+            production = Production.objects.select_related("parcel__establishment__company").get(
                 public_id=production_public_id, published=True
             )
-        except (History.DoesNotExist, DjangoValidationError, ValueError):
+        except (Production.DoesNotExist, DjangoValidationError, ValueError):
             return Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = BuyerDocRequestCreateSerializer(data=request.data)
@@ -5603,10 +5603,10 @@ class SalesRecordViewSet(viewsets.GenericViewSet):
         from users.models import WorksIn
 
         try:
-            production = History.objects.select_related("parcel__establishment__company").get(
+            production = Production.objects.select_related("parcel__establishment__company").get(
                 public_id=production_public_id
             )
-        except (History.DoesNotExist, ValueError, DjangoValidationError):
+        except (Production.DoesNotExist, ValueError, DjangoValidationError):
             # ValueError/ValidationError cover malformed UUID strings.
             return None, Response({"error": "Production not found"}, status=status.HTTP_404_NOT_FOUND)
 

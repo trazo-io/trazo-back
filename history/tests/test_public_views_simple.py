@@ -5,7 +5,7 @@ Simple test for enhanced public views tracking functionality
 from django.contrib.sessions.backends.db import SessionStore
 from django.test import RequestFactory, TestCase
 
-from history.models import History
+from history.models import Production
 
 
 class SimplePublicViewsTestCase(TestCase):
@@ -16,7 +16,7 @@ class SimplePublicViewsTestCase(TestCase):
         self.factory = RequestFactory()
 
         # Create minimal production for testing
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Test Production", published=True, public_views=0, unique_visitors=0
         )
 

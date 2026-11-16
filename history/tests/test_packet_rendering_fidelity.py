@@ -93,7 +93,7 @@ class ClaimPrecisionTests(TestCase):
 
         from carbon.models import CropType
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel, Product
 
         company = Company.objects.create(name="Precision Co")
@@ -114,7 +114,7 @@ class ClaimPrecisionTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name="Apple"),
             crop_type=crop,
@@ -240,7 +240,7 @@ class HandlerFlagEscapingTests(TestCase):
 
         from carbon.models import CropType
         from company.models import Company, Establishment
-        from history.models import History, ProductionEvent
+        from history.models import Production, ProductionEvent
         from history.services.audit_export_service import AuditExportService
         from product.models import Parcel, Product
 
@@ -262,7 +262,7 @@ class HandlerFlagEscapingTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name="Apple"),
             crop_type=crop,
@@ -329,7 +329,7 @@ class AttachedDocumentIndexTests(TestCase):
 
         from carbon.models import CropType
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel, Product
 
         self.company = Company.objects.create(name="Docs Co")
@@ -350,7 +350,7 @@ class AttachedDocumentIndexTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name="Apple"),
             crop_type=crop,

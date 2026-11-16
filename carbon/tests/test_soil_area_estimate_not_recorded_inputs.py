@@ -128,13 +128,13 @@ class StoredAndServedSoilCarbon(TestCase):
 
     def setUp(self):
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel, Product
         from users.models import User
 
         user = User.objects.create_user(email="ac14soil@test.com", password="x")
         est = Establishment.objects.create(name="AC14", company=Company.objects.create(name="AC14 Co"), state="WA")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Gala 2026",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apples"),

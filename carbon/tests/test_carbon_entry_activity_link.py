@@ -18,7 +18,7 @@ from carbon.models import CarbonAuditLog, CarbonEntry
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from common.services import census
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent
+from history.models import PestManagementEvent, Production
 from product.models import Parcel
 
 
@@ -60,8 +60,8 @@ class _Farm(TestCase):
         company = Company.objects.create(name="Link Co")
         self.est = Establishment.objects.create(name="Link Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
-        self.season = History.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
-        self.other_season = History.objects.create(parcel=parcel, name="2025", start_date=timezone.now())
+        self.season = Production.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
+        self.other_season = Production.objects.create(parcel=parcel, name="2025", start_date=timezone.now())
         self.event = self._pest()
         self.other = self._pest()
         CarbonEntry.objects.all().delete()  # whatever the save receivers wrote

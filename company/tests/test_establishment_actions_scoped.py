@@ -18,7 +18,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from users.constants import PRODUCER
 from users.models import User, WorksIn
@@ -53,7 +53,7 @@ class EstablishmentActionsScopedTests(TestCase):
         cls.victim_co = Company.objects.create(name="Victim Farms")
         cls.victim_farm = Establishment.objects.create(name="Victim Farm", company=cls.victim_co)
         victim_parcel = Parcel.objects.create(name="Victim Parcel", establishment=cls.victim_farm, area=2.0)
-        History.objects.create(name="Victim Unpublished 2026", parcel=victim_parcel, published=False)
+        Production.objects.create(name="Victim Unpublished 2026", parcel=victim_parcel, published=False)
 
         cls.outsider_co = Company.objects.create(name="Outsider Co")
         cls.outsider = _admin_of(cls.outsider_co, "admin@outsider.example")
@@ -99,7 +99,7 @@ class EstablishmentActionsScopedTests(TestCase):
         """`?parcel=` and `?production=` resolve inside the URL's farm, so a foreign id 404s
         exactly like a missing one instead of confirming it exists."""
         victim_parcel = self.victim_farm.parcels.get()
-        victim_season = History.objects.get(parcel=victim_parcel)
+        victim_season = Production.objects.get(parcel=victim_parcel)
         probes = (
             ("get_charts_data", f"&parcel={victim_parcel.id}"),
             ("get_charts_data", f"&production={victim_season.id}"),

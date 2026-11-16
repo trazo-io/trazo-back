@@ -33,7 +33,7 @@ from django.utils import timezone
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from carbon.services.verified_emission_factors import VerifiedEmissionFactors
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -54,7 +54,7 @@ class NonAreaDrivenSubtypeCarbonTests(TestCase):
         product = Product.objects.create(name="Carrot")
         # ⚠️ Parcel.area is HECTARES (two-farm certifier sweep, 2026-08-20).
         parcel = Parcel.objects.create(name="BGB", establishment=establishment, area=PARCEL_HECTARES)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Carrots 2026",
             start_date=timezone.now(),
             product=product,

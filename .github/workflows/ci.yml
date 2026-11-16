@@ -1121,6 +1121,7 @@ jobs:
             backend.tests.test_private_records_storage \
             backend.tests.test_route_tenancy_declared \
             history.tests.test_productions_routes \
+            history.tests.test_model_is_called_production \
             backend.tests.test_flat_routes_fail_closed \
             company.tests.test_cross_tenant_routes \
             company.tests.test_company_tenant_isolation \

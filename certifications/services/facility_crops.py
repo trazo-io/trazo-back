@@ -44,9 +44,9 @@ def crops_for(facility) -> list[tuple[str, list[int]]]:
 
 def crops_by_facility(establishment) -> dict[int, list[tuple[str, list[int]]]]:
     """{facility id: [(crop, [years])]} for every facility of the farm, in one query."""
-    from history.models import History
+    from history.models import Production
 
-    through = History.post_harvest_facilities.through
+    through = Production.post_harvest_facilities.through
     links = through.objects.filter(
         postharvestfacility__establishment=establishment, history__parcel__establishment=establishment
     ).values_list("postharvestfacility_id", "history_id")
@@ -54,7 +54,7 @@ def crops_by_facility(establishment) -> dict[int, list[tuple[str, list[int]]]]:
     for facility_id, history_id in links:
         by_facility.setdefault(facility_id, set()).add(history_id)
     ids = {h for hs in by_facility.values() for h in hs}
-    productions = {p.pk: p for p in History.objects.filter(pk__in=ids).select_related("crop_type", "product")}
+    productions = {p.pk: p for p in Production.objects.filter(pk__in=ids).select_related("crop_type", "product")}
     return {fid: _group(productions[h] for h in hs if h in productions) for fid, hs in by_facility.items()}
 
 

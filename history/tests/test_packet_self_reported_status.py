@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import BusinessEvent, History
+from history.models import BusinessEvent, Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -50,7 +50,7 @@ class PacketSelfReportedStatusTests(TestCase):
             has_soil_contact=True,
         )
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,

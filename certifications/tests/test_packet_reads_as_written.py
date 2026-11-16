@@ -30,7 +30,7 @@ from certifications.services.osp_module_compiler import compile_module_contribut
 from certifications.services.osp_module_pdf import _packet_cover_pdf, generate_module_pdf
 from certifications.services.parcel_land_history import current_manager_row
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 from product.services.input_evidence import parcel_inputs
 from users.models import User
@@ -124,7 +124,7 @@ class CertifiedParcelPageTests(_Farm):
         self.assertEqual(row.declared, "Not asked: parcel stated certified")
 
     def test_a_fertilizer_is_named_by_its_event_type(self):
-        season = History.objects.create(
+        season = Production.objects.create(
             name="Season", parcel=self.parcel, start_date=datetime(2026, 3, 1, tzinfo=dt_tz.utc)
         )
         ChemicalEvent.objects.create(

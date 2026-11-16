@@ -25,7 +25,7 @@ from rest_framework.test import APITestCase
 from carbon.models import CarbonEntry
 from carbon.services.calculator_service import CarbonCalculatorService
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -38,7 +38,7 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
         cls.establishment = Establishment.objects.create(name="Basis Farm", company=cls.company, state="OR")
         cls.parcel = Parcel.objects.create(name="Upper Terrace", establishment=cls.establishment, area=5.0)
         cls.product = Product.objects.create(name="Onions")
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Onions 2026",
             start_date=timezone.now() - timedelta(days=200),
             finish_date=timezone.now() - timedelta(days=10),
@@ -103,10 +103,10 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
         # season recorded, so a 349,000 lb season was treated as 349,000 kg.
         result = CarbonCalculatorService().calculate_production_carbon(self.history.id)
         self.assertAlmostEqual(result.get("recorded_co2_kg_per_kg") or 0.0, 100.0 / 453.59237, places=4)
-        History.objects.filter(pk=self.history.pk).update(production_unit="boxes")
+        Production.objects.filter(pk=self.history.pk).update(production_unit="boxes")
         result = CarbonCalculatorService().calculate_production_carbon(self.history.id)
         self.assertEqual(result.get("recorded_co2_kg_per_kg"), 0.0, "boxes are not a mass; no per-kg figure")
-        History.objects.filter(pk=self.history.pk).update(production_unit="lb")
+        Production.objects.filter(pk=self.history.pk).update(production_unit="lb")
 
     def test_only_a_published_factor_counts_and_every_such_status_is_recognised(self):
         # Review of back #132: a denylist let "estimated" (a per-hour guess) into the buyer
@@ -140,12 +140,12 @@ class PublicCarbonCountsOnlyRecordedBasisTests(APITestCase):
                 row.delete()
 
     def test_a_metric_tonne_is_a_thousand_kilograms(self):
-        History.objects.filter(pk=self.history.pk).update(production_unit="t")
+        Production.objects.filter(pk=self.history.pk).update(production_unit="t")
         try:
             result = CarbonCalculatorService().calculate_production_carbon(self.history.id)
             self.assertAlmostEqual(result.get("recorded_co2_kg_per_kg") or 0.0, 100.0 / 1_000_000, places=7)
         finally:
-            History.objects.filter(pk=self.history.pk).update(production_unit="lb")
+            Production.objects.filter(pk=self.history.pk).update(production_unit="lb")
 
     def test_the_payload_carries_no_equivalents_and_no_blanket_attribution(self):
         payload = self._payload()

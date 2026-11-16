@@ -31,7 +31,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -43,7 +43,7 @@ class EventSubtypeValidationTests(TestCase):
         self.establishment = Establishment.objects.create(name="S1", company=self.company)
         self.parcel = Parcel.objects.create(name="SP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Subtype Production",
             start_date=timezone.now(),
             product=self.product,

@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -44,7 +44,7 @@ class CertifierReadinessTests(TestCase):
         self.client.force_authenticate(self.user)
 
     def _production(self, *, name, finished):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             start_date=timezone.now() - timezone.timedelta(days=200),
             finish_date=timezone.now() - timezone.timedelta(days=5) if finished else None,

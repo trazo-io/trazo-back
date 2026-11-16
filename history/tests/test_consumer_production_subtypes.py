@@ -24,7 +24,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.serializers import PublicHistorySerializer
 from history.services.claim_authority import may_publish_production_subtype
 from product.models import Parcel, Product
@@ -79,7 +79,7 @@ class WithheldSubtypesAreAbsentFromThePayloadTests(TestCase):
         est = Establishment.objects.create(name="SG1", company=company)
         parcel = Parcel.objects.create(name="Block 4", establishment=est, area=6)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Gate Production",
             start_date=timezone.now(),
             product=product,
@@ -155,7 +155,7 @@ class OwnerSeesWithheldSubtypesTests(TestCase):
         from django.utils import timezone
 
         from company.models import Company, Establishment
-        from history.models import History, ProductionEvent
+        from history.models import Production, ProductionEvent
         from product.models import Parcel, Product
 
         User = get_user_model()
@@ -164,7 +164,7 @@ class OwnerSeesWithheldSubtypesTests(TestCase):
         cls.user.companies.add(cls.company)
         est = Establishment.objects.create(name="ST1", company=cls.company, state="WA")
         parcel = Parcel.objects.create(name="STP1", establishment=est, area=5.0)
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Subtype Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apple"),
@@ -236,7 +236,7 @@ class CleanoutNoteNeverReachesAShopperOverHttpTests(TestCase):
         cls.stranger.companies.add(Company.objects.create(name="Some Other Farm"))
         est = Establishment.objects.create(name="CO1", company=company, state="WA")
         parcel = Parcel.objects.create(name="COP1", establishment=est, area=5.0)
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Cleanout Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Walnut"),
@@ -317,7 +317,7 @@ class ShopperEventCountsMatchWhatIsServedTests(TestCase):
         company = Company.objects.create(name="Count Farm")
         est = Establishment.objects.create(name="CF1", company=company, state="WA")
         parcel = Parcel.objects.create(name="CFP1", establishment=est, area=5.0)
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="Count Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apple"),

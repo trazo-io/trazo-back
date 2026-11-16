@@ -119,7 +119,7 @@ class ConditionalListingConsumerSurfaceTests(TestCase):
 
         from carbon.models import CropType
         from company.models import Company, Establishment
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Parcel, Product
 
         company = Company.objects.create(name="Cond Co")
@@ -140,7 +140,7 @@ class ConditionalListingConsumerSurfaceTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name="Apple"),
             crop_type=crop,

@@ -12,7 +12,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, SoilManagementEvent
+from history.models import Production, SoilManagementEvent
 from history.serializers import PublicHistorySerializer
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
@@ -40,7 +40,7 @@ class SoilAmendmentProductTests(TestCase):
         self.establishment = Establishment.objects.create(name="AE1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="AP", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Amend Production",
             start_date=timezone.now(),
             product=self.product,

@@ -16,7 +16,7 @@ from datetime import timezone as dt_timezone
 
 from django.test import TestCase
 
-from history.models import History
+from history.models import Production
 from history.serializers import HistoryWriteSerializer
 from product.views import ParcelViewSet
 
@@ -27,7 +27,7 @@ def _dt(y, m, d):
 
 class HistoryWriteSerializerFinishDateTests(TestCase):
     def _history(self, **kwargs):
-        return History(**kwargs)
+        return Production(**kwargs)
 
     def test_patch_finish_before_instance_start_rejected(self):
         instance = self._history(start_date=_dt(2026, 8, 9))
@@ -60,7 +60,7 @@ class FinalizationFinishDateTests(TestCase):
 
     def _errors(self, finish_raw, start):
         view = ParcelViewSet()
-        current = History(start_date=start)
+        current = Production(start_date=start)
         data = dict(self._BASE, finish_date=finish_raw)
         return view._validate_finalization_fields(data, current_history=current)
 

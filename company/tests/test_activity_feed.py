@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 
 from company import views as company_views
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -23,7 +23,7 @@ class ActivityFeedTests(TestCase):
         self.establishment = Establishment.objects.create(name="Feed Ranch", company=self.company, state="CA")
         product = Product.objects.create(name="Walnut")
         self.parcel = Parcel.objects.create(name="Block A", establishment=self.establishment, area=10.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1)
         )
         ProductionEvent.objects.create(
@@ -83,7 +83,7 @@ class ActivityFeedTests(TestCase):
         three events; `?parcel=` must return only the requested block's.
         """
         other_parcel = Parcel.objects.create(name="Block B", establishment=self.establishment, area=5.0)
-        other_history = History.objects.create(
+        other_history = Production.objects.create(
             name="2026 B",
             parcel=other_parcel,
             product=Product.objects.get(name="Walnut"),

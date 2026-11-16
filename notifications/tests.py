@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from company.models import Company
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 from reviews.models import Review
 

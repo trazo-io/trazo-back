@@ -25,7 +25,7 @@ from certifications.models import OrganicSystemPlan
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.renewal_land_table import land_table
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelCropHistory, Product
 
 from .test_renewal_packet_contents import _pdf_text
@@ -144,7 +144,7 @@ class SameLandHistoryAsTheParcelPageTests(_Farm):
         """Review of back #221: the table read the typed rows only, so a year with a logged season
         printed "no crop recorded" while the parcel's own page in the same packet showed the crop."""
         parcel = self._parcel("Season Block", currently_certified="yes", prior_certifier_name="CCOF")
-        History.objects.create(
+        Production.objects.create(
             name=f"{self.year} apples",
             parcel=parcel,
             product=Product.objects.create(name="Apples"),

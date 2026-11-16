@@ -9,7 +9,7 @@ Usage:
 from django.core.management.base import BaseCommand
 from django.db.models import Avg
 
-from history.models import History
+from history.models import Production
 from reviews.models import Review
 
 
@@ -29,7 +29,7 @@ class Command(BaseCommand):
         if production_id:
             # Update specific production
             try:
-                production = History.objects.get(id=production_id)
+                production = Production.objects.get(id=production_id)
                 old_reputation = production.reputation
                 production.update_reputation()
                 production.refresh_from_db()
@@ -37,11 +37,11 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.SUCCESS(f"Production {production_id}: " f"{old_reputation} → {production.reputation}")
                 )
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 self.stdout.write(self.style.ERROR(f"Production {production_id} not found"))
         else:
             # Update all productions with reviews
-            productions_with_reviews = History.objects.filter(reviews__isnull=False).distinct()
+            productions_with_reviews = Production.objects.filter(reviews__isnull=False).distinct()
 
             total = productions_with_reviews.count()
             updated = 0

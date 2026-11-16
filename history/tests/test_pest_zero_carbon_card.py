@@ -28,7 +28,7 @@ from django.utils import timezone
 from carbon.models import CarbonEntry
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent
+from history.models import PestManagementEvent, Production
 from history.serializers import PestManagementEventSerializer
 from history.signals import PEST_SUBTYPES_ZERO_IS_AN_ANSWER
 from product.models import Parcel, Product
@@ -47,7 +47,7 @@ class PestZeroCarbonCardTests(TestCase):
         product = Product.objects.create(name="Carrot")
         # ⚠️ Parcel.area is HECTARES (two-farm certifier sweep, 2026-08-20).
         parcel = Parcel.objects.create(name="BGA", establishment=establishment, area=7.527)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Carrots 2026",
             start_date=timezone.now(),
             product=product,

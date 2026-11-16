@@ -83,10 +83,10 @@ class PumpPlantSerializerTests(TestCase):
 
         class FakeEvent:
             def __init__(self, parcel):
-                class History:
+                class Production:
                     pass
 
-                self.history = History()
+                self.history = Production()
                 self.history.parcel = parcel
 
         attributes = EventCarbonCalculator._parcel_pump_attributes(FakeEvent(self.parcel))
@@ -101,10 +101,10 @@ class PumpPlantSerializerTests(TestCase):
 
         class FakeEvent:
             def __init__(self, parcel):
-                class History:
+                class Production:
                     pass
 
-                self.history = History()
+                self.history = Production()
                 self.history.parcel = parcel
 
         self.assertEqual(EventCarbonCalculator._parcel_pump_attributes(FakeEvent(bare)), {})

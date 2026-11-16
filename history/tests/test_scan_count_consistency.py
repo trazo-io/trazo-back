@@ -19,7 +19,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import COUNTED_SCAN_BOT_SCORE_MAX, History, HistoryScan
+from history.models import COUNTED_SCAN_BOT_SCORE_MAX, HistoryScan, Production
 from product.models import Parcel
 
 
@@ -31,7 +31,7 @@ class CountedScanDefinitionTests(TestCase):
         cls.company = Company.objects.create(name="Counted Co")
         cls.establishment = Establishment.objects.create(name="Counted Farm", company=cls.company)
         cls.parcel = Parcel.objects.create(name="Block A", establishment=cls.establishment, area=1)
-        cls.production = History.objects.create(name="Season 1", parcel=cls.parcel, start_date=timezone.now())
+        cls.production = Production.objects.create(name="Season 1", parcel=cls.parcel, start_date=timezone.now())
 
     def _scan(self, **kwargs):
         return HistoryScan.objects.create(history=self.production, **kwargs)
@@ -103,7 +103,7 @@ class ScanCountSurfacesAgreeTests(TestCase):
         cls.company = Company.objects.create(name="Agreement Co")
         cls.establishment = Establishment.objects.create(name="Agreement Farm", company=cls.company)
         cls.parcel = Parcel.objects.create(name="Block B", establishment=cls.establishment, area=1)
-        cls.production = History.objects.create(
+        cls.production = Production.objects.create(
             name="Season 1", parcel=cls.parcel, start_date=timezone.now(), published=True
         )
 

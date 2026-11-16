@@ -31,7 +31,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production
 from history.services.operation_audit_export_service import OperationAuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -95,7 +95,7 @@ class TheCardIsServedTheData(TestCase):
         self.establishment = Establishment.objects.create(name="S1", company=self.company, state="OR")
         self.parcel = Parcel.objects.create(name="SP1", establishment=self.establishment, area=5.0)
         self.user.companies.add(self.company)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Liberty 2026",
             start_date=timezone.now() - timezone.timedelta(days=120),
             product=Product.objects.create(name="Blueberries"),

@@ -261,10 +261,10 @@ class Company(models.Model):
         full allowance that resets a few weeks later. That is generous rather than harmful, and
         fixing it properly needs a subscription-anniversary concept, not a different date field.
         """
-        from history.models import History
+        from history.models import Production
 
         start_of_year = timezone.now().replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        return History.objects.filter(
+        return Production.objects.filter(
             parcel__establishment__company=self,
             created_at__gte=start_of_year,
         ).count()

@@ -23,7 +23,7 @@ from certifications.services.lot_code_key import key_rows, recorded_lot_ids
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 
 AT = "2026-11-07T12:00:00Z"
@@ -89,7 +89,7 @@ class _Plan(TestCase):
 
     def season(self, lot_id, finished):
         parcel, _ = Parcel.objects.get_or_create(name="Home Block", establishment=self.est, defaults={"area": 5.0})
-        return History.objects.create(
+        return Production.objects.create(
             name=f"Season {lot_id}",
             parcel=parcel,
             start_date=datetime(finished.year, 3, 1, tzinfo=dt_tz.utc),

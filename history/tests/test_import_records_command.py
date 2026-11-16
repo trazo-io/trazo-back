@@ -102,13 +102,13 @@ class ImportRecordsCommandTests(IntakeFarm):
     def test_commit_refuses_when_the_farm_changed_since_the_preview(self):
         """The file is unchanged, but the farm now has the parcel a refused row named: the row
         would load, and the grower never saw it loading. The preview must be re-filed."""
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         path = self._file()
         self._run(path, "--file-preview")
         fence = Parcel.objects.create(name="fence line N", establishment=self.farm, area=0.2)
-        History.objects.create(name="2026 fence", parcel=fence, product=self.product)
+        Production.objects.create(name="2026 fence", parcel=fence, product=self.product)
         with self.assertRaises(CommandError) as ctx:
             self._run(path, "--commit")
         self.assertIn("changed since the preview", str(ctx.exception))

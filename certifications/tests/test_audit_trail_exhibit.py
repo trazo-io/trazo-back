@@ -19,7 +19,7 @@ from certifications.services import common_osp_records
 from certifications.services.audit_trail_exhibit import document_table, sample_trail
 from certifications.services.osp_module_pdf import generate_osp_packet
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -42,7 +42,7 @@ class _ExhibitBase(TestCase):
 
     def _finished_season(self, lot_id="CBF-26-UT-01"):
         product = Product.objects.create(name="Blueberries")
-        return History.objects.create(
+        return Production.objects.create(
             name="2026 blueberries",
             parcel=self.parcel,
             product=product,
@@ -85,7 +85,9 @@ class DocumentTableTests(_ExhibitBase):
         self.assertIn("Harvest records", text)
         # A model field name on a certifier's page (2026-09-11). The link is the lot, said plainly.
         self.assertIn("Lot ID on the season record", text)
-        self.assertNotIn("History.lot_id", text)
+        # Any model field name, under whatever the model is called (`History.lot_id` until
+        # 2026-11-15, `Production.lot_id`, or the evidence map's `history.Production.lot_id`).
+        self.assertNotIn(".lot_id", text)
 
     def test_a_record_trazo_cannot_hold_leaves_the_link_for_the_operator(self):
         common_osp_records.confirm(self.osp, ["weigh_tickets"], user=self.user)

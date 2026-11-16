@@ -14,7 +14,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from history.services.cogpro_import import build_plan, detect_area, execute
 from product.models import Parcel, Product
 
@@ -138,7 +138,7 @@ class ExecuteTests(TestCase):
         company = Company.objects.create(name="Migrating Farm Co")
         establishment = Establishment.objects.create(name="Home Ranch", company=company, state="CA")
         parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=20.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Season",
             parcel=parcel,
             product=Product.objects.create(name="Walnut"),
@@ -353,7 +353,7 @@ class MechanicalWeedControlTests(TestCase):
         company = Company.objects.create(name="Organic Orchard Co")
         establishment = Establishment.objects.create(name="Home Ranch", company=company, state="CA")
         parcel = Parcel.objects.create(name="North Orchard", establishment=establishment, area=20.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Season", parcel=parcel, start_date=date(2026, 1, 1), type="OR"
         )
 
@@ -436,7 +436,7 @@ class NoColumnIsSilentlyDroppedTests(TestCase):
         company = Company.objects.create(name="Losing Nothing Co")
         establishment = Establishment.objects.create(name="Home Ranch", company=company, state="CA")
         parcel = Parcel.objects.create(name="North Orchard", establishment=establishment, area=20.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Season", parcel=parcel, start_date=date(2026, 1, 1), type="OR"
         )
 
@@ -528,7 +528,7 @@ class ProductionNameIsNotOverwrittenTests(TestCase):
         return OptimizedHistoryListSerializer(history).data
 
     def test_a_farmer_chosen_name_survives(self):
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Chandler Walnuts 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -539,7 +539,7 @@ class ProductionNameIsNotOverwrittenTests(TestCase):
 
     def test_an_unnamed_production_still_gets_a_readable_label(self):
         """The generated name remains the fallback — it was solving a real problem for blank names."""
-        history = History.objects.create(
+        history = Production.objects.create(
             name="",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -549,7 +549,7 @@ class ProductionNameIsNotOverwrittenTests(TestCase):
         self.assertEqual(self._serialize(history)["name"], "Walnut 2026")
 
     def test_the_generated_form_is_still_available(self):
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Chandler Walnuts 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Walnut"),
@@ -576,7 +576,7 @@ class StoredUnitsAreNotReplacedByDefaultsTests(TestCase):
         company = Company.objects.create(name="Units Co")
         establishment = Establishment.objects.create(name="Home Ranch", company=company, state="CA")
         parcel = Parcel.objects.create(name="North Orchard", establishment=establishment, area=20.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Season", parcel=parcel, start_date=timezone.make_aware(datetime(2026, 1, 1)), type="OR"
         )
 

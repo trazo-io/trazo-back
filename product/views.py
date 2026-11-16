@@ -360,7 +360,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         from django.db.models import Prefetch
 
         from carbon.models import CarbonEntry
-        from history.models import History
+        from history.models import Production
 
         establishments = self.company.establishment_set.all()
         parcel = get_object_or_404(
@@ -386,7 +386,9 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         current = parcel.current_history
         if current is None:
             current = (
-                History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date", "-id").first()
+                Production.objects.filter(parcel=parcel, finish_date__isnull=True)
+                .order_by("-start_date", "-id")
+                .first()
             )
             if current is not None:
                 parcel.current_history = current
@@ -397,7 +399,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         # Optimized query with prefetch to avoid N+1 queries
         current_history = (
-            History.objects.select_related("product", "operator", "crop_type", "parcel", "album")
+            Production.objects.select_related("product", "operator", "crop_type", "parcel", "album")
             .prefetch_related(
                 # Prefetch all event types with their albums
                 "history_productionevent_events__album__images",
@@ -454,13 +456,13 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         disagree about which they send. Falls back to `parcel.current_history` only when the
         parcel has exactly one open season — where the fallback cannot be wrong.
         """
-        from history.models import History
+        from history.models import Production
 
         raw = history_data.get("history") or history_data.get("production_id")
         raw = str(raw).strip() if raw is not None else ""
 
         if raw:
-            qs = History.objects.filter(parcel=parcel)
+            qs = Production.objects.filter(parcel=parcel)
             target = qs.filter(id=int(raw)).first() if raw.isdigit() else None
             if target is None and not raw.isdigit():
                 try:
@@ -479,7 +481,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 )
             return target
 
-        open_seasons = list(History.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
+        open_seasons = list(Production.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
         if len(open_seasons) > 1:
             return Response(
                 {
@@ -586,7 +588,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         Return a DRF-shaped error dict for any finalization field the model would reject,
         or None when everything is acceptable.
         """
-        from history.models import History
+        from history.models import Production
 
         errors = {}
 
@@ -595,7 +597,7 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             if value in (None, ""):
                 continue
             value = str(value)
-            field = History._meta.get_field(field_name)
+            field = Production._meta.get_field(field_name)
 
             max_length = getattr(field, "max_length", None)
             if max_length and len(value) > max_length:

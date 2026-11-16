@@ -16,7 +16,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company
-from history.models import History
+from history.models import Production
 from history.retention import RetentionConflict, assert_deletable
 from product.models import Establishment, Parcel
 
@@ -26,7 +26,7 @@ class RetentionCascadeGuardTests(TestCase):
         company = Company.objects.create(name="Cascade Co")
         est = Establishment.objects.create(name="Cascade Farm", company=company)
         parcel = Parcel.objects.create(name="Cascade Parcel", establishment=est, area=1)
-        History.objects.create(
+        Production.objects.create(
             parcel=parcel,
             name="Season",
             finish_date=timezone.now() - timedelta(days=1),
@@ -74,7 +74,7 @@ class RetentionCascadeGuardTests(TestCase):
         company = Company.objects.create(name="Draft Co")
         est = Establishment.objects.create(name="Draft Farm", company=company)
         parcel = Parcel.objects.create(name="Draft Parcel", establishment=est, area=1)
-        History.objects.create(parcel=parcel, name="Unfinished draft")
+        Production.objects.create(parcel=parcel, name="Unfinished draft")
         assert_deletable("parcel", parcel=parcel)  # must not raise
 
     def test_empty_container_does_not_block(self):

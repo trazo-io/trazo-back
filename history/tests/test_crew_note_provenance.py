@@ -32,7 +32,7 @@ from rest_framework.test import APIClient, APITestCase
 from company.models import Company
 from fieldnotes.models import CrewSender, FieldNote, FieldNoteConfirmation
 from fieldnotes.services.routing import APPLICATION, suggested_route
-from history.models import ChemicalEvent, GeneralEvent, History, PestManagementEvent, SoilManagementEvent
+from history.models import ChemicalEvent, GeneralEvent, PestManagementEvent, Production, SoilManagementEvent
 from history.services.crew_note_provenance import event_type_of, provenance_for
 from product.models import Establishment, Parcel
 
@@ -49,7 +49,7 @@ def _build(prefix, words=WORDS, kind=FieldNote.TEXT):
     user.companies.add(company, through_defaults={"role": "CA"})
     est = Establishment.objects.create(name=f"{prefix} CP Farm", company=company)
     parcel = Parcel.objects.create(name=f"{prefix} CP Parcel", establishment=est, area=1)
-    history = History.objects.create(parcel=parcel, name=f"{prefix} CP Season")
+    history = Production.objects.create(parcel=parcel, name=f"{prefix} CP Season")
     parcel.current_history = history
     parcel.save(update_fields=["current_history"])
     sender = CrewSender.objects.create(
@@ -164,7 +164,7 @@ class ProvenanceTests(_Crew):
 
     def test_the_buyer_page_never_carries_it(self):
         self.post()
-        History.objects.filter(pk=self.history.pk).update(published=True, is_outdoor=True)
+        Production.objects.filter(pk=self.history.pk).update(published=True, is_outdoor=True)
         self.history.refresh_from_db()
         res = APIClient().get(
             reverse("production-transparency-detail", kwargs={"production_public_id": str(self.history.public_id)})

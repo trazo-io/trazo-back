@@ -90,9 +90,9 @@ from history.models import (
     BusinessEvent,
     ChemicalEvent,
     GeneralEvent,
-    History,
     HistoryScan,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SalesRecord,
     SoilManagementEvent,
@@ -649,7 +649,7 @@ class Command(BaseCommand):
         product = self._resolve_product()
         crop = CropType.objects.filter(slug="walnuts").first()
 
-        History.objects.filter(parcel__establishment=est).delete()
+        Production.objects.filter(parcel__establishment=est).delete()
         self.stdout.write("  Cleared previous productions on this farm.")
 
         close_current = options["close_current"]
@@ -1012,7 +1012,7 @@ class Command(BaseCommand):
 
     def _create_production(self, parcel, block, year, product, crop, user, finished):
         """One block-season. `lot_id` is only assigned once the lot physically exists."""
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,
@@ -1058,7 +1058,7 @@ class Command(BaseCommand):
         definition of a scan total, which billing also reads — counts them: not duplicates, bot
         score 0. `date` is `auto_now_add`, so the backdating is a second write.
         """
-        published = list(History.objects.filter(parcel__establishment=est, published=True).order_by("id"))
+        published = list(Production.objects.filter(parcel__establishment=est, published=True).order_by("id"))
         if not published:
             return
 
@@ -1091,7 +1091,7 @@ class Command(BaseCommand):
             # packet then reports "N edit(s) recorded after production was finalized" — telling
             # an inspector to review corrective-action context for what is really a scan
             # counter. Analytics counters are not record edits and must not look like them.
-            History.objects.filter(pk=production.pk).update(
+            Production.objects.filter(pk=production.pk).update(
                 public_views=len(scans), unique_visitors=int(len(scans) * 0.72)
             )
             total += len(scans)
@@ -2041,7 +2041,7 @@ class Command(BaseCommand):
         """
         current_year = timezone.localdate().year
         current = (
-            History.objects.filter(parcel__establishment=est, start_date__year=current_year)
+            Production.objects.filter(parcel__establishment=est, start_date__year=current_year)
             .order_by("-start_date")
             .first()
         )
@@ -2075,10 +2075,10 @@ class Command(BaseCommand):
         from history.services.operation_readiness_service import OperationReadinessService
 
         production = (
-            History.objects.filter(parcel__establishment=est, published=True, finish_date__isnull=False)
+            Production.objects.filter(parcel__establishment=est, published=True, finish_date__isnull=False)
             .order_by("-finish_date")
             .first()
-            or History.objects.filter(parcel__establishment=est).order_by("-start_date").first()
+            or Production.objects.filter(parcel__establishment=est).order_by("-start_date").first()
         )
         if production is None:
             self.stdout.write(self.style.ERROR("  No production on this farm."))

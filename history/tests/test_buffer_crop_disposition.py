@@ -26,7 +26,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -82,7 +82,7 @@ class BufferDispositionPacketTests(TestCase):
         establishment = Establishment.objects.create(name="BF1", company=company)
         self.parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=42.5)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Buffer Production",
             start_date=timezone.now(),
             product=product,
@@ -238,7 +238,7 @@ class SplitOperationDeclarationTests(TestCase):
         company = Company.objects.create(name="Split Farm")
         self.establishment = Establishment.objects.create(name="SF1", company=company)
         self.parcel = Parcel.objects.create(name="Block 9", establishment=self.establishment, area=10.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Split Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Blueberries"),

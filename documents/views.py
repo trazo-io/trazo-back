@@ -128,9 +128,9 @@ class GeneratedDocumentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         if pk in (None, ""):
             return None
         if kind == "history":
-            from history.models import History
+            from history.models import Production
 
-            obj = History.objects.filter(pk=pk, parcel__establishment=establishment).first()
+            obj = Production.objects.filter(pk=pk, parcel__establishment=establishment).first()
         elif kind == "sales_record":
             from history.models import SalesRecord
 

@@ -171,7 +171,7 @@ class EmissionFactorBenchmarkTest(TestCase):
 
         from carbon.services.event_carbon_calculator import EventCarbonCalculator
         from company.models import Company, Establishment
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Parcel, Product
         from users.models import User
 
@@ -180,7 +180,7 @@ class EmissionFactorBenchmarkTest(TestCase):
         establishment = Establishment.objects.create(name="UREA1", company=company, state="CA")
         parcel = Parcel.objects.create(name="urea-parcel", establishment=establishment, area=1.0)
         product = Product.objects.create(name="Almond")
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Urea Production",
             start_date=timezone.now(),
             product=product,

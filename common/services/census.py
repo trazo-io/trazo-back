@@ -294,10 +294,10 @@ def _v1_preimage_order(history) -> List[List[Any]]:
 
 def _seal_facts() -> Dict[str, Any]:
     from carbon.tasks import build_blockchain_raw_data
-    from history.models import History
+    from history.models import Production
 
     seasons = {}
-    sealed = History.objects.filter(extra_data__has_key="finalization_hash").select_related("parcel__establishment")
+    sealed = Production.objects.filter(extra_data__has_key="finalization_hash").select_related("parcel__establishment")
     for history in sealed.order_by("pk"):
         extra = history.extra_data if isinstance(history.extra_data, dict) else {}
         # history.seals checks the seal at the version it was written with, in its own savepoint:

@@ -22,7 +22,7 @@ from certifications.services import national_list_citations as nlc
 from certifications.services.common_osp_workbooks import _material_comments, _material_manufacturer, _material_rows
 from certifications.services.plan_materials import plan_materials, unmatched_logged_materials
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 from users.models import User
 
@@ -88,7 +88,7 @@ class _Farm(TestCase):
         self.company = Company.objects.create(name="Rows Orchards LLC")
         self.est = Establishment.objects.create(name="Rows Orchard", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(name="Pears 2026", start_date=timezone.now(), parcel=parcel)
+        self.history = Production.objects.create(name="Pears 2026", start_date=timezone.now(), parcel=parcel)
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")
 
     def _apply(self, name, **fields):

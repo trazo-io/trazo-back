@@ -22,7 +22,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from history.serializers import SoilManagementEventSerializer
 from product.models import Parcel, Product
 from users.models import User
@@ -35,7 +35,7 @@ class LabAnalysisBase(TestCase):
         establishment = Establishment.objects.create(name="LF1", company=company, state="CA")
         parcel = Parcel.objects.create(name="lab-parcel", establishment=establishment, area=44.5)
         product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Lab Production",
             start_date=timezone.now(),
             product=product,

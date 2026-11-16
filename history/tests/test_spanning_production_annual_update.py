@@ -29,7 +29,7 @@ from django.test import TestCase
 from carbon.models import CropType
 from certifications.models import OrganicSystemPlan, OSPAnnualUpdate
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -81,7 +81,7 @@ class SpanningProductionAnnualUpdateTests(TestCase):
 
     def _season(self, start, finish):
         """An overwintered crop: sown in autumn, harvested the following summer."""
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,
@@ -135,7 +135,7 @@ class SpanningProductionAnnualUpdateTests(TestCase):
         self.assertNotIn("runs into", text)
 
     def _open_season(self, start, event_dates):
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,
@@ -179,7 +179,7 @@ class SpanningProductionAnnualUpdateTests(TestCase):
     def test_backwards_dates_do_not_produce_a_range(self):
         """A finish date before its start is malformed data, not a multi-year season."""
         self._update(2025)
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,

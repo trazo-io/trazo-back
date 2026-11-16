@@ -27,8 +27,8 @@ from history.models import (
     BusinessEvent,
     ChemicalEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -441,9 +441,9 @@ class Command(BaseCommand):
         self.stdout.write("  Certifications: USDA Organic (verified), GLOBALG.A.P. (self-reported)")
 
         # 8. Productions
-        avo_finished = History(
+        avo_finished = Production(
             name="Avocado Season 2024-2025",
-            type=History.ORCHARD,
+            type=Production.ORCHARD,
             start_date=self._dt(2024, 9, 1),
             finish_date=self._dt(2025, 7, 15),
             published=True,
@@ -483,9 +483,9 @@ class Command(BaseCommand):
         )
         avo_finished.save()
 
-        avo_current = History(
+        avo_current = Production(
             name="Avocado Season 2025-2026",
-            type=History.ORCHARD,
+            type=Production.ORCHARD,
             start_date=self._dt(2025, 9, 1),
             published=False,
             description=("Current avocado production season - early stage management."),
@@ -503,9 +503,9 @@ class Command(BaseCommand):
         )
         avo_current.save()
 
-        ora_finished = History(
+        ora_finished = Production(
             name="Orange Season 2024-2025",
-            type=History.ORCHARD,
+            type=Production.ORCHARD,
             start_date=self._dt(2024, 10, 1),
             finish_date=self._dt(2025, 8, 15),
             published=True,
@@ -540,9 +540,9 @@ class Command(BaseCommand):
         )
         ora_finished.save()
 
-        ora_current = History(
+        ora_current = Production(
             name="Orange Season 2025-2026",
-            type=History.ORCHARD,
+            type=Production.ORCHARD,
             start_date=self._dt(2025, 10, 1),
             published=False,
             description=(
@@ -563,9 +563,9 @@ class Command(BaseCommand):
         ora_current.save()
 
         # Almond productions
-        alm_finished = History(
+        alm_finished = Production(
             name="Almond Season 2024-2025",
-            type=History.ORCHARD,
+            type=Production.ORCHARD,
             start_date=self._dt(2024, 11, 1),
             finish_date=self._dt(2025, 10, 15),
             published=True,
@@ -601,9 +601,9 @@ class Command(BaseCommand):
         )
         alm_finished.save()
 
-        alm_current = History(
+        alm_current = Production(
             name="Almond Season 2025-2026",
-            type=History.ORCHARD,
+            type=Production.ORCHARD,
             start_date=self._dt(2025, 11, 1),
             published=False,
             description=("Current almond production season - dormant management " "and early spring preparation."),

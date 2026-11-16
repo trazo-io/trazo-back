@@ -28,7 +28,7 @@ from certifications.services.material_identity import (
     record_decision,
 )
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -38,7 +38,7 @@ PLANNED = "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
 
 def _history(est, user):
     parcel = Parcel.objects.create(name=f"P{est.pk}", establishment=est, area=1.0)
-    return History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+    return Production.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
 
 
 class _Farm(TestCase):

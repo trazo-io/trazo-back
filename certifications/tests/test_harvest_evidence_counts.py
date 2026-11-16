@@ -28,7 +28,7 @@ from certifications.osp_modules import MODULE_REGISTRY
 from certifications.services.common_osp_records import ANSWER_EVIDENCE, RECORD_TYPES_BY_KEY, derive_record_types
 from certifications.services.osp_module_pdf import generate_module_pdf
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from product.models import Parcel
 
 G61 = "g6_1_harvest_transport"
@@ -39,7 +39,7 @@ class _Farm(TestCase):
         self.company = Company.objects.create(name="Chelan Orchards")
         self.est = Establishment.objects.create(name="Chelan Orchard", company=self.company, state="WA")
         self.parcel = Parcel.objects.create(name="Block 7", establishment=self.est, area=10.0)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             name="2026 apples",
             parcel=self.parcel,
             start_date=datetime(2026, 3, 1, tzinfo=dt_tz.utc),
@@ -104,7 +104,7 @@ class BinCleaningTests(_Farm):
 
 class TransportTests(_Farm):
     def legacy_season(self):
-        return History.objects.create(
+        return Production.objects.create(
             name="2025 apples",
             parcel=self.parcel,
             start_date=datetime(2025, 3, 1, tzinfo=dt_tz.utc),

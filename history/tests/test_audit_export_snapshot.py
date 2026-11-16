@@ -17,7 +17,7 @@ from django.utils import timezone
 from reportlab.platypus import Table
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -30,7 +30,7 @@ class ComplianceSnapshotTests(TestCase):
         self.establishment = Establishment.objects.create(name="S1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Tomato")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="H1",
             start_date=timezone.now(),
             product=self.product,

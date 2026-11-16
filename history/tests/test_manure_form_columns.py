@@ -28,7 +28,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, SoilManagementEvent
+from history.models import Production, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -61,7 +61,7 @@ class ManureColumnsReachBothExportsTests(TestCase):
         establishment = Establishment.objects.create(name="MC1", company=company)
         parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=10)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Manure Production",
             start_date=timezone.now(),
             product=product,
@@ -180,7 +180,7 @@ class PlannedHarvestInsideIntervalTests(TestCase):
         establishment = Establishment.objects.create(name="IC1", company=company)
         parcel = Parcel.objects.create(name="Block 9", establishment=establishment, area=10)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Interval Production",
             start_date=timezone.now(),
             product=product,

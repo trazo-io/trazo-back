@@ -21,7 +21,7 @@ from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.osp_modules.schema import serialize_module
 from certifications.services.osp_module_pdf import generate_module_pdf
 from company.models import Company, Establishment
-from history.models import History, SoilManagementEvent
+from history.models import Production, SoilManagementEvent
 from product.models import Parcel
 from product.services.parcel_application_status import parcel_application_status
 
@@ -173,7 +173,7 @@ class OnTheModulePages(_Farm):
         self.assertIn("Hold the lot, notify the certifier, trace the source", text)
 
     def test_soil_and_tissue_tests_are_counted_under_the_answer(self):
-        history = History.objects.create(name="Block 2026", start_date=timezone.now(), parcel=self.parcel)
+        history = Production.objects.create(name="Block 2026", start_date=timezone.now(), parcel=self.parcel)
         SoilManagementEvent.objects.create(history=history, type="ST", date=timezone.now(), description="soil test")
         SoilManagementEvent.objects.create(
             history=history, type="LA", sample_matrix="soil", date=timezone.now(), description="soil lab"

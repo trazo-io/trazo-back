@@ -20,7 +20,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from subscriptions.models import Subscription, SubscriptionEvent, SubscriptionMonthlySnapshot, mrr_for
 
 
@@ -166,7 +166,7 @@ class Command(BaseCommand):
             month_start_dt = timezone.make_aware(datetime(month.year, month.month, 1))
             month_end_dt = timezone.make_aware(datetime(month_end.year, month_end.month, 1))
             active_productions = (
-                History.objects.filter(
+                Production.objects.filter(
                     parcel__establishment__company=company,
                     start_date__lt=month_end_dt,
                 )

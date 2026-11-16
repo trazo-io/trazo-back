@@ -20,7 +20,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from company.models import Company
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from history.services.audit_export_service import _purchase_row_note, _purchase_rows
 from history.services.multi_target import MAX_TARGETS
 from history.services.pur_export_service import PURExportService
@@ -34,7 +34,7 @@ def _parcel(establishment, name, season=True):
     parcel = Parcel.objects.create(name=name, establishment=establishment, area=5)
     history = None
     if season:
-        history = History.objects.create(parcel=parcel, name=f"{name} 2026", start_date=timezone.now())
+        history = Production.objects.create(parcel=parcel, name=f"{name} 2026", start_date=timezone.now())
         parcel.current_history = history
         parcel.save(update_fields=["current_history"])
     return parcel, history
@@ -263,7 +263,7 @@ class MultiParcelActivityTests(APITestCase):
         self.assertFalse(ChemicalEvent.objects.exists())
 
     def test_two_open_seasons_need_the_season_named(self):
-        second = History.objects.create(parcel=self.block_b, name="Block B 2027", start_date=timezone.now())
+        second = Production.objects.create(parcel=self.block_b, name="Block B 2027", start_date=timezone.now())
         targets = [{"parcel": self.block_a.id}, {"parcel": self.block_b.id}]
         res = self._post(self._spray(targets))
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
@@ -485,7 +485,7 @@ class OpenSeasonCountTests(APITestCase):
         farm = Establishment.objects.create(name="Count Farm", company=company)
         one, _ = _parcel(farm, "One")
         two, _ = _parcel(farm, "Two")
-        History.objects.create(parcel=two, name="Two 2027", start_date=timezone.now())
+        Production.objects.create(parcel=two, name="Two 2027", start_date=timezone.now())
         closed, history = _parcel(farm, "Closed")
         history.finish_date = timezone.now()
         history.save(update_fields=["finish_date"])

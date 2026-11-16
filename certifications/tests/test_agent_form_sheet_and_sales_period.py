@@ -35,7 +35,7 @@ from certifications.services.osp_fork import fork_plan
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.renewal_sales import SalesSubtotal
 from company.models import Company, Establishment
-from history.models import History, SalesRecord
+from history.models import Production, SalesRecord
 from product.models import Parcel
 from subscriptions.models import Plan, Subscription
 from users.models import User, WorksIn
@@ -57,7 +57,7 @@ class _Farm(TestCase):
             phone="(541) 555-0100",
         )
         self.parcel = Parcel.objects.create(name="Home Block", establishment=self.est, area=10.0)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             name="2026 apples",
             parcel=self.parcel,
             start_date=datetime(2025, 3, 15, tzinfo=dt_tz.utc),

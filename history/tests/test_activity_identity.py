@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from carbon.models import CarbonEntry
 from company.models import Company, Establishment
-from history.models import Activity, ChemicalEvent, GeneralEvent, History, ProductionEvent
+from history.models import Activity, ChemicalEvent, GeneralEvent, Production, ProductionEvent
 from history.services.records_export import export_establishment_records_zip
 from history.taxonomy import BY_SLUG
 from product.models import Parcel
@@ -27,7 +27,7 @@ class ActivityIdentityTests(TestCase):
         company = Company.objects.create(name="Identity Co")
         self.est = Establishment.objects.create(name="Identity Farm", company=company)
         self.parcel = Parcel.objects.create(name="North", establishment=self.est, area=1)
-        self.history = History.objects.create(parcel=self.parcel, name="2026")
+        self.history = Production.objects.create(parcel=self.parcel, name="2026")
 
     def _general(self, **kw):
         return GeneralEvent.objects.create(
@@ -147,7 +147,7 @@ class ActivityIdentityTests(TestCase):
         ProductionEvent.objects.create(history=self.history, type="HA", description="pick", date=timezone.now())
         seals.seal(self.history)
         call_command("clone_production", str(self.history.pk), stdout=io.StringIO())
-        clone = History.objects.exclude(pk=self.history.pk).get()
+        clone = Production.objects.exclude(pk=self.history.pk).get()
         originals = set(GeneralEvent.objects.filter(history=self.history).values_list("activity_id", flat=True))
         copies = set(GeneralEvent.objects.filter(history=clone).values_list("activity_id", flat=True))
         self.assertTrue(copies)

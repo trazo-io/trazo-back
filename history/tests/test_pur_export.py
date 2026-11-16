@@ -16,7 +16,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.pur_export_service import PUR_COLUMNS, PURExportService
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -36,7 +36,7 @@ class PURExportServiceTests(TestCase):
         )
         self.parcel = Parcel.objects.create(name="North Orchard", establishment=self.establishment, area=40.0)
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026 Oranges",
             start_date=timezone.now(),
             product=self.product,
@@ -470,7 +470,7 @@ class PURExportStateGateTests(TestCase):
         English `notes` sentence as its only rendering of a gap (untranslatable by construction)."""
         est = self._establishment("CA")
         parcel = Parcel.objects.create(name="Row 1", establishment=est, area=1.0)
-        history = History.objects.create(
+        history = Production.objects.create(
             name="Gate season",
             start_date=timezone.now(),
             product=Product.objects.create(name="Lemon"),

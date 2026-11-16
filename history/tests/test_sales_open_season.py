@@ -34,7 +34,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord, compute_retention_until
+from history.models import Production, ProductionEvent, SalesRecord, compute_retention_until
 from history.retention import latest_covered_record_created
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -62,7 +62,7 @@ class _OpenSeason(TestCase):
         )
         if finished:
             kwargs.update(finish_date=timezone.now() - timedelta(days=1), production_amount=600, lot_id="BB-27")
-        return History.objects.create(**kwargs)
+        return Production.objects.create(**kwargs)
 
     def _pick(self, season, days_ago, qty=300, unit="lb"):
         return ProductionEvent.objects.create(

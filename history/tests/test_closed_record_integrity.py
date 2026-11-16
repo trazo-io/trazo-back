@@ -20,7 +20,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company
-from history.models import History
+from history.models import Production
 from history.serializers import HistoryWriteSerializer
 from product.models import Establishment, Parcel
 
@@ -33,7 +33,7 @@ class ClosedRecordGuardTests(TestCase):
         cls.parcel = Parcel.objects.create(name="Guard Parcel", establishment=est, area=1)
 
     def _history(self, finished):
-        h = History.objects.create(
+        h = Production.objects.create(
             parcel=self.parcel,
             name="Season",
             lot_id="LOT-ORIGINAL",
@@ -153,9 +153,9 @@ class AmendmentDivergenceTests(TestCase):
         cls.delta = timedelta
 
     def _season(self, header_amount, picks, header_unit="lb", pick_unit="lbs", finished=True):
-        from history.models import History, ProductionEvent
+        from history.models import Production, ProductionEvent
 
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,

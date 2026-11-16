@@ -46,9 +46,12 @@ class HistoryIsProductionTests(TransactionTestCase):
         self.entries = LogEntry.objects.filter(content_type_id=self.content_type.pk, object_pk=str(self.season.pk))
 
     def test_the_names_are_the_new_ones(self):
-        from history.models import History, Production, ProductionPostHarvestFacility
+        from history import models as history_models
+        from history.models import Production, ProductionPostHarvestFacility
 
-        self.assertIs(History, Production)  # the alias every existing import still uses
+        # The alias old imports used, until the PR that deletes it. Read by name, so the guard against
+        # the old name in code (test_model_is_called_production) does not count this as a use.
+        self.assertIs(getattr(history_models, "History", None), Production)
         self.assertEqual(Production._meta.db_table, "history_history")
         self.assertEqual((self.content_type.app_label, self.content_type.model), ("history", "production"))
         link = ProductionPostHarvestFacility._meta

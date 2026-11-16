@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -47,7 +47,7 @@ class PacketPostCloseEditTests(TestCase):
         )
         product = Product.objects.create(name="Walnuts")
         # A BACKFILLED season: the season ended last year, the data entry happens now.
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=product,
             crop_type=crop,
@@ -116,7 +116,7 @@ class PacketPostCloseEditTests(TestCase):
         self.history.production_amount = 123.0
         self.history.save()
 
-        ct = ContentType.objects.get_for_model(History)
+        ct = ContentType.objects.get_for_model(Production)
         latest = LogEntry.objects.filter(content_type=ct, object_pk=str(self.history.pk)).order_by("-timestamp").first()
         latest.timestamp = latest.timestamp + timedelta(minutes=5)
         latest.save(update_fields=["timestamp"])

@@ -22,7 +22,7 @@ import datetime as dt
 from django.test import TestCase
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.serializers import (
     UpdateBusinessEventSerializer,
     UpdateChemicalEventSerializer,
@@ -63,7 +63,7 @@ class FarmerObservationPersistenceTests(TestCase):
         establishment = Establishment.objects.create(company=company, name="Dry Creek Home Ranch", state="CA")
         parcel = Parcel.objects.create(name="Block 4", establishment=establishment, area=15.62)
         product = Product.objects.create(name="Walnuts")
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             name="2024 Chandler Walnut Season",
             start_date=dt.datetime(2024, 2, 1, tzinfo=dt.timezone.utc),
             parcel=parcel,

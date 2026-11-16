@@ -21,7 +21,7 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
 from company.models import Company, Establishment
-from history.models import BusinessEvent, ChemicalEvent, GeneralEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import BusinessEvent, ChemicalEvent, GeneralEvent, Production, ProductionEvent, SoilManagementEvent
 from history.serializers import PublicHistorySerializer
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -155,7 +155,7 @@ class PublicSerializerSupplierLeakageTests(TestCase):
         self.establishment = Establishment.objects.create(name="L1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="LP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Leak Test Production",
             start_date=timezone.now(),
             product=self.product,
@@ -243,7 +243,7 @@ class PublicSerializerBusinessCarbonCreditsGatingTests(TestCase):
         self.establishment = Establishment.objects.create(name="B1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="BP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Biz Leak Test Production",
             start_date=timezone.now(),
             product=self.product,
@@ -355,7 +355,7 @@ class PublicSerializerSeedSupplierLeakageTests(TestCase):
         self.establishment = Establishment.objects.create(name="S1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="SP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Seed Leak Test Production",
             start_date=timezone.now(),
             product=self.product,
@@ -521,7 +521,7 @@ class PublicSerializerExtraDataLeakageTests(TestCase):
         self.establishment = Establishment.objects.create(name="X1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="XP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Extra Data Leak Test Production",
             start_date=timezone.now(),
             product=self.product,
@@ -667,7 +667,7 @@ class PublicSerializerF20LegalFieldLeakageTests(TestCase):
         self.establishment = Establishment.objects.create(name="F20E", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="F20P", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="F20 Legal Record Test",
             start_date=timezone.now(),
             product=self.product,
@@ -740,7 +740,7 @@ class PublicSerializerFPMOConsumerVisibilityTests(TestCase):
         self.establishment = Establishment.objects.create(name="FPMOE", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="FPMOP", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="FPMO Visibility Test",
             start_date=timezone.now(),
             product=self.product,
@@ -815,7 +815,7 @@ class PublicTransparencyContactLeakageTests(TestCase):
         )
         self.parcel = Parcel.objects.create(name="CLP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Contact Leak Production",
             start_date=timezone.now(),
             product=self.product,
@@ -865,7 +865,7 @@ class PublicSerializerNopTechnicalLeakageTests(TestCase):
         self.establishment = Establishment.objects.create(name="NT1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="NTP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="NopTech Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1015,7 +1015,7 @@ class PublicSerializerOperatorLeakageTests(TestCase):
 
         self.parcel = Parcel.objects.create(name="OP1", establishment=self.establishment, area=4.0)
         self.product = Product.objects.create(name="Hass Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Operator Leak Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1108,7 +1108,7 @@ class PublicSerializerDriftWarningLeakageTests(TestCase):
         self.establishment = Establishment.objects.create(name="D1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="DP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Drift Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1220,7 +1220,7 @@ class PublicSerializerWorkerNameAndLabBlobTests(TestCase):
         self.establishment = Establishment.objects.create(name="W1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="WP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Hass Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Worker Name Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1404,7 +1404,7 @@ class PublicSerializerForcePublicViewTests(TestCase):
         self.establishment = Establishment.objects.create(name="FP1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="FPP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="ForcePublic Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1516,7 +1516,7 @@ class OwnerRetainsOperatorDataTests(TestCase):
         self.establishment = Establishment.objects.create(name="OD1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="ODP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Hass Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="OwnerData Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1616,7 +1616,7 @@ class PublicSerializerSelfAttestedVerificationTests(TestCase):
         works_in.establishments_in_charge.add(self.establishment)
         self.parcel = Parcel.objects.create(name="SAP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Hass Avocado")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="SelfAttest Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1744,7 +1744,7 @@ class PublicPayloadFinalAuditTests(TestCase):
             },
         )
         self.product = Product.objects.create(name="Navel Orange")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Final Audit Production",
             start_date=timezone.now(),
             product=self.product,
@@ -1910,7 +1910,7 @@ class RecordIdIsOwnerOnlyTests(TestCase):
         from django.utils import timezone
 
         from company.models import Company, Establishment
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Parcel, Product
 
         User = get_user_model()
@@ -1919,7 +1919,7 @@ class RecordIdIsOwnerOnlyTests(TestCase):
         self.user.companies.add(self.company)
         est = Establishment.objects.create(name="RI1", company=self.company, state="WA")
         parcel = Parcel.objects.create(name="RIP1", establishment=est, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="RecordId Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apple"),
@@ -2008,7 +2008,7 @@ class TillageWireTests(TestCase):
         self.establishment = Establishment.objects.create(name="T1", company=self.company, state="OR")
         self.parcel = Parcel.objects.create(name="TP1", establishment=self.establishment, area=7.5)
         self.product = Product.objects.create(name="Spinach")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Tillage Production",
             start_date=timezone.now(),
             product=self.product,
@@ -2091,7 +2091,7 @@ class PublicFreeTextCommercialReferenceTests(TestCase):
         company = Company.objects.create(name="Ref Farm")
         est = Establishment.objects.create(name="R1", company=company, state="OR")
         parcel = Parcel.objects.create(name="RP1", establishment=est, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Ref Production",
             start_date=timezone.now(),
             product=Product.objects.create(name="Blueberries"),

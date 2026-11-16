@@ -20,7 +20,7 @@ import datetime
 
 from django.test import SimpleTestCase
 
-from history.models import History
+from history.models import Production
 from product.models import Product
 
 
@@ -31,25 +31,25 @@ class HistoryStrTests(SimpleTestCase):
     def test_a_production_with_no_start_date_does_not_raise(self):
         """The regression. This raised AttributeError, and auditlog turned that into a
         failed save rather than a bad label."""
-        self.assertIsInstance(str(History()), str)
+        self.assertIsInstance(str(Production()), str)
 
     def test_a_production_with_no_product_is_not_empty(self):
         """Precedence bug: the whole expression collapsed to "" without a product."""
-        text = str(History(start_date=self.START, finish_date=self.FINISH))
+        text = str(Production(start_date=self.START, finish_date=self.FINISH))
         self.assertNotEqual(text, "")
         self.assertIn("02/03/2025", text)
         self.assertIn("10/22/2025", text)
 
     def test_an_unfinished_production_reads_as_present(self):
-        text = str(History(start_date=self.START))
+        text = str(Production(start_date=self.START))
         self.assertIn("02/03/2025", text)
         self.assertIn("present", text)
 
     def test_a_complete_production_still_names_its_product(self):
         """Guards the guard: the null-safety must not have cost the normal label."""
-        text = str(History(start_date=self.START, finish_date=self.FINISH, product=Product(name="Walnuts")))
+        text = str(Production(start_date=self.START, finish_date=self.FINISH, product=Product(name="Walnuts")))
         self.assertEqual(text, "[ 02/03/2025 - 10/22/2025 ] - Walnuts")
 
     def test_an_empty_production_still_produces_something_printable(self):
-        text = str(History())
+        text = str(Production())
         self.assertTrue(text.strip(), "str(History()) is blank — auditlog would log an empty object_repr")

@@ -26,7 +26,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from history.services.claim_authority import (
     LABEL_BLOCKCHAIN_ABSENT,
     LABEL_INPUT_GROWER_REPORTED,
@@ -664,7 +664,7 @@ class LiveAnonymousPayloadSweepTests(TestCase):
         self.establishment = Establishment.objects.create(name="Claim Sweep Estate", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="CS1", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Claim Sweep Production",
             start_date=timezone.now(),
             product=self.product,
@@ -750,7 +750,7 @@ class NoClaimFromAGuessTests(TestCase):
         from django.utils import timezone
 
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel, Product
         from users.models import User
 
@@ -758,7 +758,7 @@ class NoClaimFromAGuessTests(TestCase):
         company = Company.objects.create(name="Guess Farm")
         est = Establishment.objects.create(name="Guess Field", company=company)
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="H",
             start_date=timezone.now(),
             product=Product.objects.create(name="Pear"),
@@ -1204,14 +1204,14 @@ class Run8TemplateSyncTests(_TestCase):
         from django.utils import timezone
 
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
         from users.models import User
 
         user = User.objects.create_user(email="r8tpl@test.com", password="x")
         est = Establishment.objects.create(name="Tpl", company=Company.objects.create(name="Tpl Co"), state="OR")
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
-        return History.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
+        return Production.objects.create(name="H", start_date=timezone.now(), parcel=parcel, operator=user)
 
 
 class OwnerSummaryNotCertifiedTests(TestCase):
@@ -1234,7 +1234,7 @@ class OwnerSummaryNotCertifiedTests(TestCase):
         est = Establishment.objects.create(name="SF1", company=company, state="OR")
         parcel = Parcel.objects.create(name="SFP1", establishment=est, area=5.0)
         product = Product.objects.create(name="Blueberries")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Summary Production",
             start_date=timezone.now(),
             product=product,

@@ -36,8 +36,8 @@ from history.models import (
     EquipmentEvent,
     EventAmendment,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SalesRecord,
     SoilManagementEvent,
@@ -106,10 +106,10 @@ def records_fingerprint_signals(establishment) -> dict:
     signals = {
         "establishment": _rows(Establishment.objects.filter(pk=est_id)),
         "parcels": _rows(Parcel.objects.filter(establishment_id=est_id)),
-        "productions": _count_and_max(History.objects.filter(parcel__establishment_id=est_id), "updated_at"),
+        "productions": _count_and_max(Production.objects.filter(parcel__establishment_id=est_id), "updated_at"),
     }
 
-    content_types = ContentType.objects.get_for_models(History, *EVENT_MODELS)
+    content_types = ContentType.objects.get_for_models(Production, *EVENT_MODELS)
     album_filter = Q()
     for model in EVENT_MODELS:
         rows = model.objects.filter(history__parcel__establishment_id=est_id)
@@ -122,8 +122,8 @@ def records_fingerprint_signals(establishment) -> dict:
         album_filter |= Q(gallery_id__in=rows.exclude(album__isnull=True).values("album_id"))
     signals["production_log"] = _jsonable(
         LogEntry.objects.filter(
-            content_type=content_types[History],
-            object_id__in=History.objects.filter(parcel__establishment_id=est_id).values("pk"),
+            content_type=content_types[Production],
+            object_id__in=Production.objects.filter(parcel__establishment_id=est_id).values("pk"),
         ).aggregate(latest=Max("timestamp"))["latest"]
     )
     signals["photos"] = _count_and_max(GalleryImage.objects.filter(album_filter), "updated_at")

@@ -14,7 +14,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from history.serializers import ProductionEventSerializer, UpdateProductionEventSerializer
 from product.models import Parcel, Product
 
@@ -25,7 +25,7 @@ class WS4FieldAddsTests(TestCase):
         self.establishment = Establishment.objects.create(name="WS4 Ranch", company=self.company, state="CA")
         product = Product.objects.create(name="Walnut")
         self.parcel = Parcel.objects.create(name="Block A", establishment=self.establishment, area=10.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="2026", parcel=self.parcel, product=product, start_date=date(2026, 3, 1)
         )
 

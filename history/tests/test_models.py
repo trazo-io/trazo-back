@@ -32,7 +32,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from carbon.models import CarbonEntry
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, EquipmentEvent, History, ProductionEvent
+from history.models import ChemicalEvent, EquipmentEvent, Production, ProductionEvent
 
 # Skip HistoryTranslation and QRCodeData imports - models not implemented
 from product.models import Parcel, Product
@@ -113,7 +113,7 @@ class ChemicalEventValidationTestCase(TestCase):
         self.product = Product.objects.create(name="Test Avocado")
 
         # Create History instance that ChemicalEvents will be attached to
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Test Chemical History",
             start_date=timezone.now(),
             product=self.product,
@@ -481,7 +481,7 @@ class EquipmentEventValidationTestCase(TestCase):
         self.product = Product.objects.create(name="Test Avocado")
 
         # Create History instance that EquipmentEvents will be attached to
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Test Equipment History",
             start_date=timezone.now(),
             product=self.product,
@@ -925,7 +925,7 @@ class ProductionEventValidationTestCase(TestCase):
         self.product = Product.objects.create(name="Organic Avocados")
 
         # Create test history for events
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             # History's owner field is `operator`, not `user`.
             operator=self.user,
             product=self.product,

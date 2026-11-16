@@ -25,7 +25,7 @@ from rest_framework.test import APITestCase
 
 from company.models import Company
 from fieldnotes.models import CrewSender, FieldNote
-from history.models import GeneralEvent, History
+from history.models import GeneralEvent, Production
 from product.models import Establishment, Parcel
 
 WORDS = "regamos el bloque 4 esta manana, dos horas"
@@ -41,7 +41,7 @@ class FieldNoteConfirmationTests(APITestCase):
             user.companies.add(company, through_defaults={"role": "CA"})
             est = Establishment.objects.create(name=f"{prefix} FN Farm", company=company)
             parcel = Parcel.objects.create(name=f"{prefix} FN Parcel", establishment=est, area=1)
-            history = History.objects.create(parcel=parcel, name=f"{prefix} FN Season")
+            history = Production.objects.create(parcel=parcel, name=f"{prefix} FN Season")
             parcel.current_history = history
             parcel.save(update_fields=["current_history"])
             sender = CrewSender.objects.create(

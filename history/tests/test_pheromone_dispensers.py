@@ -34,7 +34,7 @@ from carbon.utils.unit_converter import UnitConverter
 from carbon.views import OptimizedCarbonCalculator, OptimizedEventProcessor
 from common.field_registry import APPLICATION_METHOD, SCHOOLSITE_CODE_SUGGESTION, UNIT_VOLUME, is_count_unit
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.serializers import UpdateChemicalEventSerializer
 from history.services.audit_export_service import AuditExportService
 from history.services.pur_export_service import PURExportService
@@ -72,7 +72,7 @@ class _Orchard(TestCase):
             zip_code="93701",
         )
         self.parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Honeycrisp 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Apples"),

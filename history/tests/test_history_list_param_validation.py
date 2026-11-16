@@ -15,7 +15,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -29,7 +29,7 @@ class HistoryListParamValidationTests(TestCase):
         WorksIn.objects.create(user=self.owner, company=self.company, role="CA")
         self.parcel = Parcel.objects.create(name="PP1", establishment=self.establishment, area=3.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Params Production",
             start_date=timezone.now() - timedelta(days=30),
             product=self.product,

@@ -44,7 +44,7 @@ from certifications.services.osp_module_pdf import (
 )
 from certifications.services.osp_pdf_snapshot import generate_osp_snapshot_pdf
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from product.models import Parcel, ParcelCropHistory
 from users.models import User
 
@@ -81,7 +81,7 @@ class _Farm(TestCase):
         )
 
     def _season(self, name="Honeycrisp 2025", finish=datetime(2025, 9, 24, tzinfo=dt_tz.utc)):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             parcel=self.parcel,
             start_date=datetime(2025, 3, 15, tzinfo=dt_tz.utc),
@@ -345,7 +345,9 @@ class TheAuditExhibitTests(_Farm):
         rows = {row.name: row for row in document_table(self.est, self.osp)}
         self.assertIn("Invoice number + Lot ID", rows["Settlement statements"].linking_element)
         text = _text(_audit_trail_exhibit_pdf(self.osp))
-        self.assertNotIn("History.lot_id", text)
+        # Any model field name, under whatever the model is called (`History.lot_id` until
+        # 2026-11-15, `Production.lot_id`, or the evidence map's `history.Production.lot_id`).
+        self.assertNotIn(".lot_id", text)
         self.assertNotIn("one real lot", text)
 
 

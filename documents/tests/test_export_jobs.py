@@ -31,7 +31,7 @@ from documents.services.export_jobs import (
     reap_stale,
     run_worker_loop,
 )
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.services.records_fingerprint import records_fingerprint, records_fingerprint_signals
 from notifications.models import Notification
 from product.models import Parcel, Product
@@ -46,7 +46,7 @@ def _operation(name="Job Farm", with_plan=True):
     establishment = Establishment.objects.create(name=f"{name} Ranch", company=company, state="CA")
     parcel = Parcel.objects.create(name="Block A", establishment=establishment, area=12.0)
     product = Product.objects.create(name="Walnuts")
-    production = History.objects.create(
+    production = Production.objects.create(
         name="2026 Walnuts",
         start_date=timezone.now(),
         product=product,

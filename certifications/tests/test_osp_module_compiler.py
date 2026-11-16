@@ -81,12 +81,12 @@ class CompilerUnitTests(TestCase):
         """A derived row is Trazo's observation; the narrative is the producer's statement."""
         from datetime import date
 
-        from history.models import History, ProductionEvent
+        from history.models import Production, ProductionEvent
         from product.models import Parcel, Product
 
         product = Product.objects.create(name="Walnut")
         parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=10.0)
-        history = History.objects.create(name="2026", parcel=parcel, product=product, start_date=date(2026, 3, 1))
+        history = Production.objects.create(name="2026", parcel=parcel, product=product, start_date=date(2026, 3, 1))
         # A real date object: ProductionEvent.save() derives a harvest lot code from it.
         ProductionEvent.objects.create(history=history, type="HA", date=date(2026, 9, 15))
 

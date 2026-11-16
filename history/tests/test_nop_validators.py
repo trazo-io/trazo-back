@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SoilManagementEvent
+from history.models import Production, ProductionEvent, SoilManagementEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -30,7 +30,7 @@ class NOPSeedSearchValidatorTests(TestCase):
         self.establishment = Establishment.objects.create(name="Field A", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Tomato")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="H1",
             start_date=timezone.now(),
             product=self.product,
@@ -191,7 +191,7 @@ class NOPManureHarvestIntervalTests(TestCase):
             has_soil_contact=False,
         )
 
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Leafy history",
             start_date=timezone.now() - timedelta(days=200),
             product=self.product,

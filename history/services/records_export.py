@@ -115,8 +115,8 @@ def export_establishment_records_zip(establishment) -> bytes:
         BusinessEvent,
         ChemicalEvent,
         GeneralEvent,
-        History,
         PestManagementEvent,
+        Production,
         ProductionEvent,
         SalesRecord,
         SoilManagementEvent,
@@ -137,7 +137,7 @@ def export_establishment_records_zip(establishment) -> bytes:
         # stay in the column until the drop-the-column slice lands and leave this export now
         # (recordkeeping review F-10).
         "productions.csv": (
-            History.objects.filter(parcel__establishment=establishment),
+            Production.objects.filter(parcel__establishment=establishment),
             ("reputation", "confidence_score"),
         ),
         "sales_records.csv": SalesRecord.objects.filter(production__parcel__establishment=establishment),

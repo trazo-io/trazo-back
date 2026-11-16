@@ -7,7 +7,7 @@ from django.db import connection
 from django.test import RequestFactory, TestCase, TransactionTestCase
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 
 
@@ -44,7 +44,7 @@ class PublicViewsTrackingTestCase(TestCase):
         )
 
         # Create test production
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Test Production 2024",
             product=self.product,
             parcel=self.parcel,
@@ -201,7 +201,7 @@ class ConcurrentViewIncrementTests(TransactionTestCase):
         self.parcel = Parcel.objects.create(
             name="Test Parcel", establishment=self.establishment, product=self.product, area=1.0
         )
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Test Production 2024",
             product=self.product,
             parcel=self.parcel,

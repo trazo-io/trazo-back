@@ -15,7 +15,7 @@ from carbon.services.calculator import CarbonFootprintCalculator
 from carbon.services.emission_factors import emission_factors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, EquipmentEvent, History
+from history.models import ChemicalEvent, EquipmentEvent, Production
 from product.models import Parcel
 
 User = get_user_model()
@@ -114,7 +114,7 @@ class TestCarbonCalculations(TransactionTestCase):
             usda_factors_used=True,
         )
 
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             establishment=self.establishment,
             parcel=self.parcel,
             product="Oranges",

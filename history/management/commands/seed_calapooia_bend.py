@@ -64,7 +64,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -613,7 +613,7 @@ class Command(BaseCommand):
             )
             if "@crop_type" in row:
                 kwargs["crop_type"] = self._resolve_crop_type(row["@crop_type"])
-            history = self._stamp(History.objects.create(**kwargs), row)
+            history = self._stamp(Production.objects.create(**kwargs), row)
             linked = [facilities[f] for f in row.get("post_harvest_facilities", []) if f in facilities]
             if linked:
                 history.post_harvest_facilities.set(linked)
@@ -750,7 +750,7 @@ class Command(BaseCommand):
                 continue
             extra = dict(extra)
             extra.update(seal_fields(history))
-            History.objects.filter(pk=history.pk).update(extra_data=extra)
+            Production.objects.filter(pk=history.pk).update(extra_data=extra)
             history.extra_data = extra
             resealed += 1
         return resealed

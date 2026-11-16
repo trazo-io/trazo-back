@@ -19,7 +19,7 @@ from rest_framework.test import APIClient
 
 from certifications.models import Certification
 from company.models import Company, Establishment
-from history.models import BuyerDocRequest, History, HistoryScan
+from history.models import BuyerDocRequest, HistoryScan, Production
 from history.services.analytics_service import AnalyticsService
 from notifications.models import Notification
 from product.models import Parcel, Product
@@ -39,7 +39,7 @@ class _Base(TestCase):
         WorksIn.objects.create(user=self.owner, company=self.company, role="CA")
         self.parcel = Parcel.objects.create(name="RP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="ROI Production",
             start_date=timezone.now() - timedelta(days=90),
             finish_date=timezone.now() - timedelta(days=5),
@@ -179,7 +179,7 @@ class BuyerDocRequestTests(_Base):
         self.assertEqual(Notification.objects.filter(title="Buyer documentation request").count(), 1)
 
     def test_unpublished_production_rejected(self):
-        History.objects.filter(id=self.history.id).update(published=False)
+        Production.objects.filter(id=self.history.id).update(published=False)
         resp = self.client.post("/api/buyer_doc_requests/", self._payload(), format="json", HTTP_USER_AGENT=UA)
         self.assertEqual(resp.status_code, 404)
 

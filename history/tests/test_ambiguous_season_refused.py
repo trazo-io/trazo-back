@@ -22,7 +22,7 @@ from rest_framework.test import APITestCase
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, WeatherEvent
+from history.models import Production, WeatherEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -58,7 +58,7 @@ class AmbiguousSeasonTests(APITestCase):
         self.client.force_authenticate(self.user)
 
     def _season(self, name, days_ago, finished=False):
-        h = History.objects.create(
+        h = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,
@@ -143,7 +143,7 @@ class AmbiguousSeasonTests(APITestCase):
         """
         mine = self._season("Ridge 2025", 200)
         other_parcel = Parcel.objects.create(name="Creek", establishment=self.est, area=3.0)
-        theirs = History.objects.create(
+        theirs = Production.objects.create(
             parcel=other_parcel,
             product=self.product,
             crop_type=self.crop,
@@ -154,4 +154,4 @@ class AmbiguousSeasonTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, resp.data)
         self.assertIn("No production", str(resp.data))
         self.assertEqual(WeatherEvent.objects.count(), 0)
-        self.assertEqual(History.objects.filter(pk=mine.pk).count(), 1)
+        self.assertEqual(Production.objects.filter(pk=mine.pk).count(), 1)

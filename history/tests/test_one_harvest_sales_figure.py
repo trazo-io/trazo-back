@@ -30,7 +30,7 @@ from certifications.services.audit_trail_exhibit import (
     sample_trail,
 )
 from certifications.tests.test_audit_trail_exhibit import _ExhibitBase
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from history.services.storage_on_hand import on_hand_by_location
 from history.services.traceback import trace_sale
 from product.models import Product
@@ -51,7 +51,7 @@ class _Season(_ExhibitBase):
         )
         if finished:
             kwargs["finish_date"] = timezone.make_aware(datetime(2026, 10, 20))
-        return History.objects.create(**kwargs)
+        return Production.objects.create(**kwargs)
 
     def _pick(self, season, qty, unit="bins", day=14, **kw):
         return ProductionEvent.objects.create(
@@ -259,7 +259,7 @@ class ReviewOf448Tests(_Season):
 
     def test_the_header_gap_is_reported_across_lb_and_lbs(self):
         season = self._season()
-        History.objects.filter(pk=season.pk).update(production_amount=9000, production_unit="lb")
+        Production.objects.filter(pk=season.pk).update(production_amount=9000, production_unit="lb")
         self._pick(season, 6200, unit="lbs")
         self._pick(season, 3000, unit="lb", day=21)
         self._sale(season, 9200, unit="lb")

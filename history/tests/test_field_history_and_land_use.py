@@ -33,7 +33,7 @@ from django.utils import timezone
 
 from certifications.models import LandownerAffidavit
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService, _last_prohibited_input
 from product.models import Parcel, ParcelCropHistory, Product
 from users.models import User, WorksIn
@@ -153,7 +153,7 @@ class FieldHistoryPacketTests(TestCase):
         establishment = Establishment.objects.create(name="FH1", company=company)
         self.parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=10)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="FH Production",
             start_date=timezone.now(),
             product=product,

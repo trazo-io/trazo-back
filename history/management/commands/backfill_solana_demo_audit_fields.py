@@ -29,7 +29,7 @@ from history.models import (
     BusinessEvent,
     ChemicalEvent,
     GeneralEvent,
-    History,
+    Production,
     ProductionEvent,
     SalesRecord,
     SoilManagementEvent,
@@ -141,7 +141,7 @@ class Command(BaseCommand):
             return
 
         prod = (
-            History.objects.filter(parcel__establishment__company=company, published=True)
+            Production.objects.filter(parcel__establishment__company=company, published=True)
             .order_by("-finish_date", "-id")
             .first()
         )

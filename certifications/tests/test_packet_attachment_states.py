@@ -32,7 +32,7 @@ from certifications.services.packet_answers import _Answers, row_answer_state
 from certifications.services.packet_attachments import LABEL_REQUIREMENT, build_manifest, building
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
-from history.models import History, ProductionEvent, SalesRecord
+from history.models import Production, ProductionEvent, SalesRecord
 from product.models import Parcel, Product
 from subscriptions.testing import grant_compliance_exports
 from users.models import User, WorksIn
@@ -70,7 +70,7 @@ class _Farm(TestCase):
         return doc
 
     def _sold_season(self):
-        season = History.objects.create(
+        season = Production.objects.create(
             name="2026 blueberries",
             parcel=self.parcel,
             product=Product.objects.create(name="Blueberries"),
@@ -201,7 +201,7 @@ class UploadLinksAreValidatedTests(APITestCase):
         other_company = Company.objects.create(name="Other Co")
         other_est = Establishment.objects.create(name="Other Farm", company=other_company)
         other_parcel = Parcel.objects.create(name="Elsewhere", establishment=other_est, area=1.0)
-        season = History.objects.create(name="Other season", parcel=other_parcel)
+        season = Production.objects.create(name="Other season", parcel=other_parcel)
         self.foreign_sale = SalesRecord.objects.create(
             production=season, sale_date=date(2026, 8, 1), buyer_name="X", quantity=1, quantity_unit="lb"
         )

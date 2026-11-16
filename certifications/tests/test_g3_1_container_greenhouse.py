@@ -19,7 +19,7 @@ from certifications.osp_modules.conditions import visible_pages, visible_questio
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.structure_production import na_contradictions
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel
 
 G31 = MODULES_BY_KEY["g3_1_container_greenhouse"]
@@ -126,7 +126,7 @@ class NotApplicableTests(_Plan):
     def test_each_fact_that_says_otherwise_prints_a_review(self):
         self.parcel.container_production = True
         self.parcel.save(update_fields=["container_production"])
-        History.objects.create(name="Starts", start_date=timezone.now(), parcel=self.parcel, is_outdoor=False)
+        Production.objects.create(name="Starts", start_date=timezone.now(), parcel=self.parcel, is_outdoor=False)
         osp = self.plan(
             {
                 "g3_1_container_greenhouse": self.na(),

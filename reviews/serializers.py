@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from history.models import History
+from history.models import Production
 
 from .models import Review
 
@@ -52,7 +52,7 @@ class ListReviewSerializer(serializers.ModelSerializer):
 
 class ReviewSerializer(serializers.ModelSerializer):
     production_public_id = serializers.UUIDField(write_only=True, required=False)
-    production = serializers.PrimaryKeyRelatedField(queryset=History.objects.all(), required=False)
+    production = serializers.PrimaryKeyRelatedField(queryset=Production.objects.all(), required=False)
 
     class Meta:
         model = Review
@@ -87,8 +87,8 @@ class ReviewSerializer(serializers.ModelSerializer):
         if production_public_id and not data.get("production"):
             # Same rule as the integer path, including the author's carve-out on update.
             try:
-                data["production"] = self.validate_production(History.objects.get(public_id=production_public_id))
-            except (History.DoesNotExist, serializers.ValidationError):
+                data["production"] = self.validate_production(Production.objects.get(public_id=production_public_id))
+            except (Production.DoesNotExist, serializers.ValidationError):
                 raise serializers.ValidationError({"production_public_id": "Production not found."})
 
         if not data.get("production"):

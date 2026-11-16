@@ -20,7 +20,7 @@ from datetime import timezone as dt_tz
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from notifications.models import Notification
 from notifications.services import notification_service
 from reviews.models import Review
@@ -268,7 +268,7 @@ class Command(BaseCommand):
 
         # 2. Find finished productions for this user
         finished_productions = list(
-            History.objects.filter(
+            Production.objects.filter(
                 operator=user,
                 finish_date__isnull=False,
                 published=True,

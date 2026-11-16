@@ -35,9 +35,9 @@ from .models import (
     CommonEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     HistoryScan,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     ProductionPlanItem,
     SalesRecord,
@@ -1030,9 +1030,9 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         history = None
         raw_history = self.initial_data.get("history") if hasattr(self, "initial_data") else None
         if raw_history:
-            from history.models import History
+            from history.models import Production
 
-            history = History.objects.filter(pk=raw_history).select_related("parcel__establishment").first()
+            history = Production.objects.filter(pk=raw_history).select_related("parcel__establishment").first()
         if history is None and getattr(self, "instance", None) is not None:
             history = getattr(self.instance, "history", None)
         if history is not None and doc.establishment_id != history.parcel.establishment_id:
@@ -3019,7 +3019,7 @@ class OptimizedHistoryListSerializer(serializers.ModelSerializer):
     has_sale_record = serializers.SerializerMethodField()
 
     class Meta:
-        model = History
+        model = Production
         fields = [
             "id",
             "public_id",
@@ -3374,7 +3374,7 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
     class Meta:
-        model = History
+        model = Production
         fields = [
             "id",
             "crop_type_id",
@@ -3452,7 +3452,7 @@ class HistorySerializer(serializers.ModelSerializer):
     post_harvest_facilities_detail = serializers.SerializerMethodField()
 
     class Meta:
-        model = History
+        model = Production
         fields = [
             "id",
             "public_id",
@@ -3809,7 +3809,7 @@ class PublicHistoryListSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
 
     class Meta:
-        model = History
+        model = Production
         fields = ["id", "name", "product", "reputation", "image"]
 
     def get_image(self, history):
@@ -3831,7 +3831,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
     specimen = serializers.SerializerMethodField()
 
     class Meta:
-        model = History
+        model = Production
         fields = [
             "specimen",
             "public_id",
@@ -7110,9 +7110,9 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         history = None
         raw_history = self.initial_data.get("history") if hasattr(self, "initial_data") else None
         if raw_history:
-            from history.models import History
+            from history.models import Production
 
-            history = History.objects.filter(pk=raw_history).select_related("parcel__establishment").first()
+            history = Production.objects.filter(pk=raw_history).select_related("parcel__establishment").first()
         if history is None and getattr(self, "instance", None) is not None:
             history = getattr(self.instance, "history", None)
         if history is not None and doc.establishment_id != history.parcel.establishment_id:

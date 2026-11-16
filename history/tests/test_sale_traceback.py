@@ -17,7 +17,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SalesRecord
+from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent, SalesRecord
 from history.services.traceback import trace_sale
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -34,7 +34,7 @@ class _TraceBase(TestCase):
         self.client.force_authenticate(self.user)
 
     def _season(self, parcel=None, lot_id="CBF-26-UT-01", name="2026 blueberries"):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             parcel=parcel or self.parcel,
             product=Product.objects.create(name="Blueberries"),
@@ -551,7 +551,7 @@ class ReviewOf191Tests(_TraceBase):
     def test_a_season_without_a_parcel_does_not_crash(self):
         season = self._season()
         sale = self._sale(season)
-        History.objects.filter(pk=season.pk).update(parcel=None)
+        Production.objects.filter(pk=season.pk).update(parcel=None)
         sale.refresh_from_db()
         trace = trace_sale(sale).as_dict()
         self.assertEqual(trace["sale"]["documents"], [])

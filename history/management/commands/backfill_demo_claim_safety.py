@@ -58,8 +58,8 @@ from history.models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -253,7 +253,7 @@ class Command(BaseCommand):
                 changes += self._fix_osp(est)
                 for parcel in Parcel.objects.filter(establishment=est):
                     changes += self._fix_parcel(parcel, cfg)
-                    for history in History.objects.filter(parcel=parcel):
+                    for history in Production.objects.filter(parcel=parcel):
                         changes += self._fix_history(history, cfg)
                         changes += self._fix_events(history)
 

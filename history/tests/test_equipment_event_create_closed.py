@@ -18,7 +18,7 @@ from rest_framework.test import APITestCase
 
 from company.models import Company
 from history.constants import EQUIPMENT_EVENT_TYPE, GENERAL_EVENT_TYPE
-from history.models import EquipmentEvent, GeneralEvent, History
+from history.models import EquipmentEvent, GeneralEvent, Production
 from product.models import Establishment, Parcel
 from users.models import WorksIn
 
@@ -32,7 +32,7 @@ class EquipmentEventCreateClosedTests(APITestCase):
         est = Establishment.objects.create(name="Owner Farm", company=company)
         cls.parcel = Parcel.objects.create(name="North", establishment=est, area=1)
         cls.other_parcel = Parcel.objects.create(name="South", establishment=est, area=1)
-        cls.history = History.objects.create(parcel=cls.parcel, name="2026 Season")
+        cls.history = Production.objects.create(parcel=cls.parcel, name="2026 Season")
         cls.legacy = EquipmentEvent.objects.create(
             history=cls.history, type="MN", description="legacy maintenance", date=timezone.now()
         )

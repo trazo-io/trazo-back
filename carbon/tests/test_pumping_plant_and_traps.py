@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent, ProductionEvent
+from history.models import PestManagementEvent, Production, ProductionEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -38,7 +38,7 @@ class PumpingPlantTests(TestCase):
 
     def _production_on_parcel(self, **parcel_kwargs):
         parcel = Parcel.objects.create(name="pump-parcel", establishment=self.establishment, area=44.5, **parcel_kwargs)
-        return History.objects.create(
+        return Production.objects.create(
             name="Pump Production",
             start_date=timezone.now(),
             product=self.product,
@@ -121,7 +121,7 @@ class PumpingPlantExportTests(TestCase):
             pump_test_provider="Valley Pump Testing",
         )
         product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Pump Export Production",
             start_date=timezone.now(),
             product=product,
@@ -177,7 +177,7 @@ class VertebrateTrapTests(TestCase):
         establishment = Establishment.objects.create(name="TF1", company=company, state="CA")
         parcel = Parcel.objects.create(name="t-parcel", establishment=establishment, area=10.0)
         product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Trap Production",
             start_date=timezone.now(),
             product=product,

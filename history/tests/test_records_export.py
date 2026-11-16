@@ -18,7 +18,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, SoilManagementEvent
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -28,7 +28,7 @@ class RecordsExportTests(TestCase):
         self.company = Company.objects.create(name="Export Farm Co")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Export Season",
             start_date=timezone.now(),
             parcel=self.parcel,

@@ -105,10 +105,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from auditlog.models import LogEntry
 
-        from history.models import EventAmendment, History
+        from history.models import EventAmendment, Production
 
         with read_only_snapshot():
-            sealed = History.objects.filter(extra_data__has_key="finalization_hash").select_related(
+            sealed = Production.objects.filter(extra_data__has_key="finalization_hash").select_related(
                 "parcel__establishment__company"
             )
             if options["season"]:

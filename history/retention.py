@@ -46,11 +46,11 @@ def histories_in_retention(**lookup):
     `history/tests/test_record_retention.py` pins as deliberate. An unfinished season that HOLDS
     records is refused separately, by `unfinished_histories_holding_records` (OV-ST-C02).
     """
-    from history.models import History
+    from history.models import Production
 
     today = timezone.now().date()
     seasons = list(
-        History.objects.filter(retention_until__isnull=False, **lookup).select_related("parcel__establishment")
+        Production.objects.filter(retention_until__isnull=False, **lookup).select_related("parcel__establishment")
     )
     dates = effective_retention_dates(seasons)
     held = [(season, dates[season.pk]) for season in seasons if dates[season.pk] > today]
@@ -75,12 +75,12 @@ def unfinished_histories_holding_records(**lookup):
     """
     from django.db.models import Q
 
-    from history.models import History
+    from history.models import Production
 
     holds = Q()
     for relation in RECORD_RELATIONS:
         holds |= Q(**{f"{relation}__isnull": False})
-    return History.objects.filter(finish_date__isnull=True, published=False, **lookup).filter(holds).distinct()
+    return Production.objects.filter(finish_date__isnull=True, published=False, **lookup).filter(holds).distinct()
 
 
 def record_count(history):

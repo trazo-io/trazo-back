@@ -232,7 +232,7 @@ def _gallery_image_keys(image) -> List[str]:
 
 
 def plan(company) -> ClosurePlan:
-    from history.models import History
+    from history.models import Production
 
     collector, users, kept, gallery_ids, protected = _collect(company)
     files = _files(collector)
@@ -243,7 +243,7 @@ def plan(company) -> ClosurePlan:
         files=[(type(storage).__name__, name) for storage, name in files],
         deleted_users=[u.pk for u in users],
         kept_users=kept,
-        published_seasons=History.objects.filter(parcel__establishment__company=company, published=True).count(),
+        published_seasons=Production.objects.filter(parcel__establishment__company=company, published=True).count(),
         recordings_at_provider=_recordings(company).count(),
         collector=collector,
         galleries=gallery_ids,
@@ -388,7 +388,7 @@ def apply(company, confirm_name: str, run_by: str = "") -> dict:
     from auditlog.models import LogEntry
 
     from common.models import DataOperationLog
-    from history.models import History
+    from history.models import Production
 
     if confirm_name != company.name:
         raise ClosureRefused("The confirmation name does not match the company name exactly.")
@@ -408,7 +408,9 @@ def apply(company, confirm_name: str, run_by: str = "") -> dict:
     # Public pages first and outside the transaction: if anything below fails, the pages are still
     # down, which is what the policy says happens "straight away". Unpublishing is reversible; the
     # recordings are not, so they are released only after the rows are gone (below).
-    unpublished = History.objects.filter(parcel__establishment__company=company, published=True).update(published=False)
+    unpublished = Production.objects.filter(parcel__establishment__company=company, published=True).update(
+        published=False
+    )
     recording_refs = list(_recordings(company).values_list("provider_media_ref", flat=True))
 
     files = _files(p.collector)

@@ -26,7 +26,7 @@ from rest_framework.response import Response
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from product.views import ParcelViewSet
 
@@ -61,7 +61,7 @@ class FinishTargetResolutionTests(TestCase):
         self.parcel.save(update_fields=["current_history"])
 
     def _season(self, name, days_ago):
-        return History.objects.create(
+        return Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,
@@ -105,7 +105,7 @@ class FinishTargetResolutionTests(TestCase):
 
     def test_a_season_on_another_parcel_is_refused(self):
         other = Parcel.objects.create(name="Creek", establishment=self.parcel.establishment, area=6.8)
-        theirs = History.objects.create(
+        theirs = Production.objects.create(
             parcel=other,
             product=self.product,
             crop_type=self.crop,

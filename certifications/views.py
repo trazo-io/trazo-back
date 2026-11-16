@@ -3513,11 +3513,11 @@ def buyer_review_metadata(request, token):
         user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
     )
 
-    from history.models import History
+    from history.models import Production
 
     seasons = []
     qs = (
-        History.objects.filter(parcel__establishment=link.establishment)
+        Production.objects.filter(parcel__establishment=link.establishment)
         .select_related("product", "parcel")
         .order_by("-start_date")
     )

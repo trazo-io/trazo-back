@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from backend.permissions import CALLER_SCOPED, CompanyNestedViewSet, IsCompanyAdmin, scope_to_caller_companies
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from history.retention import assert_deletable
 from product.models import Parcel, Product
 from product.serializers import ProductListOptionsSerializer
@@ -309,7 +309,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         if production is not None:
             # Resolved inside the farm, so another company's season id 404s exactly like a missing one.
-            production = get_object_or_404(History.objects.filter(parcel__establishment=establishment), pk=production)
+            production = get_object_or_404(
+                Production.objects.filter(parcel__establishment=establishment), pk=production
+            )
             filter_kwargs["history__id"] = production.id
 
         return filter_kwargs
@@ -635,7 +637,9 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             filter_kwargs["production__product__id"] = product.id
 
         if production is not None:
-            production = get_object_or_404(History.objects.filter(parcel__establishment=establishment), pk=production)
+            production = get_object_or_404(
+                Production.objects.filter(parcel__establishment=establishment), pk=production
+            )
             filter_kwargs["production__id"] = production.id
 
         series_result = []
@@ -996,7 +1000,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Prefetch what `compliance_snapshot_rows` reads — all eight event tables and their photo
         # albums — so a season with photographs costs the same fixed set of queries as one without
         # (the service reads albums from the prefetch cache; unprefetched it is a query per event).
-        seasons = History.objects.select_related("parcel__establishment", "crop_type", "product").prefetch_related(
+        seasons = Production.objects.select_related("parcel__establishment", "crop_type", "product").prefetch_related(
             *(
                 f"history_{model}_events__album__images"
                 for model in (
@@ -1145,7 +1149,7 @@ class EstablishmentViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     Prefetch("parcels", queryset=Parcel.objects.select_related("establishment", "product")),
                     Prefetch(
                         "parcels__histories",
-                        queryset=History.objects.select_related("product", "crop_type").prefetch_related(
+                        queryset=Production.objects.select_related("product", "crop_type").prefetch_related(
                             "carbonentry_set",
                             "album__images",  # Correct album relationship
                             "history_productionevent_events",

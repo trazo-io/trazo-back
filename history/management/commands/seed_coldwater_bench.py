@@ -79,7 +79,7 @@ from django.utils import timezone
 
 from company.models import Establishment
 from history.constants import CHEMICAL_EVENT_TYPE
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent, SalesRecord, SoilManagementEvent
+from history.models import ChemicalEvent, GeneralEvent, Production, ProductionEvent, SalesRecord, SoilManagementEvent
 from product.models import Parcel, ParcelCropHistory, ParcelPlannedCrop, Product
 from users.models import User
 
@@ -775,7 +775,7 @@ class Command(BaseCommand):
                     f"CropType {block['crop']!r} missing. Run `populate_usda_crop_types --crops-only` first."
                 )
             product, _ = Product.objects.get_or_create(name=block["crop"])
-            history = History.objects.create(
+            history = Production.objects.create(
                 parcel=parcels[block["key"]],
                 product=product,
                 crop_type=crop_type,
@@ -1106,7 +1106,7 @@ class Command(BaseCommand):
             )
         records = []
         for target in targets:
-            history = History.objects.get(pk=target["history"])
+            history = Production.objects.get(pk=target["history"])
             fields = {k: v for k, v in target.items() if k not in multi_target.TARGET_ADDRESS_KEYS}
             validated = self._serializer_for({**shared, **fields}, history)
             extra = {"application_group": group} if group else {}
@@ -1158,7 +1158,7 @@ class Command(BaseCommand):
         several = len(tank.targets) > 1
         records = []
         for index, line, body in tank_mix.record_bodies(tank):
-            history = History.objects.get(pk=tank.targets[index]["history"])
+            history = Production.objects.get(pk=tank.targets[index]["history"])
             validated = self._serializer_for(body, history)
             extra = {"tank_mix_group": tank.tank_id, "tank_mix_line": line.number, "tank_mix_role": line.role}
             if several:
@@ -1492,4 +1492,4 @@ class Command(BaseCommand):
             parcel.current_history = None
             parcel.save(update_fields=["current_history"])
         for key in ("B1", "B2", "B4"):
-            seal(History.objects.get(pk=seasons[key].pk))
+            seal(Production.objects.get(pk=seasons[key].pk))

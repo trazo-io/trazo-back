@@ -21,8 +21,8 @@ from company.models import Company, Establishment
 from history.models import (
     ChemicalEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -146,7 +146,7 @@ class _SeveralParcels(APITestCase):
         cls.parcels, cls.seasons = [], []
         for name in ("North", "South", "East"):
             parcel = Parcel.objects.create(name=name, establishment=farm, area=4)
-            season = History.objects.create(parcel=parcel, name=f"{name} 2026", start_date=timezone.now())
+            season = Production.objects.create(parcel=parcel, name=f"{name} 2026", start_date=timezone.now())
             parcel.current_history = season
             parcel.save(update_fields=["current_history"])
             cls.parcels.append(parcel)

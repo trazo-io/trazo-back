@@ -22,7 +22,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import History, WeatherEvent
+from history.models import Production, WeatherEvent
 from history.services.audit_export_service import AuditExportService, _weather_magnitudes
 from product.models import Parcel, Product
 from users.models import User
@@ -93,7 +93,7 @@ class WeatherSectionRenderTests(TestCase):
         self.establishment = Establishment.objects.create(name="WE1", company=self.company, state="CA")
         self.parcel = Parcel.objects.create(name="W-parcel", establishment=self.establishment, area=10.0)
         self.product = Product.objects.create(name="Walnut")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Weather Production",
             start_date=timezone.now(),
             product=self.product,

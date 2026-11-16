@@ -59,11 +59,11 @@ def recorded_lot_ids(establishment, limit: int = 3) -> list:
     """Distinct lot numbers on the operation's production records, most recently finished first."""
     from django.db.models import F
 
-    from history.models import History
+    from history.models import Production
 
     seen, out = set(), []
     qs = (
-        History.objects.filter(parcel__establishment=establishment)
+        Production.objects.filter(parcel__establishment=establishment)
         .exclude(lot_id__isnull=True)
         .exclude(lot_id="")
         .order_by(F("finish_date").desc(nulls_last=True), "-pk")

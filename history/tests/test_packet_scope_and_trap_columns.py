@@ -22,7 +22,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -49,7 +49,7 @@ class PacketScopeAndTrapColumnTests(TestCase):
         self.establishment = Establishment.objects.create(name="S1", company=self.company, state="California")
         self.parcel = Parcel.objects.create(name="SP1", establishment=self.establishment, area=5.0)
         self.product = Product.objects.create(name="Almond")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="SH1",
             start_date=timezone.now(),
             product=self.product,

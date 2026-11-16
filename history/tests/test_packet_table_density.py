@@ -26,7 +26,7 @@ from django.utils import timezone
 from reportlab.platypus import Table
 
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -49,7 +49,7 @@ class PacketTableDensityTests(TestCase):
         est = Establishment.objects.create(name="D1", company=company, state="California")
         parcel = Parcel.objects.create(name="Block 1", establishment=est, area=10)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Density Production",
             start_date=timezone.now(),
             product=product,

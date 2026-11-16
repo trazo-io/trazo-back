@@ -24,7 +24,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from history.models import History
+from history.models import Production
 from history.services.cogpro_import import analyze, build_plan, execute
 
 
@@ -80,10 +80,10 @@ class Command(BaseCommand):
             if self.created_by is None:
                 raise CommandError(f"No account with email {options['created_by']!r}.")
             try:
-                production = History.objects.select_related("parcel__establishment__company").get(
+                production = Production.objects.select_related("parcel__establishment__company").get(
                     id=options["production"]
                 )
-            except History.DoesNotExist:
+            except Production.DoesNotExist:
                 raise CommandError(f"No production with id {options['production']}.")
             # The author must belong to the operation, as `import_records` requires: a migrated
             # record attributed to an outsider is the misattribution `created_by` exists to

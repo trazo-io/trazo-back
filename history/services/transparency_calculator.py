@@ -13,8 +13,8 @@ from ..models import (
     BusinessEvent,
     ChemicalEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -62,7 +62,7 @@ class TransparencyCalculator:
             for model in models
         )
 
-    def _ensure_prefetched(self, history: History) -> None:
+    def _ensure_prefetched(self, history: Production) -> None:
         """One bounded round of prefetching so the per-history loops below never hit the DB.
 
         A caller that prefetched already pays nothing; one that did not pays ~3 queries per
@@ -70,7 +70,7 @@ class TransparencyCalculator:
         """
         prefetch_related_objects([history], *self.event_prefetch_lookups())
 
-    def _events_of(self, history: History, event_model) -> list:
+    def _events_of(self, history: Production, event_model) -> list:
         """All events of one model for this history, from the prefetch cache."""
         return list(getattr(history, self._events_accessor(event_model)).all())
 
@@ -78,7 +78,7 @@ class TransparencyCalculator:
     #   IR, EM, TH = Production; PA, TI = Soil; TA = Pest
     #   All weather, business, general events
 
-    def calculate_transparency_score(self, history: History) -> Dict:
+    def calculate_transparency_score(self, history: Production) -> Dict:
         """FACTS about what a production logged, for the consumer QR page. Never a grade.
 
         The name stayed when the method stopped grading (2026-11-08): the QR view and the
@@ -103,7 +103,7 @@ class TransparencyCalculator:
             "category_breakdown": self._category_counts(history),
         }
 
-    def _category_counts(self, history: History) -> Dict:
+    def _category_counts(self, history: Production) -> Dict:
         """Per category: events logged, and how many carry a photo that passes the checks."""
         breakdown = {}
         for category_name, event_models in self.EVENT_CATEGORIES.items():
@@ -114,7 +114,7 @@ class TransparencyCalculator:
             }
         return breakdown
 
-    def _count_all_events(self, history: History) -> int:
+    def _count_all_events(self, history: Production) -> int:
         """Count all events across all categories for this production history"""
 
         total_events = 0
@@ -368,7 +368,7 @@ class TransparencyCalculator:
             # (temporal correlation is a bonus check, not mandatory)
             return True
 
-    def _get_farming_approach(self, history: History) -> str:
+    def _get_farming_approach(self, history: Production) -> str:
         """Determine farming approach from events and data"""
 
         # Check extra_data first

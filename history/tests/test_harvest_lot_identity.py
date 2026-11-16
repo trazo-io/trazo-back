@@ -15,7 +15,7 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from history.serializers import SalesRecordSerializer
 from product.models import Product
 
@@ -408,7 +408,7 @@ def _make_history(crop_name=""):
     so this is no longer a workaround.
     """
     product = Product.objects.create(name=crop_name) if crop_name else None
-    return History.objects.create(
+    return Production.objects.create(
         product=product,
         name="Test production",
         start_date=timezone.now(),

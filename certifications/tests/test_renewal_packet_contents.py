@@ -41,7 +41,7 @@ from certifications.models import (
 from certifications.services.osp_module_pdf import generate_module_pdf, generate_osp_packet
 from certifications.services.plan_review import plan_review
 from company.models import Company, Establishment
-from history.models import GeneralEvent, History
+from history.models import GeneralEvent, Production
 from product.models import Parcel, ParcelCropHistory, Product
 from users.models import User
 
@@ -223,7 +223,7 @@ class PacketCarriesTheFilingTests(_Farm):
 
 class PlanReviewTests(_Farm):
     def _season(self, name, start, finish=None, parcel=None):
-        return History.objects.create(name=name, parcel=parcel or self.parcel, start_date=start, finish_date=finish)
+        return Production.objects.create(name=name, parcel=parcel or self.parcel, start_date=start, finish_date=finish)
 
     def test_one_incident_on_several_parcels_is_counted_once(self):
         # One drift event logged on two parcels is two records sharing an application_group:
@@ -464,7 +464,7 @@ class PlanReviewTests(_Farm):
 
 class ParcelApplicationEvidenceTests(_Farm):
     def test_contamination_incident_prints_on_the_parcel_application(self):
-        s = History.objects.create(
+        s = Production.objects.create(
             name="Draper 2027",
             parcel=self.parcel,
             production_method="organic",
@@ -490,7 +490,7 @@ class ParcelApplicationEvidenceTests(_Farm):
         self.assertIn("Certifier notified 2027-05-11", text)
 
     def test_unnotified_incident_is_called_out(self):
-        s = History.objects.create(
+        s = Production.objects.create(
             name="Draper 2027", parcel=self.parcel, start_date=datetime(2027, 3, 1, tzinfo=dt_tz.utc)
         )
         GeneralEvent.objects.create(
@@ -523,7 +523,7 @@ class ParcelApplicationEvidenceTests(_Farm):
         carrots = Product.objects.create(name="Carrots")
         for y in (2023, 2024, 2025):
             ParcelCropHistory.objects.create(parcel=self.parcel, year=y, crop_grown="Blueberries ('Draper')")
-        s = History.objects.create(
+        s = Production.objects.create(
             name="Draper 2027",
             parcel=self.parcel,
             product=carrots,

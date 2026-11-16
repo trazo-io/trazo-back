@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from company.models import Company, Establishment
 from history.management.commands import diagnose_seals as cmd
-from history.models import ChemicalEvent, GeneralEvent, History
+from history.models import ChemicalEvent, GeneralEvent, Production
 from product.models import Parcel
 
 
@@ -26,7 +26,7 @@ class DiagnoseSealsTests(TransactionTestCase):
         self.parcel = Parcel.objects.create(name="North", establishment=est, area=1)
 
     def _season(self, name="2026"):
-        history = History.objects.create(parcel=self.parcel, name=name)
+        history = Production.objects.create(parcel=self.parcel, name=name)
         GeneralEvent.objects.create(history=history, name="g", description="general", date=timezone.now(), index=1)
         ChemicalEvent.objects.create(
             history=history,
@@ -40,7 +40,7 @@ class DiagnoseSealsTests(TransactionTestCase):
 
     def _seal(self, history, stored=None, at=None):
         current, count = history.compute_finalization_hash()
-        History.objects.filter(pk=history.pk).update(
+        Production.objects.filter(pk=history.pk).update(
             extra_data={
                 "finalization_hash": stored or current,
                 "finalization_event_count": count,
@@ -127,7 +127,7 @@ class DiagnoseSealsTests(TransactionTestCase):
         self._seal(history)
         extra = dict(history.extra_data)
         extra.pop("finalization_event_count")
-        History.objects.filter(pk=history.pk).update(extra_data=extra)
+        Production.objects.filter(pk=history.pk).update(extra_data=extra)
         GeneralEvent.objects.get(history=history).delete()
         report, _ = self._run(history)
         self.assertEqual(report["verdict"], "changed_after_seal")
@@ -148,7 +148,7 @@ class DiagnoseSealsTests(TransactionTestCase):
         """Prod 2026-11: 22 events on one index (22! orders). The seal was taken in insertion order;
         the database now returns another. Too many permutations to try, so the likely seal-time
         orders are tried by name."""
-        history = History.objects.create(parcel=self.parcel, name="wide tie")
+        history = Production.objects.create(parcel=self.parcel, name="wide tie")
         for i in range(9):
             GeneralEvent.objects.create(
                 history=history, name=f"g{i}", description=f"d{i}", date=timezone.now(), index=0
@@ -176,7 +176,7 @@ class DiagnoseSealsTests(TransactionTestCase):
         sealed_at = timezone.now() - timedelta(days=60)
         self._seal(history, stored="f" * 64, at=sealed_at)
         LogEntry.objects.all().delete()  # this season's events predate the log
-        other = History.objects.create(parcel=self.parcel, name="later season")
+        other = Production.objects.create(parcel=self.parcel, name="later season")
         GeneralEvent.objects.create(history=other, name="later", description="later", date=timezone.now())
         coverage = sealed_at + timedelta(days=50)
         LogEntry.objects.update(timestamp=coverage)

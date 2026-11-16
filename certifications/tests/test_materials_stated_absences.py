@@ -29,7 +29,7 @@ from certifications.osp_modules.materials_application import MATERIALS_APPLICATI
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.plan_materials import PlanMaterial, none_used_contradictions, plan_materials
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel
 
 
@@ -157,7 +157,7 @@ class NoneUsedTests(TestCase):
 
     def test_a_category_statement_over_logged_applications_is_flagged(self):
         parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=1.0)
-        history = History.objects.create(
+        history = Production.objects.create(
             parcel=parcel, name="Blueberries 2026", start_date=date(2026, 1, 1), published=False
         )
         ChemicalEvent.objects.create(

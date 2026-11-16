@@ -22,7 +22,7 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
 from company.models import Company, Establishment
-from history.models import History, PestManagementEvent
+from history.models import PestManagementEvent, Production
 from history.serializers import PublicHistorySerializer
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
@@ -61,7 +61,7 @@ class IdentifierIsProducerAndCertifierOnly(TestCase):
         self.user = User.objects.create_user(email="pestid@test.com", password="x")
         self.company = Company.objects.create(name="Identifier Farm")
         establishment = Establishment.objects.create(name="ID1", company=self.company, state="WA")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Gala 2026",
             start_date=timezone.now(),
             product=Product.objects.create(name="Apples"),

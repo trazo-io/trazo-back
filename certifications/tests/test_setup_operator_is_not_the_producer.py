@@ -26,7 +26,7 @@ from certifications.models import OrganicSystemPlan, OSPAnnualUpdate
 from certifications.services.annual_update_filing import default_signer_name
 from certifications.services.osp_module_pdf import _packet_cover_pdf, _renewal_context
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services import audit_export_service as audit_mod
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
@@ -104,7 +104,7 @@ class AttestationTests(_AssistedSetupFarm):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name="Apples"),
             crop_type=crop,
@@ -143,7 +143,7 @@ class AttestationTests(_AssistedSetupFarm):
         self.assertNotIn("Trazo setup", text)
 
     def test_a_season_operator_who_is_the_grower_is_still_named(self):
-        History.objects.filter(pk=self.history.pk).update(operator=self.grower)
+        Production.objects.filter(pk=self.history.pk).update(operator=self.grower)
         self.history.refresh_from_db()
         self.assertIn("John Doe", self._attestation_text())
 

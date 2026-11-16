@@ -28,7 +28,7 @@ from certifications.services.common_osp_workbooks import (
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.plan_materials import none_used_contradictions, unmatched_logged_materials
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, Production, ProductionEvent, SoilManagementEvent
 from product.models import Parcel
 from users.models import User, WorksIn
 
@@ -47,7 +47,7 @@ class _Farm(TestCase):
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         self.est = Establishment.objects.create(name="Aids Orchard", company=self.company, state="CA")
         parcel = Parcel.objects.create(name="North Block", establishment=self.est, area=4.0)
-        self.history = History.objects.create(name="Almonds 2026", start_date=timezone.now(), parcel=parcel)
+        self.history = Production.objects.create(name="Almonds 2026", start_date=timezone.now(), parcel=parcel)
         self.osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")
         self.client = APIClient()
         self.client.force_authenticate(self.user)

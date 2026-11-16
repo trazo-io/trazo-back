@@ -28,7 +28,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from company.models import Company, Establishment
-from history.models import BusinessEvent, History
+from history.models import BusinessEvent, Production
 from history.serializers import PublicHistorySerializer
 from history.services.claim_authority import (
     _PUBLISHABLE_CERTIFICATION_TYPES,
@@ -101,7 +101,7 @@ class WithheldCertificationDoesNotReachTheAnonymousPayloadTests(TestCase):
         establishment = Establishment.objects.create(name="CG1", company=company)
         parcel = Parcel.objects.create(name="Block 3", establishment=establishment, area=5)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Cert Gate Production",
             start_date=timezone.now(),
             product=product,

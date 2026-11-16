@@ -64,13 +64,13 @@ class NormalizationOnSaveTests(TestCase):
 
     def _make_history(self):
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         company = Company.objects.create(name="Orchard Co")
         establishment = Establishment.objects.create(name="Home Ranch", company=company, country="US", state="CA")
         parcel = Parcel.objects.create(name="North", establishment=establishment, area=10.0)
-        return History.objects.create(parcel=parcel, name="2026 Season"), parcel
+        return Production.objects.create(parcel=parcel, name="2026 Season"), parcel
 
     def test_every_event_type_normalizes_on_save(self):
         from django.utils import timezone
@@ -124,15 +124,15 @@ class KnownBlockIdsForParcelTests(TestCase):
 
     def setUp(self):
         from company.models import Company, Establishment
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         company = Company.objects.create(name="Orchard Co")
         establishment = Establishment.objects.create(name="Home Ranch", company=company, country="US", state="CA")
         self.parcel = Parcel.objects.create(name="North", establishment=establishment, area=10.0)
         self.other_parcel = Parcel.objects.create(name="South", establishment=establishment, area=8.0)
-        self.history = History.objects.create(parcel=self.parcel, name="2026")
-        self.other_history = History.objects.create(parcel=self.other_parcel, name="2026")
+        self.history = Production.objects.create(parcel=self.parcel, name="2026")
+        self.other_history = Production.objects.create(parcel=self.other_parcel, name="2026")
 
     def _add(self, block_id, history=None, model=None):
         from django.utils import timezone

@@ -33,7 +33,7 @@ from common.services import account_closure
 from company.models import Company
 from documents.models import GeneratedDocument
 from fieldnotes.models import FieldNote
-from history.models import History
+from history.models import Production
 from product.models import Establishment, Parcel
 from users.models import WorksIn
 
@@ -73,7 +73,7 @@ class AccountClosureTests(TestCase):
         GalleryImage.objects.filter(pk=photo.pk).update(s3_key="gallery_images/raw-upload.jpg")
         self.album_id = album.pk
         # Inside the five-year window: the product refuses to delete this season record by record.
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             parcel=parcel,
             name="2026 apples",
             finish_date=timezone.now() - timedelta(days=30),
@@ -141,7 +141,7 @@ class AccountClosureTests(TestCase):
         with self.assertRaisesMessage(CommandError, "No closure export"):
             self._apply()
         self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
-        self.assertTrue(History.objects.get(pk=self.season.pk).published)
+        self.assertTrue(Production.objects.get(pk=self.season.pk).published)
 
     def test_apply_refuses_a_wrong_name(self):
         self._export()
@@ -172,7 +172,7 @@ class AccountClosureTests(TestCase):
         deleted_media, _ = self._apply()
 
         self.assertFalse(Company.objects.filter(pk=self.company.pk).exists())
-        self.assertFalse(History.objects.filter(pk=season_pk).exists())
+        self.assertFalse(Production.objects.filter(pk=season_pk).exists())
         self.assertFalse(User.objects.filter(pk=owner_pk).exists())
         self.assertFalse(Gallery.objects.filter(pk=self.album_id).exists(), "the album outlived its record")
         self.assertFalse(FieldNote.objects.filter(pk=self.note.pk).exists())
@@ -220,7 +220,7 @@ class AccountClosureTests(TestCase):
                         stdout=io.StringIO(),
                     )
         self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
-        self.assertFalse(History.objects.get(pk=self.season.pk).published)
+        self.assertFalse(Production.objects.get(pk=self.season.pk).published)
         # Review of #398: the recording is deleted only after the rows are, never before.
         deleted.assert_not_called()
 
@@ -244,7 +244,7 @@ class AccountClosureTests(TestCase):
         with self.assertRaisesMessage(CommandError, "changed since the export"):
             self._apply()
         self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
-        self.assertTrue(History.objects.get(pk=self.season.pk).published, "refused before anything changed")
+        self.assertTrue(Production.objects.get(pk=self.season.pk).published, "refused before anything changed")
 
     def test_exports_are_purged_after_thirty_days(self):
         self._export()

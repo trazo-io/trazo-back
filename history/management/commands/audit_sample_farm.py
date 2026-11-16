@@ -59,11 +59,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from history.models import History, ProductionEvent, SalesRecord
+        from history.models import Production, ProductionEvent, SalesRecord
 
         try:
-            history = History.objects.select_related("parcel", "product", "crop_type").get(id=options["production"])
-        except History.DoesNotExist:
+            history = Production.objects.select_related("parcel", "product", "crop_type").get(id=options["production"])
+        except Production.DoesNotExist:
             self.stderr.write(self.style.ERROR(f"No production with id {options['production']}"))
             return
 

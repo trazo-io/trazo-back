@@ -24,7 +24,7 @@ from certifications.models import Certification, CertifierAccessLink, OrganicSys
 from common.models import DataOperationLog
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
-from history.models import History
+from history.models import Production
 from history.services.operation_readiness_service import OperationReadinessService
 from notifications.models import Notification
 from product.models import Parcel
@@ -45,7 +45,7 @@ COUNTED_MODELS = (
     Establishment,
     DataOperationLog,
     Parcel,
-    History,
+    Production,
     Certification,
     OrganicSystemPlan,
     GeneratedDocument,

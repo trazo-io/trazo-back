@@ -165,11 +165,11 @@ def parcel_inputs(parcel) -> List[InputRecord]:
 
 def season_spans(parcel, inputs: Optional[List[InputRecord]] = None) -> List[SeasonSpan]:
     """The seasons logged on this parcel, with their exact span and how many dated inputs they hold."""
-    from history.models import History
+    from history.models import Production
 
     inputs = inputs if inputs is not None else parcel_inputs(parcel)
     out: List[SeasonSpan] = []
-    for season in History.objects.filter(parcel=parcel).order_by("start_date", "pk"):
+    for season in Production.objects.filter(parcel=parcel).order_by("start_date", "pk"):
         start, end = _day(season.start_date), _day(season.finish_date)
         count = sum(1 for r in inputs if r.season_id == season.pk)
         out.append(SeasonSpan(season.name or "Season", start, end, count))

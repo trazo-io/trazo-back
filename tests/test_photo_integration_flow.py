@@ -25,7 +25,7 @@ from common.models import Gallery, GalleryImage
 
 TODAY = timezone.now().date()
 from common.serializers import GalleryImageSerializer, GallerySerializer
-from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, Production, ProductionEvent, SoilManagementEvent
 
 
 def _make_farm_photo(width=800, height=600):
@@ -82,7 +82,7 @@ class TestPhotoUploadToEvent(TestCase):
         Expected: Gallery created, GalleryImage stored, event linked.
         """
         # Create a minimal production + event
-        history = History.objects.create()
+        history = Production.objects.create()
         event = ProductionEvent.objects.create(
             history=history,
             index=0,
@@ -142,7 +142,7 @@ class TestPhotoUploadToEvent(TestCase):
         Chemical events (Tier 1) require 2+ photos for full verification.
         Simulate adding a second photo.
         """
-        history = History.objects.create()
+        history = Production.objects.create()
         gallery = Gallery.objects.create()
 
         # First photo already exists
@@ -363,7 +363,7 @@ class TestPhotoUploadToEvent(TestCase):
         """
         Events support up to 5 photos. Verify gallery handles multiple images.
         """
-        history = History.objects.create()
+        history = Production.objects.create()
         gallery = Gallery.objects.create()
 
         for i in range(5):

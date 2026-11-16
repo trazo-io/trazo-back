@@ -31,7 +31,7 @@ from django.utils import timezone
 from rest_framework import serializers as drf_serializers
 
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -106,7 +106,7 @@ class SoilEventCustomFieldsRoundTripTests(TestCase):
         establishment = Establishment.objects.create(name="SC1", company=company)
         parcel = Parcel.objects.create(name="Block 2", establishment=establishment, area=3)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Soil CF Production",
             start_date=timezone.now(),
             product=product,

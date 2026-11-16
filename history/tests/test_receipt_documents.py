@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from company.models import Company, Establishment
 from documents.models import GeneratedDocument
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from history.serializers import UpdateChemicalEventSerializer
 from product.models import Parcel
 
@@ -31,7 +31,7 @@ class ReceiptDocumentTests(TestCase):
         self.company = Company.objects.create(name="Receipt Farm")
         self.establishment = Establishment.objects.create(name="Main", company=self.company)
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=5.0)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Receipt Season",
             start_date=timezone.now(),
             parcel=self.parcel,

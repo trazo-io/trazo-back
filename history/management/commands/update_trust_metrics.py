@@ -10,7 +10,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from history.models import History
+from history.models import Production
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +36,12 @@ class Command(BaseCommand):
 
         # Get productions to update
         if production_id:
-            productions = History.objects.filter(id=production_id)
+            productions = Production.objects.filter(id=production_id)
             if not productions.exists():
                 self.stderr.write(f"❌ Production with ID {production_id} not found")
                 return
         else:
-            productions = History.objects.all()
+            productions = Production.objects.all()
 
         total_count = productions.count()
         self.stdout.write(f"📊 Found {total_count} productions to process")

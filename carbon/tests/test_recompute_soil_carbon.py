@@ -32,7 +32,7 @@ from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from common.models import DataOperationLog
 from common.services import census
 from company.models import Company, Establishment
-from history.models import EventAmendment, History, SoilManagementEvent
+from history.models import EventAmendment, Production, SoilManagementEvent
 from product.models import Parcel, Product
 from users.models import User
 
@@ -93,7 +93,7 @@ class _RecomputeFixture:
 
     # -- builders --------------------------------------------------------------------
     def _season(self, name):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             start_date=timezone.now(),
             product=Product.objects.create(name="Blueberries"),
@@ -402,7 +402,7 @@ class Apply(RecomputeSoilCarbonBase):
     def test_the_event_rows_and_the_season_are_untouched(self):
         events = [self.tillage, self.lab, self.fueled]
         before = {e.pk: model_to_dict(SoilManagementEvent.objects.get(pk=e.pk)) for e in events}
-        updated_before = History.objects.get(pk=self.history.pk).updated_at
+        updated_before = Production.objects.get(pk=self.history.pk).updated_at
         has_updated_at = hasattr(SoilManagementEvent, "updated_at")
         stamps = {e.pk: SoilManagementEvent.objects.get(pk=e.pk).updated_at for e in events} if has_updated_at else {}
 
@@ -414,7 +414,7 @@ class Apply(RecomputeSoilCarbonBase):
             self.assertEqual(model_to_dict(fresh), before[e.pk], "a farmer-entered field changed")
             if has_updated_at:
                 self.assertEqual(fresh.updated_at, stamps[e.pk])
-        self.assertEqual(History.objects.get(pk=self.history.pk).updated_at, updated_before)
+        self.assertEqual(Production.objects.get(pk=self.history.pk).updated_at, updated_before)
 
     def test_only_carbon_tables_are_ever_written(self):
         with CaptureQueriesContext(connection) as queries:

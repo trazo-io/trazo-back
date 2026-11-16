@@ -35,7 +35,7 @@ from rest_framework.test import APITestCase
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent, SoilManagementEvent
+from history.models import Production, ProductionEvent, SoilManagementEvent
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -65,7 +65,7 @@ class PostHarvestContinuationTests(APITestCase):
         self.product = Product.objects.create(name="Onions")
         # Lifted and closed 40 days ago; the lot is still shipping from the shed.
         self.finish = timezone.now() - timedelta(days=40)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,
@@ -149,7 +149,7 @@ class PostHarvestContinuationTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN, res.data)
 
     def test_an_open_season_is_not_touched_by_this_rule(self):
-        open_season = History.objects.create(
+        open_season = Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,

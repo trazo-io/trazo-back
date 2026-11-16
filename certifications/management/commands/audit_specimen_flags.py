@@ -44,7 +44,7 @@ from django.core.management.base import BaseCommand
 
 from certifications.models import Certification
 from company.models import Establishment
-from history.models import History
+from history.models import Production
 
 #: Substrings in a name, contact address or description that suggest seeded data. A PROMPT TO
 #: LOOK, not a verdict — real farms are called "Test Valley" and real people use example.com in
@@ -72,7 +72,7 @@ class Command(BaseCommand):
         rows = []
 
         for establishment in Establishment.objects.filter(is_demo=False).select_related("company"):
-            published = History.objects.filter(parcel__establishment=establishment, published=True).count()
+            published = Production.objects.filter(parcel__establishment=establishment, published=True).count()
             if not published and not include_unpublished:
                 continue
 

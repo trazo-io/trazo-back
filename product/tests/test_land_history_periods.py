@@ -20,7 +20,7 @@ from certifications.models import OrganicSystemPlan
 from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
 from certifications.services.osp_module_pdf import generate_module_pdf
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelCropHistory, Product
 from product.services.land_history import land_history_rows
 from users.models import User, WorksIn
@@ -143,7 +143,7 @@ class SectionFPrintsTheColumns(_Parcel):
         self.assertIn("planting: seed, GMO, treated (Cruiser 5FS)", self.page())
 
     def test_a_year_from_season_records_prints_the_months_its_seasons_cover(self):
-        History.objects.create(
+        Production.objects.create(
             name="Squash 2025",
             parcel=self.parcel,
             product=Product.objects.create(name="Squash"),
@@ -173,7 +173,7 @@ class ReviewFindingsOn383(_Parcel):
 
     def test_an_open_season_dated_after_today_adds_no_months(self):
         today = timezone.now()
-        History.objects.create(
+        Production.objects.create(
             name="Garlic (planned)",
             parcel=self.parcel,
             product=Product.objects.create(name="Garlic"),

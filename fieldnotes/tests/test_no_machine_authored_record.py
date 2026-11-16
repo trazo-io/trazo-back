@@ -22,7 +22,7 @@ from django.utils import timezone
 
 from company.models import Company
 from fieldnotes.models import CrewSender, FieldNote
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent
+from history.models import ChemicalEvent, GeneralEvent, Production, ProductionEvent
 from product.models import Establishment, Parcel
 
 APP = Path(__file__).resolve().parent.parent
@@ -107,7 +107,7 @@ class APendingNoteProducesNoRecord(TestCase):
         self.user.companies.add(self.company)
         self.establishment = Establishment.objects.create(name="Rule Farm", company=self.company)
         self.parcel = Parcel.objects.create(name="Block 4", establishment=self.establishment, area=2)
-        self.history = History.objects.create(parcel=self.parcel, name="2026 season")
+        self.history = Production.objects.create(parcel=self.parcel, name="2026 season")
         self.sender = CrewSender.objects.create(
             company=self.company,
             establishment=self.establishment,

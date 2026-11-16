@@ -267,7 +267,7 @@ class ConsumerClaimValidator:
         Evaluate the organic-claim status for a History (production).
 
         Args:
-            history: history.models.History instance. Must have parcel + establishment
+            history: history.models.Production instance. Must have parcel + establishment
                      loaded (caller is responsible — this service does no queries on
                      those relations beyond what Django lazy-loads).
 

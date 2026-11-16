@@ -23,7 +23,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent
+from history.models import ChemicalEvent, Production, ProductionEvent
 from history.services.phi_check import inside_phi, season_conflicts
 from product.models import Parcel, Product
 from users.models import User, WorksIn
@@ -45,7 +45,7 @@ class _Farm(TestCase):
         WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
         self.est = Establishment.objects.create(name="PHI Orchard", company=self.company, state="WA")
         self.parcel = Parcel.objects.create(name="Upper Terrace", establishment=self.est, area=4.0)
-        self.season = History.objects.create(
+        self.season = Production.objects.create(
             parcel=self.parcel,
             product=Product.objects.create(name="Blueberries"),
             name="Blueberries 2026",
@@ -105,7 +105,7 @@ class SeasonConflictTests(_Farm):
         self.assertEqual({c.pick_id for c in season_conflicts(self.season)}, {buffer_pick.pk, unnamed_block.pk})
 
     def test_another_productions_pick_does_not_count(self):
-        other = History.objects.create(
+        other = Production.objects.create(
             parcel=self.parcel, product=self.season.product, name="Second planting", start_date=self._at(3, 1)
         )
         self._spray(10, 7)

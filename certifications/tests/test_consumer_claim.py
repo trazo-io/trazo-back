@@ -23,7 +23,7 @@ from certifications.services.consumer_claim_validator import (
     filter_certifications_for_consumer,
 )
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, ParcelCropHistory, Product
 from users.models import User
 
@@ -37,7 +37,7 @@ class ConsumerClaimValidatorTests(TestCase):
         self.product = Product.objects.create(name="Tomato")
 
     def _make_history(self, production_method="conventional"):
-        return History.objects.create(
+        return Production.objects.create(
             name="H",
             start_date=timezone.now(),
             product=self.product,

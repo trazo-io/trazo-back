@@ -27,7 +27,7 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from history.models import History
+from history.models import Production
 
 
 class ProductionMethodVocabularyTests(SimpleTestCase):
@@ -44,7 +44,7 @@ class ProductionMethodVocabularyTests(SimpleTestCase):
         benefit claim — the 16 CFR 260.6 category. The fix is to stop offering it, not to
         legitimise it by widening the model.
         """
-        self.assertNotIn("sustainable", dict(History.PRODUCTION_METHOD_CHOICES))
+        self.assertNotIn("sustainable", dict(Production.PRODUCTION_METHOD_CHOICES))
 
     def test_form_offers_exactly_the_model_vocabulary(self):
         """The guard with teeth — reads the actual dropdown out of trazo-app."""
@@ -66,7 +66,7 @@ class ProductionMethodVocabularyTests(SimpleTestCase):
         self.assertNotEqual(end, -1, f"{const_name} in {relative_path} is not closed by ']'")
 
         found = re.findall(r"value:\s*'([^']+)'", source[start:end])
-        expected = [value for value, _label in History.PRODUCTION_METHOD_CHOICES]
+        expected = [value for value, _label in Production.PRODUCTION_METHOD_CHOICES]
         self.assertEqual(
             found,
             expected,
@@ -92,7 +92,7 @@ class ProductionMethodVocabularyTests(SimpleTestCase):
         end = source.find("\n]", start)
 
         found = re.findall(r"label:\s*'([^']+)'", source[start:end])
-        expected = [label for _value, label in History.PRODUCTION_METHOD_CHOICES]
+        expected = [label for _value, label in Production.PRODUCTION_METHOD_CHOICES]
         self.assertEqual(found, expected, f"{relative_path} :: {const_name} labels must match the model's.")
 
 
@@ -105,10 +105,10 @@ class StartProductionMethodValidationTests(SimpleTestCase):
     """
 
     def test_every_offered_method_is_accepted_by_the_model(self):
-        valid = [value for value, _ in History.PRODUCTION_METHOD_CHOICES]
+        valid = [value for value, _ in Production.PRODUCTION_METHOD_CHOICES]
         for method in valid:
             with self.subTest(method=method):
-                history = History(production_method=method)
+                history = Production(production_method=method)
                 # Populated from choices, so the display string must resolve to a real label
                 # rather than echoing the slug back.
                 self.assertNotEqual(history.get_production_method_display(), method)
@@ -120,4 +120,4 @@ class StartProductionMethodValidationTests(SimpleTestCase):
         `get_production_method_display()`, so nothing downstream can tell a stored
         "sustainable" from a legitimate label — it just prints in the packet.
         """
-        self.assertEqual(History(production_method="sustainable").get_production_method_display(), "sustainable")
+        self.assertEqual(Production(production_method="sustainable").get_production_method_display(), "sustainable")

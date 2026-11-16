@@ -25,7 +25,7 @@ from certifications.models import OrganicSystemPlan, PostHarvestFacility
 from certifications.services.osp_module_compiler import compile_module_contributions
 from certifications.services.osp_module_pdf import generate_module_pdf
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from history.services.audit_export_service import AuditExportService
 from history.services.operation_readiness_service import OperationReadinessService
 from product.models import Parcel, Product
@@ -229,7 +229,7 @@ class AuditExport(_Farm):
     def setUp(self):
         super().setUp()
         parcel = Parcel.objects.create(name="Block A", establishment=self.est, area=5.0)
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="Pears 2026", parcel=parcel, product=Product.objects.create(name="Pear"), start_date=timezone.now()
         )
 

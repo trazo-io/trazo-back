@@ -22,7 +22,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, PestManagementEvent, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent, SoilManagementEvent
 from history.serializers import PublicHistorySerializer
 from history.services.privacy import public_parcel_geo
 from product.models import Parcel, Product
@@ -70,7 +70,7 @@ class _Base(TestCase):
             map_metadata={"center": {"lat": 34.3414, "lng": -119.1795}, "zoom": 16},
         )
         self.product = Product.objects.create(name="Citrus")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Privacy Test Production",
             start_date=timezone.now(),
             product=self.product,
@@ -598,7 +598,7 @@ class ProductionsFlatScoreGatingTests(_Base):
         other_company = Company.objects.create(name="Other Farm")
         other_est = Establishment.objects.create(name="O1", company=other_company, state="CA")
         other_parcel = Parcel.objects.create(name="OP1", establishment=other_est, area=3.0)
-        return History.objects.create(
+        return Production.objects.create(
             name="Other Tenant Production",
             start_date=timezone.now(),
             product=self.product,

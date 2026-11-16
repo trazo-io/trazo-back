@@ -31,7 +31,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Table
 
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History, ProductionEvent, SoilManagementEvent
+from history.models import ChemicalEvent, Production, ProductionEvent, SoilManagementEvent
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -56,7 +56,7 @@ class PacketCarbonScopeTests(TestCase):
         self.establishment = Establishment.objects.create(name="S1", company=self.company, state="California")
         self.parcel = Parcel.objects.create(name="P1", establishment=self.establishment, area=4.0)
         self.product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="Season", parcel=self.parcel, product=self.product, start_date=timezone.now()
         )
         # One event of each kind that carries a carbon column, so the tables actually render.

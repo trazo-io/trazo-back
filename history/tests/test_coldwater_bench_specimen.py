@@ -43,7 +43,7 @@ from history.management.commands.seed_coldwater_bench import (
     OSP_ANSWERS_PATH,
 )
 from history.management.commands.seed_showcase_walnut_farm import _load_osp_answers
-from history.models import ChemicalEvent, GeneralEvent, History, ProductionEvent, SalesRecord, SoilManagementEvent
+from history.models import ChemicalEvent, GeneralEvent, Production, ProductionEvent, SalesRecord, SoilManagementEvent
 from history.services.tank_mix import tank_cell_text
 from history.services.wa_spray_record_service import NOT_RECORDED, WASprayRecordService
 from product.models import Parcel
@@ -93,7 +93,7 @@ class ColdwaterBenchSpecimenTests(TestCase):
         on_farm = {"history__parcel__establishment__name": FARM_NAME}
         return {
             "parcels": Parcel.objects.filter(establishment__name=FARM_NAME).count(),
-            "seasons": History.objects.filter(parcel__establishment__name=FARM_NAME).count(),
+            "seasons": Production.objects.filter(parcel__establishment__name=FARM_NAME).count(),
             "sprays": ChemicalEvent.objects.filter(**on_farm).count(),
             "soil": SoilManagementEvent.objects.filter(**on_farm).count(),
             "production": ProductionEvent.objects.filter(**on_farm).count(),
@@ -199,7 +199,7 @@ class ColdwaterBenchSpecimenTests(TestCase):
         self.assertFalse(self._sprays().filter(epa_registration_number__gt="").exists())
         self.assertFalse(self._sprays().filter(volume_numeric__isnull=False).exists())
         # Honeycrisp is still picking: no harvest record, and its season stays open.
-        block_3 = History.objects.get(parcel__establishment=self.est, parcel__name="Block 3 Honeycrisp")
+        block_3 = Production.objects.get(parcel__establishment=self.est, parcel__name="Block 3 Honeycrisp")
         self.assertIsNone(block_3.finish_date)
         self.assertFalse(ProductionEvent.objects.filter(history=block_3, type="HA").exists())
 

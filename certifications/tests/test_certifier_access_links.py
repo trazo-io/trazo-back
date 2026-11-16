@@ -18,7 +18,7 @@ from rest_framework.test import APIClient
 
 from certifications.models import CertifierAccessLink, CertifierAccessLog, OrganicSystemPlan
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -53,7 +53,7 @@ def make_operation_submission_ready(establishment, user):
 
     parcel = Parcel.objects.create(name="North Block", establishment=establishment, area=10.0)
     product = Product.objects.create(name="Walnuts")
-    History.objects.create(
+    Production.objects.create(
         name="2026 Walnuts",
         start_date=timezone.now(),
         product=product,
@@ -223,7 +223,7 @@ class CertifierReviewReadinessTests(TestCase):
         return f"/api/certifier-review/{token}/readiness/"
 
     def _make_production(self, name="2026 Walnuts"):
-        return History.objects.create(
+        return Production.objects.create(
             name=name,
             start_date=timezone.now(),
             product=self.product,
@@ -305,7 +305,7 @@ class CertifierReviewReadinessTests(TestCase):
         other_company = Company.objects.create(name="Someone Else Farms")
         other_est = Establishment.objects.create(name="Not Yours", company=other_company, state="CA")
         other_parcel = Parcel.objects.create(name="Other Block", establishment=other_est, area=5.0)
-        History.objects.create(
+        Production.objects.create(
             name="Not Yours 2026",
             start_date=timezone.now(),
             product=self.product,
@@ -644,7 +644,7 @@ class ReadinessScopeTests(TestCase):
         # Records exist; only the NOP artifacts are absent.
         parcel = Parcel.objects.create(name="Field", establishment=self.establishment, area=5.0)
         product = Product.objects.create(name="Table Grapes")
-        History.objects.create(
+        Production.objects.create(
             name="2026 Grapes",
             start_date=timezone.now(),
             product=product,

@@ -306,14 +306,14 @@ class VerifyInputSaysConditionalTests(APITestCase):
 
 class AuditExportListsTheConditionTests(TestCase):
     def test_the_approved_substance_list_prints_the_condition(self):
-        from history.models import History
+        from history.models import Production
         from history.services.audit_export_service import AuditExportService
         from product.models import Parcel
 
         company = Company.objects.create(name="Audit Co")
         est = Establishment.objects.create(name="Main", company=company)
         parcel = Parcel.objects.create(name="P", establishment=est, area=1.0)
-        history = History.objects.create(name="Prod", start_date=timezone.now(), parcel=parcel)
+        history = Production.objects.create(name="Prod", start_date=timezone.now(), parcel=parcel)
         osp = OrganicSystemPlan.objects.create(
             establishment=est, version_number=1, status="active", effective_date=timezone.now().date()
         )

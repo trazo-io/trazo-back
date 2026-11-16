@@ -21,7 +21,7 @@ from rest_framework.test import APIClient
 from certifications.models import OrganicSystemPlan
 from certifications.services.common_osp_records import COMMON_OSP_RECORD_TYPES
 from company.models import Company, Establishment
-from history.models import History, ProductionEvent
+from history.models import Production, ProductionEvent
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -48,7 +48,7 @@ class CommonOSPRecordTypesAPITests(TestCase):
         # omitting it fails at save time inside Django's error reporting rather than at the DB.
         product = Product.objects.create(name="Walnut")
         parcel = Parcel.objects.create(name="Block 1", establishment=self.establishment, area=40.0)
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026 Season", parcel=parcel, product=product, start_date=date(2026, 3, 1)
         )
         ProductionEvent.objects.create(history=history, type="HA", date=date(2026, 9, 15))

@@ -277,13 +277,13 @@ def _current_season_crops(parcel, crop_history) -> Optional[SeasonCrops]:
     the current crop is named from that season. Nothing is invented: both sides are the
     operation's own records, and the prior-year history is untouched.
     """
-    from history.models import History
+    from history.models import Production
 
     newest_history_year = max((h.year for h in crop_history), default=None)
     seasons = list(
         # `start_date__isnull=False` in the FILTER: a null-dated season has no year to belong to,
         # and letting one sort into the list would hide the dated seasons around it.
-        History.objects.filter(parcel=parcel, start_date__isnull=False)
+        Production.objects.filter(parcel=parcel, start_date__isnull=False)
         .select_related("product", "crop_type")
         .order_by("start_date", "pk")
     )
@@ -318,11 +318,11 @@ def _current_season_crops(parcel, crop_history) -> Optional[SeasonCrops]:
 
 
 def _product_rows(establishment, osp=None):
-    from history.models import History
+    from history.models import Production
 
     seen = {}
     for h in (
-        History.objects.filter(parcel__establishment=establishment)
+        Production.objects.filter(parcel__establishment=establishment)
         .select_related("product", "crop_type")
         .order_by("product__name")
     ):

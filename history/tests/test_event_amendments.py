@@ -16,7 +16,7 @@ from django.utils import timezone
 from company.models import Company
 from history.amendments import AmendmentError, apply_amendment
 from history.constants import PRODUCTION_EVENT_TYPE
-from history.models import EventAmendment, History, ProductionEvent
+from history.models import EventAmendment, Production, ProductionEvent
 from product.models import Establishment, Parcel
 from users.models import User, WorksIn
 
@@ -29,7 +29,7 @@ class AmendmentServiceTests(TestCase):
         est = Establishment.objects.create(name="Amend Farm", company=self.company)
         parcel = Parcel.objects.create(name="Amend Parcel", establishment=est, area=1)
         # A FINISHED season — the case the whole feature exists for.
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel, name="2026", finish_date=timezone.now() - timedelta(days=1)
         )
         self.event = ProductionEvent.objects.create(
@@ -155,7 +155,7 @@ class AmendableFieldSelectionTests(TestCase):
         company = Company.objects.create(name="Fields Co")
         est = Establishment.objects.create(name="Fields Farm", company=company)
         parcel = Parcel.objects.create(name="Fields Parcel", establishment=est, area=1)
-        self.history = History.objects.create(parcel=parcel, name="2026")
+        self.history = Production.objects.create(parcel=parcel, name="2026")
         self.event = ProductionEvent.objects.create(
             history=self.history, type="HA", date=timezone.now(), yield_quantity=200
         )
@@ -255,7 +255,7 @@ class AmendmentValidationEdgeTests(TestCase):
         WorksIn.objects.create(user=self.user, company=company, role=WorksIn.COMPANY_ADMIN)
         est = Establishment.objects.create(name="Edge Farm", company=company)
         parcel = Parcel.objects.create(name="Edge Parcel", establishment=est, area=1)
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             parcel=parcel, name="2026", finish_date=timezone.now() - timedelta(days=1)
         )
         self.event = ProductionEvent.objects.create(
@@ -355,7 +355,7 @@ class LockedEventResponseContractTests(TestCase):
 
         from carbon.models import CropType
         from company.models import Company, Establishment
-        from history.models import History, ProductionEvent
+        from history.models import Production, ProductionEvent
         from product.models import Parcel, Product
         from users.models import WorksIn
 
@@ -381,7 +381,7 @@ class LockedEventResponseContractTests(TestCase):
             typical_cost_per_hectare=0.0,
             has_soil_contact=True,
         )
-        cls.history = History.objects.create(
+        cls.history = Production.objects.create(
             parcel=parcel,
             product=Product.objects.create(name="Apple"),
             crop_type=crop,

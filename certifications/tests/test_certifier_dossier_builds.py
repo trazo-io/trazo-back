@@ -19,7 +19,7 @@ from certifications.models import CertifierAccessLink, CertifierAccessLog
 from company.models import Company, Establishment
 from documents.models import ExportJob
 from documents.services.export_jobs import OPERATION_DOSSIER, run_worker_loop
-from history.models import ChemicalEvent, History
+from history.models import ChemicalEvent, Production
 from product.models import Parcel, Product
 from users.models import User
 
@@ -33,7 +33,7 @@ class CertifierDossierBuildTests(TestCase):
         self.establishment = Establishment.objects.create(name="Home Ranch", company=self.company, state="CA")
         parcel = Parcel.objects.create(name="North Block", establishment=self.establishment, area=10.0)
         product = Product.objects.create(name="Navel Oranges")
-        self.production = History.objects.create(
+        self.production = Production.objects.create(
             name="2026 Navels",
             start_date=timezone.now(),
             product=product,

@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from carbon.models import CarbonEntry
 from company.models import Company, Establishment
-from history.models import History, HistoryScan
+from history.models import HistoryScan, Production
 from product.models import Parcel
 from reviews.models import Review
 from users.constants import PRODUCER
@@ -41,7 +41,7 @@ class CrossTenantRouteTests(TestCase):
         cls.victim = _admin_of(cls.victim_co, "admin@victim.example")
         cls.victim_farm = Establishment.objects.create(name="Victim Farm", company=cls.victim_co)
         cls.victim_parcel = Parcel.objects.create(name="Victim Parcel", establishment=cls.victim_farm, area=2.0)
-        cls.victim_season = History.objects.create(
+        cls.victim_season = Production.objects.create(
             name="Victim 2026",
             parcel=cls.victim_parcel,
             published=False,
@@ -56,7 +56,7 @@ class CrossTenantRouteTests(TestCase):
         cls.outsider = _admin_of(cls.outsider_co, "admin@outsider.example")
         cls.outsider_farm = Establishment.objects.create(name="Outsider Farm", company=cls.outsider_co)
         cls.outsider_parcel = Parcel.objects.create(name="Outsider Parcel", establishment=cls.outsider_farm, area=1.0)
-        cls.outsider_season = History.objects.create(name="Outsider 2026", parcel=cls.outsider_parcel)
+        cls.outsider_season = Production.objects.create(name="Outsider 2026", parcel=cls.outsider_parcel)
 
     def setUp(self):
         self.client = APIClient()

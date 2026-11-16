@@ -34,7 +34,7 @@ from django.utils import timezone
 
 from certifications.models import AdjoiningLandAffidavit
 from company.models import Company, Establishment
-from history.models import History, SalesRecord
+from history.models import Production, SalesRecord
 from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
@@ -144,7 +144,7 @@ class SaleUnitVocabularyTests(TestCase):
         is true by construction and this assertion can never fail on drift. The drift that
         actually happened was in the FRONTEND, which is what the next test checks.
         """
-        self.assertEqual(SalesRecord._meta.get_field("quantity_unit").choices, History.UNIT_CHOICES)
+        self.assertEqual(SalesRecord._meta.get_field("quantity_unit").choices, Production.UNIT_CHOICES)
 
     def test_tonnes_is_gone(self):
         """It was only ever reachable through the one dropdown; 0204 folded it into `tons`."""
@@ -164,7 +164,7 @@ class SaleUnitVocabularyTests(TestCase):
             # Do NOT silently pass; a guard that no-ops in half the checkouts is decorative.
             self.fail(f"trazo-app/src not found at {app_src}. This guard needs both repos.")
 
-        expected = [value for value, _label in History.UNIT_CHOICES]
+        expected = [value for value, _label in Production.UNIT_CHOICES]
         for relative_path, const_name in self.APP_UNIT_LISTS.items():
             path = app_src / relative_path
             self.assertTrue(path.is_file(), f"{relative_path} not found — did the editor move?")
@@ -251,7 +251,7 @@ class TransportAndAdjoiningPacketTests(TestCase):
         establishment = Establishment.objects.create(name="TR1", company=company)
         self.parcel = Parcel.objects.create(name="Block 1", establishment=establishment, area=10)
         product = Product.objects.create(name="Walnuts")
-        self.history = History.objects.create(
+        self.history = Production.objects.create(
             name="TR Production",
             start_date=timezone.now(),
             product=product,

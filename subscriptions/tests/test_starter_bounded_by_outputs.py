@@ -232,13 +232,13 @@ class ExportDoorTests(TestCase):
         # Rows the OSP and production doors need in order to get PAST `get_object()` — without
         # them a 404 would stand in for the 403 and the test would pass while the gate was gone.
         from certifications.models import OrganicSystemPlan
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         cls.starter_osp = OrganicSystemPlan.objects.create(establishment=cls.starter_farm, version_number=1)
         cls.paid_osp = OrganicSystemPlan.objects.create(establishment=cls.paid_farm, version_number=1)
         cls.starter_parcel = Parcel.objects.create(name="Block A", establishment=cls.starter_farm, area=4.0)
-        cls.starter_production = History.objects.create(parcel=cls.starter_parcel, name="2026 Navels")
+        cls.starter_production = Production.objects.create(parcel=cls.starter_parcel, name="2026 Navels")
 
     def _client(self, user):
         # `force_authenticate`, never `force_login`: DRF here authenticates only via
@@ -451,13 +451,13 @@ class LoggingStaysFreeTests(TestCase):
         cls.starter = _company_on(Plan.objects.get(slug="starter"), "Starter Ranch")
 
     def test_a_starter_farm_can_create_a_twentieth_production(self):
-        from history.models import History
+        from history.models import Production
         from product.models import Parcel
 
         farm = Establishment.objects.create(name="Home", company=self.starter, country="US", state="CA")
         parcel = Parcel.objects.create(name="Block 1", establishment=farm, area=10.0)
         for i in range(19):
-            History.objects.create(parcel=parcel, name=f"Cycle {i}")
+            Production.objects.create(parcel=parcel, name=f"Cycle {i}")
 
         self.assertIs(
             self.starter.can_create_production(),

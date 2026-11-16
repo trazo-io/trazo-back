@@ -19,8 +19,8 @@ from history.models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     SoilManagementEvent,
     WeatherEvent,
@@ -54,8 +54,8 @@ class Command(BaseCommand):
         production_id = options["production_id"]
 
         try:
-            original = History.objects.get(pk=production_id)
-        except History.DoesNotExist:
+            original = Production.objects.get(pk=production_id)
+        except Production.DoesNotExist:
             self.stderr.write(self.style.ERROR(f"Production {production_id} not found"))
             return
 
@@ -63,7 +63,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Cloning production #{original.pk}: {original.name} (Parcel: {parcel_name})")
 
         # Clone the History object
-        clone = History()
+        clone = Production()
         for field in original._meta.fields:
             # `public_id` is the QR identity and unique: the clone mints its own (copying it made
             # every clone fail with a duplicate key).

@@ -23,7 +23,7 @@ Usage:
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from history.models import History
+from history.models import Production
 
 # Every event family that writes a CarbonEntry, as (label, related_name).
 EVENT_SOURCES = (
@@ -78,10 +78,10 @@ class Command(BaseCommand):
 
     def _resolve_productions(self, options):
         if options["all"]:
-            return list(History.objects.all())
+            return list(Production.objects.all())
 
         key = options["production"]
-        query = History.objects.filter(public_id=key) if "-" in str(key) else History.objects.filter(pk=key)
+        query = Production.objects.filter(public_id=key) if "-" in str(key) else Production.objects.filter(pk=key)
         production = query.first()
         if not production:
             raise CommandError(f"No production found for {key!r}.")

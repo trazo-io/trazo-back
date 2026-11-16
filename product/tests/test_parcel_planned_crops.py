@@ -23,7 +23,7 @@ from certifications.services.certifier_register import load_forms
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.packet_answers import form_answer_states
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, ParcelPlannedCrop, Product
 from users.models import User, WorksIn
 
@@ -105,7 +105,7 @@ class TheApiKeepsTheRows(_Parcel):
 
     def test_the_wizard_payload_carries_the_rows_and_the_open_season_crops(self):
         self.crop(acres=3)
-        History.objects.create(
+        Production.objects.create(
             name="Pears 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Pears"),
@@ -174,7 +174,7 @@ class TheTablePrintsInSectionA(_Parcel):
         )
 
     def test_an_open_season_the_list_leaves_out_is_named(self):
-        History.objects.create(
+        Production.objects.create(
             name="Pears 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Pears"),
@@ -195,7 +195,7 @@ class ReviewFindingsOn381(_Parcel):
         self.assertNotIn("185", page)
 
     def test_a_crop_name_inside_another_word_does_not_count_as_listed(self):
-        History.objects.create(
+        Production.objects.create(
             name="Pineapple 2026",
             parcel=self.parcel,
             product=Product.objects.create(name="Pineapple"),
@@ -386,7 +386,7 @@ class TheActivityFormsOfferTheBlockNames(_Parcel):
         self.crop(block_name="Block 7")
         other = Parcel.objects.create(name="Lower Bench", establishment=self.est, area=2.0)
         ParcelPlannedCrop.objects.create(parcel=other, crop="Pears", block_name="River Block")
-        season = History.objects.create(name="Apples 2026", parcel=self.parcel, start_date=timezone.now())
+        season = Production.objects.create(name="Apples 2026", parcel=self.parcel, start_date=timezone.now())
         for _ in range(2):
             GeneralEvent.objects.create(history=season, name="Mow", date=timezone.now(), block_id="Block 3")
         # The crop table's "block 3" is the same block as the activities' "Block 3": one chip, their spelling.

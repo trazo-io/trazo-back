@@ -39,8 +39,8 @@ from history.models import (
     ChemicalEvent,
     EquipmentEvent,
     GeneralEvent,
-    History,
     PestManagementEvent,
+    Production,
     ProductionEvent,
     ProductionPlanItem,
     SoilManagementEvent,
@@ -172,7 +172,7 @@ class StartProductionWritesNoRecords(SeasonPlanFixture):
         response = self._start_production()
         self.assertEqual(response.status_code, 201, response.data)
 
-        history = History.objects.get(id=response.data["id"])
+        history = Production.objects.get(id=response.data["id"])
         self.assertEqual(ProductionPlanItem.objects.filter(history=history).count(), 1)
 
         # The load-bearing assertion. Named per model so a failure says WHICH table gained
@@ -187,7 +187,7 @@ class StartProductionWritesNoRecords(SeasonPlanFixture):
     def test_untickedsuggestions_do_not_enter_the_plan(self):
         response = self._start_production(selected=[])
         self.assertEqual(response.status_code, 201, response.data)
-        history = History.objects.get(id=response.data["id"])
+        history = Production.objects.get(id=response.data["id"])
         self.assertEqual(ProductionPlanItem.objects.filter(history=history).count(), 0)
 
     def test_a_plan_item_carries_a_window_never_a_day(self):
@@ -220,13 +220,13 @@ class StartProductionWritesNoRecords(SeasonPlanFixture):
         """Server-side. The browser check is a UI affordance; this is the rule."""
         response = self._start_production(selected=[self.pruning, self.glyphosate])
         self.assertEqual(response.status_code, 201, response.data)
-        history = History.objects.get(id=response.data["id"])
+        history = Production.objects.get(id=response.data["id"])
         names = set(ProductionPlanItem.objects.filter(history=history).values_list("name", flat=True))
         self.assertEqual(names, {"Annual Structural Pruning"})
 
     def test_a_conventional_operation_still_gets_the_conventional_programme(self):
         response = self._start_production(method="conventional", selected=[self.pruning, self.glyphosate])
-        history = History.objects.get(id=response.data["id"])
+        history = Production.objects.get(id=response.data["id"])
         self.assertEqual(ProductionPlanItem.objects.filter(history=history).count(), 2)
 
     def test_a_payload_cannot_pull_suggestions_from_another_crops_catalogue(self):
@@ -254,7 +254,7 @@ class StartProductionWritesNoRecords(SeasonPlanFixture):
             backend_event_fields={"type": "PE"},
         )
         response = self._start_production(selected=[self.pruning, foreign])
-        history = History.objects.get(id=response.data["id"])
+        history = Production.objects.get(id=response.data["id"])
         names = set(ProductionPlanItem.objects.filter(history=history).values_list("name", flat=True))
         self.assertNotIn("Almond Hull Split Spray", names)
 
@@ -284,7 +284,7 @@ class APlanItemCarriesNoValues(SeasonPlanFixture):
 
     def test_the_payload_carries_no_values_either(self):
         self._start_production()
-        history = History.objects.get(name="2026 Walnuts")
+        history = Production.objects.get(name="2026 Walnuts")
         response = self.client.get(reverse("productions-season-plan", args=[history.id]))
         self.assertEqual(response.status_code, 200)
 
@@ -332,7 +332,7 @@ class SeasonPlanEndpoints(SeasonPlanFixture):
     def setUp(self):
         super().setUp()
         response = self._start_production()
-        self.history = History.objects.get(id=response.data["id"])
+        self.history = Production.objects.get(id=response.data["id"])
         self.item = ProductionPlanItem.objects.get(history=self.history)
 
     def _plan_url(self):
@@ -454,14 +454,14 @@ class SeasonPlanEndpoints(SeasonPlanFixture):
     def test_a_finished_season_closes_its_plan_too(self):
         """The card hides these controls on a finished production. A gate only the client
         honours is not a gate."""
-        History.objects.filter(id=self.history.id).update(finish_date="2026-11-01T00:00:00Z")
+        Production.objects.filter(id=self.history.id).update(finish_date="2026-11-01T00:00:00Z")
         response = self.client.patch(self._item_url(), {"status": "skipped"}, format="json")
         self.assertEqual(response.status_code, 423, response.data)
         self.item.refresh_from_db()
         self.assertEqual(self.item.status, ProductionPlanItem.PENDING)
 
     def test_a_finished_season_still_shows_its_plan(self):
-        History.objects.filter(id=self.history.id).update(finish_date="2026-11-01T00:00:00Z")
+        Production.objects.filter(id=self.history.id).update(finish_date="2026-11-01T00:00:00Z")
         self.assertEqual(self.client.get(self._plan_url()).status_code, 200)
 
     def test_a_closed_item_cannot_be_reopened_around_its_record(self):
@@ -525,7 +525,7 @@ class ProhibitedInputVocabularyIsOneList(SeasonPlanFixture):
         )
 
     def test_every_listed_method_is_a_real_model_choice(self):
-        valid = {choice for choice, _ in History.PRODUCTION_METHOD_CHOICES}
+        valid = {choice for choice, _ in Production.PRODUCTION_METHOD_CHOICES}
         self.assertTrue(set(season_plan_service.ORGANIC_PRODUCTION_METHODS) <= valid)
 
 

@@ -500,12 +500,12 @@ class PlanMaterialsAreOneListTests(TestCase):
     def test_a_logged_product_absent_from_the_plan_is_reported_as_unmatched(self):
         from datetime import date
 
-        from history.models import ChemicalEvent, History
+        from history.models import ChemicalEvent, Production
         from product.models import Parcel, Product
 
         product = Product.objects.create(name="Blueberry")
         parcel = Parcel.objects.create(name="Home Field East", establishment=self.establishment, area=5.0)
-        history = History.objects.create(
+        history = Production.objects.create(
             name="2026 Season", parcel=parcel, product=product, start_date=date(2026, 3, 1)
         )
         ChemicalEvent.objects.create(history=history, date=date(2026, 6, 1), commercial_name="Rexius Organic Compost")

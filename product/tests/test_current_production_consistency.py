@@ -22,7 +22,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from carbon.models import CropType
 from company.models import Company, Establishment
-from history.models import History
+from history.models import Production
 from product.models import Parcel, Product
 from product.views import ParcelViewSet
 from users.models import User, WorksIn
@@ -54,7 +54,7 @@ class CurrentProductionConsistencyTests(TestCase):
         self.crop = crop
 
     def _open_season(self):
-        return History.objects.create(
+        return Production.objects.create(
             parcel=self.parcel,
             product=self.product,
             crop_type=self.crop,
