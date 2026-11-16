@@ -1824,6 +1824,23 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             rows = derive_record_types(establishment, osp=osp)
             return Response({"summary": summarize(rows), "record_types": rows})
 
+        # How a confirmed record the operation keeps outside Trazo links to the next and previous
+        # document (OTCO C12 12.2-6), one record type at a time, in the operator's words.
+        if "linking_element" in request.data:
+            from certifications.services.common_osp_records import set_linking_element
+
+            if len(keys) != 1:
+                raise ValidationError({"keys": "State one record type's linking element at a time."})
+            text = request.data.get("linking_element")
+            if text is not None and not isinstance(text, str):
+                raise ValidationError({"linking_element": "Must be a string."})
+            try:
+                set_linking_element(osp, keys[0], text or "", user=request.user)
+            except ValueError as exc:
+                raise ValidationError({"linking_element": str(exc)}) from exc
+            rows = derive_record_types(establishment, osp=osp)
+            return Response({"summary": summarize(rows), "record_types": rows})
+
         unknown = [k for k in keys if k not in RECORD_TYPES_BY_KEY]
         if unknown:
             raise ValidationError({"keys": f"Unknown record type(s): {', '.join(sorted(unknown))}"})

@@ -168,40 +168,53 @@ items:
     in chain. The audit trail should include all steps in the supply chain during the time your operation owns
     the crop: sourcing/origin, crop production activities or product processing, storage, transport, to final
     end use/sale/disposition.'
-  status: partial
-  severity: P3
+  status: covered
   trazo:
+    where: '05-audit-trail-exhibit.pdf Part A: OTCO''s three columns for every record type confirmed in G8.0
+      §A; the linking element is Trazo''s for a record it holds, and the operator''s own words, marked as theirs,
+      for a record kept outside Trazo'
     questions:
     - g8_0_record_keeping.audit_trail_exhibit
     - g7_0_labeling.invoices_identify_lot
-    prints: '05-audit-trail-exhibit.pdf — Part A: the table OTCO draws (Name of Document · Activity · Linking
-      element), one row per record type the operator confirmed in G8.0 §A, the linking element stated from
-      Trazo''s own record shapes; Part B: the sample trail'
-  gap: 'Closed 2026-09-09 to the table itself: document 05 prints OTCO''s three columns for every record type
-    the operator confirmed in G8.0 §A, with the linking element named for each record Trazo holds (lot ID,
-    invoice number, parcel + date, storage location). A confirmed record type Trazo cannot hold — weigh tickets,
-    delivery slips, the operator''s own ''other'' — prints with its linking cell left for the operator to state,
-    so a paper-heavy operation completes those rows by hand on the printed page.'
-  fix: Let the operator type the linking element for an external record type in G8.0 §A (a per-row free text
-    on the confirmation), so document 05 prints it instead of leaving the cell.
+    models:
+    - certifications.services.common_osp_records.set_linking_element
+    - certifications.services.audit_trail_exhibit.operator_states_link
+    prints: '05-audit-trail-exhibit.pdf Part A: the table OTCO draws (Name of Document, Activity, Linking element),
+      one row per record type the operator confirmed in G8.0 §A; Part B: the sample trail'
+  gap: 'Closed 2026-11-16 (feat/c12-audit-trail). Document 05 printed OTCO''s three columns since 2026-09-09,
+    with the linking element named for each record Trazo holds (lot ID, invoice number, parcel and date, storage
+    location) and for the two outside documents whose link is standard (settlement statements, contracts). A
+    confirmed record kept outside Trazo (a weigh ticket, a delivery slip, a bin ticket stub, the operation''s own
+    "other" form) left its cell for the operator to fill by hand. G8.0 §A now asks that link once the record is
+    confirmed, in the operator''s own words (`set_linking_element`, refused on a record Trazo links itself and on
+    one not confirmed), and the exhibit prints it "as stated by the operator"; a renewal carries it with the
+    confirmation.'
 - ref: 12.2-6a
   asks: Attach sample documents (e.g. seed purchase records, planting records, input application records, harvest
     records, storage records, transport records, sales records, BOLs) to demonstrate your audit trail system.
     Records attached.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: '05-audit-trail-exhibit.pdf Part B and B2: one finished, sold lot walked from its planting records
+      through harvest, storage and sales (invoice, BOL), and one of its sales back to every input applied and
+      seed or stock bought, with supplier, invoice, lot and the files the operation holds; the operator''s own
+      sample documents ride in the packet under attachments/'
     questions:
     - g8_0_record_keeping.audit_trail_exhibit
     - g6_5_sales_soe.sales_soe_upload
-    prints: 05-audit-trail-exhibit.pdf Part B — the harvest, storage and sales records of one finished lot
-      rendered as the sample set, from the operation's own dated records
-  gap: 'Partly closed 2026-09-09: document 05 renders the records OTCO lists as samples — harvest records,
-    storage location, sales records with invoice and BOL — for one finished lot, from the operation''s own
-    dated records. Seed purchase, planting and input-application records are not yet in the trace. Since
-    2026-10-01 the operator''s own samples uploaded for `audit_trail_exhibit` or `sales_soe_upload` ride in
-    the packet under attachments/.'
-  fix: Extend Part B back through the season's planting and input-application events.
+    models:
+    - certifications.services.audit_trail_exhibit.sample_trail
+    - history.services.traceback.trace_sale
+    prints: 05-audit-trail-exhibit.pdf Part B (planting, harvest, storage, sales, balance) and Part B2 (one sale
+      traced to the inputs applied and seed or stock purchased); attachments/ for the operator's uploads
+  gap: 'Closed 2026-11-16 (feat/c12-audit-trail). The register said seed purchase, planting and input-application
+    records were not in the trace; Part B2 has traced one sale back to every input applied in the season and to
+    the seed or stock purchases, each with supplier, invoice and lot and the files held, since #251. What was
+    missing was a planting record that names no purchase (farm-saved seed, a replant from the operation''s own
+    nursery): Part B now begins at every planting and transplanting record on the season, with block, rootstock,
+    seed or stock source, supplier and lot, and says so when the season has none (a perennial block is planted
+    once). Transport is the sale''s bill of lading; the operator''s own sample documents uploaded for
+    `audit_trail_exhibit` or `sales_soe_upload` ride in the packet under attachments/.'
 - ref: 12.2-7
   asks: Describe the crop and/or crop product inventory system. This should include how often inventory is conducted
     and recorded.

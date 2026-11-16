@@ -983,6 +983,8 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
     `suggested` as a tick has reintroduced the auto-attestation bug this module exists to
     prevent — see the module docstring.
     """
+    from certifications.services.audit_trail_exhibit import operator_states_link
+
     bundle = EvidenceBundle(establishment, start_date=start_date, end_date=end_date)
     confirmations = _confirmations(osp)
 
@@ -1010,6 +1012,10 @@ def derive_record_types(establishment, osp=None, start_date=None, end_date=None)
                 "external_by_design": rt.external_by_design,
                 "free_text": rt.free_text,
                 "custom_label": conf.get("label") or None,
+                # How this record links to the next and previous one, in the operator's words; only
+                # asked of a record type whose link Trazo cannot state (OTCO C12 12.2-6).
+                "operator_states_link": operator_states_link(rt.key, rt.external_by_design),
+                "linking_element": conf.get("linking") or "",
                 # A free-text row is never suggested — nothing derives it, and `count` is
                 # always 0 — but state it rather than leaving it to the arithmetic.
                 "suggested": (not rt.free_text) and bool(count) and not confirmed,
@@ -1209,10 +1215,60 @@ def confirm(osp, keys, user=None, confirmed=True, label=None) -> dict:
             }
             if RECORD_TYPES_BY_KEY[key].free_text:
                 entry["label"] = label
+            # A re-confirmation (a renamed "Other" row) keeps the link the operator stated for it.
+            previous = current.get(key)
+            if isinstance(previous, dict) and previous.get("confirmed") and previous.get("linking"):
+                entry["linking"] = previous["linking"]
             current[key] = entry
         else:
             current.pop(key, None)
 
+    section[CONFIRMATIONS_KEY] = current
+    sections[OSP_SECTION_KEY] = section
+    osp.sections = sections
+    osp.save(update_fields=["sections", "updated_at"])
+    return current
+
+
+#: Longest linking element an operator may state: one cell of the exhibit's Part A table.
+LINKING_ELEMENT_MAX = 300
+
+
+def set_linking_element(osp, key, text, user=None) -> dict:
+    """Record how a confirmed record type links to the next and previous document, in the operator's
+    words (OTCO C12 12.2-6: "Linking element to next and previous document in chain").
+
+    Only for a record type whose link Trazo cannot state from its own record shapes
+    (`audit_trail_exhibit.operator_states_link`): a weigh ticket, a delivery slip, the operation's
+    own form. Only on a CONFIRMED row: a link for a record the operation has not said it keeps would
+    print a chain nobody vouched for. Empty text clears it. Operator-only, like `confirm()`.
+    """
+    from certifications.services.audit_trail_exhibit import operator_states_link
+
+    if osp is None:
+        raise ValueError("An OrganicSystemPlan is required to record a linking element.")
+    rt = RECORD_TYPES_BY_KEY.get(key)
+    if rt is None:
+        raise ValueError(f"Unknown record type: {key}")
+    if not operator_states_link(key, rt.external_by_design):
+        raise ValueError("Trazo states this record's linking element from its own records; there is none to add.")
+    text = (text or "").strip()
+    if len(text) > LINKING_ELEMENT_MAX:
+        raise ValueError(f"A linking element may be at most {LINKING_ELEMENT_MAX} characters.")
+    sections = dict(osp.sections or {})
+    section = dict(sections.get(OSP_SECTION_KEY) or {})
+    current = dict(section.get(CONFIRMATIONS_KEY) or {})
+    entry = current.get(key)
+    if not (isinstance(entry, dict) and entry.get("confirmed")):
+        raise ValueError("Confirm that the operation keeps this record before stating how it links.")
+    entry = dict(entry)
+    if text:
+        entry["linking"] = text
+        entry["linking_by"] = getattr(user, "id", None)
+    else:
+        entry.pop("linking", None)
+        entry.pop("linking_by", None)
+    current[key] = entry
     section[CONFIRMATIONS_KEY] = current
     sections[OSP_SECTION_KEY] = section
     osp.sections = sections

@@ -194,6 +194,23 @@ class DocumentRow:
     name: str
     activity: str
     linking_element: Optional[str]  # None = left for the operator
+    #: The link is the operator's own statement (G8.0 §A), not a fact about Trazo's record shapes.
+    stated_by_operator: bool = False
+
+
+def operator_states_link(key: str, external_by_design: bool) -> bool:
+    """Whether only the operator can state this record type's linking element.
+
+    Trazo states the link for a record it holds (`LINKING_ELEMENTS`) and for an external document
+    whose link is standard (`EXTERNAL_LINKING_ELEMENTS`). Every other confirmed record type, a
+    weigh ticket, a delivery slip, the operation's own "other" form, links by the operation's own
+    scheme, so the operator states it (OTCO C12 12.2-6, 2026-11-16).
+    """
+    if key in LINKING_ELEMENTS and not external_by_design:
+        return False
+    if key in EXTERNAL_LINKING_ELEMENTS and external_by_design:
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -442,7 +459,7 @@ def _count_of(count: int, noun: str) -> str:
 def balance_statement(balance, *, season_open: bool = False, as_at: str = "") -> tuple[str, bool]:
     """The organic lot's harvested minus sold as one sentence, and whether it is a [REVIEW].
 
-    One sentence for every document that states the balance (the exhibit's Part B step 4 and the
+    One sentence for every document that states the balance (the exhibit's Part B step 5 and the
     dossier's Output Reconciliation), so the two cannot give an inspector different figures for
     one season (overall review 2026-11, OV-FJ-C24). The sentence carries no "[REVIEW]" marker; the
     caller prints it its own way. A balance that cannot be computed returns its reason, and the
@@ -546,6 +563,10 @@ class SampleTrail:
     parcel: str
     lot_id: Optional[str]
     lot_blocker: str
+    #: Planting and transplanting records on the season (OTCO C12 12.2-6a names planting records among
+    #: the samples): dicts of date, kind, block, source, supplier, lot, rootstock. Every one of them,
+    #: whatever the seed's origin; Part B2 lists only the plantings that name a purchase.
+    plantings: list = field(default_factory=list)
     harvests: list = field(default_factory=list)  # dicts: date, quantity, unit, storage, block
     storage_locations: list = field(default_factory=list)
     sales: list = field(
@@ -572,7 +593,10 @@ def document_table(establishment, osp) -> list[DocumentRow]:
         elif external and rt["external_by_design"]:
             rows.append(DocumentRow(name=name, activity=external[0], linking_element=external[1]))
         else:
-            rows.append(DocumentRow(name=name, activity=name, linking_element=None))
+            stated = (rt.get("linking_element") or "").strip()
+            rows.append(
+                DocumentRow(name=name, activity=name, linking_element=stated or None, stated_by_operator=bool(stated))
+            )
     return rows
 
 
@@ -692,6 +716,20 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
         lot_blocker="" if decision.may_print else decision.blocker,
         season_id=season.pk,
     )
+    for ev in ProductionEvent.objects.filter(
+        history=season, type__in=(ProductionEvent.PLANTING, ProductionEvent.TRANSPLANTING)
+    ).order_by("date", "pk"):
+        trail.plantings.append(
+            {
+                "date": ev.date.date().isoformat() if ev.date else "",
+                "kind": ev.get_type_display(),
+                "block": (ev.block_id or "").strip(),
+                "source": ev.get_seeds_source_display() if ev.seeds_source else "",
+                "supplier": (ev.seed_supplier_name or "").strip(),
+                "lot": (ev.seed_lot_number or "").strip(),
+                "rootstock": (ev.rootstock or "").strip(),
+            }
+        )
     harvest_events = list(
         ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING).order_by("date")
     )
