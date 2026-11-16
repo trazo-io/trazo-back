@@ -422,6 +422,20 @@ def national_list_candidates_by_name(query: str, limit: int = 25):
     if exact or variants:
         return exact + variants
 
+    # The curated alias table the saved record is classified by (`history/signals.py`, the drift
+    # detector). "zinc sulfate", "Solubor" and "borax" are how a grower names the § 205.601(j)(7)
+    # rows, and none of them is contained in, or contains, the catalogue's row name, so until
+    # 2026-11-16 the lookup answered "no match" for the inputs whose condition (a documented
+    # deficiency) it most needs to show (overall review OV-MT-C01). An ambiguous term resolves to
+    # nothing here, exactly as on save, and falls through to the containment passes.
+    from certifications.services.national_list_aliases import resolve_alias
+
+    canonical = resolve_alias(query)
+    if canonical:
+        aliased = list(NationalListSubstance.objects.filter(substance_name=canonical))
+        if aliased:
+            return aliased
+
     rows = list(NationalListSubstance.objects.values_list("id", "substance_name_normalized"))
 
     forward = [(pk, n) for pk, n in rows if len(n) >= 5 and n in normalized]

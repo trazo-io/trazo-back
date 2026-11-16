@@ -1016,6 +1016,7 @@ jobs:
             certifications.tests.test_catalog_refresh_rerun \
             certifications.tests.test_national_list_seed_keys \
             certifications.tests.test_national_list_held_annotations \
+            certifications.tests.test_national_list_601_conditions \
             certifications.tests.test_restricted_materials \
             history.tests.test_national_list_conditions_row \
             history.tests.test_lab_analysis_and_micronutrients \

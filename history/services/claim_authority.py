@@ -66,6 +66,13 @@ LABEL_INPUT_OMRI_LISTED = "OMRI Listed"
 #: that never reviewed the product.
 LABEL_INPUT_WSDA_LISTED = "WSDA Listed"
 LABEL_INPUT_NATIONAL_LIST = "Allowed input · National List § 205.601"
+# A § 205.601 entry the rule allows only under a condition of use: zinc and boron with a documented
+# deficiency ((j)(7)), magnesium sulfate with a documented soil deficiency ((j)(6)), the fixed coppers
+# used so copper does not build up in the soil ((i)(2)), boric acid for structural pest control only
+# ((e)(3)). "Allowed input" alone told a shopper more than the rule does (overall review 2026-11,
+# OV-MT-C01). Whether this application met the condition is the certifier's call, so the label names
+# that there is one and stops. Typed by paragraph (`NationalListSubstance.allowed_with_condition`).
+LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION = "Allowed with a condition · National List § 205.601"
 # 🔴 2026-08-20 — hardcoded "§ 205.602", which is wrong for most rows that reach it.
 # § 205.602 lists NONSYNTHETIC substances prohibited in crop production (calcium chloride,
 # rotenone, strychnine). A synthetic like glyphosate is barred by § 205.105(a) — it is simply
@@ -294,6 +301,12 @@ def may_claim_input_listing(chemical_event):
                     LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
                 )
             return ClaimDecision(False, "National List prohibited match", LABEL_INPUT_NATIONAL_LIST_PROHIBITED)
+        if getattr(nl, "allowed_with_condition", False):
+            return ClaimDecision(
+                False,
+                "National List § 205.601 listing that carries a condition of use",
+                LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION,
+            )
         return ClaimDecision(False, "National List citation, not an OMRI listing", LABEL_INPUT_NATIONAL_LIST)
 
     # Import here: claim_resolver imports this module, and the reverse import at module scope

@@ -299,6 +299,14 @@ def verify_input(request):
             "national_list_conditional": matched_nl.is_conditionally_permitted if matched_nl else None,
             "national_list_subsection": matched_nl.subsection if matched_nl else None,
             "national_list_restriction_notes": matched_nl.restriction_notes if matched_nl else None,
+            # A § 205.601 row the rule allows only under a condition of use (zinc and boron need a
+            # documented deficiency, boric acid is for structural pest control). The client must not
+            # call it plain "allowed" (OV-MT-C01). `rule_words` is the rule's own text for the row's
+            # paragraph, verbatim and in English, for any § 205.601 row whose entry has words; it is
+            # never the paraphrase in `restriction_notes`.
+            "national_list_allowed_with_condition": matched_nl.allowed_with_condition if matched_nl else None,
+            "national_list_rule_paragraph": (matched_nl.rule_words or (None, None))[0] if matched_nl else None,
+            "national_list_rule_words": (matched_nl.rule_words or (None, None))[1] if matched_nl else None,
             # Every § 205.601/602 entry the query could mean. `status` travels with each row:
             # the catalogue holds PROHIBITED substances too, and both answer the same search,
             # so a row the UI must refuse to add has to be distinguishable per-row, not just
@@ -314,6 +322,9 @@ def verify_input(request):
                     "status": s.status,
                     "is_conditionally_permitted": s.is_conditionally_permitted,
                     "restriction_notes": s.restriction_notes,
+                    "allowed_with_condition": s.allowed_with_condition,
+                    "rule_paragraph": (s.rule_words or (None, None))[0],
+                    "rule_words": (s.rule_words or (None, None))[1],
                 }
                 for s in nl_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
             ],
