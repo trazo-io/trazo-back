@@ -110,6 +110,7 @@ class ConflictTests(_Farm):
                 "picked": "2026-06-20",
                 "days": 80,
                 "interval_days": 90,
+                "recorded_as": "raw",
             },
         )
 
@@ -140,17 +141,67 @@ class ConflictTests(_Farm):
                 self._pick(date(2026, 6, 20))
                 self.assertEqual([c.interval_days for c in parcel_conflicts(self.parcel.pk)], [90])
 
-    def test_composted_and_documented_processed_manure_never_count(self):
-        self._manure(date(2026, 4, 1), treatment="composted")
+    def test_compost_shown_to_meet_c2_bought_compost_and_documented_processed_manure_never_count(self):
+        c2 = dict(compost_initial_cn_ratio=30, compost_peak_temp_f=140, compost_method="windrow")
+        self._manure(
+            date(2026, 4, 1), treatment="composted", compost_duration_days_at_temp=15, compost_turning_count=5, **c2
+        )
+        self._manure(
+            date(2026, 4, 1),
+            treatment="composted",
+            compost_method="in_vessel",
+            compost_initial_cn_ratio=28,
+            compost_peak_temp_f=150,
+            compost_duration_days_at_temp=3,
+        )
+        self._manure(date(2026, 4, 1), treatment="composted", amendment_supplier_name="Valley Compost Co")
         self._manure(date(2026, 4, 2), treatment="processed_5006", processed_manure_temp_f=165)
         self._manure(date(2026, 4, 3), treatment="processed_5006", processed_manure_attestation="OMRI listed")
         self._pick(date(2026, 4, 20))
         self.assertEqual(parcel_conflicts(self.parcel.pk), [])
 
+    def test_a_composted_label_with_nothing_to_show_it_is_read_as_raw_and_says_so(self):
+        """Review of back #446: the label alone exempted the record, while processed manure needed evidence."""
+        cases = (
+            ("no figures", {}),
+            (
+                "C:N outside 25 to 40",
+                dict(
+                    compost_initial_cn_ratio=45,
+                    compost_peak_temp_f=140,
+                    compost_method="windrow",
+                    compost_duration_days_at_temp=15,
+                    compost_turning_count=5,
+                ),
+            ),
+            (
+                "windrow short of 15 days",
+                dict(
+                    compost_initial_cn_ratio=30,
+                    compost_peak_temp_f=140,
+                    compost_method="windrow",
+                    compost_duration_days_at_temp=10,
+                    compost_turning_count=5,
+                ),
+            ),
+            ("no method", dict(compost_initial_cn_ratio=30, compost_peak_temp_f=140, compost_duration_days_at_temp=20)),
+        )
+        for label, fields in cases:
+            with self.subTest(label):
+                SoilManagementEvent.objects.all().delete()
+                ProductionEvent.objects.all().delete()
+                manure = self._manure(date(2026, 4, 1), treatment="composted", **fields)
+                self._pick(date(2026, 4, 20))
+                found = parcel_conflicts(self.parcel.pk)
+                self.assertEqual([(c.application_id, c.recorded_as) for c in found], [(manure.pk, "composted")])
+
     def test_undocumented_processed_manure_counts_as_raw(self):
         manure = self._manure(date(2026, 4, 1), treatment="processed_5006")
         self._pick(date(2026, 4, 20))
-        self.assertEqual([c.application_id for c in parcel_conflicts(self.parcel.pk)], [manure.pk])
+        self.assertEqual(
+            [(c.application_id, c.recorded_as) for c in parcel_conflicts(self.parcel.pk)],
+            [(manure.pk, "processed_5006")],
+        )
 
     def test_manure_under_an_earlier_season_on_the_parcel_counts(self):
         last_year = self._season("Apples 2025", self.apples)
@@ -228,7 +279,14 @@ class ReadinessRowTests(_Farm):
         self.assertEqual(row["detail_code"], "raw_manure_interval.harvest_inside")
         self.assertEqual(
             row["params"],
-            {"count": 2, "applied": "2026-04-01", "picked": "2026-06-20", "days": 80, "interval": 90},
+            {
+                "count": 2,
+                "applied": "2026-04-01",
+                "picked": "2026-06-20",
+                "days": 80,
+                "interval": 90,
+                "recorded_as": "raw",
+            },
         )
         self.assertTrue(row["detail"].startswith("2 pick(s) on this production came sooner"), row["detail"])
 
@@ -243,7 +301,38 @@ class ReadinessRowTests(_Farm):
         self._pick(date(2026, 8, 1))
         self.assertEqual(self._row()["status"], "PASS")
 
-    def test_an_interval_missing_on_this_seasons_manure_stays_the_fail(self):
+    def test_an_interval_missing_on_this_seasons_manure_stays_the_fail_and_names_the_pick(self):
+        """Review of back #446: the FAIL dropped the conflict it had found."""
         self._manure(date(2026, 4, 1), interval=None)
         self._pick(date(2026, 4, 20))
-        self.assertEqual(self._row()["status"], "FAIL")
+        row = self._row()
+        self.assertEqual(row["status"], "FAIL")
+        self.assertEqual(row["detail_code"], "raw_manure_interval.not_recorded_harvest_inside")
+        self.assertEqual(
+            row["params"],
+            {
+                "recorded": 0,
+                "total": 1,
+                "days": 90,
+                "after": 19,
+                "count": 1,
+                "applied": "2026-04-01",
+                "picked": "2026-04-20",
+                "interval": 90,
+                "recorded_as": "raw",
+            },
+        )
+        self.assertIn("picked 2026-04-20, 19 day(s) after (interval 90 days)", row["detail"])
+
+    def test_an_interval_missing_with_no_conflict_is_the_plain_fail(self):
+        self._manure(date(2026, 4, 1), interval=None)
+        self._pick(date(2026, 8, 20))
+        row = self._row()
+        self.assertEqual((row["status"], row["detail_code"]), ("FAIL", "raw_manure_interval.not_recorded"))
+
+    def test_a_composted_label_with_nothing_to_show_it_says_so_in_the_row(self):
+        self._manure(date(2026, 4, 1), treatment="composted")
+        self._pick(date(2026, 4, 20))
+        row = self._row()
+        self.assertEqual((row["status"], row["params"]["recorded_as"]), ("REVIEW", "composted"))
+        self.assertIn("recorded as composted, but the record carries neither", row["detail"])

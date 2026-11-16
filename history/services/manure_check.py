@@ -13,8 +13,12 @@ What this is, and is not:
   * the parcel, not the production: manure spread in the fall under one season counts against a pick
     the next summer under another;
   * a pick on another block does not count when both records name a block (`phi_check`'s rule);
-  * raw means not composted and not documented NOP 5006 processed manure (the model's own reading);
-    undocumented "processed" manure is handled as raw, as `clean()` and the soil serializer say;
+  * raw means neither compost shown to meet § 205.203(c)(2) nor documented NOP 5006 processed manure.
+    A record labelled composted is exempt only with its C:N, temperature and method time inside the
+    rule, as the model's old harvest check read it, or when it names a supplier or product (bought
+    compost, whose figures are the supplier's, as the audit export reads it). A label alone is not
+    evidence (review of back #446): undocumented "composted" or "processed" manure is read as raw, and
+    the conflict says how it was recorded;
   * the interval is the longer of the wait the operation recorded on the manure record and the crop's
     minimum (`manure_interval.minimum_interval_days`): a farm that keeps 120 days on a tree crop is held
     to its own record, and a recorded wait shorter than the minimum never lowers it;
@@ -38,6 +42,9 @@ class ManureConflict:
     picked: date
     days: int
     interval_days: int
+    #: How the manure record labels itself when it is read as raw anyway: "composted" or "processed_5006"
+    #: with no evidence for the exemption, else "raw".
+    recorded_as: str = "raw"
 
     def as_dict(self) -> dict:
         return {
@@ -47,22 +54,48 @@ class ManureConflict:
             "picked": self.picked.isoformat(),
             "days": self.days,
             "interval_days": self.interval_days,
+            "recorded_as": self.recorded_as,
         }
 
 
-def is_raw(event) -> bool:
-    """A soil record with a manure application date that is neither composted nor documented NOP 5006."""
-    if not getattr(event, "manure_application_date", None):
+def compost_meets_c2(event) -> bool:
+    """C:N 25:1 to 40:1, 131 to 170 F, and the method's time at temperature (windrow 15 days and 5
+    turnings; static aerated or in-vessel 3 days): § 205.203(c)(2) as the model's harvest check reads it."""
+    cn = getattr(event, "compost_initial_cn_ratio", None)
+    temp = getattr(event, "compost_peak_temp_f", None)
+    duration = getattr(event, "compost_duration_days_at_temp", None) or 0
+    turnings = getattr(event, "compost_turning_count", None) or 0
+    method = getattr(event, "compost_method", None)
+    if cn is None or temp is None or not (25.0 <= float(cn) <= 40.0) or not (131.0 <= float(temp) <= 170.0):
         return False
+    if method == "windrow":
+        return duration >= 15 and turnings >= 5
+    if method in ("static_aerated", "in_vessel"):
+        return duration >= 3
+    return False
+
+
+def raw_reading(event) -> str:
+    """ "raw" when the record is read as raw manure, "composted" or "processed_5006" when its label claims
+    an exemption the record does not support, or "" when it is exempt or carries no manure date."""
+    if not getattr(event, "manure_application_date", None):
+        return ""
     treatment = getattr(event, "manure_treatment", None)
     if treatment == "composted":
-        return False
+        from history.services.audit_export_service import _compost_is_purchased
+
+        return "" if compost_meets_c2(event) or _compost_is_purchased(event) else "composted"
     if treatment == "processed_5006":
         documented = getattr(event, "processed_manure_temp_f", None) is not None or bool(
             (getattr(event, "processed_manure_attestation", None) or "").strip()
         )
-        return not documented
-    return True
+        return "" if documented else "processed_5006"
+    return "raw"
+
+
+def is_raw(event) -> bool:
+    """A soil record with a manure date that no exemption covers (`raw_reading`)."""
+    return bool(raw_reading(event))
 
 
 def interval_for(application, crop_type) -> int:
@@ -115,6 +148,7 @@ def parcel_conflicts(parcel_id, *, application=None, pick=None) -> list[ManureCo
                         picked=picked,
                         days=days,
                         interval_days=interval,
+                        recorded_as=raw_reading(app),
                     )
                 )
     return out

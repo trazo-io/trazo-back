@@ -788,6 +788,18 @@ def _compost_is_purchased(ev):
     )
 
 
+#: Said after a raw-manure conflict whose record is labelled as exempt with nothing to show it (manure_check).
+_MANURE_READ_AS_RAW = {
+    "composted": (
+        " The manure is recorded as composted, but the record carries neither the § 205.203(c)(2) figures nor a"
+        " supplier, so it is read as raw."
+    ),
+    "processed_5006": (
+        " The manure is recorded as processed (NOP 5006) with no processing temperature or attestation, so it is"
+        " read as raw."
+    ),
+}
+
 _COMPOST_SUPPLIER_DOCS_NOTE = "supplier's process documentation (C:N, temperatures, turnings) not on file"
 
 
@@ -4557,32 +4569,57 @@ class AuditExportService:
         manure_row_label = f"Raw manure interval ({manure_interval_rule['cite']})"
         # The recorded picks against raw manure on the parcel (OV-RK-C02): manure spread under an earlier
         # season counts, so this can fire with no manure record on this production. An interval missing
-        # from this production's own manure records stays the FAIL below; it is the more serious gap.
+        # from this production's own manure records keeps the FAIL; it is the more serious gap.
         from .manure_check import season_conflicts as manure_season_conflicts
 
         manure_harvest_conflicts = manure_season_conflicts(p)
         manure_interval_unrecorded = bool(manure_events) and manure_with_interval != len(manure_events)
-        if manure_harvest_conflicts and not manure_interval_unrecorded:
+        manure_conflict_text = ""
+        if manure_harvest_conflicts:
             first = manure_harvest_conflicts[0]
             # Picks, not (application, pick) pairs, as the PHI row counts them.
             pick_count = len({c.pick_id for c in manure_harvest_conflicts})
+            manure_conflict_text = (
+                f"{pick_count} pick(s) on this production came sooner after raw manure on the parcel than "
+                f"the harvest interval. The first: manure applied {first.applied.isoformat()}, picked "
+                f"{first.picked.isoformat()}, {first.days} day(s) after (interval {first.interval_days} days)."
+                + _MANURE_READ_AS_RAW.get(first.recorded_as, "")
+            )
+            manure_conflict_params = dict(
+                count=pick_count,
+                applied=first.applied.isoformat(),
+                picked=first.picked.isoformat(),
+                interval=first.interval_days,
+                recorded_as=first.recorded_as,
+            )
+        if manure_harvest_conflicts and manure_interval_unrecorded:
+            # The FAIL keeps its status and says the conflict too (review of back #446): the record missing
+            # its interval is where a pick inside it most needs saying.
+            snapshot_rows.append(
+                (
+                    manure_row_label,
+                    "FAIL",
+                    (
+                        f"{manure_with_interval}/{len(manure_events)} events have the "
+                        f"{manure_interval_rule['label']} interval recorded, safety-critical. {manure_conflict_text}"
+                    ),
+                    said(
+                        "raw_manure_interval.not_recorded_harvest_inside",
+                        recorded=manure_with_interval,
+                        total=len(manure_events),
+                        days=manure_interval_rule["days"],
+                        after=first.days,
+                        **manure_conflict_params,
+                    ),
+                )
+            )
+        elif manure_harvest_conflicts:
             snapshot_rows.append(
                 (
                     manure_row_label,
                     "REVIEW",
-                    (
-                        f"{pick_count} pick(s) on this production came sooner after raw manure on the parcel than "
-                        f"the harvest interval. The first: manure applied {first.applied.isoformat()}, picked "
-                        f"{first.picked.isoformat()}, {first.days} day(s) after (interval {first.interval_days} days)."
-                    ),
-                    said(
-                        "raw_manure_interval.harvest_inside",
-                        count=pick_count,
-                        applied=first.applied.isoformat(),
-                        picked=first.picked.isoformat(),
-                        days=first.days,
-                        interval=first.interval_days,
-                    ),
+                    manure_conflict_text,
+                    said("raw_manure_interval.harvest_inside", days=first.days, **manure_conflict_params),
                 )
             )
         elif not manure_events and compost_manure_notes:
