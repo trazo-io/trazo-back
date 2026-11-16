@@ -5238,13 +5238,13 @@ def _workbook_filename(spec) -> str:
 
 
 def _lot_balance_flowables(balance, styles) -> list:
-    """Part B step 4: harvested minus sold for the traced lot, stated or explained.
+    """Part B step 5: harvested minus sold for the traced lot, stated or explained.
 
     The sentence is `audit_trail_exhibit.balance_statement`, the one the dossier's Output
     Reconciliation prints too (overall review 2026-11, OV-FJ-C24)."""
     from certifications.services.audit_trail_exhibit import balance_statement
 
-    out = [Paragraph("<b>4. Balance</b> \u2014 harvested minus sold, for this lot", styles["body"])]
+    out = [Paragraph("<b>5. Balance</b> \u2014 harvested minus sold, for this lot", styles["body"])]
     text, review = balance_statement(balance)
     if balance is None or balance.difference is None:
         out.append(Paragraph(_escape(f"{text} The operator states the balance on this page."), styles["meta"]))
@@ -5320,6 +5320,10 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
         data = [head]
         for row in rows:
             link = row.linking_element if row.linking_element else OPERATOR_COMPLETES
+            if row.stated_by_operator:
+                # The operator's own words about their own document, marked as theirs: every other
+                # stated link is a fact about how Trazo's records connect.
+                link = f"{link} (as stated by the operator)"
             data.append(
                 [
                     Paragraph(_escape(row.name), styles["meta"]),
@@ -5346,7 +5350,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                 Paragraph(
                     "Rows whose linking element reads as the operator's own document are records Trazo does "
                     "not hold (weigh tickets, delivery slips, the operation's own forms); the operator states "
-                    "the link on this page.",
+                    "the link on this page, or once in module G8.0 §A, where it prints from then on.",
                     styles["meta"],
                 )
             )
@@ -5395,7 +5399,36 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                     styles["body"],
                 )
             )
-        story.append(Paragraph("<b>1. Harvest records</b> — link: Lot ID + harvest date + parcel", styles["body"]))
+        story.append(
+            Paragraph(
+                "<b>1. Planting records</b> (link: parcel and season; the planting is recorded on the season)",
+                styles["body"],
+            )
+        )
+        if trail.plantings:
+            for pl in trail.plantings:
+                bits = [pl["date"] or "undated", pl["kind"]]
+                if pl["block"]:
+                    bits.append(f"block {pl['block']}")
+                if pl["rootstock"]:
+                    bits.append(f"rootstock {pl['rootstock']}")
+                if pl["source"]:
+                    bits.append(f"seed or stock: {pl['source']}")
+                if pl["supplier"]:
+                    bits.append(f"supplier {pl['supplier']}")
+                if pl["lot"]:
+                    bits.append(f"lot {pl['lot']}")
+                story.append(Paragraph(_escape("• " + " · ".join(bits)), styles["meta"]))
+        else:
+            # A perennial block is planted once, not each season, so its season usually has none.
+            story.append(
+                Paragraph(
+                    "• No planting or transplanting record is on this season. A perennial planting is "
+                    "recorded on the season it went in.",
+                    styles["meta"],
+                )
+            )
+        story.append(Paragraph("<b>2. Harvest records</b> — link: Lot ID + harvest date + parcel", styles["body"]))
         if trail.harvests:
             for h in trail.harvests:
                 bits = [h["date"] or "undated"]
@@ -5409,7 +5442,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
         else:
             story.append(Paragraph("• No harvest event is recorded on this season.", styles["meta"]))
         story.append(
-            Paragraph("<b>2. Storage</b> — link: storage location on the harvest record + Lot ID", styles["body"])
+            Paragraph("<b>3. Storage</b> — link: storage location on the harvest record + Lot ID", styles["body"])
         )
         if trail.storage_locations:
             for loc in trail.storage_locations:
@@ -5420,7 +5453,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             )
         story.append(
             Paragraph(
-                "<b>3. Sales records</b> — link: invoice / bill of lading number + Lot ID + buyer; organic status as identified on the invoice",
+                "<b>4. Sales records</b> — link: invoice / bill of lading number + Lot ID + buyer; organic status as identified on the invoice",
                 styles["body"],
             )
         )

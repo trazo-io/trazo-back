@@ -187,7 +187,9 @@ class ExhibitBufferAndBalanceTests(_RehearsalSeason):
         self._harvest(buffer_disposition="sold_conventional")
         self._sale(unit="units")
         text = self._exhibit()
-        self.assertIn("2026-09-15 · 40 bins 2. Storage", text)  # Part B lists the harvest
+        self.assertIn(
+            "2026-09-15 · 40 bins 3. Storage", text
+        )  # Part B lists the harvest (step 2 since planting is step 1)
         self.assertNotIn("no harvest record is on file", text)
         self.assertIn(
             "Balance not computed: the harvest is recorded in bins and the sales in units, and Trazo does not "

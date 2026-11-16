@@ -518,6 +518,10 @@ jobs:
       # C2, C3; OTCO 12.4-1a, 1b), contamination prevention and shared storage (OTCO C9 9.4-2, 9.4-3), buffer options
       # (CCOF G6.0 A1). Builds its own farm; no sibling repo.
       #
+      # 2026-11-16: certifications.tests.test_audit_trail_linking_and_planting joins. The audit trail exhibit's
+      # linking element for a record kept outside Trazo, stated by the operator in G8.0 §A (OTCO C12 12.2-6),
+      # and Part B's planting records (12.2-6a). Builds its own farm; no sibling repo.
+      #
       # 2026-11-16: certifications.tests.test_c11_materials_list joins. OTCO C11's four columns on an OTCO plan's
       # materials page, the Other review agency, use and section taken with a catalog attach, the change log for
       # operator-entered materials and the additions since the filing (C11 11.1; CCOF materials list update).
@@ -1013,6 +1017,7 @@ jobs:
             certifications.tests.test_natural_resources_practices \
             certifications.tests.test_irrigation_materials \
             certifications.tests.test_recordkeeping_split_records \
+            certifications.tests.test_audit_trail_linking_and_planting \
             certifications.tests.test_c11_materials_list \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
