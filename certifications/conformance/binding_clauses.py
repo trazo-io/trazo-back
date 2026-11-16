@@ -619,16 +619,21 @@ _PRODUCTION_STANDARDS = (
         ),
         disposition=Disposition.SOFTWARE_SATISFIES,
         rationale=(
-            "This is the clause whose sub-paragraphs carry hard NUMBERS, and Trazo enforces "
-            "them rather than merely storing them: the raw-manure harvest interval is "
-            "VALIDATED against the 90/120-day rule, and compost records carry C:N ratio, "
-            "temperature log, method and turn count. A threshold that is stored but never "
-            "checked is a field, not a control."
+            "This is the clause whose sub-paragraphs carry hard NUMBERS, and Trazo checks "
+            "them rather than merely storing them: the raw-manure interval recorded on a "
+            "manure record is checked against the crop's 90/120-day minimum when it is saved, "
+            "and every recorded harvest is compared with the raw manure applied on its parcel, "
+            "in the save response and the audit export. A harvest inside the interval is "
+            "reported, never refused: it happened, and the record must say so. Compost records "
+            "carry C:N ratio, temperature log, method and turn count. A threshold that is "
+            "stored but never checked is a field, not a control."
         ),
         implementation=(
-            # The 90/120-day rule is enforced from the HARVEST side (ProductionEvent), because
-            # the interval is measured to harvest — the field it reads lives on the soil event.
-            "trazo-back/history/models.py::ProductionEvent._validate_raw_manure_harvest_interval",
+            # The interval is measured to harvest, so the check reads the recorded harvests against
+            # the soil records' manure dates. Until 2026-11-15 this named a model clean() method no API
+            # save calls (overall review OV-RK-C02).
+            "trazo-back/history/services/manure_check.py::parcel_conflicts",
+            "trazo-back/history/services/manure_interval.py::below_minimum",
             "trazo-back/history/models.py::SoilManagementEvent.manure_harvest_interval",
             "trazo-back/history/models.py::SoilManagementEvent.compost_initial_cn_ratio",
             "trazo-back/history/models.py::SoilManagementEvent.compost_method",
@@ -637,6 +642,7 @@ _PRODUCTION_STANDARDS = (
         tests=(
             "trazo-app/src/config/events/__tests__/grazingManureInterval.test.ts",
             "trazo-back/certifications/tests/test_osp_module_compiler.py",
+            "trazo-back/history/tests/test_manure_harvest_check.py",
         ),
         note=(
             "The 90/120-day distinction turns on whether the edible portion contacts the soil "

@@ -844,6 +844,7 @@ jobs:
             history.tests.test_printed_citations_2026_11 \
             history.tests.test_no_transparency_score_served \
             history.tests.test_transparency_calculator \
+            history.tests.test_production_permissions_migration \
             history.tests.test_calapooia_fixture_integrity \
             history.tests.test_audit_pdf_column_fit \
             history.tests.test_blue_oak_osp_answers \
@@ -932,6 +933,7 @@ jobs:
             certifications.tests.test_wsda_agr_2196 \
             certifications.tests.test_materials_print_polish \
             history.tests.test_phi_check \
+            history.tests.test_manure_harvest_check \
             certifications.tests.test_contradicted_answers \
             certifications.tests.test_packet_truth \
             certifications.tests.test_required_records_attestation \

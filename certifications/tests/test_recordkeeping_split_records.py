@@ -136,7 +136,7 @@ class _Plan(TestCase):
             module_responses={
                 "schema_version": 1,
                 "modules": {
-                    key: {"answers": {k: {"value": v} for k, v in a.items()}, "definition_version": "2026.12.14"}
+                    key: {"answers": {k: {"value": v} for k, v in a.items()}, "definition_version": "2026.12.15"}
                     for key, a in modules.items()
                 },
             },
