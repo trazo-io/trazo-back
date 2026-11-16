@@ -389,7 +389,9 @@ class ChainTests(_TraceBase):
             },
         )
 
-    def test_a_sale_not_invoiced_as_organic_is_stated_beside_the_balance(self):
+    def test_a_sale_not_invoiced_as_organic_is_inside_sold_and_named(self):
+        # Overall review 2026-11, OV-FJ-C24: with no buffer crop on record the unmarked sale left
+        # the lot, so it is subtracted (the dossier subtracts it too) and named, not counted apart.
         season = self._season()
         pick = self._pick(season)
         sale = self._sale(season, picks=[pick], quantity=13000)
@@ -397,8 +399,9 @@ class ChainTests(_TraceBase):
         balance = trace_sale(sale).as_dict()["balance"]
         self.assertEqual(
             (balance["sold"], balance["sold_not_organic"], balance["sold_not_organic_count"]),
-            ("13,000 lb", "400 lb", 1),
+            ("13,400 lb", "400 lb", 1),
         )
+        self.assertEqual((balance["buffer_sold"], balance["buffer_sale_count"]), ("", 0))
 
     def test_the_balance_never_counts_a_voided_sale(self):
         season = self._season()

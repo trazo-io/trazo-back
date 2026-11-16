@@ -309,12 +309,18 @@ class OnHandByLocationTests(_LotBase):
         row = self._row(self._on_hand(season), "Cooler 3")
         self.assertEqual((row["sale_count"], row["sold"], row["difference"]), (0, "0 lb", "5,000 lb"))
 
-    def test_a_sale_not_invoiced_as_organic_is_counted_apart(self):
+    def test_a_sale_not_invoiced_as_organic_left_the_cooler_all_the_same(self):
+        # Overall review 2026-11, OV-FJ-C24: it was counted apart as buffer crop, so 400 lb sold
+        # read as still on hand.
         season = self._season()
         c3 = self._stored(season, "Cooler 3", qty=5000)
         self._sale(season, picks=[c3], quantity=400, organic_on_invoice=False, organic_label_category="")
         row = self._row(self._on_hand(season), "Cooler 3")
-        self.assertEqual((row["sold"], row["sold_not_organic_count"], row["sold_not_organic"]), ("0 lb", 1, "400 lb"))
+        self.assertEqual(
+            (row["sold"], row["difference"], row["sold_not_organic_count"], row["sold_not_organic"]),
+            ("400 lb", "4,600 lb", 1, "400 lb"),
+        )
+        self.assertEqual((row["buffer_sale_count"], row["buffer_sold"]), (0, ""))
 
     def test_the_lot_trace_carries_the_reading_for_its_season(self):
         season = self._season()

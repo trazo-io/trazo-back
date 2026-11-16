@@ -12425,7 +12425,9 @@ class AuditExportService:
             for ev in related_events(self.production, "history_productionevent_events", type="HA")
             if ev.yield_quantity
         ]
-        units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
+        # `_canonical_unit`, as `_lot_balance` does: "lb" and "lbs" are one unit, and a raw string
+        # compare sent such a season to the header total while the balance summed the picks.
+        units = {self._canonical_unit(_val(ev.yield_unit, "")) for ev in events}
         if events and len(units) == 1:
             return (
                 sum(ev.yield_quantity for ev in events),
@@ -12750,7 +12752,37 @@ class AuditExportService:
         # An uninvoiced remainder is a normal, honest state. It is stated with the date it was
         # measured, because it changes the moment the operator records the sale.
         _as_of = _fmt_generated_date()
-        if harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit) and quantity_sold:
+        # Overall review 2026-11, OV-FJ-C24: with itemised sales this section computed its own
+        # balance (every sale against every pick, buffer picks included, with a header fallback),
+        # while the trace and the audit trail exhibit printed another for the same season. Both now
+        # print `balance_statement` over `_lot_balance`: the organic lot (buffer picks and buffer-
+        # crop sales counted apart, on evidence), every other sale subtracted whatever its invoice
+        # says, and one rule for a sale exceeding the harvest. A legacy production (no itemised
+        # sales) has no other document to disagree with and keeps the rows below.
+        lot_notes: list[str] = []
+        lot_review = ""
+        # No harvest record on file: the balance is not computed (as on the trace), and the
+        # header total is the only harvest figure there is, so the oversell check below still
+        # reads it, labelled as the header's.
+        lot_header_only = False
+        if sales:
+            from certifications.services.audit_trail_exhibit import _lot_balance, balance_statement, buffer_statement
+
+            lot = _lot_balance(
+                list(related_events(self.production, "history_productionevent_events", type="HA")), sales
+            )
+            text, review = balance_statement(lot, season_open=self.production.finish_date is None, as_at=_as_of)
+            if lot.difference is None:
+                text += " Reconcile from the itemised sales below."
+            lot_header_only = lot.not_computed_code == "no_harvest"
+            if review:
+                # Escaped: the flag paragraph below is raw markup, and a unit is operator text.
+                lot_review = _esc(f"Organic lot, harvested minus sold: {text}")
+            else:
+                output_rows.append(("Organic lot: harvested minus sold", text))
+            if buffer_statement(lot):
+                lot_notes.append(buffer_statement(lot))
+        elif harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit) and quantity_sold:
             balance = float(harvest_amount) - float(quantity_sold)
             output_rows.append(
                 (
@@ -12797,6 +12829,8 @@ class AuditExportService:
 
         for label, value in output_rows:
             elements.append(self._label_value(label, value))
+        for note in lot_notes:
+            elements.append(Paragraph(_esc(note), self._styles["footer_note"]))
 
         # --- Mass-balance integrity guardrails (§ 205.103(b)(2)) ---
         # A mass-balance section must CATCH an impossible balance, not print it
@@ -12816,7 +12850,15 @@ class AuditExportService:
                 "Corrections in the Record Change History below. Reconcile the two before "
                 "certifier submission."
             )
-        if harvest_amount and quantity_sold and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
+        if lot_review:
+            mb_flags.append(lot_review)
+        elif (
+            (not sales or lot_header_only)
+            and harvest_amount
+            and quantity_sold
+            and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit)
+        ):
+            # Legacy production only (see `lot_review` above for itemised sales).
             # 2% tolerance absorbs rounding / unit-precision noise.
             if float(quantity_sold) > float(harvest_amount) * 1.02:
                 mb_flags.append(
@@ -19270,7 +19312,24 @@ class AuditExportService:
             # arithmetically meaningful.
             _csv_has_sales = bool(_csv_sales.buyer or _csv_sales.sale_date or quantity_sold)
             _csv_units_match = self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit)
-            if harvest_amount and not _csv_units_match and _csv_has_sales:
+            # Itemised sales: the PDF's balance, from the same function (overall review 2026-11,
+            # OV-FJ-C24). Only a legacy production keeps the rows below.
+            _csv_live = list(p.sales_records.live()) if _csv_sales.source == "sales_records" else []
+            if _csv_live:
+                from certifications.services.audit_trail_exhibit import (
+                    _lot_balance,
+                    balance_statement,
+                    buffer_statement,
+                )
+
+                _lot = _lot_balance(list(related_events(p, "history_productionevent_events", type="HA")), _csv_live)
+                _text, _review = balance_statement(_lot, season_open=p.finish_date is None, as_at=_fmt_generated_date())
+                if _lot.difference is None:
+                    _text += " Reconcile from the itemised sales."
+                writer.writerow(["Organic lot: harvested minus sold", f"[REVIEW] {_text}" if _review else _text])
+                if buffer_statement(_lot):
+                    writer.writerow(["Buffer crop (7 CFR 205.202(c))", buffer_statement(_lot)])
+            elif harvest_amount and not _csv_units_match and _csv_has_sales:
                 writer.writerow(
                     [
                         "Harvest minus sales recorded",

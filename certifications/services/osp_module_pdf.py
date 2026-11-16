@@ -5129,95 +5129,28 @@ def _workbook_filename(spec) -> str:
 
 
 def _lot_balance_flowables(balance, styles) -> list:
-    """Part B step 4 — harvested minus sold for the traced lot, stated or explained."""
-    from certifications.services.audit_trail_exhibit import fmt_total
+    """Part B step 4: harvested minus sold for the traced lot, stated or explained.
 
-    out = [Paragraph("<b>4. Balance</b> — harvested minus sold, for this lot", styles["body"])]
+    The sentence is `audit_trail_exhibit.balance_statement`, the one the dossier's Output
+    Reconciliation prints too (overall review 2026-11, OV-FJ-C24)."""
+    from certifications.services.audit_trail_exhibit import balance_statement
+
+    out = [Paragraph("<b>4. Balance</b> \u2014 harvested minus sold, for this lot", styles["body"])]
+    text, review = balance_statement(balance)
     if balance is None or balance.difference is None:
-        reason = balance.not_computed if balance is not None else "no harvest or sale is on record"
-        out.append(
-            Paragraph(
-                _escape(f"Balance not computed: {reason}. The operator states the balance on this page."),
-                styles["meta"],
-            )
-        )
+        out.append(Paragraph(_escape(f"{text} The operator states the balance on this page."), styles["meta"]))
         return out
-    plural = "s" if balance.harvest_count != 1 else ""
-    sale_plural = "s" if balance.sale_count != 1 else ""
-    line = (
-        f"Harvested {fmt_total(balance.harvested, balance.unit)} ({balance.harvest_count} harvest record{plural})"
-        f" \u00b7 sold {fmt_total(balance.sold, balance.unit)} ({balance.sale_count} sale{sale_plural})"
-    )
-    diff = balance.difference
-    packed = balance.packed_out
-    if packed is not None and diff == 0:
-        # Balanced AND packed: the fresh pack-out and the processing fruit are separate sales of
-        # the same delivery, and the pack-out is the number a reviewer reads first.
-        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}, the rest sold on the "
-        line += "same settlement \u00b7 harvest and sales balance."
-    elif packed is not None and diff > 0:
-        # A packed crop: the handler's pack-out is on every harvest record, so the gap between
-        # harvest and sale is stated from the records, not handed back to the operator.
-        shrink = balance.harvested - packed
-        unsold = packed - balance.sold
-        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}."
-        if unsold == 0:
-            # 🔴 2026-09-30 (audit T22): this said the gap "is the handler's culls and shrink". No
-            # cull or loss record exists anywhere in the data model; the pack-out figure shows a
-            # difference, not its cause. State the record, name no cause.
-            line += (
-                f" Sales match the pack-out. The handler's pack-out records {fmt_total(shrink, balance.unit)} "
-                "less than was harvested."
-            )
-        elif unsold > 0:
-            line += (
-                f" {fmt_total(unsold, balance.unit)} of the packed-out crop is not accounted for by a sale of "
-                "this lot. State whether it is in storage or was sold under another record."
-            )
-        else:
-            line = (
-                f"[REVIEW] {line} Sales exceed the handler's pack-out by {fmt_total(-unsold, balance.unit)}. "
-                "A pack-out figure is missing, or a sale is filed against the wrong lot."
-            )
-    elif diff == 0:
-        line += " \u00b7 harvest and sales balance."
-    elif diff > 0:
-        line += (
-            f" \u00b7 {fmt_total(diff, balance.unit)} harvested is on no sale, pack-out or loss record in "
-            "Trazo for this lot. State where it went."
-        )
-    else:
-        line = (
-            f"[REVIEW] {line} \u00b7 sales exceed the recorded harvest by {fmt_total(-diff, balance.unit)}. "
-            "A harvest record is missing, or a sale is filed against the wrong lot."
-        )
-    out.append(Paragraph(_escape(line), styles["body"]))
+    out.append(Paragraph(_escape(f"[REVIEW] {text}" if review else text), styles["body"]))
     out.extend(_buffer_crop_flowables(balance, styles))
     return out
 
 
 def _buffer_crop_flowables(balance, styles) -> list:
     """The § 205.202(c) buffer crop, stated beside the organic balance it is kept out of."""
-    from certifications.services.audit_trail_exhibit import fmt_total
+    from certifications.services.audit_trail_exhibit import buffer_statement
 
-    if balance is None or (balance.buffer_harvested is None and balance.buffer_sold is None):
-        return []
-    bits = []
-    if balance.buffer_harvested is not None:
-        bits.append(f"{fmt_total(balance.buffer_harvested, balance.unit)} harvested from the buffer row")
-    if balance.buffer_sold is not None:
-        bits.append(
-            f"{fmt_total(balance.buffer_sold, balance.unit)} sold on "
-            f"{_count_phrase(balance.buffer_sale_count, 'invoice')} that do not identify it as organic"
-        )
-    return [
-        Paragraph(
-            _escape(
-                "Buffer crop (7 CFR 205.202(c)), counted apart from the organic lot above: " + " · ".join(bits) + "."
-            ),
-            styles["meta"],
-        )
-    ]
+    text = buffer_statement(balance)
+    return [Paragraph(_escape(text), styles["meta"])] if text else []
 
 
 def _audit_trail_exhibit_pdf(osp) -> bytes:

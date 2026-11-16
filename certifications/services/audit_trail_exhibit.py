@@ -221,6 +221,12 @@ class LotBalance:
     buffer_harvested: Optional[Decimal] = None
     buffer_sold: Optional[Decimal] = None
     buffer_sale_count: int = 0
+    #: The part of `sold` whose invoice does not identify the product as organic. It left the
+    #: organic lot all the same, so it is subtracted; it is named so a reader sees it (overall
+    #: review 2026-11, OV-FJ-C24: it was counted apart as buffer crop, and the trace said the
+    #: whole harvest was unsold while the dossier subtracted it).
+    sold_not_organic: Optional[Decimal] = None
+    sold_not_organic_count: int = 0
     unit: str = ""
     harvest_count: int = 0
     sale_count: int = 0
@@ -260,6 +266,58 @@ def _is_buffer_pick(ev) -> bool:
     return ev.buffer_disposition_entered_commerce() and bool((ev.buffer_disposition_quantity or "").strip())
 
 
+def season_sells_buffer_crop(season_ids) -> bool:
+    """True when any of these seasons records § 205.202(c) buffer crop going into someone else's
+    hands: a harvest record or a buffer-use (BU) record whose disposition entered commerce."""
+    from history.models import ProductionEvent
+
+    ids = {pk for pk in season_ids if pk is not None}
+    if not ids:
+        return False
+    return ProductionEvent.objects.filter(
+        history_id__in=ids,
+        type__in=(ProductionEvent.HARVESTING, ProductionEvent.BUFFER_USE),
+        buffer_disposition__in=ProductionEvent.BUFFER_DISPOSITIONS_ENTERING_COMMERCE,
+    ).exists()
+
+
+def buffer_sales(all_harvest_events, all_sales) -> list:
+    """The sales that carried the buffer crop off the farm, on evidence only; never the organic lot.
+
+    Overall review 2026-11, OV-FJ-C24: every sale whose invoice did not identify the product as
+    organic was read as buffer crop, in a season with no buffer crop at all. `organic_on_invoice`
+    defaults to False, so a grower who left it unticked had every sale counted apart: the trace said
+    the whole harvest was unsold, storage said it was still in the cooler, and the dossier, which
+    subtracted the sale, gave another figure. A sale is the buffer crop when:
+
+      * it names the picks it drew from (`harvest_events`) and every one is a buffer-row pick
+        (`_is_buffer_pick`); or
+      * it names no pick, its invoice does not identify it as organic, and its season records buffer
+        crop entering commerce (`season_sells_buffer_crop`): the only case where a buffer crop
+        exists to have been sold on it.
+
+    Every other sale left the organic lot, whatever its invoice says.
+    """
+    seasons = {getattr(s, "production_id", None) for s in all_sales} | {
+        getattr(ev, "history_id", None) for ev in all_harvest_events
+    }
+    sells_buffer = None
+    out = []
+    for sale in all_sales:
+        linked = list(sale.harvest_events.all()) if getattr(sale, "pk", None) else []
+        if linked:
+            if all(_is_buffer_pick(ev) for ev in linked):
+                out.append(sale)
+            continue
+        if sale.organic_on_invoice:
+            continue
+        if sells_buffer is None:
+            sells_buffer = season_sells_buffer_crop(seasons)
+        if sells_buffer:
+            out.append(sale)
+    return out
+
+
 def _units_phrase(units) -> str:
     return ", ".join(sorted(u or "no unit" for u in units))
 
@@ -267,23 +325,31 @@ def _units_phrase(units) -> str:
 def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
     """Sum each side only when every record carries a quantity and all share one unit.
 
-    The organic lot is what balances: a buffer-row pick (see `_is_buffer_pick`), and a sale not
-    invoiced as organic, are counted apart. Netted in, they made the organic harvest look bigger
-    than the fruit that could be sold as organic.
+    The organic lot is what balances: a buffer-row pick (see `_is_buffer_pick`) and a sale of the
+    buffer crop (see `buffer_sales`) are counted apart. Netted in, they made the organic harvest look
+    bigger than the fruit that could be sold as organic. Every other sale left the lot and is
+    subtracted; those whose invoice does not identify the product as organic are named inside the
+    sold figure (`sold_not_organic`), never left out of it.
     """
     from history.services.audit_export_service import AuditExportService
 
     canonical = AuditExportService._canonical_unit
     buffer_events = [ev for ev in all_harvest_events if _is_buffer_pick(ev)]
     harvest_events = [ev for ev in all_harvest_events if ev not in buffer_events]
-    buffer_sales = [s for s in all_sales if not s.organic_on_invoice]
-    sales = [s for s in all_sales if s.organic_on_invoice]
+    apart = buffer_sales(all_harvest_events, all_sales)
+    sales = [s for s in all_sales if s not in apart]
+    not_organic = [s for s in sales if not s.organic_on_invoice]
     buffer_harvested = (
         sum((Decimal(str(ev.yield_quantity)) for ev in buffer_events if ev.yield_quantity is not None), Decimal(0))
         or None
     )
-    buffer_sold = sum((Decimal(str(s.quantity)) for s in buffer_sales if s.quantity is not None), Decimal(0)) or None
-    buffer = dict(buffer_harvested=buffer_harvested, buffer_sold=buffer_sold, buffer_sale_count=len(buffer_sales))
+    buffer_sold = sum((Decimal(str(s.quantity)) for s in apart if s.quantity is not None), Decimal(0)) or None
+    buffer = dict(
+        buffer_harvested=buffer_harvested,
+        buffer_sold=buffer_sold,
+        buffer_sale_count=len(apart),
+        sold_not_organic_count=len(not_organic),
+    )
     if not harvest_events:
         # Name the actual reason. "No harvest record" printed beside a listed harvest is a
         # false statement about the operation's records.
@@ -348,12 +414,110 @@ def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
     return LotBalance(
         harvested=sum((Decimal(str(ev.yield_quantity)) for ev in harvest_events), Decimal(0)),
         sold=sum((Decimal(str(s.quantity)) for s in sales), Decimal(0)),
+        sold_not_organic=(sum((Decimal(str(s.quantity)) for s in not_organic), Decimal(0)) if not_organic else None),
         packed_out=packed_out,
         unit=unit,
         harvest_count=len(harvest_events),
         sale_count=len(sales),
         **buffer,
     )
+
+
+def _count_of(count: int, noun: str) -> str:
+    return f"{count} {noun}" + ("" if count == 1 else "s")
+
+
+def balance_statement(balance, *, season_open: bool = False, as_at: str = "") -> tuple[str, bool]:
+    """The organic lot's harvested minus sold as one sentence, and whether it is a [REVIEW].
+
+    One sentence for every document that states the balance (the exhibit's Part B step 4 and the
+    dossier's Output Reconciliation), so the two cannot give an inspector different figures for
+    one season (overall review 2026-11, OV-FJ-C24). The sentence carries no "[REVIEW]" marker; the
+    caller prints it its own way. A balance that cannot be computed returns its reason, and the
+    caller says who states it.
+    """
+    if balance is None or balance.difference is None:
+        reason = balance.not_computed if balance is not None else "no harvest or sale is on record"
+        return f"Balance not computed: {reason}.", False
+    line = (
+        f"Harvested {fmt_total(balance.harvested, balance.unit)} ({_count_of(balance.harvest_count, 'harvest record')})"
+        f" \u00b7 sold {fmt_total(balance.sold, balance.unit)} ({_count_of(balance.sale_count, 'sale')})"
+    )
+    if balance.sold_not_organic_count and balance.sold_not_organic is not None:
+        line += (
+            f", of which {fmt_total(balance.sold_not_organic, balance.unit)} on "
+            f"{_count_of(balance.sold_not_organic_count, 'invoice')} that do not identify it as organic"
+        )
+    diff = balance.difference
+    packed = balance.packed_out
+    if packed is not None and diff == 0:
+        # Balanced AND packed: the fresh pack-out and the processing fruit are separate sales of
+        # the same delivery, and the pack-out is the number a reviewer reads first.
+        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}, the rest sold on the "
+        return line + "same settlement \u00b7 harvest and sales balance.", False
+    if packed is not None and diff > 0:
+        # A packed crop: the handler's pack-out is on every harvest record, so the gap between
+        # harvest and sale is stated from the records, not handed back to the operator.
+        shrink = balance.harvested - packed
+        unsold = packed - balance.sold
+        line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}."
+        if unsold == 0:
+            # 2026-09-30 (audit T22): no cull or loss record exists anywhere in the data model; the
+            # pack-out figure shows a difference, not its cause. State the record, name no cause.
+            return (
+                line + f" Sales match the pack-out. The handler's pack-out records {fmt_total(shrink, balance.unit)} "
+                "less than was harvested.",
+                False,
+            )
+        if unsold > 0:
+            return (
+                line + f" {fmt_total(unsold, balance.unit)} of the packed-out crop is not accounted for by a sale of "
+                "this lot. State whether it is in storage or was sold under another record.",
+                False,
+            )
+        return (
+            line + f" Sales exceed the handler's pack-out by {fmt_total(-unsold, balance.unit)}. "
+            "A pack-out figure is missing, or a sale is filed against the wrong lot.",
+            True,
+        )
+    if diff == 0:
+        return line + " \u00b7 harvest and sales balance.", False
+    if diff > 0:
+        if season_open:
+            # An open season is still being picked and sold: the difference is what no sale
+            # recorded so far accounts for, not something to explain yet.
+            when = f", as at {as_at}" if as_at else ""
+            return (
+                line + f" \u00b7 {fmt_total(diff, balance.unit)} harvested is on no sale recorded so far "
+                f"(the season is open{when}).",
+                False,
+            )
+        return (
+            line + f" \u00b7 {fmt_total(diff, balance.unit)} harvested is on no sale, pack-out or loss record in "
+            "Trazo for this lot. State where it went.",
+            False,
+        )
+    return (
+        line + f" \u00b7 sales exceed the recorded harvest by {fmt_total(-diff, balance.unit)}. "
+        "A harvest record is missing, or a sale is filed against the wrong lot.",
+        True,
+    )
+
+
+def buffer_statement(balance) -> str:
+    """The § 205.202(c) buffer crop, stated beside the organic balance it is kept out of; "" when
+    there is none."""
+    if balance is None or (balance.buffer_harvested is None and balance.buffer_sold is None):
+        return ""
+    bits = []
+    if balance.buffer_harvested is not None:
+        bits.append(f"{fmt_total(balance.buffer_harvested, balance.unit)} harvested from the buffer row")
+    if balance.buffer_sold is not None:
+        bits.append(
+            f"{fmt_total(balance.buffer_sold, balance.unit)} sold on "
+            f"{_count_of(balance.buffer_sale_count, 'invoice')} that do not identify it as organic"
+        )
+    return "Buffer crop (7 CFR 205.202(c)), counted apart from the organic lot: " + " \u00b7 ".join(bits) + "."
 
 
 @dataclass
@@ -430,7 +594,9 @@ def buffer_dispositions(establishment) -> list:
     asks for the disposition and the paperwork proving it. The exhibit walks ONE lot, so on a farm
     whose buffer row is on a different block than the traced lot — the usual case — the packet
     showed the operator's claim that buffer records are kept and not one of them (WSDA specimen
-    read, 2026-09-12). Sales are matched by season, and only those NOT invoiced as organic.
+    read, 2026-09-12). Sales are matched by season, and only those `buffer_sales` attributes to the
+    buffer crop: a sale not invoiced as organic is not, by that alone, a sale of the buffer crop
+    (overall review 2026-11, OV-FJ-C24).
     """
     from history.models import ProductionEvent, SalesRecord
 
@@ -449,6 +615,8 @@ def buffer_dispositions(establishment) -> list:
         if not pick.buffer_disposition_entered_commerce():
             continue
         season = pick.history
+        season_sales = list(SalesRecord.objects.live().filter(production=season).order_by("sale_date", "pk"))
+        season_picks = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))
         sales = [
             (
                 s.sale_date.isoformat() if s.sale_date else "",
@@ -457,9 +625,7 @@ def buffer_dispositions(establishment) -> list:
                 s.invoice_number or "",
                 bool(s.organic_on_invoice),
             )
-            for s in SalesRecord.objects.live()
-            .filter(production=season, organic_on_invoice=False)
-            .order_by("sale_date")
+            for s in buffer_sales(season_picks, season_sales)
         ]
         out.append(
             BufferDisposition(
