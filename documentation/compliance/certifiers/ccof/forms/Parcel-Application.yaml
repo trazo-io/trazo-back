@@ -382,6 +382,8 @@ items:
   trazo:
     questions:
     - parcel_application.dlpm_none_within_tenure
+    - parcel_application.dlpm_in_tenure_date
+    - parcel_application.dlpm_none_since_in_tenure_date
     - parcel_application.affidavit_card
     - parcel_application.transition_card
     models:
@@ -397,6 +399,10 @@ items:
     printed as 'None applied since tenure began (declared)') rather than a blank, and the
     declaration is shown with a '[REVIEW]' line when a dated prohibited application inside the
     tenure contradicts it — both sides visible, neither hidden.
+    Since 2026-11-15 an operation that last applied a prohibited material itself, and so answers that
+    declaration No, gives the DLPM as a date with the statement that none followed. The 36-month
+    accounting runs from it (F6 asks for prior controllers only when the operation has not managed
+    the parcel since the DLPM), and the transition card reads the same date.
 - ref: F5
   asks: Material(s) applied on the DLPM.
   status: covered

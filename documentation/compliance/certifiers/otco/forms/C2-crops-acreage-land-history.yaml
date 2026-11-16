@@ -298,6 +298,8 @@ items:
     questions:
     - parcel_application.crop_history
     - parcel_application.transition_card
+    - parcel_application.dlpm_in_tenure_date
+    - parcel_application.dlpm_none_since_in_tenure_date
     - parcel_application.certificate_card
     - parcel_application.no_lapse_attested
     - parcel_application.certified_branch
@@ -320,6 +322,8 @@ items:
     anchors the 36 months is asked on page B (2.1 8)) and optional, like every parcel question. A
     currently certified parcel follows OTCO's own route (certificate and no-lapse statement), and a
     certificate copy ships under parcels/certificates/.
+    Since 2026-11-15 an operation that last applied a prohibited material itself states that date and
+    whether any followed, and the 36-month accounting begins the day after it, as 2.4 allows.
 - ref: '2.5'
   asks: AFFIRMATION STATEMENTS — provide signed affirmations for the land history in 2.4. Every distinct party
     that has had management of the parcel during the past 36 months is required to sign; a separate narrative
