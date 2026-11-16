@@ -1686,7 +1686,9 @@ def _organic_basis_cell(event, raw=_UNSET):
     # Either catalogue backs the claim. WSDA added 2026-09-02: `wsda_listed` was already in
     # the set above, so a WSDA basis was claimable and unbackable — it carried the
     # "no listing on file" suffix even when the operator had attached the WSDA row.
-    if getattr(event, "omri_product_id", None) or getattr(event, "wsda_material_id", None):
+    from product.services.input_evidence import listing_on_file
+
+    if listing_on_file(event):
         return label
     return f"{label} — grower-selected, no listing on file"
 

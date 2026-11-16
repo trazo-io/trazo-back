@@ -59,6 +59,19 @@ class InputRecord:
     source: str  # ChemicalEvent | SoilManagementEvent | PestManagementEvent
     record_id: int
     season_id: Optional[int] = None
+    #: An OMRI or WSDA listing is attached to the record (`listing_on_file`). Only a chemical
+    #: application can hold one; an amendment's "OMRI listed" is always the operator's word alone.
+    listing_on_file: bool = False
+
+
+def listing_on_file(event) -> bool:
+    """Whether the record carries the listing an "OMRI listed" or "WSDA listed" pick names.
+
+    One rule for every page of a packet. The Input Log's Organic Status cell has read it since
+    2026-08-20; the land history printed the bare pick until 2026-11-16 (OV-MT-C08), so two pages
+    of one packet disagreed about the same spray. Either catalogue counts, as it does there.
+    """
+    return bool(getattr(event, "omri_product_id", None) or getattr(event, "wsda_material_id", None))
 
 
 @dataclass(frozen=True)
@@ -123,6 +136,7 @@ def parcel_inputs(parcel) -> List[InputRecord]:
                 "ChemicalEvent",
                 ev.pk,
                 ev.history_id,
+                listing_on_file(ev),
             )
         )
     for ev in SoilManagementEvent.objects.filter(history__parcel=parcel):
@@ -190,8 +204,17 @@ _ALLOWED_BASIS_WORDS = {
 }
 
 
+#: Picks that name a listing Trazo can look for on the record. A seal on the label or a
+#: certifier's review is not a listing, and the line already attributes those to the operator.
+_LISTING_BASIS = frozenset({"omri_listed", "wsda_listed"})
+
+
 def describe(record: InputRecord) -> str:
     words = STATUS_WORDS[record.status]
     if record.status == ALLOWED and record.raw_status in _ALLOWED_BASIS_WORDS:
-        words = f"{words}: {_ALLOWED_BASIS_WORDS[record.raw_status]}"
+        basis = _ALLOWED_BASIS_WORDS[record.raw_status]
+        if record.raw_status in _LISTING_BASIS and not record.listing_on_file:
+            # The Input Log's words for the same pick, so the two pages read alike.
+            basis = f"{basis} (no listing on file)"
+        words = f"{words}: {basis}"
     return f"{record.day.isoformat()} · {record.product} · {record.kind} · {words}"
