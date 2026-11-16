@@ -1341,6 +1341,47 @@ class Run7bResidualTests(TestCase):
         self._compost(purchased=False)
         self.assertIn("No (C:N)", flowable_text(self._svc()._build_soil_section()))
 
+    def _pile(self, method, days, turnings):
+        return SoilManagementEvent.objects.create(
+            history=self.history,
+            date=timezone.now(),
+            description="on-farm pile",
+            type="CO",
+            amendment_type="compost",
+            compost_feedstock="straw, manure",
+            compost_initial_cn_ratio=30,
+            compost_peak_temp_f=145,
+            compost_duration_days_at_temp=days,
+            compost_turning_count=turnings,
+            compost_method=method,
+        )
+
+    def _compost_verdicts(self):
+        """The Compliant column of the dossier's compost temperature table."""
+        for element in self._svc()._build_soil_section():
+            rows = getattr(element, "_cellvalues", None) or []
+            header = " ".join(getattr(cell, "text", "") or "" for cell in rows[0]) if rows else ""
+            if "Turnings" in header and "Compliant" in header:
+                return [getattr(row[-1], "text", "") for row in rows[1:]]
+        self.fail("the soil section printed no compost temperature table")
+
+    def test_the_recorded_method_decides_the_time_at_temperature(self):
+        """2026-11-16, the Calapooia specimen read: a windrow with 16 days at temperature and three
+        turnings printed "Compliant: Yes". The table accepted any pile at 3 days whatever its
+        method; § 205.203(c)(2)(iii) asks a windrow for 15 days and at least five turnings."""
+        cases = [
+            ("windrow", 16, 3, "No"),
+            ("windrow", 16, 5, "Yes"),
+            ("static_aerated", 3, 0, "Yes"),
+            ("in_vessel", 2, 0, "No"),
+            (None, 16, 3, "Not established (method not recorded)"),
+        ]
+        for method, days, turnings, expected in cases:
+            with self.subTest(method=method, days=days, turnings=turnings):
+                SoilManagementEvent.objects.filter(history=self.history).delete()
+                self._pile(method, days, turnings)
+                self.assertEqual(self._compost_verdicts(), [expected])
+
 
 class Run7BrowserPassTests(TestCase):
     """Browser pass on run 7 (2026-10-04): the certifier review page shows the readiness rows, and
