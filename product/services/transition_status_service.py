@@ -203,7 +203,10 @@ def compute_transition_status(parcel) -> TransitionStatus:
     # Source 4: the operation's own statement of its last prohibited application (Parcel Application F,
     # CCOF ORGB49 F4). A grower converting their own ground gives the date there, and the land-history
     # table prints it as the current manager's; read here too so the card and that table agree. A day
-    # after today is an entry the page flags, never a clock.
+    # after today is an entry the page flags, never a clock. A day before the tenure began still dates
+    # the clock (review of back #444): it is the operation's statement that a prohibited material went
+    # on then, and dropping it would let the card read clean over it. The table does not use it to
+    # account for the window, and both the table and section B print the review line naming the clash.
     from certifications.services.parcel_land_history import stated_last_in_tenure
 
     stated = stated_last_in_tenure(parcel)

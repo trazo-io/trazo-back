@@ -656,6 +656,19 @@ class OwnTransitionRecordsTests(TestCase):
                 self.parcel.save(update_fields=["application_answers"])
                 self.assertIsNone(compute_transition_status(self.parcel).last_prohibited_date)
 
+    def test_a_date_before_the_tenure_still_dates_the_clock_and_section_b_names_the_clash(self):
+        """Review of back #444: the clock keeps a stated prohibited application the table cannot place, so the
+        card never reads clean over it; section B carries the same review line as the table."""
+        from product.services.transition_status_service import compute_transition_status, operator_statement_lines
+
+        before = self.parcel.date_began_managing - timedelta(days=30)
+        self.parcel.application_answers = {**self.parcel.application_answers, "dlpm_in_tenure_date": before.isoformat()}
+        self.parcel.save(update_fields=["application_answers"])
+        self.assertEqual(compute_transition_status(self.parcel).last_prohibited_date, before)
+        review = [line for line in operator_statement_lines(self.parcel) if line.startswith("[REVIEW] The stated date")]
+        self.assertEqual(len(review), 1, operator_statement_lines(self.parcel))
+        self.assertIn("is before it began managing it", review[0])
+
     def test_the_operator_statements_name_the_date(self):
         from product.services.transition_status_service import operator_statement_lines
 
