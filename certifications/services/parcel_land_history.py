@@ -237,8 +237,14 @@ def current_manager_row(parcel, answers: Optional[dict] = None) -> ManagerRow:
         attested = attested.get("value")
     began = parcel.date_began_managing
     contradiction = bool(attested is True and last_prohibited and began and last_prohibited >= began)
+    stated = stated_last_in_tenure(parcel, answers)
     if attested is True:
         declared = "None applied since tenure began (declared)"
+    elif stated.covers_since:
+        # The operation's own DLPM and its statement that none followed (CCOF ORGB49 F4). A dated
+        # prohibited record after that day sits against the statement and is flagged like the one above.
+        declared = f"None applied since {stated.day.isoformat()} (declared)"
+        contradiction = bool(last_prohibited and last_prohibited > stated.day)
     elif attested is False:
         # "No" to the statement "no prohibited material has been applied" is a negated boolean and
         # cannot be read as an affirmative that one WAS applied — the dated records say that, if
@@ -278,6 +284,64 @@ def _stated_certified(answers) -> bool:
     if isinstance(value, dict):
         value = value.get("value")
     return value == "yes"
+
+
+@dataclass(frozen=True)
+class StatedLast:
+    """The last prohibited application the operation states it made itself (Parcel Application F,
+    CCOF ORGB49 F4), and whether it declares none since. Read only where the questions are asked: a
+    parcel not stated currently certified whose operator answered No to "none since I began managing it".
+    A stored answer left behind by a later change of those answers is not read."""
+
+    day: Optional[date] = None
+    none_since: Optional[bool] = None
+    #: Why the stated day cannot be placed in the operation's tenure, or "" when it can.
+    problem: str = ""
+
+    @property
+    def placed(self) -> bool:
+        return bool(self.day and not self.problem)
+
+    @property
+    def covers_since(self) -> bool:
+        return self.placed and self.none_since is True
+
+
+def _as_day(value) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value or "").strip()[:10])
+    except ValueError:
+        return None
+
+
+def stated_last_in_tenure(parcel, answers: Optional[dict] = None, today: Optional[date] = None) -> StatedLast:
+    from certifications.osp_modules.conditions import answer_value
+
+    if answers is None:
+        answers = getattr(parcel, "application_answers", None) or {}
+    if answer_value(answers, "currently_certified") not in ("no", "previously"):
+        return StatedLast()
+    if answer_value(answers, "dlpm_none_within_tenure") is not False:
+        return StatedLast()
+    none_since = answer_value(answers, "dlpm_none_since_in_tenure_date")
+    none_since = none_since if isinstance(none_since, bool) else None
+    day = _as_day(answer_value(answers, "dlpm_in_tenure_date"))
+    if day is None:
+        return StatedLast(none_since=none_since)
+    today = today or date.today()
+    began = getattr(parcel, "date_began_managing", None)
+    if day > today:
+        problem = f"The stated date of the last prohibited application, {day.isoformat()}, is after today"
+    elif began and day < began:
+        problem = (
+            f"The stated date of the last prohibited application while the operation managed this parcel, "
+            f"{day.isoformat()}, is before it began managing it ({began.isoformat()})"
+        )
+    else:
+        problem = ""
+    return StatedLast(day=day, none_since=none_since, problem=problem)
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +496,9 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None, 
         )
     else:
         own = f"the operation's own period from {began.isoformat()} is not covered: the operator has made no declaration for it"
+    stated = stated_last_in_tenure(parcel, today=today)
+    if not declared and stated.placed:
+        return _from_stated_last(stated, began, window_start, today)
     if began <= window_start and declared:
         return Coverage(
             window_start,
@@ -478,6 +545,8 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None, 
     ]
     if unplaced:
         bits.append(f"{unplaced} affidavit(s) carry no management period and cannot be placed in the window")
+    if stated.problem:
+        bits.append(f"[REVIEW] {stated.problem}")
     if gaps:
         bits.append("[REVIEW] not accounted for: " + ", ".join(f"{a.isoformat()} to {b.isoformat()}" for a, b in gaps))
     else:
@@ -485,6 +554,47 @@ def coverage(parcel, prior: Sequence[ManagerRow], today: Optional[date] = None, 
     return Coverage(
         window_start, today, complete=not gaps, gaps=tuple(gaps), unplaced=unplaced, text=". ".join(bits) + "."
     )
+
+
+def _from_stated_last(stated: StatedLast, began: date, window_start: date, today: date) -> Coverage:
+    """The window for a parcel whose operation states its own last prohibited application (CCOF ORGB49 F4).
+
+    The 36 months before an organic harvest run from that day, and the day lies inside the operation's
+    tenure, so every earlier manager's period falls before them: CCOF F6 asks for prior controllers only
+    when the operation has not managed the parcel "for the full past three years (or since the DLPM)".
+    What is left to account for is the days after it, covered only by the operation's statement that
+    none followed. A No to that statement is a declined declaration, read as not made, never as an
+    application.
+    """
+    day = stated.day.isoformat()
+    if stated.none_since is True:
+        if stated.day < window_start:
+            text = (
+                f"The operation has had control of this parcel for the full 36 months (since {began.isoformat()}); "
+                f"it states its last prohibited application on it was {day}, before the window, and declares none "
+                "since; no prior-manager affidavit is required for this window."
+            )
+        else:
+            text = (
+                f"Window {window_start.isoformat()} to {today.isoformat()}: the operation, managing this parcel since "
+                f"{began.isoformat()}, states its last prohibited application on it was {day} and declares none since. "
+                f"The 36 months before an organic harvest run from {day} (§ 205.202(b)); the operation has managed "
+                "the parcel since before that day, so no prior manager's period falls inside them."
+            )
+        return Coverage(window_start, today, complete=True, text=text)
+    start = max(window_start, stated.day + ONE_DAY)
+    gaps = ((start, today),) if start <= today else ()
+    lead = (
+        f"Window {window_start.isoformat()} to {today.isoformat()}: the operation, managing this parcel since "
+        f"{began.isoformat()}, states its last prohibited application on it was {day}, and the 36 months before "
+        "an organic harvest run from that day; it has not declared that none followed"
+    )
+    tail = (
+        "[REVIEW] not accounted for: " + ", ".join(f"{a.isoformat()} to {b.isoformat()}" for a, b in gaps)
+        if gaps
+        else "Every day of the window is accounted for"
+    )
+    return Coverage(window_start, today, complete=not gaps, gaps=gaps, text=f"{lead}. {tail}.")
 
 
 def season_evidence_lines(parcel, today: Optional[date] = None) -> List[str]:

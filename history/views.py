@@ -3440,6 +3440,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         response = super().create(request, *args, **kwargs)
         self._attach_completeness_gaps(response, getattr(self, "_completeness_event", None))
         self._attach_phi_conflicts(response, getattr(self, "_completeness_event", None))
+        self._attach_manure_conflicts(response, getattr(self, "_completeness_event", None))
         return response
 
     def _attach_phi_conflicts(self, response, event):
@@ -3457,6 +3458,20 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         found = conflicts_for_saved(event)
         if found is not None:
             response.data["phi_conflicts"] = found
+
+    def _attach_manure_conflicts(self, response, event):
+        """Echo any pick on this parcel that came sooner after raw manure than its harvest interval.
+
+        Non-blocking, like `phi_conflicts`: a harvest that happened is a record, and refusing it would only
+        lose it (`manure_check`). No key for a record that is neither a pick nor a manure application.
+        """
+        if not isinstance(response.data, dict) or event is None:
+            return
+        from .services.manure_check import conflicts_for_saved
+
+        found = conflicts_for_saved(event)
+        if found is not None:
+            response.data["manure_conflicts"] = found
 
     def _attach_completeness_gaps(self, response, event):
         """Echo certifier-required fields still missing on a just-saved event.
@@ -4907,6 +4922,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return response
         self._attach_completeness_gaps(response, instance)
         self._attach_phi_conflicts(response, instance)
+        self._attach_manure_conflicts(response, instance)
 
         return response
 

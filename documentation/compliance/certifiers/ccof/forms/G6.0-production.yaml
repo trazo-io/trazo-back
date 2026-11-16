@@ -162,20 +162,17 @@ items:
     prints: modules/G4_2.pdf §C (source types; the district, river or lake by name)
   # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
 - ref: D3
-  asks: Are you aware of any prohibited materials that are added to your irrigation water (e.g. algicides)?
-    (Yes / No.)
-  status: partial
-  severity: P2
+  asks: Are you aware of any prohibited materials that are added to your irrigation water (e.g. algicides)? (Yes
+    / No.)
+  status: covered
   trazo:
     questions:
     - g4_2_natural_resources.water_from_irrigation_district
     - g4_2_natural_resources.irrigation_district_additives
-    prints: modules/G4_2.pdf §C (not G6.0)
-  gap: Gated on `water_from_irrigation_district`, so a well, reservoir, river, or canal-company water
-    source is never asked this question at all — only water delivered through an irrigation district reaches
-    it.
-  fix: Ungate into an `irrigation_water_prohibited_additives` question asked for any water source; keep
-    the district-specific coaching (e.g. canal-company algaecides) when a district is selected.
+    - g4_2_natural_resources.non_district_water_additives
+    prints: modules/G4_2.pdf §C
+  note: Closed 2026-11-15. A district's water is asked by `irrigation_district_additives`; any other source by `non_district_water_additives`,
+    shown when a well, municipal supply, river, pond, cistern or other source is used. A No is an answer.
 - ref: D4
   asks: Does your organic cropland share irrigation lines or irrigation water (including tail water) with other
     cropland where prohibited materials are applied into the water? Yes / No.
@@ -206,26 +203,28 @@ items:
     - g4_2_natural_resources.shared_irrigation_mitigation
     - g4_2_natural_resources.irrigation_piping_map_upload
     - g4_2_natural_resources.irrigation_district_piping_map_upload
-    prints: modules/G4_2.pdf §C (district or shared-line measures; the piping diagram, asked on either branch, rides under attachments/g4_2_natural_resources/)
-  # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
+    - g4_2_natural_resources.water_additive_mitigation
+    prints: modules/G4_2.pdf §C (district or shared-line measures; the piping diagram, asked on either branch, rides
+      under attachments/g4_2_natural_resources/)
+  note: 'Closed 2026-11-09 by the water, lumber and non-organic-side slice. Measures for each yes: the district''s
+    plan, shared lines, and (2026-11-15) additives in water that is not a district''s (`water_additive_mitigation`).
+    Each branch carries its own piping diagram where one is asked.'
 - ref: D6
-  asks: Do you apply materials to organic crops or land via irrigation water (e.g. fertigation, irrigation
-    line cleaners, pH adjusters, etc.)? (No / Yes — list all materials on your Grower Materials Application.)
-  status: partial
-  severity: P2
+  asks: Do you apply materials to organic crops or land via irrigation water (e.g. fertigation, irrigation line
+    cleaners, pH adjusters, etc.)? (No / Yes — list all materials on your Grower Materials Application.)
+  status: covered
   trazo:
-    where: not in this packet; the operation's audit export, a separate document, shows fertigation on each application record
+    questions:
+    - g4_2_natural_resources.materials_via_irrigation
+    - g4_2_natural_resources.irrigation_material_types
+    - g4_2_natural_resources.irrigation_material_types_other
     models:
     - history.ChemicalEvent.is_fertigation
     - history.ChemicalEvent.application_method_structured (drip / chemigation)
-    prints: audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)
-  gap: No OSP-level question or Materials Application attestation exists for materials applied via irrigation.
-    Fertigation is recorded per chemical-application event, but irrigation line cleaners, pH adjusters,
-    and descalers have no event home at all, and the Materials Application attestations have no 'via irrigation'
-    category.
-  fix: Add `materials_via_irrigation` [boolean] + an `irrigation_materials_listed` attestation, prefilled
-    from fertigation/chemigation events; add an irrigation-system-materials category (line cleaners, pH
-    adjusters, descalers) to the Materials Application attestations.
+    prints: modules/G4_2.pdf §C
+  note: Closed 2026-11-15. `materials_via_irrigation` is the yes or no, its coaching naming fertigation, chemigation,
+    line cleaners, descalers and pH adjusters and asking each on the materials list (the Materials Application).
+    `irrigation_material_types` says which. Fertigation events stay on the activity records.
 - ref: E1
   asks: Do you store any prohibited materials (or materials not included on your approved OSP Materials
     List) on farm? (No — stop, this form is complete / Yes, complete this section.)

@@ -786,11 +786,13 @@ PARCEL_APPLICATION = Module(
                     "Three years of field history — crop grown, substances applied, and the "
                     "date/name of the last prohibited material — is the core of § 205.202(b) "
                     "eligibility. If you managed the land fewer than three years, a prior "
-                    "land manager affidavit covers the gap.",
+                    "land manager affidavit covers the gap. If you applied a prohibited "
+                    "material yourself, give its date: the 36 months run from it.",
                     "Tres años de historial del campo — cultivo, sustancias aplicadas y la "
                     "fecha/nombre del último material prohibido — es el núcleo de la "
-                    "elegibilidad § 205.202(b). Si manejó la tierra menos de tres años, una "
-                    "declaración jurada del manejador anterior cubre el vacío.",
+                    "elegibilidad § 205.202(b). Si manejaste la tierra menos de tres años, una "
+                    "declaración jurada del manejador anterior cubre el vacío. Si aplicaste tú "
+                    "un material prohibido, indica la fecha: los 36 meses corren desde ella.",
                 ),
             ),
             questions=(
@@ -1044,6 +1046,47 @@ PARCEL_APPLICATION = Module(
                     nop_cite="§ 205.202(b)",
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["no", "previously"]),),
+                ),
+                Question(
+                    # CCOF ORGB49 F4 (the DLPM), for land the operation itself last treated with a prohibited
+                    # material: a grower converting their own ground cannot truthfully answer the declaration
+                    # above Yes, and until 2026-11-15 nothing else could cover their own period, so the page
+                    # printed the whole window as not accounted for and pointed at a prior manager's affidavit.
+                    # CCOF F6 asks for prior controllers only when the operation has not managed the parcel
+                    # "for the full past three years (or since the DLPM)". The date also feeds the transition
+                    # clock (`compute_transition_status`), so the card and the land-history table agree.
+                    key="dlpm_in_tenure_date",
+                    kind="date",
+                    label=text(
+                        "Date of the last prohibited material applied to this parcel while you managed it",
+                        "Fecha de la última aplicación de un material prohibido en esta parcela mientras la manejabas",
+                    ),
+                    coaching=text(
+                        "CCOF calls this the DLPM. The 36 months before an organic harvest run from this date.",
+                        "CCOF lo llama DLPM. Los 36 meses previos a una cosecha orgánica corren desde esta fecha.",
+                    ),
+                    nop_cite="§ 205.202(b)",
+                    required=False,
+                    visible_when=(
+                        Condition(question="currently_certified", op="one_of", value=["no", "previously"]),
+                        Condition(question="dlpm_none_within_tenure", op="eq", value=False),
+                    ),
+                ),
+                Question(
+                    # The statement that accounts for the operation's own period from that date. Kept apart
+                    # from the date: a date alone says one application happened, not that none followed it.
+                    key="dlpm_none_since_in_tenure_date",
+                    kind="boolean",
+                    label=text(
+                        "No prohibited material has been applied to this parcel since that date.",
+                        "No se ha aplicado ningún material prohibido a esta parcela desde esa fecha.",
+                    ),
+                    nop_cite="§ 205.202(b)",
+                    required=False,
+                    visible_when=(
+                        Condition(question="currently_certified", op="one_of", value=["no", "previously"]),
+                        Condition(question="dlpm_none_within_tenure", op="eq", value=False),
+                    ),
                 ),
                 Question(
                     # WSDA AGR 2264 ref 13's N/A: "No input materials have been applied while under my

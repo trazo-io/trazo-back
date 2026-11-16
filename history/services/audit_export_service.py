@@ -788,6 +788,18 @@ def _compost_is_purchased(ev):
     )
 
 
+#: Said after a raw-manure conflict whose record is labelled as exempt with nothing to show it (manure_check).
+_MANURE_READ_AS_RAW = {
+    "composted": (
+        " The manure is recorded as composted, but the record carries neither the § 205.203(c)(2) figures nor a"
+        " supplier, so it is read as raw."
+    ),
+    "processed_5006": (
+        " The manure is recorded as processed (NOP 5006) with no processing temperature or attestation, so it is"
+        " read as raw."
+    ),
+}
+
 _COMPOST_SUPPLIER_DOCS_NOTE = "supplier's process documentation (C:N, temperatures, turnings) not on file"
 
 
@@ -4555,7 +4567,62 @@ class AuditExportService:
         # would read it as a category mismatch / regulatory misanchor.
         manure_interval_rule = self._manure_interval_rule_for_crop()
         manure_row_label = f"Raw manure interval ({manure_interval_rule['cite']})"
-        if not manure_events and compost_manure_notes:
+        # The recorded picks against raw manure on the parcel (OV-RK-C02): manure spread under an earlier
+        # season counts, so this can fire with no manure record on this production. An interval missing
+        # from this production's own manure records keeps the FAIL; it is the more serious gap.
+        from .manure_check import season_conflicts as manure_season_conflicts
+
+        manure_harvest_conflicts = manure_season_conflicts(p)
+        manure_interval_unrecorded = bool(manure_events) and manure_with_interval != len(manure_events)
+        manure_conflict_text = ""
+        if manure_harvest_conflicts:
+            first = manure_harvest_conflicts[0]
+            # Picks, not (application, pick) pairs, as the PHI row counts them.
+            pick_count = len({c.pick_id for c in manure_harvest_conflicts})
+            manure_conflict_text = (
+                f"{pick_count} pick(s) on this production came sooner after raw manure on the parcel than "
+                f"the harvest interval. The first: manure applied {first.applied.isoformat()}, picked "
+                f"{first.picked.isoformat()}, {first.days} day(s) after (interval {first.interval_days} days)."
+                + _MANURE_READ_AS_RAW.get(first.recorded_as, "")
+            )
+            manure_conflict_params = dict(
+                count=pick_count,
+                applied=first.applied.isoformat(),
+                picked=first.picked.isoformat(),
+                interval=first.interval_days,
+                recorded_as=first.recorded_as,
+            )
+        if manure_harvest_conflicts and manure_interval_unrecorded:
+            # The FAIL keeps its status and says the conflict too (review of back #446): the record missing
+            # its interval is where a pick inside it most needs saying.
+            snapshot_rows.append(
+                (
+                    manure_row_label,
+                    "FAIL",
+                    (
+                        f"{manure_with_interval}/{len(manure_events)} events have the "
+                        f"{manure_interval_rule['label']} interval recorded, safety-critical. {manure_conflict_text}"
+                    ),
+                    said(
+                        "raw_manure_interval.not_recorded_harvest_inside",
+                        recorded=manure_with_interval,
+                        total=len(manure_events),
+                        days=manure_interval_rule["days"],
+                        after=first.days,
+                        **manure_conflict_params,
+                    ),
+                )
+            )
+        elif manure_harvest_conflicts:
+            snapshot_rows.append(
+                (
+                    manure_row_label,
+                    "REVIEW",
+                    manure_conflict_text,
+                    said("raw_manure_interval.harvest_inside", days=first.days, **manure_conflict_params),
+                )
+            )
+        elif not manure_events and compost_manure_notes:
             # Run 7 (R7-09): never "N/A" after the compost row raised the interval question.
             snapshot_rows.append(
                 (
@@ -12425,7 +12492,9 @@ class AuditExportService:
             for ev in related_events(self.production, "history_productionevent_events", type="HA")
             if ev.yield_quantity
         ]
-        units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
+        # `_canonical_unit`, as `_lot_balance` does: "lb" and "lbs" are one unit, and a raw string
+        # compare sent such a season to the header total while the balance summed the picks.
+        units = {self._canonical_unit(_val(ev.yield_unit, "")) for ev in events}
         if events and len(units) == 1:
             return (
                 sum(ev.yield_quantity for ev in events),
@@ -12478,7 +12547,9 @@ class AuditExportService:
         ]
         if not events:
             return None
-        units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
+        # `_canonical_unit`, as `_resolve_harvest_total` does: summing "lb" and "lbs" picks there
+        # while this saw two units hid the very gap this check reports (review of back #448).
+        units = {self._canonical_unit(_val(ev.yield_unit, "")) for ev in events}
         header_amount = self.production.production_amount
         if len(units) != 1 or header_amount is None:
             return None
@@ -12750,7 +12821,38 @@ class AuditExportService:
         # An uninvoiced remainder is a normal, honest state. It is stated with the date it was
         # measured, because it changes the moment the operator records the sale.
         _as_of = _fmt_generated_date()
-        if harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit) and quantity_sold:
+        # Overall review 2026-11, OV-FJ-C24: with itemised sales this section computed its own
+        # balance (every sale against every pick, buffer picks included, with a header fallback),
+        # while the trace and the audit trail exhibit printed another for the same season. Both now
+        # print `balance_statement` over `_lot_balance`: the organic lot (buffer picks and buffer-
+        # crop sales counted apart, on evidence), every other sale subtracted whatever its invoice
+        # says, and one rule for a sale exceeding the harvest. A legacy production (no itemised
+        # sales) has no other document to disagree with and keeps the rows below.
+        lot_notes: list[str] = []
+        lot_review = ""
+        # The balance not computed (as on the trace): the yield row's total, picks or header, is
+        # the only harvest figure there is, so the oversell check below still reads it, as it did
+        # before the shared balance (review of back #448: gating this on "no harvest record" alone
+        # let a season with a blank-quantity pick or mixed pick units oversell with no flag).
+        lot_not_computed = False
+        if sales:
+            from certifications.services.audit_trail_exhibit import _lot_balance, balance_statement, buffer_statement
+
+            lot = _lot_balance(
+                list(related_events(self.production, "history_productionevent_events", type="HA")), sales
+            )
+            text, review = balance_statement(lot, season_open=self.production.finish_date is None, as_at=_as_of)
+            if lot.difference is None:
+                text += " Reconcile from the itemised sales below."
+            lot_not_computed = lot.difference is None
+            if review:
+                # Escaped: the flag paragraph below is raw markup, and a unit is operator text.
+                lot_review = _esc(f"Organic lot, harvested minus sold: {text}")
+            else:
+                output_rows.append(("Organic lot: harvested minus sold", text))
+            if buffer_statement(lot):
+                lot_notes.append(buffer_statement(lot))
+        elif harvest_amount and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit) and quantity_sold:
             balance = float(harvest_amount) - float(quantity_sold)
             output_rows.append(
                 (
@@ -12797,6 +12899,8 @@ class AuditExportService:
 
         for label, value in output_rows:
             elements.append(self._label_value(label, value))
+        for note in lot_notes:
+            elements.append(Paragraph(_esc(note), self._styles["footer_note"]))
 
         # --- Mass-balance integrity guardrails (§ 205.103(b)(2)) ---
         # A mass-balance section must CATCH an impossible balance, not print it
@@ -12816,7 +12920,15 @@ class AuditExportService:
                 "Corrections in the Record Change History below. Reconcile the two before "
                 "certifier submission."
             )
-        if harvest_amount and quantity_sold and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit):
+        if lot_review:
+            mb_flags.append(lot_review)
+        elif (
+            (not sales or lot_not_computed)
+            and harvest_amount
+            and quantity_sold
+            and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit)
+        ):
+            # Legacy production only (see `lot_review` above for itemised sales).
             # 2% tolerance absorbs rounding / unit-precision noise.
             if float(quantity_sold) > float(harvest_amount) * 1.02:
                 mb_flags.append(
@@ -19270,7 +19382,24 @@ class AuditExportService:
             # arithmetically meaningful.
             _csv_has_sales = bool(_csv_sales.buyer or _csv_sales.sale_date or quantity_sold)
             _csv_units_match = self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit)
-            if harvest_amount and not _csv_units_match and _csv_has_sales:
+            # Itemised sales: the PDF's balance, from the same function (overall review 2026-11,
+            # OV-FJ-C24). Only a legacy production keeps the rows below.
+            _csv_live = list(p.sales_records.live()) if _csv_sales.source == "sales_records" else []
+            if _csv_live:
+                from certifications.services.audit_trail_exhibit import (
+                    _lot_balance,
+                    balance_statement,
+                    buffer_statement,
+                )
+
+                _lot = _lot_balance(list(related_events(p, "history_productionevent_events", type="HA")), _csv_live)
+                _text, _review = balance_statement(_lot, season_open=p.finish_date is None, as_at=_fmt_generated_date())
+                if _lot.difference is None:
+                    _text += " Reconcile from the itemised sales."
+                writer.writerow(["Organic lot: harvested minus sold", f"[REVIEW] {_text}" if _review else _text])
+                if buffer_statement(_lot):
+                    writer.writerow(["Buffer crop (7 CFR 205.202(c))", buffer_statement(_lot)])
+            elif harvest_amount and not _csv_units_match and _csv_has_sales:
                 writer.writerow(
                     [
                         "Harvest minus sales recorded",

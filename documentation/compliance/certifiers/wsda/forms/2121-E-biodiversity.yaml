@@ -135,54 +135,38 @@ items:
       prints: modules/G4_2.pdf §C (irrigation source types, with 'we do not irrigate')
     # Closed 2026-11-09 by the water, lumber and non-organic-side slice.
   - ref: '8'
-    asks: Do you apply input materials through your irrigation system to sites where conventional or certified
-      crops are harvested? Consider materials applied to non-certified sites as well as certified sites. Yes
-      / No.
-    status: partial
-    severity: P2
+    asks: Do you apply input materials through your irrigation system to sites where conventional or certified crops
+      are harvested? Consider materials applied to non-certified sites as well as certified sites. Yes / No.
+    status: covered
     trazo:
-      where: not in this packet; the operation's audit export, a separate document, shows fertigation on each application record
+      questions:
+      - g4_2_natural_resources.materials_via_irrigation
       models:
       - history.ChemicalEvent.is_fertigation
       - history.ChemicalEvent.application_method_structured (drip / chemigation)
-      prints: audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)
-    gap: 'Same gap CCOF''s G6.0 D6 already names: no OSP-level question or Materials Application attestation
-      exists for materials applied via irrigation. Fertigation is recorded per chemical-application event, but
-      WSDA''s other categories — pre-harvest crop sanitizers, irrigation system cleaners, chemigated pesticides
-      — have no event home or attestation at all, and nothing answers WSDA''s 8b contamination-prevention question
-      either (the closest analog, CCOF G6.0 D5''s prohibited-materials mitigation textarea, is gated on a different
-      fact — a shared irrigation district connection — not on applying materials through one''s own system).'
-    fix: 'Same fix as CCOF G6.0 D6: add `materials_via_irrigation` [boolean] + `irrigation_materials_listed`
-      attestation, prefilled from fertigation/chemigation events; extend Materials Application with an irrigation-materials
-      category; add an `irrigation_contamination_prevention` [textarea] for 8b.'
+      prints: modules/G4_2.pdf §C
+    note: Closed 2026-11-15. `materials_via_irrigation` asks it of certified or other ground, as WSDA does.
   - ref: 8a
-    asks: If yes, what type of materials are applied through your irrigation system? Fertilizers / Pesticides
-      / Pre-harvest crop sanitizers / Irrigation system cleaners / Other.
-    status: partial
-    severity: P2
+    asks: If yes, what type of materials are applied through your irrigation system? Fertilizers / Pesticides / Pre-harvest
+      crop sanitizers / Irrigation system cleaners / Other.
+    status: covered
     trazo:
-      where: not in this packet; the operation's audit export, a separate document, shows fertigation on each application record
-      models:
-      - history.ChemicalEvent.is_fertigation
-      - history.ChemicalEvent.application_method_structured (drip / chemigation)
-      prints: audit dossier (fertigation column; per-event evidence only, no OSP question or attestation)
-    gap: Fertigation is recorded per chemical-application event, but pre-harvest crop sanitizers, irrigation
-      system cleaners and chemigated pesticides have no event home or attestation, and no OSP question asks the
-      material types.
-    fix: 'Same fix as CCOF G6.0 D6: add `materials_via_irrigation` [boolean] + `irrigation_materials_listed`
-      attestation, prefilled from fertigation/chemigation events; extend Materials Application with an irrigation-materials
-      category; add an `irrigation_contamination_prevention` [textarea] for 8b.'
+      questions:
+      - g4_2_natural_resources.irrigation_material_types
+      - g4_2_natural_resources.irrigation_material_types_other
+      prints: modules/G4_2.pdf §C
+    note: Closed 2026-11-15. WSDA's four types plus pH adjusters and other.
   - ref: 8b
     asks: If yes, describe your practices to prevent contamination of certified crops. Not applicable, all materials
       applied through irrigation systems are approved for use in organic production.
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: No question answers it. The closest analog, CCOF G6.0 D5's prohibited-materials mitigation textarea,
-      is gated on a shared irrigation district connection, not on applying materials through one's own system.
-    fix: Add an `irrigation_contamination_prevention` [textarea], visible when materials go through the irrigation
-      system.
+      questions:
+      - g4_2_natural_resources.irrigation_materials_all_approved
+      - g4_2_natural_resources.irrigation_contamination_prevention
+      prints: modules/G4_2.pdf §C
+    note: Closed 2026-11-15. `irrigation_materials_all_approved` is WSDA's "Not applicable, all approved"; on a No,
+      `irrigation_contamination_prevention` asks the practices.
 
   - ref: "9"
     asks: "Which of the following practices do you use to improve irrigation water use efficiency? (Alley cropping / Annual crop rotation / Contour buffer strips / Contour farming / Cover crop - Annual / Cross wind trap strips / Irrigation reservoir / Irrigation water management / Micro-irrigation / Mulching / No till / Ridge till / Row arrangement / Tailwater recovery / Windbreak or shelterbelt establishment / Other.)"

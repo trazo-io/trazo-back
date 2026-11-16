@@ -1325,6 +1325,105 @@ G4_2_NATURAL_RESOURCES = Module(
                     ),
                     compiles_to=CompileRule(template="Water quality testing frequency: {answer}."),
                 ),
+                # 2026-11-15: OTCO C9 9.2-1a asks HOW the water is verified free of contaminants, not only whether it is
+                # tested: a municipal supply's utility reports or a sealed well's assessment are answers too.
+                Question(
+                    key="water_verification_method",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "How do you verify that your irrigation water is free of contaminants?",
+                        "¿Cómo verificas que tu agua de riego está libre de contaminantes?",
+                    ),
+                    coaching=text(
+                        "Contaminants include prohibited substances and pathogens.",
+                        "Los contaminantes incluyen sustancias prohibidas y patógenos.",
+                    ),
+                    visible_when=(Condition("irrigation_source_types", "not_includes", "not_irrigated"),),
+                    nop_cite="§ 205.202",
+                    compiles_to=CompileRule(
+                        template="Irrigation water is verified free of contaminants by: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option(
+                            "lab_testing", text("Laboratory testing of the water", "Análisis de laboratorio del agua")
+                        ),
+                        Option(
+                            "utility_reports",
+                            text(
+                                "The municipal utility's water quality reports",
+                                "Los informes de calidad del agua del servicio municipal",
+                            ),
+                        ),
+                        Option(
+                            "district_statement",
+                            text(
+                                "The irrigation district's written statement",
+                                "La declaración escrita del distrito de riego",
+                            ),
+                        ),
+                        Option(
+                            "source_assessment",
+                            text(
+                                "An assessment of the source, such as a sealed, deep well",
+                                "Una evaluación de la fuente, como un pozo profundo y sellado",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                        Option(
+                            "not_verified",
+                            text("We do not verify it", "No lo verificamos"),
+                            exclusive=True,
+                            review="The operation states it does not verify that its irrigation water is free of "
+                            "contaminants.",
+                        ),
+                    ),
+                ),
+                Question(
+                    key="water_verification_method_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other way", "Describe la otra forma"),
+                    visible_when=(Condition("water_verification_method", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other verification of irrigation water: {answer}.", section_key="commingling_barriers"
+                    ),
+                ),
+                Question(
+                    key="water_contaminants_tested",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text("What is the water tested for?", "¿Para qué se analiza el agua?"),
+                    visible_when=(Condition("water_verification_method", "includes", "lab_testing"),),
+                    compiles_to=CompileRule(
+                        template="Irrigation water is tested for: {answer}.", section_key="commingling_barriers"
+                    ),
+                    options=(
+                        Option(
+                            "prohibited_substances",
+                            text(
+                                "Prohibited substances, such as pesticides", "Sustancias prohibidas, como plaguicidas"
+                            ),
+                        ),
+                        Option(
+                            "pathogens", text("Pathogens, such as generic E. coli", "Patógenos, como E. coli genérica")
+                        ),
+                        Option("nitrates", text("Nitrates", "Nitratos")),
+                        Option("heavy_metals", text("Heavy metals", "Metales pesados")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="water_contaminants_tested_other",
+                    kind="text",
+                    required=False,
+                    label=text("What else is it tested for?", "¿Para qué más se analiza?"),
+                    visible_when=(Condition("water_contaminants_tested", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Irrigation water is also tested for: {answer}.", section_key="commingling_barriers"
+                    ),
+                ),
                 Question(
                     key="water_from_irrigation_district",
                     kind="boolean",
@@ -1419,6 +1518,53 @@ G4_2_NATURAL_RESOURCES = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # 2026-11-15: OTCO C9 9.2-1b names four elements of the plan: the materials added, their frequency and
+                # timing, how contamination is prevented (the textarea above), and that the district contacts the
+                # operation before applying. The three the textarea left to the operator are asked on their own.
+                Question(
+                    key="district_additive_types",
+                    kind="text",
+                    required=False,
+                    label=text("Which materials does the district add?", "¿Qué materiales agrega el distrito?"),
+                    visible_when=(Condition("irrigation_district_additives", "eq", "yes"),),
+                    compiles_to=CompileRule(
+                        template="Materials the district adds to the water: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="district_additive_timing",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "How often and when does it add them, against your growing season?",
+                        "¿Con qué frecuencia y cuándo los agrega, en relación con tu temporada de cultivo?",
+                    ),
+                    placeholder=text(
+                        "e.g. copper sulfate for algae in July and August, after our last irrigation set",
+                        "p. ej. sulfato de cobre contra algas en julio y agosto, después de nuestro último riego",
+                    ),
+                    visible_when=(Condition("irrigation_district_additives", "eq", "yes"),),
+                    compiles_to=CompileRule(
+                        template="Frequency and timing of the district's additions: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="district_notifies_before_treatment",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Does the district contact you before it adds a prohibited material?",
+                        "¿El distrito te avisa antes de agregar un material prohibido?",
+                    ),
+                    visible_when=(Condition("irrigation_district_additives", "eq", "yes"),),
+                    compiles_to=CompileRule(
+                        template="The district contacts the operation before adding a prohibited material ({answer}).",
+                        template_false="The district does not contact the operation before adding a prohibited material.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 # CCOF G6.0 D5 asks for the diagram on either branch (district additives or shared lines);
                 # conditions are AND-only, so each branch carries its own upload (2026.11.09).
                 Question(
@@ -1447,6 +1593,154 @@ G4_2_NATURAL_RESOURCES = Module(
                     visible_when=(
                         Condition("irrigation_source_types", "not_includes", "not_irrigated"),
                         Condition("water_from_irrigation_district", "truthy"),
+                    ),
+                ),
+                # 2026-11-15: CCOF G6.0 D3 asks every irrigator about prohibited additives, not only a district's; the
+                # district's own question stays above. Shown for any source other than a district.
+                Question(
+                    key="non_district_water_additives",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Are you aware of any prohibited material, such as an algicide, added to irrigation water that "
+                        "does not come from an irrigation district?",
+                        "¿Sabes de algún material prohibido, como un alguicida, que se agregue al agua de riego que no "
+                        "proviene de un distrito de riego?",
+                    ),
+                    visible_when=(
+                        Condition(
+                            "irrigation_source_types",
+                            "includes_any",
+                            ["well", "municipal", "river_stream_lake", "pond_reservoir", "catchment_cistern", "other"],
+                        ),
+                    ),
+                    nop_cite="§ 205.202",
+                    compiles_to=CompileRule(
+                        template="A prohibited material is added to irrigation water from another source ({answer}).",
+                        template_false="No prohibited material is known to be added to irrigation water from a source "
+                        "other than a district.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="water_additive_mitigation",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "What do you do to keep that material away from organic crops and land?",
+                        "¿Qué haces para mantener ese material lejos de los cultivos y la tierra orgánicos?",
+                    ),
+                    visible_when=(Condition("non_district_water_additives", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Measures keeping additives in irrigation water from organic crops and land: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # 2026-11-15: CCOF G6.0 D6 and WSDA AGR 2121 E 8, 8a, 8b. Materials put through the irrigation system,
+                # on certified or other ground, their types, and how certified crops are kept from any that are not
+                # approved.
+                Question(
+                    key="materials_via_irrigation",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you apply any material through your irrigation system, on certified or other ground?",
+                        "¿Aplicas algún material a través de tu sistema de riego, en tierra certificada o en otra?",
+                    ),
+                    coaching=text(
+                        "Fertigation and chemigation count, and so do line cleaners, descalers and pH adjusters. List each "
+                        "material on your materials list.",
+                        "La fertirrigación y la quimigación cuentan, y también los limpiadores de líneas, los "
+                        "desincrustantes y los ajustadores de pH. Incluye cada material en tu lista de materiales.",
+                    ),
+                    visible_when=(Condition("irrigation_source_types", "not_includes", "not_irrigated"),),
+                    nop_cite="§ 205.203",
+                    compiles_to=CompileRule(
+                        template="Materials are applied through the irrigation system ({answer}).",
+                        template_false="No material is applied through the irrigation system.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="irrigation_material_types",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "What types of material go through the irrigation system?",
+                        "¿Qué tipos de material pasan por el sistema de riego?",
+                    ),
+                    visible_when=(Condition("materials_via_irrigation", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Material types applied through the irrigation system: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                    options=(
+                        Option("fertilizers", text("Fertilizers (fertigation)", "Fertilizantes (fertirrigación)")),
+                        Option("pesticides", text("Pesticides (chemigation)", "Plaguicidas (quimigación)")),
+                        Option(
+                            "pre_harvest_sanitizers",
+                            text("Pre-harvest crop sanitizers", "Desinfectantes de cultivo antes de la cosecha"),
+                        ),
+                        Option(
+                            "system_cleaners",
+                            text(
+                                "Irrigation line cleaners or descalers",
+                                "Limpiadores o desincrustantes de las líneas de riego",
+                            ),
+                        ),
+                        Option("ph_adjusters", text("pH adjusters", "Ajustadores de pH")),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="irrigation_material_types_other",
+                    kind="text",
+                    required=False,
+                    label=text("Describe the other material", "Describe el otro material"),
+                    visible_when=(Condition("irrigation_material_types", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other material applied through the irrigation system: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="irrigation_materials_all_approved",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is every material that goes through the irrigation system approved for organic production?",
+                        "¿Todos los materiales que pasan por el sistema de riego están aprobados para la producción "
+                        "orgánica?",
+                    ),
+                    visible_when=(Condition("materials_via_irrigation", "truthy"),),
+                    nop_cite="§ 205.206",
+                    compiles_to=CompileRule(
+                        template="Every material applied through the irrigation system is approved for organic "
+                        "production ({answer}).",
+                        template_false="Some material applied through the irrigation system is not approved for organic "
+                        "production.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="irrigation_contamination_prevention",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do you keep certified crops from the materials that are not approved?",
+                        "¿Cómo mantienes los cultivos certificados lejos de los materiales que no están aprobados?",
+                    ),
+                    coaching=text(
+                        "For example separate lines or injection points for certified blocks, flushing between uses, "
+                        "backflow prevention, and the records that show it.",
+                        "Por ejemplo, líneas o puntos de inyección separados para los bloques certificados, lavado entre "
+                        "usos, prevención de reflujo y los registros que lo demuestran.",
+                    ),
+                    visible_when=(Condition("irrigation_materials_all_approved", "eq", False),),
+                    compiles_to=CompileRule(
+                        template="Practices keeping certified crops from unapproved materials in the irrigation system: "
+                        "{answer}",
+                        section_key="commingling_barriers",
                     ),
                 ),
                 Question(

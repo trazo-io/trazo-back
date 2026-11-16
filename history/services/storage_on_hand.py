@@ -63,9 +63,17 @@ def _location_row(location: str, picks: list, sales: list) -> dict:
         not_computed=not computed,
         not_computed_code=code,
         units=units,
-        # Sales not invoiced as organic are counted apart, as on the season balance.
-        sold_not_organic_count=balance.buffer_sale_count,
+        # As on the season balance: a sale not invoiced as organic is inside "sold" (it left the
+        # cooler), and only a sale of the buffer crop is counted apart (overall review 2026-11,
+        # OV-FJ-C24: counting every unmarked sale apart kept sold fruit "on hand").
+        sold_not_organic_count=balance.sold_not_organic_count,
         sold_not_organic=(
+            fmt_total(balance.sold_not_organic, balance.unit)
+            if computed and balance.sold_not_organic is not None and balance.unit
+            else ""
+        ),
+        buffer_sale_count=balance.buffer_sale_count,
+        buffer_sold=(
             fmt_total(balance.buffer_sold, balance.unit)
             if computed and balance.buffer_sold is not None and balance.unit
             else ""

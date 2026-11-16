@@ -200,6 +200,29 @@ def compute_transition_status(parcel) -> TransitionStatus:
             )
         )
 
+    # Source 4: the operation's own statement of its last prohibited application (Parcel Application F,
+    # CCOF ORGB49 F4). A grower converting their own ground gives the date there, and the land-history
+    # table prints it as the current manager's; read here too so the card and that table agree. A day
+    # after today is an entry the page flags, never a clock. A day before the tenure began still dates
+    # the clock (review of back #444): it is the operation's statement that a prohibited material went
+    # on then, and dropping it would let the card read clean over it. The table does not use it to
+    # account for the window, and both the table and section B print the review line naming the clash.
+    from certifications.services.parcel_land_history import stated_last_in_tenure
+
+    stated = stated_last_in_tenure(parcel)
+    if stated.day and stated.day <= timezone.now().date():
+        findings.append(
+            ProhibitedFinding(
+                source="ParcelApplication",
+                date_observed=stated.day,
+                description=(
+                    f"Stated by the operation for {parcel.name}: last prohibited application while it managed "
+                    f"the parcel, {stated.day.isoformat()}"
+                ),
+                record_id=parcel.pk,
+            )
+        )
+
     findings.sort(key=lambda f: f.date_observed, reverse=True)
     unclassified.sort(key=lambda f: f.date_observed, reverse=True)
     unconfirmed.sort(key=lambda f: f.date_observed, reverse=True)
@@ -433,6 +456,21 @@ def operator_statement_lines(parcel) -> list[str]:
             f"The operator answered No to the declaration that no prohibited material has been applied "
             f"since {since} (Parcel Application F)."
         )
+        from certifications.services.parcel_land_history import stated_last_in_tenure
+
+        stated = stated_last_in_tenure(parcel)
+        if stated.problem:
+            lines.append(f"[REVIEW] {stated.problem}.")
+        elif stated.day and stated.none_since is True:
+            lines.append(
+                f"The operator states the last prohibited material it applied to this parcel was applied on "
+                f"{stated.day.isoformat()}, and declares none has been applied since."
+            )
+        elif stated.day:
+            lines.append(
+                f"The operator states the last prohibited material it applied to this parcel was applied on "
+                f"{stated.day.isoformat()}; it has not declared that none has been applied since."
+            )
     elif certified == "yes":
         lines.append(
             "The prohibited-materials declaration is not asked of a parcel the operation states is "
