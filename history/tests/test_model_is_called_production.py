@@ -1,10 +1,11 @@
 """Code calls the model `Production`; the name `History` is gone from it (2026-11-15).
 
 The model became `Production` in history 0264, and `History = Production` in history/models.py
-kept old imports working while 354 files moved over (scripts/rename_history_alias.py). A new
-`History` reference works only while that alias exists. Once it goes, the reference raises
-NameError: at import time if it is an import, but at RUN time if it sits in a function body, where
-no import check sees it. This test fails first.
+kept old imports working while 354 files moved over (scripts/rename_history_alias.py). The alias
+was deleted on 2026-11-16, so a `History` reference now fails, often late. An import of it fails
+when its module loads, which for a management command no test imports is the day someone runs it;
+`models.History` fails only when that line runs, and no linter sees it. Branches written before
+the rename bring such references in when they merge. This test names the line first.
 
 Only NAME tokens count. Strings, comments and docstrings keep their words (certifier forms really
 are called "Field History"), and migrations keep the model's name at the time they were written.
@@ -22,7 +23,6 @@ _spec = importlib.util.spec_from_file_location("rename_history_alias", ROOT / "s
 script = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(script)
 # The fix and this check share one walker and one tokenizer, so they cannot disagree about scope.
-ALIAS = ("history/models.py", script.ALIAS_LINE)
 
 
 class TheModelIsCalledProductionTests(SimpleTestCase):
@@ -33,8 +33,7 @@ class TheModelIsCalledProductionTests(SimpleTestCase):
             source = path.read_text()
             lines = source.splitlines()
             for row, _ in script.old_name_positions(source):
-                if (rel, lines[row - 1].strip()) != ALIAS:
-                    hits.append(f"{rel}:{row}: {lines[row - 1].strip()}")
+                hits.append(f"{rel}:{row}: {lines[row - 1].strip()}")
         self.assertEqual(hits, [], "run `poetry run python scripts/rename_history_alias.py && poetry run isort .`")
 
     def test_the_walk_reads_the_tree_it_is_about(self):

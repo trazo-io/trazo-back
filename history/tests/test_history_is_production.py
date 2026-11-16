@@ -49,9 +49,9 @@ class HistoryIsProductionTests(TransactionTestCase):
         from history import models as history_models
         from history.models import Production, ProductionPostHarvestFacility
 
-        # The alias old imports used, until the PR that deletes it. Read by name, so the guard against
-        # the old name in code (test_model_is_called_production) does not count this as a use.
-        self.assertIs(getattr(history_models, "History", None), Production)
+        # The alias old imports used (`History = Production`) is gone since 2026-11-16. Read by name, so
+        # the guard against the old name in code (test_model_is_called_production) does not count it.
+        self.assertFalse(hasattr(history_models, "History"))
         self.assertEqual(Production._meta.db_table, "history_history")
         self.assertEqual((self.content_type.app_label, self.content_type.model), ("history", "production"))
         link = ProductionPostHarvestFacility._meta

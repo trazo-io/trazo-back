@@ -1240,6 +1240,13 @@ jobs:
           fi
       - run: poetry run isort --check-only .
 
+      # 2026-11-16: a name that is never defined (F821) passes every import check when it sits in a
+      # function body, and fails only when that function runs. format.sh runs this selection; CI did
+      # not. main is clean under it (0 hits, about 7s). The flags are format.sh's, so a local pass is
+      # a CI pass. F82: undefined names; E9, F63, F7: syntax errors and invalid statements.
+      - name: Undefined names and syntax errors (flake8, as format.sh runs it)
+        run: poetry run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv,venv,node_modules,.git,__pycache__,migrations
+
       # 2026-11-04: nothing here checked that the models and the migrations agree, or that each
       # app has ONE leaf migration. A model change merged without its migration deploys fine and
       # then fails at the first write; two PRs that each add history 0247 already reached main

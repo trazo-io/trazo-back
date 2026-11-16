@@ -134,8 +134,9 @@ class Production(models.Model):
     # Schema remodel Phase 3 (2026-11-14): the model was `History`. It is a production season; the
     # name `History` described the table, not the thing. Renamed in Django state only:
     # `Meta.db_table` pins the table name, the app label stays `history`, and the ContentType row
-    # is renamed in place by the migration (same id, so the audit trail is untouched). `History`
-    # below stays as an alias until every import has moved.
+    # is renamed in place by the migration (same id, so the audit trail is untouched). The alias
+    # `History = Production` kept old imports working while code moved over; it was deleted on
+    # 2026-11-16. Comments, docstrings and migrations written before the rename still say History.
     ORCHARD = "OR"
     GARDEN = "GA"
 
@@ -983,11 +984,6 @@ class Production(models.Model):
 
     class Meta:
         db_table = "history_history"
-
-
-#: The model's name until 2026-11-14. Kept so existing imports and `History.objects` keep working;
-#: new code says `Production`.
-History = Production
 
 
 class ProductionPostHarvestFacility(models.Model):
