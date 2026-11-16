@@ -137,9 +137,9 @@ items:
   asks: The products identified below are to be added to my current Materials List.
   status: covered
   trazo:
-    where: 'modules/materials_application.pdf: a row added since the plan was filed says "Added to the list on
-      <date>, after the plan was filed on <date>", and the page lists every material added to and taken off
-      the list since that filing'
+    where: 'modules/materials_application.pdf: a row added since the plan was filed says on which day it was
+      added and on which day the plan was filed, and the page lists every material added to and taken off the
+      list since that filing'
     questions:
     - materials_application.materials_list_panel
     models:
@@ -225,7 +225,7 @@ items:
   status: covered
   trazo:
     where: 'modules/materials_application.pdf: the C11 table''s Third party review agency cell: OMRI or WSDA with
-      the listing''s own identifier, "Other: <agency>, <reference>" as the operator names it, or "No review
+      the listing''s own identifier, Other with the agency and reference the operator names, or "No review
       agency named" with the row''s basis'
     questions:
     - materials_application.materials_list_panel
