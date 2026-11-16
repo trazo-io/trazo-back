@@ -1242,6 +1242,25 @@ class NationalListSubstance(models.Model):
 
         return citation_letter(self) or (f"§ {self.cfr_section}" + (f"({self.subsection})" if self.subsection else ""))
 
+    @property
+    def rule_words(self) -> tuple[str, str] | None:
+        """(paragraph, the rule's words) for a § 205.601 row whose entry carries words beyond its name;
+        None otherwise. Verbatim from eCFR, never the paraphrase in `restriction_notes`."""
+        from certifications.services.national_list_citations import rule_words
+
+        return rule_words(self)
+
+    @property
+    def allowed_with_condition(self) -> bool:
+        """An allowed § 205.601 row the rule permits only under a condition of use (documented
+        deficiency, structural use only, minimise copper in the soil). No surface may call it plain
+        "allowed". Typed by paragraph in `national_list_citations.USE_CONDITION_601`."""
+        if (self.status or "").lower() != "allowed":
+            return False
+        from certifications.services.national_list_citations import use_condition
+
+        return use_condition(self) is not None
+
     def __str__(self):
         if not self.is_national_list_entry:
             return f"{self.substance_name} (nonsynthetic, no National List entry — {self.status})"

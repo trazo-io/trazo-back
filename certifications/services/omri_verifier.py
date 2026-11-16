@@ -422,13 +422,34 @@ def national_list_candidates_by_name(query: str, limit: int = 25):
     if exact or variants:
         return exact + variants
 
+    # The curated alias table the saved record is classified by (`history/signals.py`, the drift
+    # detector). "zinc sulfate", "Solubor" and "borax" are how a grower names the § 205.601(j)(7)
+    # rows, and none of them is contained in, or contains, the catalogue's row name, so until
+    # 2026-11-16 the lookup answered "no match" for the inputs whose condition (a documented
+    # deficiency) it most needs to show (overall review OV-MT-C01). An ambiguous term resolves to
+    # nothing here, exactly as on save.
+    #
+    # The alias hit LEADS the list and never replaces it. The table answers one row for save-time
+    # classification, and this function offers the grower a choice: "sulfur" is "Elemental sulfur"
+    # to the classifier, but the grower typing it may hold lime sulfur or sulfurous acid, and a list
+    # of one reads as unambiguous to `verify_input` (review of back #453).
+    from certifications.services.national_list_aliases import resolve_alias
+
+    canonical = resolve_alias(query)
+    aliased_pks = (
+        list(NationalListSubstance.objects.filter(substance_name=canonical).values_list("id", flat=True))
+        if canonical
+        else []
+    )
+
     rows = list(NationalListSubstance.objects.values_list("id", "substance_name_normalized"))
 
     forward = [(pk, n) for pk, n in rows if len(n) >= 5 and n in normalized]
     reverse = [(pk, n) for pk, n in rows if len(normalized) >= 3 and normalized in n and (pk, n) not in forward]
 
-    ordered_pks = [pk for pk, _ in sorted(forward, key=lambda pair: (-len(pair[1]), pair[0]))]
-    ordered_pks += [pk for pk, _ in sorted(reverse, key=lambda pair: (len(pair[1]), pair[0]))]
+    ordered_pks = list(aliased_pks)
+    ordered_pks += [pk for pk, _ in sorted(forward, key=lambda pair: (-len(pair[1]), pair[0])) if pk not in aliased_pks]
+    ordered_pks += [pk for pk, _ in sorted(reverse, key=lambda pair: (len(pair[1]), pair[0])) if pk not in aliased_pks]
     ordered_pks = ordered_pks[:limit]
 
     by_pk = {s.pk: s for s in NationalListSubstance.objects.filter(pk__in=ordered_pks)}

@@ -1120,6 +1120,19 @@ class _ApprovedNationalListInline(serializers.Serializer):
     is_conditionally_permitted = serializers.BooleanField(read_only=True)
     subsection = serializers.CharField(required=False, allow_null=True, allow_blank=True, read_only=True)
     restriction_notes = serializers.CharField(required=False, allow_null=True, allow_blank=True, read_only=True)
+    # A § 205.601 row the rule allows only under a condition of use, and the rule's own words for the
+    # row's paragraph (verbatim, English). The same fields the input lookup sends (OV-MT-C01).
+    allowed_with_condition = serializers.BooleanField(read_only=True)
+    rule_paragraph = serializers.SerializerMethodField()
+    rule_words = serializers.SerializerMethodField()
+
+    def get_rule_paragraph(self, obj):
+        found = getattr(obj, "rule_words", None)
+        return found[0] if found else None
+
+    def get_rule_words(self, obj):
+        found = getattr(obj, "rule_words", None)
+        return found[1] if found else None
 
 
 class _ApprovedOMRIInline(serializers.Serializer):

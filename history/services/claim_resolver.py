@@ -287,7 +287,8 @@ def resolve_input_status(chemical_event) -> dict:
     the frontend currently re-derives this client-side; serving it keeps the
     chip vocabulary in one place and lets the audit export reuse it.
 
-        status: omri_listed | national_list_allowed | national_list_conditional
+        status: omri_listed | wsda_listed | national_list_allowed | national_list_allowed_condition
+                | national_list_conditional
                 | organic_approved | conventional_documented | unclassified
 
     The organic side of the vocabulary is NOT decided here — it is asked of
@@ -304,6 +305,7 @@ def resolve_input_status(chemical_event) -> dict:
         LABEL_INPUT_NATIONAL_LIST,
         LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
+        LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION,
         LABEL_INPUT_OMRI_LISTED,
         LABEL_INPUT_WSDA_LISTED,
         _omri_listing_is_current,
@@ -364,6 +366,11 @@ def resolve_input_status(chemical_event) -> dict:
     elif listing.safe_label == LABEL_INPUT_NATIONAL_LIST:
         status = "national_list_allowed"
         label = LABEL_INPUT_NATIONAL_LIST
+    elif listing.safe_label == LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION:
+        # Same tier as the plain § 205.601 allowance, and after the not-organic check above: a
+        # grower who said the input was not organic-approved still outranks the citation.
+        status = "national_list_allowed_condition"
+        label = LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION
     elif listing.safe_label == LABEL_INPUT_GROWER_REPORTED:
         status = "organic_approved"
         label = LABEL_INPUT_GROWER_REPORTED
