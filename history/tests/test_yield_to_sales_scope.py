@@ -1375,6 +1375,9 @@ class Run7bResidualTests(TestCase):
             ("static_aerated", 3, 0, "Yes"),
             ("in_vessel", 2, 0, "No"),
             (None, 16, 3, "Not established (method not recorded)"),
+            # Review of back #454: a blank turning count is unknown, not zero turnings.
+            ("windrow", 16, None, "Not established (turnings not recorded)"),
+            ("windrow", 10, None, "No"),
         ]
         for method, days, turnings, expected in cases:
             with self.subTest(method=method, days=days, turnings=turnings):

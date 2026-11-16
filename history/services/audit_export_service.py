@@ -8994,7 +8994,8 @@ class AuditExportService:
                 # Small organic farms often run static piles (no turnings) and were once stamped
                 # "Non-Compliant" by a windrow-only rule. The fix for that accepted ANY pile at 3
                 # days, so a windrow turned three times printed "Yes" (2026-11-16). With no method
-                # recorded the time cannot be judged, as the snapshot's pathway count also says.
+                # recorded, or a windrow's turnings left blank, the time cannot be judged: a blank
+                # is not a zero.
                 compliant = "—"
                 cn_value = float(cev.compost_initial_cn_ratio) if cev.compost_initial_cn_ratio is not None else None
                 if cn_value is not None and not (25.0 <= cn_value <= 40.0):
@@ -9007,7 +9008,8 @@ class AuditExportService:
                     if not temp_ok:
                         compliant = "No"
                     elif time_ok is None:
-                        compliant = "Not established (method not recorded)"
+                        missing = "method" if not cev.compost_method else "turnings"
+                        compliant = f"Not established ({missing} not recorded)"
                     else:
                         compliant = "Yes" if time_ok else "No"
 

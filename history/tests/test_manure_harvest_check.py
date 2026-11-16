@@ -375,6 +375,20 @@ class CompostTimeAtTemperatureTests(SimpleTestCase):
         self.assertIsNone(compost_time_at_temperature_met(pile))
         self.assertFalse(compost_meets_c2(pile))
 
+    def test_a_blank_figure_is_unknown_unless_a_recorded_one_already_fails(self):
+        """Review of back #454: a windrow with no turning count is not a windrow turned 0 times."""
+        cases = [
+            ("windrow", 15, None, None),
+            ("windrow", None, 5, None),
+            ("windrow", 14, None, False),
+            ("windrow", None, 4, False),
+            ("static_aerated", None, 0, None),
+        ]
+        for method, days, turnings, expected in cases:
+            with self.subTest(method=method, days=days, turnings=turnings):
+                self.assertIs(compost_time_at_temperature_met(self._pile(method, days, turnings)), expected)
+        self.assertFalse(compost_meets_c2(self._pile("windrow", 15, None)))
+
     def test_meets_c2_still_needs_the_cn_and_the_temperature(self):
         self.assertTrue(compost_meets_c2(self._pile("windrow", 15, 5)))
         self.assertFalse(compost_meets_c2(self._pile("windrow", 15, 5, cn=20)))

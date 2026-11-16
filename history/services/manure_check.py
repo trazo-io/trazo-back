@@ -60,19 +60,26 @@ class ManureConflict:
 
 def compost_time_at_temperature_met(event) -> bool | None:
     """The method's time at temperature under § 205.203(c)(2)(ii)/(iii): 15 days and at least 5
-    turnings in a windrow, 3 days in a static aerated pile or in-vessel. None when no method is
-    recorded, because the time the rule asks for depends on it.
+    turnings in a windrow, 3 days in a static aerated pile or in-vessel.
+
+    None when the record cannot answer: no method (the time the rule asks for depends on it), or a
+    figure the method needs left blank. A blank is not a zero: a windrow with no turning count
+    recorded is unknown, not "turned 0 times", unless a recorded figure already fails it.
 
     The one reading of the method for every surface. Until 2026-11-16 the dossier's compost table
     had its own copy that accepted any pile at 3 days, so a windrow turned three times printed
     "Compliant: Yes"."""
-    duration = getattr(event, "compost_duration_days_at_temp", None) or 0
-    turnings = getattr(event, "compost_turning_count", None) or 0
+    duration = getattr(event, "compost_duration_days_at_temp", None)
+    turnings = getattr(event, "compost_turning_count", None)
     method = getattr(event, "compost_method", None)
     if method == "windrow":
-        return duration >= 15 and turnings >= 5
+        if (duration is not None and duration < 15) or (turnings is not None and turnings < 5):
+            return False
+        if duration is None or turnings is None:
+            return None
+        return True
     if method in ("static_aerated", "in_vessel"):
-        return duration >= 3
+        return None if duration is None else duration >= 3
     return None
 
 
