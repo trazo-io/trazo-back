@@ -76,6 +76,10 @@ class MultiTargetSpec:
     subtypes: frozenset = None
     per_target_by_subtype: dict = field(default_factory=dict)
     either: frozenset = frozenset()
+    # Groups of `either` keys that describe one fact (a start and its stop): all shared or all per
+    # target. Sent half each way, the merge would store a shared start beside one parcel's own stop,
+    # a window nobody stated.
+    either_together: tuple = ()
     # {key: frozenset(values)}: the shared key is refused only when it holds one of these values.
     refused_values: dict = field(default_factory=dict)
 
@@ -102,6 +106,7 @@ def _load_specs(path=SPEC_PATH) -> dict:
             subtypes=None if subtypes is None else frozenset(subtypes),
             per_target_by_subtype={k: frozenset(v) for k, v in entry.get("per_target_by_subtype", {}).items()},
             either=frozenset(entry.get("either", [])),
+            either_together=tuple(frozenset(group) for group in entry.get("either_together", [])),
             refused_values={k: frozenset(v) for k, v in entry.get("refused_values", {}).items()},
         )
     return specs
@@ -267,4 +272,14 @@ def shared_errors(spec, shared, targets):
     )
     if twice:
         errors["either"] = [f"Send once for every parcel or once per parcel, not both: {', '.join(twice)}."]
+    split = [
+        sorted(group)
+        for group in spec.either_together
+        if any(not _is_blank(shared.get(key)) or not _is_blank(extra.get(key)) for key in group)
+        and any(not _is_blank(target.get(key)) for target in targets for key in group)
+    ]
+    if split:
+        errors.setdefault("either", []).extend(
+            f"Send these together, all for every parcel or all per parcel: {', '.join(group)}." for group in split
+        )
     return errors

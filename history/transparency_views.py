@@ -982,6 +982,7 @@ def _organic_input_evidence(chemical_events):
         LABEL_INPUT_NATIONAL_LIST,
         LABEL_INPUT_NATIONAL_LIST_CONDITIONAL,
         LABEL_INPUT_NATIONAL_LIST_PROHIBITED,
+        LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION,
         LABEL_INPUT_OMRI_LISTED,
         LABEL_INPUT_WSDA_LISTED,
         may_claim_input_listing,
@@ -1005,11 +1006,13 @@ def _organic_input_evidence(chemical_events):
             counts["catalog_matched"] += 1
         elif label == LABEL_INPUT_NATIONAL_LIST:
             counts["national_list"] += 1
-        elif label == LABEL_INPUT_NATIONAL_LIST_CONDITIONAL:
-            # § 205.602 with a condition of use. Not `contradicted` — the CFR writes the use
-            # out as permitted — and not `national_list` either, because that tier means an
-            # unconditional § 205.601 allowance. Its own bucket, so the basis a caller reads
-            # says "there is a condition attached" instead of quietly rounding to either side.
+        elif label in (LABEL_INPUT_NATIONAL_LIST_CONDITIONAL, LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION):
+            # A National List entry with a condition of use: § 205.602 for one stated use, or
+            # § 205.601 under its entry's words (documented deficiency, structural use only).
+            # Not `contradicted` (the CFR writes the use out as permitted), and not
+            # `national_list` either, because that tier means an unconditional § 205.601
+            # allowance. Its own bucket, so the basis a caller reads says "there is a condition
+            # attached" instead of quietly rounding to either side.
             counts["conditional"] += 1
         elif label == LABEL_INPUT_NATIONAL_LIST_PROHIBITED:
             # The grower classified this input as organic-approved and § 205.602 lists the

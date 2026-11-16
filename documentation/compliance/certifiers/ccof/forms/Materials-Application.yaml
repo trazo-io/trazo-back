@@ -94,20 +94,18 @@ items:
 - ref: Preamble (adding or removing materials)
   asks: To add or remove materials after your initial application, update your OSP Materials List (MyCCOF Material
     Search, email, or other notice to CCOF).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: not in this packet; the operation's audit export, a separate document, carries the change log
+    where: not in this packet; the operation's audit export, a separate document, carries the change log, and
+      the plan review names each addition and removal since the plan's answers
     models:
     - certifications.models.ApprovedInputChangeLog
     - certifications.models.OSPChangeNotification
     prints: history/audit-export dossier (change log); plan_review flags inputs_changed
-  gap: 'Catalog-attached additions and removals are logged (`ApprovedInputChangeLog`, written by the add/remove
-    views) and `plan_review` flags them. An operator-entered `PlanMaterialEntry` added mid-year carries only
-    `created_at`: no change-log row is written for it, so `plan_review` cannot surface the addition and the
-    audit export''s change log omits it.'
-  fix: Write an `ApprovedInputChangeLog` row on `PlanMaterialEntry` create and delete, or have `plan_review`
-    read `PlanMaterialEntry.created_at` beside the log.
+  gap: 'Closed 2026-11-16 (feat/c11-materials-list). Catalog attaches and removals were always logged; an
+    operator-entered material added or removed now writes the same dated, append-only `ApprovedInputChangeLog`
+    row (kind `operator_entered`), so `plan_review` surfaces it as `inputs_changed` and the audit export''s
+    change log carries it.'
 - ref: Preamble (only listed materials)
   asks: It is your responsibility to verify that all materials are allowed prior to use. Only materials included
     in your OSP Materials List may be used.

@@ -1,16 +1,17 @@
 """Rename the `History` alias to `Production` in Python code (2026-11-15).
 
-The model became `Production` in history 0264, and `History = Production` in history/models.py
-kept every old import working. This rewrites each remaining use of the old name so the alias can
-be deleted.
+The model became `Production` in history 0264. The alias `History = Production` kept old imports
+working while this script moved 354 files over, and was deleted on 2026-11-16. Code written before
+the rename, on a branch that has not merged yet, still says `History`, and that name no longer
+exists: an import of it fails when its module loads, and `models.History` only when that line runs.
+This rewrites each use to the new name.
 
 It changes NAME tokens only, which is what makes it safe to run over the whole tree:
 - strings, comments and docstrings keep their words. Certifier forms really are called "Field
   History" and "Record Change History", and those labels print in the packet;
 - migrations are skipped. They describe the model as it was when each one was written;
 - only files git tracks are read, so a local virtualenv or a worktree nested under `.claude/` is
-  never touched;
-- the alias line itself is kept until the PR that deletes it.
+  never touched.
 
 A file where `History` is something else (imported from another library, or a class of its own)
 is not rewritten: the script lists it and exits 1, and that file is fixed by hand.
@@ -30,7 +31,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD, NEW = "History", "Production"
-ALIAS_LINE = f"{OLD} = {NEW}"
 MODEL_MODULE = "history.models"
 
 
@@ -64,14 +64,25 @@ def _absolute(module: str | None, level: int, rel: str) -> str:
 
 
 def other_bindings(source: str, rel: str) -> list[int]:
-    """Lines where `History` is bound to something other than the model."""
+    """Lines where `History` is bound to something other than the model.
+
+    Imports from elsewhere and classes or functions of that name, and also every other way code
+    binds a name: an assignment (`History = Production`, the deleted alias itself), a loop, `with`
+    or `except` target, a parameter, and `import x as History`. Rewriting any of these would bind
+    `Production` to something else, or leave a dead `Production = Production`.
+    """
     lines = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ImportFrom) and _absolute(node.module, node.level, rel) != MODEL_MODULE:
             lines += [node.lineno for alias in node.names if alias.name == OLD]
-        elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == OLD:
+        elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.ExceptHandler)):
+            if node.name == OLD:
+                lines.append(node.lineno)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store) and node.id == OLD:
             lines.append(node.lineno)
-    return lines
+        elif (isinstance(node, ast.arg) and node.arg == OLD) or (isinstance(node, ast.alias) and node.asname == OLD):
+            lines.append(node.lineno)
+    return sorted(set(lines))
 
 
 def rewrite(source: str) -> str:
@@ -79,8 +90,6 @@ def rewrite(source: str) -> str:
     # Right to left, so an earlier replacement never shifts a later column.
     for row, col in sorted(old_name_positions(source), reverse=True):
         line = lines[row - 1]
-        if line.strip() == ALIAS_LINE:
-            continue
         lines[row - 1] = line[:col] + NEW + line[col + len(OLD) :]
     return "".join(lines)
 

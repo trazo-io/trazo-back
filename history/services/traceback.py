@@ -49,6 +49,7 @@ _LISTING_CODES = {
     "LABEL_INPUT_WSDA_LISTED": "wsda_listed",
     "LABEL_INPUT_NATIONAL_LIST": "national_list_allowed",
     "LABEL_INPUT_NATIONAL_LIST_CONDITIONAL": "national_list_conditional",
+    "LABEL_INPUT_NATIONAL_LIST_WITH_CONDITION": "national_list_allowed_condition",
     "LABEL_INPUT_NATIONAL_LIST_PROHIBITED": "national_list_prohibited",
     "LABEL_INPUT_GROWER_REPORTED": "recorded_by_farm",
     "LABEL_INPUT_UNCLASSIFIED": "not_classified",

@@ -3984,6 +3984,8 @@ class AuditExportService:
         compost_pathway_counts = {"windrow": 0, "static_aerated": 0, "in_vessel": 0, "unspecified": 0}
         compost_cn_min = None
         compost_cn_max = None
+        from history.services.manure_check import compost_time_at_temperature_met
+
         for ev in compost_events:
             cn = float(ev.compost_initial_cn_ratio) if ev.compost_initial_cn_ratio is not None else None
             if cn is not None:
@@ -4016,10 +4018,7 @@ class AuditExportService:
                     compost_missing_temp_or_duration += 1
                 continue
             temp_ok = 131 <= float(ev.compost_peak_temp_f) <= 170
-            if ev.compost_method == "windrow":
-                duration_ok = ev.compost_duration_days_at_temp >= 15 and (ev.compost_turning_count or 0) >= 5
-            else:
-                duration_ok = ev.compost_duration_days_at_temp >= 3
+            duration_ok = bool(compost_time_at_temperature_met(ev))
             if temp_ok and duration_ok:
                 compost_compliant += 1
 
@@ -8981,18 +8980,22 @@ class AuditExportService:
                 "Compliant",
             ]
             compost_data = [[self._hdr(h) for h in compost_headers]]
+            from history.services.manure_check import compost_time_at_temperature_met
+
             for cev in compost_events:
                 peak = str(cev.compost_peak_temp_f) if cev.compost_peak_temp_f is not None else "—"
                 days = str(cev.compost_duration_days_at_temp) if cev.compost_duration_days_at_temp is not None else "—"
                 turns = str(cev.compost_turning_count) if cev.compost_turning_count is not None else "—"
 
-                # NOP compliance check per § 205.203(c)(2). Two acceptable pathways:
+                # NOP compliance check per § 205.203(c)(2). The RECORDED method decides the time:
                 #   • Windrow:        131-170°F for 15+ days, with 5+ turnings
                 #   • In-vessel /
                 #     static pile:    131-170°F for 3+ days  (no turning requirement)
-                # Most demo / windrow operations document turnings; small organic farms
-                # often run static piles (no turnings) and were previously stamped
-                # "Non-Compliant" by the windrow-only rule.
+                # Small organic farms often run static piles (no turnings) and were once stamped
+                # "Non-Compliant" by a windrow-only rule. The fix for that accepted ANY pile at 3
+                # days, so a windrow turned three times printed "Yes" (2026-11-16). With no method
+                # recorded, or a windrow's turnings left blank, the time cannot be judged: a blank
+                # is not a zero.
                 compliant = "—"
                 cn_value = float(cev.compost_initial_cn_ratio) if cev.compost_initial_cn_ratio is not None else None
                 if cn_value is not None and not (25.0 <= cn_value <= 40.0):
@@ -9001,9 +9004,14 @@ class AuditExportService:
                     compliant = "No (C:N)" if _compost_cn_is_initial(cev) else "Not established (C:N basis)"
                 elif cev.compost_peak_temp_f is not None and cev.compost_duration_days_at_temp is not None:
                     temp_ok = 131 <= float(cev.compost_peak_temp_f) <= 170
-                    windrow_path = cev.compost_duration_days_at_temp >= 15 and (cev.compost_turning_count or 0) >= 5
-                    static_path = cev.compost_duration_days_at_temp >= 3
-                    compliant = "Yes" if (temp_ok and (windrow_path or static_path)) else "No"
+                    time_ok = compost_time_at_temperature_met(cev)
+                    if not temp_ok:
+                        compliant = "No"
+                    elif time_ok is None:
+                        missing = "method" if not cev.compost_method else "turnings"
+                        compliant = f"Not established ({missing} not recorded)"
+                    else:
+                        compliant = "Yes" if time_ok else "No"
 
                 compost_data.append(
                     [

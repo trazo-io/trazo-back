@@ -217,6 +217,168 @@ RULE_TEXT: dict[tuple[str, str], str] = {
     ),
 }
 
+#: Where RULE_WORDS_601 was read: the eCFR versioner API, Title 7 issue of 2026-11-12, fetched
+#: 2026-11-16. § 205.601 was last amended 2025-03-21, so this is the text ANNOTATION_SOURCE read too.
+RULE_WORDS_SOURCE = "eCFR 7 CFR 205.601, Title 7 issue of 2026-11-12"
+
+_A2 = (
+    "Chlorine materials—For pre-harvest use, residual chlorine levels in the water in direct crop contact or as "
+    "water from cleaning irrigation systems applied to soil must not exceed the maximum residual disinfectant limit "
+    "under the Safe Drinking Water Act, except that chlorine products may be used in edible sprout production "
+    "according to EPA label directions."
+)
+_SILICA = (
+    "Aqueous potassium silicate (CAS #-1312-76-1)—the silica, used in the manufacture of potassium silicate, must be "
+    "sourced from naturally occurring sand."
+)
+
+#: § 205.601 paragraph -> the words its entry carries beyond the substance's name, verbatim.
+#:
+#: WHY (2026-11-16, overall review OV-MT-C01): the input lookup and the buyer chip said "allowed" for
+#: every § 205.601 hit, and most entries allow the substance only as their words say: zinc and boron
+#: need a documented deficiency ((j)(7)), boric acid is for structural pest control with no contact
+#: with crops ((e)(3)). The stored `restriction_notes` are paraphrases for all but the ANNOTATIONS
+#: rows, so a surface that quotes the rule reads it from here.
+#:
+#: An item's words are its own; the words of the entry above it apply too ((a)(2) to every chlorine
+#: material, (j)(7) to both micronutrient rows), and `rule_words` joins them parent first. Paragraph
+#: headings ("(e) As insecticides") are uses, not words, and are left out. Entries whose words are only
+#: a CAS number are left out.
+RULE_WORDS_601: dict[str, str] = {
+    "(a)(2)": _A2,
+    "(a)(2)(iii)": "Hypochlorous acid—generated from electrolyzed water.",
+    "(a)(2)(iv)": "Potassium hypochlorite—for use in water for irrigation purposes.",
+    "(a)(3)": (
+        "Copper sulfate—for use as an algicide in aquatic rice systems, is limited to one application per field "
+        "during any 24-month period. Application rates are limited to those which do not increase baseline soil test "
+        "values for copper over a timeframe agreed upon by the producer and accredited certifying agent."
+    ),
+    "(a)(5)": "Ozone gas—for use as an irrigation system cleaner only.",
+    "(a)(6)": (
+        "Peracetic acid—for use in disinfecting equipment, seed, and asexually propagated planting material. Also "
+        "permitted in hydrogen peroxide formulations as allowed in § 205.601(a) at concentration of no more than 6% "
+        "as indicated on the pesticide product label."
+    ),
+    "(a)(8)": (
+        "Sodium carbonate peroxyhydrate (CAS #-15630-89-4)—Federal law restricts the use of this substance in food "
+        "crop production to approved food uses identified on the product label."
+    ),
+    "(b)(1)": (
+        "Herbicides, soap-based—for use in farmstead maintenance (roadways, ditches, right of ways, building "
+        "perimeters) and ornamental crops."
+    ),
+    "(b)(2)(i)": "Newspaper or other recycled paper, without glossy or colored inks.",
+    "(b)(2)(ii)": "Plastic mulch and covers (petroleum-based other than polyvinyl chloride (PVC)).",
+    "(b)(2)(iii)": (
+        "Biodegradable biobased mulch film as defined in § 205.2. Must be produced without organisms or feedstock "
+        "derived from excluded methods."
+    ),
+    "(c)": "As compost feedstocks—Newspapers or other recycled paper, without glossy or colored inks.",
+    "(d)": (
+        "As animal repellents—Soaps, ammonium—for use as a large animal repellant only, no contact with soil or "
+        "edible portion of crop."
+    ),
+    "(e)(1)": "Ammonium carbonate—for use as bait in insect traps only, no direct contact with crop or soil.",
+    "(e)(2)": _SILICA,
+    "(e)(3)": "Boric acid—structural pest control, no direct contact with organic food or crops.",
+    "(e)(4)": (
+        "Copper sulfate—for use as tadpole shrimp control in aquatic rice production, is limited to one application "
+        "per field during any 24-month period. Application rates are limited to levels which do not increase baseline "
+        "soil test values for copper over a timeframe agreed upon by the producer and accredited certifying agent."
+    ),
+    "(e)(6)": "Lime sulfur—including calcium polysulfide.",
+    "(e)(7)": "Oils, horticultural—narrow range oils as dormant, suffocating, and summer oils.",
+    "(e)(10)": "Sucrose octanoate esters (CAS #s—42922-74-7; 58064-47-4)—in accordance with approved labeling.",
+    "(i)(1)": _SILICA,
+    "(i)(2)": _I2,
+    "(i)(3)": _I3,
+    "(i)(7)": "Oils, horticultural, narrow range oils as dormant, suffocating, and summer oils.",
+    "(i)(8)": (
+        "Peracetic acid—for use to control fire blight bacteria. Also permitted in hydrogen peroxide formulations as "
+        "allowed in § 205.601(i) at concentration of no more than 6% as indicated on the pesticide product label."
+    ),
+    "(j)(1)": (
+        "Aquatic plant extracts (other than hydrolyzed)—Extraction process is limited to the use of potassium "
+        "hydroxide or sodium hydroxide; solvent amount used is limited to that amount necessary for extraction."
+    ),
+    "(j)(3)": "Humic acids—naturally occurring deposits, water and alkali extracts only.",
+    "(j)(4)": "Lignin sulfonate—chelating agent, dust suppressant.",
+    "(j)(5)": (
+        "Magnesium oxide (CAS # 1309-48-4)—for use only to control the viscosity of a clay suspension agent for "
+        "humates."
+    ),
+    "(j)(6)": _J6,
+    "(j)(7)": _J7,
+    "(j)(8)": (
+        "Liquid fish products—can be pH adjusted with sulfuric, citric or phosphoric acid. The amount of acid used "
+        "shall not exceed the minimum needed to lower the pH to 3.5."
+    ),
+    "(j)(10)": (
+        "Squid byproducts—from food waste processing only. Can be pH adjusted with sulfuric, citric, or phosphoric "
+        "acid. The amount of acid used shall not exceed the minimum needed to lower the pH to 3.5."
+    ),
+    "(j)(11)": (
+        "Sulfurous acid (CAS # 7782-99-2) for on-farm generation of substance utilizing 99% purity elemental sulfur "
+        "per paragraph (j)(2) of this section."
+    ),
+    "(k)(1)": "Ethylene gas—for regulation of pineapple flowering.",
+    "(k)(2)": "Fatty alcohols (C6, C8, C10, and/or C12)—for sucker control in organic tobacco production.",
+    "(l)": "As floating agents in postharvest handling. Sodium silicate—for tree fruit and fiber processing.",
+    "(m)(2)": "EPA List 3—Inerts of unknown toxicity—for use only in passive pheromone dispensers.",
+    "(n)": "Seed preparations. Hydrogen chloride (CAS # 7647-01-0)—for delinting cotton seed for planting.",
+    "(o)(1)": (
+        "Microcrystalline cheesewax (CAS #'s 64742-42-3, 8009-03-08, and 8002-74-2)—for use in log grown mushroom "
+        "production. Must be made without either ethylene-propylene co-polymer or synthetic colors."
+    ),
+    "(o)(2)": (
+        "Paper-based crop planting aids as defined in § 205.2. Virgin or recycled paper without glossy paper or "
+        "colored inks."
+    ),
+}
+
+#: The § 205.601 paragraphs whose words limit HOW, WHERE or ON WHAT the substance may be used, or ask
+#: for a record before it is used. A use can fall outside these, so no surface may call such a row plain
+#: "allowed".
+#:
+#: Every other paragraph in RULE_WORDS_601 says what QUALIFIES as the substance, which the product
+#: either is or is not: silica from sand ((e)(2), (i)(1)), papers without glossy inks ((b)(2)(i), (c),
+#: (o)(2)), plastic other than PVC ((b)(2)(ii)), film without excluded methods ((b)(2)(iii)), electrolyzed
+#: water ((a)(2)(iii)), "including calcium polysulfide" ((e)(6)), narrow range oils ((e)(7), (i)(7)), an
+#: extraction method ((j)(1)), natural deposits ((j)(3)) and the acid that adjusts fish and squid pH
+#: ((j)(8), (j)(10)). Those rows stay "allowed" and their words are still shown.
+#:
+#: Typed by paragraph, never read from the prose: the same rule as `NationalListSubstance.annotation_kind`.
+USE_CONDITION_601: frozenset[str] = frozenset(
+    {
+        "(a)(2)",  # residual chlorine limit in water touching the crop
+        "(a)(2)(iv)",  # irrigation water only
+        "(a)(3)",  # aquatic rice algicide, one application per 24 months
+        "(a)(5)",  # irrigation system cleaner only
+        "(a)(6)",  # equipment, seed and planting material only
+        "(a)(8)",  # the label's approved food uses only
+        "(b)(1)",  # farmstead maintenance and ornamental crops only
+        "(d)",  # large animal repellent, no contact with soil or crop
+        "(e)(1)",  # trap bait only, no contact with crop or soil
+        "(e)(3)",  # structural pest control, no contact with food or crops
+        "(e)(4)",  # aquatic rice tadpole shrimp, one application per 24 months
+        "(e)(10)",  # per approved labeling
+        "(i)(2)",  # minimise copper in the soil; never as a herbicide
+        "(i)(3)",  # minimise copper in the soil
+        "(i)(8)",  # fire blight only
+        "(j)(4)",  # chelating agent or dust suppressant
+        "(j)(5)",  # clay suspension viscosity for humates only
+        "(j)(6)",  # documented soil deficiency
+        "(j)(7)",  # documented deficiency; not a defoliant, herbicide or desiccant
+        "(j)(11)",  # on-farm generation from 99% sulfur
+        "(k)(1)",  # pineapple flowering only
+        "(k)(2)",  # tobacco sucker control only
+        "(l)",  # tree fruit and fiber processing only
+        "(m)(2)",  # passive pheromone dispensers only
+        "(n)",  # cotton seed delinting only
+        "(o)(1)",  # log-grown mushrooms only
+    }
+)
+
 #: The date the text in force took effect, where Trazo knows it; None is unknown, never guessed.
 ANNOTATION_EFFECTIVE: dict[str, date | None] = {
     "(i)(2)": None,
@@ -305,3 +467,44 @@ def citation_with_uses(substance) -> str:
         use = USES_601.get(paragraph[1], "") if section == "205.601" else ""
         parts.append(f"{paragraph} {use}" if use else paragraph)
     return f"§ {section}{', '.join(parts)}"
+
+
+def _chain(paragraph: str) -> list[str]:
+    """The paragraph and the entries above it, outermost first: "(a)(2)(iv)" -> ["(a)", "(a)(2)",
+    "(a)(2)(iv)"]."""
+    parts = re.findall(r"\([^)]*\)", paragraph)
+    return ["".join(parts[: i + 1]) for i in range(len(parts))]
+
+
+def _words_for(paragraph: str) -> tuple[str, str] | None:
+    """(the deepest paragraph whose words apply, the words joined parent first), or None."""
+    held = [p for p in _chain(paragraph) if p in RULE_WORDS_601]
+    if not held:
+        return None
+    return held[-1], " ".join(RULE_WORDS_601[p] for p in held)
+
+
+def rule_words(substance) -> tuple[str, str] | None:
+    """(paragraph, verbatim words) for a § 205.601 row whose entry carries words beyond its name.
+
+    A row the rule lists under several paragraphs answers with the first that carries words; None for
+    any other section, or a row PARAGRAPHS does not name."""
+    if getattr(substance, "cfr_section", "") != "205.601":
+        return None
+    for paragraph in paragraphs(substance):
+        found = _words_for(paragraph)
+        if found:
+            return found
+    return None
+
+
+def use_condition(substance) -> tuple[str, str] | None:
+    """(paragraph, verbatim words) when the rule allows this § 205.601 row only under a condition of
+    use (USE_CONDITION_601), else None. Rows whose words only say what qualifies as the substance
+    answer None here and still answer `rule_words`."""
+    if getattr(substance, "cfr_section", "") != "205.601":
+        return None
+    for paragraph in paragraphs(substance):
+        if any(p in USE_CONDITION_601 for p in _chain(paragraph)):
+            return _words_for(paragraph)
+    return None

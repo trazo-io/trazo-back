@@ -80,6 +80,8 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             "facility_material_type",
             "where_used",
             "applied_by_fumigation",
+            "other_review_agency",
+            "other_review_reference",
             "national_list_substance",
             "omri_product",
             "wsda_material",
@@ -164,6 +166,26 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
                         "Name the certifier letter that approved this material. "
                         "\u201cApproved by our certifier\u201d with nothing behind it is the kind of "
                         "unsupported claim a reviewer sends the packet back for."
+                    )
+                }
+            )
+        # OTCO C11 asks one review agency per row: OMRI, WSDA or OTHER. An OMRI or WSDA row's reviewer is
+        # its listing, so a second, typed one would print two answers to a one-answer column.
+        other_agency = attrs.get("other_review_agency", getattr(self.instance, "other_review_agency", ""))
+        other_ref = attrs.get("other_review_reference", getattr(self.instance, "other_review_reference", ""))
+        # The listing as it stands, not the stored basis alone: a lapsed OMRI listing no longer fills the
+        # OMRI box, and its row must be able to name the agency that does (review of back #457).
+        omri = attrs.get("omri_product", getattr(self.instance, "omri_product", None))
+        wsda = attrs.get("wsda_material", getattr(self.instance, "wsda_material", None))
+        listing_fills_the_box = (
+            basis == PlanMaterialEntry.BASIS_OMRI and omri is not None and not omri.delisted_on
+        ) or (basis == PlanMaterialEntry.BASIS_WSDA and wsda is not None)
+        if listing_fills_the_box and ((other_agency or "").strip() or (other_ref or "").strip()):
+            raise serializers.ValidationError(
+                {
+                    "other_review_agency": (
+                        "This material's review agency is its OMRI or WSDA listing. Another agency is "
+                        "recorded only for a material that is neither."
                     )
                 }
             )
@@ -1120,6 +1142,19 @@ class _ApprovedNationalListInline(serializers.Serializer):
     is_conditionally_permitted = serializers.BooleanField(read_only=True)
     subsection = serializers.CharField(required=False, allow_null=True, allow_blank=True, read_only=True)
     restriction_notes = serializers.CharField(required=False, allow_null=True, allow_blank=True, read_only=True)
+    # A § 205.601 row the rule allows only under a condition of use, and the rule's own words for the
+    # row's paragraph (verbatim, English). The same fields the input lookup sends (OV-MT-C01).
+    allowed_with_condition = serializers.BooleanField(read_only=True)
+    rule_paragraph = serializers.SerializerMethodField()
+    rule_words = serializers.SerializerMethodField()
+
+    def get_rule_paragraph(self, obj):
+        found = getattr(obj, "rule_words", None)
+        return found[0] if found else None
+
+    def get_rule_words(self, obj):
+        found = getattr(obj, "rule_words", None)
+        return found[1] if found else None
 
 
 class _ApprovedOMRIInline(serializers.Serializer):

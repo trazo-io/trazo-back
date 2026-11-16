@@ -13,7 +13,10 @@ What these tests hold:
 - one reading of the floor, `history/services/manure_interval.py`, used by the serializer,
   the model's clean(), the harvest-side check and the audit export;
 - only an interval SHORTER than the crop's floor is refused or flagged;
-- the seeder and a data migration put tree crops on the 90-day floor.
+- the seeder and data migrations put tree crops, and the seeded crops outside the tree
+  categories whose edible part is held off the ground, on the 90-day floor. Each seeded crop
+  is classified by name: on 2026-11-16 the category rule refused 90 days on blueberries
+  ("berry", the category strawberries share) with a message saying the fruit touches the soil.
 """
 
 import importlib
@@ -201,14 +204,70 @@ class DossierReadsTheSameFloorTests(_Production):
         self.assertIn("SHORT: crop requires at least 120 days", text)
 
 
-class SeederAndMigrationPutTreeCropsOnTheNinetyDayFloorTests(TestCase):
-    def test_the_seeder_sets_the_flag_from_the_category(self):
+# Every seeded crop, classified by name. True: the edible part touches the soil, or can
+# (§ 205.203(c)(1)(ii), 120 days). False: it is held off the ground ((c)(1)(iii), 90 days).
+# A category cannot decide this ("berry" holds blueberries and strawberries), so a crop added to
+# the seeder fails here until someone states its class.
+SEEDED_CROP_TOUCHES_SOIL = {
+    # Roots, tubers, bulbs, pods underground, leaves cut at the soil line.
+    "potatoes": True,
+    "carrots": True,
+    "onions": True,
+    "peanuts": True,
+    "lettuce": True,
+    "spinach": True,
+    "mixed_vegetables": True,
+    # Fruit lying on the soil.
+    "strawberries": True,
+    # Can touch the soil, so the stricter floor stays: sprawling tomatoes, the lowest soybean
+    # pods, hay cured on the ground in windrows.
+    "tomatoes": True,
+    "soybeans": True,
+    "hay_alfalfa": True,
+    # Tree fruit and nuts.
+    "citrus_oranges": False,
+    "apples": False,
+    "grapes": False,
+    "avocados": False,
+    "stone_fruit": False,
+    "olives": False,
+    "dates": False,
+    "figs": False,
+    "pomegranates": False,
+    "pears": False,
+    "walnuts": False,
+    "almonds": False,
+    "pecans": False,
+    "hazelnuts": False,
+    "pistachios": False,
+    # Outside the tree categories, edible part held off the ground.
+    "blueberries": False,
+    "hops": False,
+    "corn_field": False,
+    "wheat": False,
+    "rice": False,
+    "sunflowers": False,
+    "cotton": False,
+}
+
+
+class SeederAndMigrationsClassifyEachCropTests(TestCase):
+    def test_every_seeded_crop_has_the_class_its_edible_part_has(self):
         call_command("populate_usda_crop_types", "--crops-only", verbosity=0)
-        seeded = CropType.objects.all()
-        self.assertTrue(seeded.filter(category__in=CropType.NO_SOIL_CONTACT_CATEGORIES).exists())
-        for crop in seeded:
-            expected = crop.category not in CropType.NO_SOIL_CONTACT_CATEGORIES
-            self.assertEqual(crop.has_soil_contact, expected, f"{crop.name} ({crop.category})")
+        seeded = dict(CropType.objects.values_list("slug", "has_soil_contact"))
+        self.assertEqual(
+            set(seeded),
+            set(SEEDED_CROP_TOUCHES_SOIL),
+            "A seeded crop is missing from SEEDED_CROP_TOUCHES_SOIL: state whether its edible part "
+            "touches the soil.",
+        )
+        for slug, expected in SEEDED_CROP_TOUCHES_SOIL.items():
+            self.assertEqual(seeded[slug], expected, slug)
+
+    def test_seeded_blueberries_take_90_days_and_strawberries_do_not(self):
+        call_command("populate_usda_crop_types", "--crops-only", verbosity=0)
+        self.assertEqual(minimum_interval_days(CropType.objects.get(slug="blueberries")), 90)
+        self.assertEqual(minimum_interval_days(CropType.objects.get(slug="strawberries")), 120)
 
     def test_a_rerun_keeps_a_value_set_on_purpose(self):
         # Review of back #371: the seeder used to write the category default on every run, which
@@ -230,3 +289,17 @@ class SeederAndMigrationPutTreeCropsOnTheNinetyDayFloorTests(TestCase):
         self.assertFalse(apples.has_soil_contact)
         self.assertTrue(lettuce.has_soil_contact)
         self.assertTrue(avocados.has_soil_contact)
+
+    def test_the_migration_moves_named_crops_held_off_the_ground_and_nothing_else(self):
+        blueberries = _crop("Blueberries (migration test)", "blueberries", "berry", True)
+        hops = _crop("Hops (migration test)", "hops", "other", True)
+        strawberries = _crop("Strawberries (migration test)", "strawberries", "berry", True)
+        soybeans = _crop("Soybeans (migration test)", "soybeans", "oilseed", True)
+        migration = importlib.import_module("carbon.migrations.0056_crops_held_off_the_ground_have_no_soil_contact")
+        migration.crops_held_off_the_ground_have_no_soil_contact(django_apps, None)
+        for crop in (blueberries, hops, strawberries, soybeans):
+            crop.refresh_from_db()
+        self.assertFalse(blueberries.has_soil_contact)
+        self.assertFalse(hops.has_soil_contact)
+        self.assertTrue(strawberries.has_soil_contact)
+        self.assertTrue(soybeans.has_soil_contact)
