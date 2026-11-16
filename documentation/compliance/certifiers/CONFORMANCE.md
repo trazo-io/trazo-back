@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 806 |
 | Rows that are not questions (instructions, Trazo interpretations) | 57 |
-| Covered | 641 |
-| Partial | 85 |
+| Covered | 642 |
+| Partial | 84 |
 | Not covered | 31 |
 | Out of scope (stated) | 49 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 0 |
-| Minor (P2 / P3) | 116 |
+| Minor (P2 / P3) | 115 |
 
 These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
 
@@ -846,13 +846,13 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When OTCO requires it:** C1 Crop Activities Checklist — "I/We are applying for Oregon Tilth organic certification for crop production" routes to "O1: Operation Information (required)" and "OFPP: Organic Fraud Prevention Plan". The form itself carries a not-applicable stop for perennial or wild-crop growers who buy no certified organic seed or planting stock (row 1-3).
 
-**17 questions** — Covered 16 · Partial 1 · not questions: Instruction (asks nothing) 1
+**17 questions** — Covered 17 · not questions: Instruction (asks nothing) 1
 
 | Ref | What OTCO asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
 | 1-1 | Section 1. ORGANIC FRAUD PREVENTION TEAM — identify the person or people responsible for approving, implementing, training staff, and monitoring the Organic Fraud Prevention Plan. Table: Name · Job Title/Role · Contact Info (Phone/Email). | Covered | — | `g2_0_fraud_prevention.ofpp_team` · `g2_0_fraud_prevention.osp_accuracy_process` | — |
 | 1-2 | How will you report possible organic fraud? Check all that apply: report to your Oregon Tilth Client Services Team · report to the supplier's certifying agent · report to the USDA National Organic Program · report to the California Department of Food and Agriculture (CDFA) State Organic Program, for CA operations · other (describe). | Covered | — | `g2_0_fraud_prevention.fraud_reporting_channels` · `g2_0_fraud_prevention.fraud_reporting_channels_other` | — |
-| 1-3 | If you grow perennial crops or harvest wild crops, do you buy certified organic products like seeds or planting stock? Yes / No — the Organic Fraud Prevention Plan is not applicable (stop here; you do not need to fill out the rest of the form) / N/A — I don't grow perennial crops or harvest wild crops. | Partial | P3 | `g2_0_fraud_prevention.fraud_risk_areas` | A DIVERGENCE, not a missing field. OTCO lets a perennial or wild-crop grower who buys no certified organic inputs declare the whole plan not applicable and stop. Trazo's G2.0 has `allows_not_applicable=False` on purpose — the federal Common OSP Section 2 offers no N/A, because SOE applies § 205.201(a)(3) to every certified operation — so the same grower answers all four pages, briefly (the `none` risk area, the mitigations they actually run, the review cadence). The packet therefore carries a full plan where OTCO would have accepted a stopped form, and nothing on the packet says this is deliberate, so a reviewer may read the extra pages as the operation misjudging its own scope. The three facts OTCO's gate turns on — perennial system (G4.0), wild crop (W2.0), certified inputs purchased (G3.0/G3.2) — are all in the plan but are never stated together. **Fix:** Do NOT add an N/A gate to G2.0. For an OTCO packet, state on 04-coverage-and-scope.pdf (or in the G2.0 module header) that the plan answers the fraud-prevention module in full under the federal template even where OTCO's OFPP would accept "not applicable", and print the three trigger facts beside it so the reviewer sees why the pages are short. |
+| 1-3 | If you grow perennial crops or harvest wild crops, do you buy certified organic products like seeds or planting stock? Yes / No — the Organic Fraud Prevention Plan is not applicable (stop here; you do not need to fill out the rest of the form) / N/A — I don't grow perennial crops or harvest wild crops. | Covered | — | `g2_0_fraud_prevention.fraud_risk_areas` · `certifications.services.ofpp_scope.scope_facts` · `certifications.services.ofpp_scope.ofpp_scope_note` | Closed 2026-11-16 (feat/ofpp-1-3-note). A DIVERGENCE kept on purpose: OTCO lets a perennial or wild-crop grower who buys no certified organic inputs mark the plan not applicable and stop, and G2.0 offers no not-applicable because the federal Common OSP Section 2 asks it of every certified operation (§ 205.201(a)(3)). An OTCO plan's G2.0 page now says so at the top, and states the three facts item 1-3 turns on from the plan's own answers: perennial crops (G4.0 system type), wild crops (certification scope, or W2.0 marked not applicable) and certified organic seed, seedlings or planting stock (G3.0 and G3.2, naming which), each yes, no or not stated. It never concludes the plan would be not applicable; the reviewer reads the facts against OTCO's rule. Other agents' plans print no such note. |
 | 1-4 | Does your operation already have an Organic Fraud Prevention Plan? No — complete this module / Yes — plan is attached; you can skip the rest of this module if your plan includes all the required sections, and complete any that are missing. | Covered | — | `g2_0_fraud_prevention.fraud_plan_kept_separately` · `g2_0_fraud_prevention.fraud_plan_upload` · `company.Establishment.fraud_prevention_plan_document` · `company.Establishment.fraud_prevention_plan_date` · `company.Establishment.ofpp_on_file` | — |
 | 2-1 | Attach a map or flow chart of your supply chain. Start with the certified operations that supply to you. | Covered | — | `g2_0_fraud_prevention.supply_chain_shown_as` · `g2_0_fraud_prevention.supply_chain_map_upload` · `g2_0_fraud_prevention.supply_chain_description` | — |
 | 2-1a | Submit multiple maps only if the supply chains are very different. | Instruction (asks nothing) | — | — | — |

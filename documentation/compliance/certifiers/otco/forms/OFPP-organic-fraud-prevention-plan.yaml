@@ -82,31 +82,32 @@ items:
   asks: If you grow perennial crops or harvest wild crops, do you buy certified organic products like seeds
     or planting stock? Yes / No — the Organic Fraud Prevention Plan is not applicable (stop here; you do not
     need to fill out the rest of the form) / N/A — I don't grow perennial crops or harvest wild crops.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
+    where: 'modules/G2_0.pdf, at the top of the page on an OTCO plan: why the plan answers the fraud prevention
+      module in full, and the three facts item 1-3 turns on (perennial crops, wild crops, certified organic seed
+      or planting stock), each yes, no or not stated with where it comes from'
     questions:
     - g2_0_fraud_prevention.fraud_risk_areas
     triggered_by:
     - g3_0_seeds.seeds_used
+    - g3_0_seeds.seedlings_used
     - g3_0_seeds.planting_stock_used
     - g3_2_planting_stock.stock_organic_status
     - g4_0_rotation_soil.system_type
-    prints: modules/G2_0.pdf §A — the exclusive `none` option ("None of these — we grow and sell only our own
-      certified organic crop") is the nearest statement
-  gap: A DIVERGENCE, not a missing field. OTCO lets a perennial or wild-crop grower who buys no certified organic
-    inputs declare the whole plan not applicable and stop. Trazo's G2.0 has `allows_not_applicable=False` on
-    purpose — the federal Common OSP Section 2 offers no N/A, because SOE applies § 205.201(a)(3) to every
-    certified operation — so the same grower answers all four pages, briefly (the `none` risk area, the mitigations
-    they actually run, the review cadence). The packet therefore carries a full plan where OTCO would have
-    accepted a stopped form, and nothing on the packet says this is deliberate, so a reviewer may read the
-    extra pages as the operation misjudging its own scope. The three facts OTCO's gate turns on — perennial
-    system (G4.0), wild crop (W2.0), certified inputs purchased (G3.0/G3.2) — are all in the plan but are never
-    stated together.
-  fix: Do NOT add an N/A gate to G2.0. For an OTCO packet, state on 04-coverage-and-scope.pdf (or in the G2.0
-    module header) that the plan answers the fraud-prevention module in full under the federal template even
-    where OTCO's OFPP would accept "not applicable", and print the three trigger facts beside it so the reviewer
-    sees why the pages are short.
+    - certification_contract.contract_scopes
+    models:
+    - certifications.services.ofpp_scope.scope_facts
+    - certifications.services.ofpp_scope.ofpp_scope_note
+    prints: modules/G2_0.pdf header note (OTCO plans); §A the risk areas
+  gap: 'Closed 2026-11-16 (feat/ofpp-1-3-note). A DIVERGENCE kept on purpose: OTCO lets a perennial or wild-crop
+    grower who buys no certified organic inputs mark the plan not applicable and stop, and G2.0 offers no
+    not-applicable because the federal Common OSP Section 2 asks it of every certified operation (§ 205.201(a)(3)).
+    An OTCO plan''s G2.0 page now says so at the top, and states the three facts item 1-3 turns on from the plan''s
+    own answers: perennial crops (G4.0 system type), wild crops (certification scope, or W2.0 marked not applicable)
+    and certified organic seed, seedlings or planting stock (G3.0 and G3.2, naming which), each yes, no or not
+    stated. It never concludes the plan would be not applicable; the reviewer reads the facts against OTCO''s rule.
+    Other agents'' plans print no such note.'
 - ref: 1-4
   asks: Does your operation already have an Organic Fraud Prevention Plan? No — complete this module / Yes — plan
     is attached; you can skip the rest of this module if your plan includes all the required sections, and complete
