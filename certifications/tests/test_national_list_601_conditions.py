@@ -247,6 +247,16 @@ class TheLookupSaysSoTests(TestCase):
                 self.assertIs(body["national_list_allowed_with_condition"], True)
                 self.assertEqual(body["national_list_rule_paragraph"], "(j)(7)")
 
+    def test_an_alias_leads_the_list_and_never_replaces_it(self):
+        # Review of back #453: "sulfur" is an alias for "Elemental sulfur", and returning only that
+        # row hid lime sulfur from a grower who may hold it. The alias goes first; the rest stay.
+        body = self._get("sulfur")
+        names = [c["substance_name"] for c in body["national_list_candidates"]]
+        self.assertEqual(names[0], "Elemental sulfur")
+        self.assertIn("Lime sulfur", names)
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(body["national_list_substance_name"], "Elemental sulfur")
+
     def test_an_ambiguous_term_is_still_not_resolved(self):
         # "soap" could be four listings; the alias table refuses it, so the lookup offers them all
         # by containment and the grower picks.
