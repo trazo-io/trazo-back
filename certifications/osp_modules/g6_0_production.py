@@ -194,6 +194,56 @@ G6_0_PRODUCTION = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # 2026-11-15: CCOF G8.0 C2 and OTCO C12 12.4-1a ask how INPUT records (receipts, application records)
+                # tell organic from non-organic use; OTCO C9 9.4-3 how contamination is prevented through production
+                # AND handling. The narrative above answers neither in those terms.
+                Question(
+                    key="split_input_records_distinction",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do your input records tell materials used on organic crops from those used on "
+                        "non-organic crops?",
+                        "¿Cómo distinguen tus registros de insumos los materiales usados en cultivos orgánicos de los "
+                        "usados en cultivos no orgánicos?",
+                    ),
+                    placeholder=text(
+                        "e.g. each application record names the block, and the conventional blocks have their own "
+                        "block names; the same organic inputs are used on every block",
+                        "p. ej. cada registro de aplicación nombra el bloque, y los bloques convencionales tienen sus "
+                        "propios nombres; en todos los bloques se usan los mismos insumos orgánicos",
+                    ),
+                    visible_when=(Condition("split_operation", "truthy"),),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="How input records tell organic from non-organic use: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                Question(
+                    key="split_contamination_prevention",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do you keep organic product from contact with non-organic material and prohibited "
+                        "substances, through production and handling?",
+                        "¿Cómo evitas que el producto orgánico tenga contacto con material no orgánico y sustancias "
+                        "prohibidas, durante la producción y el manejo?",
+                    ),
+                    coaching=text(
+                        "Cover the field (equipment, applications) and handling after harvest (cleanout, separate "
+                        "runs, storage). The handling controls you named in On-Farm Handling count here too.",
+                        "Incluye el campo (equipo, aplicaciones) y el manejo después de la cosecha (limpieza, corridas "
+                        "separadas, almacenamiento). Los controles que nombraste en Manejo en la finca también cuentan "
+                        "aquí.",
+                    ),
+                    visible_when=(Condition("split_operation", "truthy"),),
+                    nop_cite="§ 205.272",
+                    compiles_to=CompileRule(
+                        template="Prevention of contact with non-organic material and prohibited substances: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 # CCOF G6.1 B5; OTCO C9 9.4-2. The narrative above stays the operator's own words; this
                 # names the methods both agents list, for harvest and transport specifically.
                 Question(
@@ -279,6 +329,27 @@ G6_0_PRODUCTION = Module(
                             "Distinction between parallel organic and conventional lots "
                             "at harvest and sale: {answer}"
                         )
+                    ),
+                ),
+                # 2026-11-15: CCOF G8.0 C3 and OTCO C12 12.4-1b ask it of every split operation; the question above is
+                # asked only of parallel production, so a split operation growing different crops was never asked.
+                Question(
+                    key="split_records_distinction",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do your harvest, shipping and sales records tell organic from non-organic crops?",
+                        "¿Cómo distinguen tus registros de cosecha, envío y venta los cultivos orgánicos de los no "
+                        "orgánicos?",
+                    ),
+                    visible_when=(
+                        Condition("split_operation", "truthy"),
+                        Condition("parallel_production", "ne", True),
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="How harvest, shipping and sales records tell organic from non-organic crops: {answer}",
+                        section_key="commingling_barriers",
                     ),
                 ),
                 # OTCO C9 9.4-1 (2026.11.09): what the non-organic side grows.
@@ -460,6 +531,28 @@ G6_0_PRODUCTION = Module(
                             text(
                                 "Physical distance or isolation from conventional fields",
                                 "Distancia física o aislamiento respecto a campos " "convencionales",
+                            ),
+                        ),
+                        # 2026-11-15: CCOF G6.0 A1 asks these three; appended, so stored answers keep their options.
+                        Option(
+                            "no_buffer_crop",
+                            text(
+                                "No crop is grown in the buffer areas",
+                                "No se cultiva nada en las áreas de amortiguamiento",
+                            ),
+                        ),
+                        Option(
+                            "buffer_records_not_marked_organic",
+                            text(
+                                "Buffer crop is never marked organic on crop records",
+                                "El cultivo de amortiguamiento nunca se marca como orgánico en los registros de cultivo",
+                            ),
+                        ),
+                        Option(
+                            "buffer_destroyed_or_given_away",
+                            text(
+                                "Buffer crop is destroyed or given away",
+                                "El cultivo de amortiguamiento se destruye o se regala",
                             ),
                         ),
                         Option(

@@ -98,3 +98,15 @@ questions:
     Written agreements with neighbors, attached (CCOF G6.0 A2). WSDA AGR 2264 ref 14 and AGR 2121 §E ask about drift safeguards, never for the agreements as attachments.
   g6_0_production.roadside_agreement_upload: >-
     A written agreement with the roadside manager, attached (CCOF G6.0 A2). WSDA AGR 2264 ref 14 and AGR 2121 §E ask about drift safeguards, never for the agreements as attachments.
+  g6_0_production.split_input_records_distinction: >-
+    How input records tell organic from non-organic use on a split operation. Asked by CCOF G8.0 C2 and
+    OTCO C12 12.4-1a; WSDA's split-operation questions ask the separation itself, not how the records tell
+    crops apart.
+  g6_0_production.split_records_distinction: >-
+    How harvest, shipping and sales records tell organic from non-organic crops. Asked by CCOF G8.0 C3 and
+    OTCO C12 12.4-1b; WSDA's split-operation questions ask the separation itself, not how the records tell
+    crops apart.
+  g6_0_production.split_contamination_prevention: >-
+    How organic product is kept from non-organic material and prohibited substances through production and
+    handling. Asked by OTCO C9 9.4-3; WSDA asks the separation and the storage of prohibited materials in
+    their own sections.

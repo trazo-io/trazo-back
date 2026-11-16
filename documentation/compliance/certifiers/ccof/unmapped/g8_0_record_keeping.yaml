@@ -40,3 +40,17 @@ questions:
     entry. CCOF has no counterpart question."
   g8_0_record_keeping.records_maintained_as: "WSDA AGR 2121-O question 7 (electronic / hardcopy). CCOF's
     G8.0 does not ask what medium the records are kept in."
+  g8_0_record_keeping.records_maintained_as_other: >-
+    The other way of `records_maintained_as`, unmapped with its parent.
+  g8_0_record_keeping.sources_organic_products: >-
+    Whether the operation sources organic agricultural products, as a yes or no. Asked by OTCO C12 12.2-4;
+    CCOF G8.0 D1 asks the sourcing scenarios as a checklist instead.
+  g8_0_record_keeping.sells_as_organic: >-
+    Whether the operation sells crops or crop products as organic. Asked by OTCO C12 12.2-5; CCOF reads it
+    from the label categories (G7.0).
+  g8_0_record_keeping.records_identify_organic_status: >-
+    Whether records identify organic status from harvest through sale. Asked by OTCO C12 12.2-5a; CCOF
+    G8.0 asks how records distinguish organic from nonorganic only for a split operation (C2, C3).
+  g8_0_record_keeping.records_organic_status_explanation: >-
+    Whether records identify organic status from harvest through sale, on a No. Asked by OTCO C12 12.2-5a;
+    same reason as `records_identify_organic_status`.

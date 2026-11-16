@@ -12,3 +12,15 @@ questions:
     to have been treated or irradiated, with the records maintained. There is no export-side
     equivalent: WSDA takes the document list as the answer and does not ask how the operation
     obtains or retains those certificates. CCOF does not ask it either.
+  g8_0_record_keeping.sources_organic_products: >-
+    Whether the operation sources organic agricultural products, as a yes or no. Asked by OTCO C12 12.2-4;
+    WSDA's recordkeeping section asks how records are kept (§O 7) and how they link (§O 8), not this.
+  g8_0_record_keeping.sells_as_organic: >-
+    Whether the operation sells crops or crop products as organic. Asked by OTCO C12 12.2-5; WSDA's
+    recordkeeping section asks how records are kept (§O 7) and how they link (§O 8), not this.
+  g8_0_record_keeping.records_identify_organic_status: >-
+    Whether records identify organic status from harvest through sale. Asked by OTCO C12 12.2-5a; WSDA's
+    recordkeeping section asks how records are kept (§O 7) and how they link (§O 8), not this.
+  g8_0_record_keeping.records_organic_status_explanation: >-
+    Whether records identify organic status from harvest through sale, on a No. Asked by OTCO C12 12.2-5a;
+    same reason as `records_identify_organic_status`.

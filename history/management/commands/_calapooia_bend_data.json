@@ -3772,6 +3772,14 @@
          "no_spray_signs",
          "agency_notification"
         ]
+       },
+       "split_input_records_distinction": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": "The buffer rows get the same organic inputs as the organic rows beside them, and every application record names its parcel, so no input record has to tell organic from non-organic use."
+       },
+       "split_contamination_prevention": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": "Nothing prohibited is applied anywhere on the farm. Buffer fruit is picked last, into red-tagged lugs used for nothing else, and never enters the organic cooler room or the pack line."
        }
       },
       "completed_at": "2026-08-21T11:58:04.045373+00:00",
@@ -3990,6 +3998,14 @@
        "storage_shared_with_nonorganic": {
         "at": "2026-08-21T11:28:46.441230+00:00",
         "value": false
+       },
+       "inventory_system_description": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": "Each lot is logged into the cooler by lot code as it is picked and logged out as it ships; the cooler log is checked against the harvest and sales records."
+       },
+       "inventory_frequency": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": "per_movement"
        }
       },
       "completed_at": "2026-08-21T11:28:46.475711+00:00",
@@ -4321,6 +4337,18 @@
        },
        "records_retention_attestation": {
         "at": "2026-08-21T11:28:46.766365+00:00",
+        "value": true
+       },
+       "sources_organic_products": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": true
+       },
+       "sells_as_organic": {
+        "at": "2026-11-15T09:00:00+00:00",
+        "value": true
+       },
+       "records_identify_organic_status": {
+        "at": "2026-11-15T09:00:00+00:00",
         "value": true
        }
       },

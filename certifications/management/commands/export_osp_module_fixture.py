@@ -237,6 +237,10 @@ GOLDEN_ANSWER_CASES = {
             "uses_production_equipment": False,
             "equipment_cleaning_documentation": ["sop_followed", "other"],
         },
+        # Split records (2026.12.15): split but not parallel asks how records tell crops apart; parallel does not.
+        # Split with parallel unanswered is the existing `split` case.
+        "split_not_parallel": {"split_operation": True, "parallel_production": False},
+        "split_parallel": {"split_operation": True, "parallel_production": True},
     },
     # Sealed packaging gates on `eq False`, so an unanswered plan must hide the unsealed questions in
     # both languages (None is not False).
@@ -302,6 +306,9 @@ GOLDEN_ANSWER_CASES = {
         "retired_none_only": {"import_export_activity": ["none"]},
         "indirect_export": {"import_export_activity": ["indirect_export"]},
         "no_known_export": {"import_export_activity": ["none_no_known_export"]},
+        # Sells as organic, records short of organic status; other ways records are kept (2026.12.15).
+        "sells_records_short": {"sells_as_organic": True, "records_identify_organic_status": False},
+        "records_other": {"records_maintained_as": ["phone_app", "other"]},
     },
 }
 

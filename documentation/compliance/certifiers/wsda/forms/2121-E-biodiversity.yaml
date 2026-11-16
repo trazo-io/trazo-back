@@ -119,7 +119,7 @@ items:
       - g4_2_natural_resources.habitat_biodiversity_practices
       - g4_2_natural_resources.habitat_biodiversity_practices_other
       - g4_0_rotation_soil.erosion_practices
-      prints: modules/G4_2.pdf §A; modules/G4_0.pdf §C
+      prints: modules/G4_2.pdf §A; modules/G4_0.pdf §D
     note: 'Closed 2026-11-15. Every practice the row names is an option on G4.2: soil stability and water quality
       on `soil_water_practices`, habitat on `habitat_biodiversity_practices`, waterway practices on `waterway_practices`
       (asked where streams or channels run by the land, E 16). Each practice is asked once and printed once; WSDA
@@ -281,7 +281,7 @@ items:
       - g4_2_natural_resources.waterway_practices
       - g4_2_natural_resources.waterway_practices_other
       - g4_0_rotation_soil.erosion_practices
-      prints: modules/G4_2.pdf §A; modules/G4_0.pdf §C
+      prints: modules/G4_2.pdf §A; modules/G4_0.pdf §D
     note: 'Closed 2026-11-15. Every practice the row names is an option on G4.2: soil stability and water quality
       on `soil_water_practices`, habitat on `habitat_biodiversity_practices`, waterway practices on `waterway_practices`
       (asked where streams or channels run by the land, E 16). Each practice is asked once and printed once; WSDA

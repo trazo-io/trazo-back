@@ -20,3 +20,7 @@ questions:
     Free text for the `other` option of `storage_location_records`, a WSDA §K3b question this agent does not ask.
   g6_2_storage.organic_storage_area_identification: >-
     OTCO C7 asks how organic and non-organic product is kept apart in a shared handling area (7.4-1a), not how an organic storage area is marked. Asked for CCOF G6.2 §B2b and WSDA §K3a.
+  g6_2_storage.lot_identity_maintained: >-
+    Lot identity through storage. It stood in for organic status on OTCO C12 12.2-5a until that row got
+    its own question, `g8_0_record_keeping.records_identify_organic_status`, on 2026-11-15; no other OTCO
+    row asks lot identity in storage.

@@ -185,6 +185,39 @@ OSP_EVIDENCE_MAP: dict = {
         note="WSDA AGR 2121 E 1b. Each season is a production (season) row naming its parcel, crop and start date, so the "
         "rotation reads from the seasons logged per parcel; the operator's answer names any other record kept.",
     ),
+    # --- 2026-11-15: recordkeeping and split-operation records (OTCO C12, CCOF G8.0 C2, C3) ----------------
+    "split_input_records_distinction": EvidenceEntry(
+        EVIDENCED,
+        source="history.ChemicalEvent.history",
+        note="Every application record belongs to a season on a parcel, so it names the block it went on; whether "
+        "that block is organic is the parcel's. The operator's answer says how the rest of the input records do it.",
+    ),
+    "split_records_distinction": EvidenceEntry(
+        EVIDENCED,
+        source="history.SalesRecord.organic_on_invoice",
+        note="Each sale states whether the invoice names the product organic; harvest records carry the status of "
+        "the season they belong to.",
+    ),
+    "records_identify_organic_status": EvidenceEntry(
+        EVIDENCED,
+        source="history.SalesRecord.organic_on_invoice",
+        note="The sales half is a per-sale field; harvest and storage records carry status through the season. "
+        "Records kept outside Trazo are the operator's statement.",
+    ),
+    "records_organic_status_explanation": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="The operator's account of records that do not show organic status, on a No; nothing in Trazo "
+        "corroborates records it does not hold.",
+    ),
+    "records_maintained_as_other": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Another way the operator keeps records (OTCO C12 12.2-1), outside Trazo by definition.",
+    ),
+    "inventory_frequency": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="How often inventory is taken (OTCO C12 12.2-7). Trazo holds no inventory count; the `inventory_records` "
+        "registry row is external by design. Closing it needs an inventory record type.",
+    ),
     # --- G4.1 compost and manure ------------------------------------------------
     "compost_temp_logs_kept": EvidenceEntry(
         EVIDENCED,

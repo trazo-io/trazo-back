@@ -101,6 +101,7 @@ items:
   trazo:
     questions:
     - g8_0_record_keeping.records_maintained_as
+    - g8_0_record_keeping.records_maintained_as_other
     prints: modules/G8_0.pdf §A
   # CLOSED 2026-09-06. Shipped WITHOUT the fix line's "defaulting electronic to checked": a
   # pre-ticked box is an answer nobody gave, which is the same rule the § 11 registry above

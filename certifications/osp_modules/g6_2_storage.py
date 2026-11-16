@@ -529,6 +529,55 @@ G6_2_STORAGE = Module(
                         template="Lot identity maintained through storage (bin cards, pallet tags): {answer}."
                     ),
                 ),
+                # 2026-11-15: OTCO C12 12.2-7 asks the crop inventory system and how often inventory is taken. Nothing
+                # asked it; the storage module owns the stored product.
+                Question(
+                    key="inventory_system_description",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do you keep track of the crop you have on hand?",
+                        "¿Cómo llevas el control del cultivo que tienes en existencia?",
+                    ),
+                    placeholder=text(
+                        "e.g. each bin is counted onto a storage sheet by lot as it goes into the cooler and counted "
+                        "off as it ships; the sheet is reconciled with the harvest and sales records",
+                        "p. ej. cada contenedor se anota por lote en una hoja de almacenamiento al entrar a la cámara y "
+                        "se descuenta al despacharse; la hoja se concilia con los registros de cosecha y de venta",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(template="Crop inventory system: {answer}"),
+                ),
+                Question(
+                    key="inventory_frequency",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "How often is inventory taken and recorded?",
+                        "¿Con qué frecuencia se toma y registra el inventario?",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(template="Inventory is taken and recorded: {answer}."),
+                    options=(
+                        Option(
+                            "per_movement",
+                            text("Every time product moves in or out", "Cada vez que el producto entra o sale"),
+                        ),
+                        Option("weekly", text("Weekly", "Semanalmente")),
+                        Option("monthly", text("Monthly", "Mensualmente")),
+                        Option("seasonal", text("Once a season", "Una vez por temporada")),
+                        Option("annual", text("Once a year", "Una vez al año")),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="inventory_frequency_other",
+                    kind="text",
+                    required=False,
+                    label=text("How often, then?", "¿Con qué frecuencia, entonces?"),
+                    visible_when=(Condition("inventory_frequency", "eq", "other"),),
+                    compiles_to=CompileRule(template="Inventory frequency, in the operation's words: {answer}."),
+                ),
             ),
         ),
     ),

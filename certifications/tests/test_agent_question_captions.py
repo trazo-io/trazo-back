@@ -48,7 +48,15 @@ class ModuleDetailCaptionTests(TestCase):
         for certifier, agent, expected in (
             (WSDA, "WSDA", [{"form": "K Storage (AGR 2121)", "items": ["3a"]}]),
             (CCOF, "CCOF", [{"form": "G6.2 Storage (ORGB38)", "items": ["B2a"]}]),
-            (OTCO, "OTCO", [{"form": "C7 Crop Harvest, Processing, Storage, & Transport", "items": ["7.4-1a"]}]),
+            # C9 9.4-2's storage half cites the shared-storage answers since 2026-11-15.
+            (
+                OTCO,
+                "OTCO",
+                [
+                    {"form": "C7 Crop Harvest, Processing, Storage, & Transport", "items": ["7.4-1a"]},
+                    {"form": "C9 Contamination Prevention", "items": ["9.4-2"]},
+                ],
+            ),
         ):
             with self.subTest(agent):
                 refs = self.detail(certifier)["agent_refs"]

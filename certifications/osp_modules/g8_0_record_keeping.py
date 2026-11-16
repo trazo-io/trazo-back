@@ -221,10 +221,11 @@ G8_0_RECORD_KEEPING = Module(
                         "¿Cómo se conservan tus registros?",
                     ),
                     coaching=text(
-                        "Tick both if paper source documents — delivery tickets, scale "
-                        "tickets, handwritten spray logs — are filed as well as entered here.",
-                        "Marca ambas si además conservas documentos en papel — boletas de entrega, tiquetes de "
-                        "báscula, registros de aplicación escritos a mano — aparte de lo que registras aquí.",
+                        "Tick every kind you use. Paper source documents (delivery tickets, scale tickets, "
+                        "handwritten spray logs) filed as well as entered here count as paper too.",
+                        "Marca cada forma que uses. Los documentos en papel (boletas de entrega, tiquetes de báscula, "
+                        "registros de aplicación escritos a mano) que conservas además de lo que registras aquí "
+                        "también cuentan como papel.",
                     ),
                     # (b)(1) — records "adapted to the particular business that the certified
                     # operation is conducting". Electronic vs paper is exactly that question.
@@ -238,10 +239,31 @@ G8_0_RECORD_KEEPING = Module(
                             value="hardcopy",
                             label=text("Hardcopy / paper", "Copia impresa / papel"),
                         ),
+                        # 2026-11-15: OTCO C12 12.2-1 splits electronic three ways and offers other. Appended beside
+                        # `electronic`, which stays: nearly every filed plan chose it, and retiring it would send every
+                        # one back to unanswered over a finer grain. WSDA §O 7 reads any of them as electronic.
+                        Option(
+                            value="software_spreadsheet",
+                            label=text("Computer software or spreadsheet", "Programa de computadora u hoja de cálculo"),
+                        ),
+                        Option(value="phone_app", label=text("Phone app", "Aplicación de teléfono")),
+                        Option(
+                            value="online_cloud",
+                            label=text("Online or cloud program", "Programa en línea o en la nube"),
+                        ),
+                        Option(value="other", label=text("Other (describe below)", "Otro (describe abajo)")),
                     ),
                     compiles_to=CompileRule(
                         template="Records are maintained as: {answer}.",
                     ),
+                ),
+                Question(
+                    key="records_maintained_as_other",
+                    kind="text",
+                    required=False,
+                    label=text("How else are records kept?", "¿De qué otra forma se conservan los registros?"),
+                    visible_when=(Condition("records_maintained_as", "includes", "other"),),
+                    compiles_to=CompileRule(template="Records are also kept as: {answer}."),
                 ),
             ),
         ),
@@ -262,6 +284,67 @@ G8_0_RECORD_KEEPING = Module(
                 ),
             ),
             questions=(
+                # 2026-11-15: OTCO C12 12.2-4, 12.2-5 and 12.2-5a, asked as the form asks them. Whether the operation
+                # sources or sells organic product was read from three other pages; now it is stated here, beside the
+                # audit trail it decides.
+                Question(
+                    key="sources_organic_products",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you source organic agricultural products, such as seed or crops, for your operation?",
+                        "¿Adquieres productos agrícolas orgánicos, como semilla o cultivos, para tu operación?",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="The operation sources organic agricultural products ({answer}).",
+                        template_false="The operation sources no organic agricultural products.",
+                    ),
+                ),
+                Question(
+                    key="sells_as_organic",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you sell any crops or crop products as organic?",
+                        "¿Vendes algún cultivo o producto de cultivo como orgánico?",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="The operation sells crops or crop products as organic ({answer}).",
+                        template_false="The operation sells no crop or crop product as organic.",
+                    ),
+                ),
+                Question(
+                    key="records_identify_organic_status",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do your records identify the organic status of every crop and crop product, through harvest, "
+                        "storage, shipping and sale?",
+                        "¿Tus registros identifican la condición orgánica de cada cultivo y producto, durante la cosecha, "
+                        "el almacenamiento, el envío y la venta?",
+                    ),
+                    visible_when=(Condition("sells_as_organic", "truthy"),),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="Records identify the organic status of every crop and crop product ({answer}).",
+                        template_false="Records do not identify the organic status of every crop and crop product.",
+                    ),
+                ),
+                Question(
+                    key="records_organic_status_explanation",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Which records do not, and how is organic status known for them?",
+                        "¿Qué registros no la identifican, y cómo se conoce la condición orgánica en esos casos?",
+                    ),
+                    visible_when=(Condition("records_identify_organic_status", "eq", False),),
+                    compiles_to=CompileRule(
+                        template="Records that do not identify organic status, and how it is known: {answer}"
+                    ),
+                ),
                 Question(
                     key="lot_numbering",
                     kind="radio",

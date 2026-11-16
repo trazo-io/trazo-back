@@ -509,6 +509,11 @@ jobs:
       # inspections and the agent's items (§ 205.662), with responses and resolutions; derived status; every
       # linked file held against delete. Proves both viewsets' tenancy. Builds its own farms; no sibling repo.
       #
+      # 2026-11-15: certifications.tests.test_recordkeeping_split_records joins. OTCO C12's kinds of records, sourcing,
+      # selling and organic status, and inventory (12.2-1 to 12.2-7); split-operation input and sales records (CCOF G8.0
+      # C2, C3; OTCO 12.4-1a, 1b), contamination prevention and shared storage (OTCO C9 9.4-2, 9.4-3), buffer options
+      # (CCOF G6.0 A1). Builds its own farm; no sibling repo.
+      #
       # 2026-11-15: certifications.tests.test_irrigation_materials joins. How irrigation water is verified (OTCO C9
       # 9.2-1a), the district plan's elements (9.2-1b), additives in water that is not a district's (CCOF G6.0 D3, D5),
       # and materials put through the system (CCOF D6; WSDA AGR 2121 E 8 to 8b): gates, prints, register rows. Builds its
@@ -977,6 +982,7 @@ jobs:
             certifications.tests.test_operation_summary_cdph_certificate \
             certifications.tests.test_natural_resources_practices \
             certifications.tests.test_irrigation_materials \
+            certifications.tests.test_recordkeeping_split_records \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \
