@@ -818,6 +818,15 @@ jobs:
       # 2026-11-13: carbon.tests.test_chemical_estimate_is_labelled joins. A chemical figure's
       # status follows its basis ("estimate" when any part is estimated or left out, never the
       # published-factor label), and no N-P-K or %AI is invented. It does not read the sibling repo.
+      # 2026-11-16: seven modules that read the record-completeness registry join. They were outside
+      # this list, and history.tests.test_record_completeness had two stale assertions that nobody
+      # saw: run 8 (R8-08) added the conditional organic_approved row on purpose and the shape
+      # tests still expected the older five keys. history.tests.test_planting_record_completeness,
+      # history.tests.test_event_completeness_nudge, history.tests.test_subtype_detail_coverage,
+      # history.tests.test_operation_audit_export, history.tests.test_manure_form_columns and
+      # certifications.tests.test_certifier_access_links passed unchanged (105 tests). None reads
+      # the sibling repo. history.tests.test_completeness_gap_label_parity stays out: it reads
+      # trazo-app through parents[3] and would skip here, a pass that checks nothing.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -935,6 +944,13 @@ jobs:
             certifications.tests.test_materials_print_polish \
             history.tests.test_phi_check \
             history.tests.test_manure_harvest_check \
+            history.tests.test_record_completeness \
+            history.tests.test_planting_record_completeness \
+            history.tests.test_event_completeness_nudge \
+            history.tests.test_subtype_detail_coverage \
+            history.tests.test_operation_audit_export \
+            history.tests.test_manure_form_columns \
+            certifications.tests.test_certifier_access_links \
             certifications.tests.test_contradicted_answers \
             certifications.tests.test_packet_truth \
             certifications.tests.test_required_records_attestation \

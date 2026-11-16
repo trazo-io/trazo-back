@@ -50,19 +50,20 @@ class RegistryShapeTests(SimpleTestCase):
         for rf in CHEMICAL_EVENT_REQUIRED_FIELDS:
             self.assertTrue(rf.cfr_cite.startswith("§"), f"{rf.key} has no CFR citation: {rf.cfr_cite!r}")
 
-    def test_registry_covers_product_amount_area_target_and_purchase_quantity(self):
+    def test_registry_covers_product_amount_area_target_purchase_quantity_and_basis(self):
         keys = {rf.key for rf in CHEMICAL_EVENT_REQUIRED_FIELDS}
         self.assertEqual(
             keys,
-            {"commercial_name", "volume", "area", "target_pest_disease", "quantity_purchased"},
+            {"commercial_name", "volume", "area", "target_pest_disease", "quantity_purchased", "organic_approved"},
         )
 
     def test_conditional_entries_declare_when_they_apply(self):
         # A field that is required only sometimes must say so in the registry rather than in
-        # a caller. `quantity_purchased` is the first such entry: it is owed once the operator
-        # has asserted a purchase, not on every application.
+        # a caller. `quantity_purchased` is owed once the operator has asserted a purchase, not
+        # on every application. `organic_approved` is owed only when the grower recorded "Not yet
+        # confirmed" (run 8, R8-08); a blank basis stays silent.
         conditional = [rf for rf in CHEMICAL_EVENT_REQUIRED_FIELDS if rf.applies_when is not None]
-        self.assertEqual([rf.key for rf in conditional], ["quantity_purchased"])
+        self.assertEqual([rf.key for rf in conditional], ["quantity_purchased", "organic_approved"])
 
 
 class MissingRequiredFieldsTests(SimpleTestCase):
