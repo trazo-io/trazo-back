@@ -249,7 +249,10 @@ class OpenSeasonPacketTests(_OpenSeason):
         season = self._season()
         self._sale(season, picks=[self._pick(season, days_ago=10, qty=300)], qty=500)
 
-        self.assertIn("EXCEEDS harvest yield", self._pdf_text(season))
+        # The exhibit's rule and words (overall review 2026-11, OV-FJ-C24).
+        text = self._pdf_text(season)
+        self.assertIn("[REVIEW]", text)
+        self.assertIn("sales exceed the recorded harvest by 200", text)
 
     def test_the_csv_states_the_season_is_open(self):
         open_rows = self._csv_rows(self._season())

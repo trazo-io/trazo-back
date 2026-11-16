@@ -828,6 +828,7 @@ jobs:
             certifications.tests.test_packet_specimen_every_document \
             history.tests.test_certification_claim_states \
             history.tests.test_yield_to_sales_scope \
+            history.tests.test_one_harvest_sales_figure \
             history.tests.test_parcel_two_axes \
             history.tests.test_public_serializer_leakage \
             history.tests.test_input_rates_off_public_wire \

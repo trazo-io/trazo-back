@@ -341,7 +341,10 @@ class TransportAndAdjoiningPacketTests(TestCase):
         self.history.save(update_fields=["production_amount", "production_unit"])
         self._sale(quantity=2000, quantity_unit="lb")
         text = self._text()
-        self.assertIn("Balance (Yield", text)
+        # No harvest record: the organic lot's balance is not computed, as on the trace, and the
+        # header total still catches the oversold lot (overall review 2026-11, OV-FJ-C24).
+        self.assertIn("Organic lot: harvested minus sold", text)
+        self.assertIn("Balance not computed: no harvest record is on file for this season", text)
         self.assertIn("EXCEEDS harvest yield", text)
 
     def test_a_non_dedicated_unit_without_a_prior_load_is_flagged(self):

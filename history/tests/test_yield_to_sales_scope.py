@@ -169,7 +169,8 @@ class YieldToSalesScopeTests(TestCase):
     def test_a_partly_sold_lot_states_the_remainder_too(self):
         history = self._production("Partly sold", harvested_lb=1000, sold_lb=600)
         text = self._pdf_text(history)
-        self.assertIn("Harvest minus sales recorded", text)
+        self.assertIn("Organic lot: harvested minus sold", text)
+        self.assertRegex(text, r"400 lb harvested is on no sale")
 
     def test_a_fully_sold_lot_states_no_remainder(self):
         history = self._production("Fully sold", harvested_lb=1000, sold_lb=1000)
@@ -207,7 +208,7 @@ class YieldToSalesScopeTests(TestCase):
             "premise: the section must be naming a buyer, or the contradiction cannot arise",
         )
         self.assertNotIn("no sales recorded for this production", text)
-        self.assertIn("Not calculable", text)
+        self.assertIn("Balance not computed: the sales use more than one unit", text)
 
     def test_the_csv_twin_says_the_same(self):
         history = self._production("Mixed units csv", harvested_lb=10000, sold_lb=4000)
@@ -222,7 +223,7 @@ class YieldToSalesScopeTests(TestCase):
         )
         csv_text = self._csv_text(history)
         self.assertNotIn("no sales recorded for this production", csv_text)
-        self.assertIn("Not calculable", csv_text)
+        self.assertIn("Balance not computed: the sales use more than one unit", csv_text)
 
     # -- the sibling export ------------------------------------------------------------------
 

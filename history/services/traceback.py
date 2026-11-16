@@ -591,12 +591,19 @@ def _balance_row(season) -> dict:
         # The reason is English certifier prose (the exhibit prints it); the screen says only that
         # the two sides cannot be summed and lists the records, which name why.
         not_computed=bool(balance.not_computed),
-        # Sales NOT identified as organic on the invoice are counted apart by `_lot_balance` (a
-        # buffer-row crop sold conventional). Dropping them made "sold" read short, with a
-        # confident difference and no sign anything was left out; the exhibit prints them beside
-        # the balance, and so does this.
-        sold_not_organic_count=balance.buffer_sale_count,
+        # Sales whose invoice does not identify the product as organic are INSIDE "sold": they left
+        # the lot all the same (overall review 2026-11, OV-FJ-C24, where counting them apart made
+        # this row say the whole harvest was unsold while the dossier subtracted them). Named so the
+        # reader sees which part of "sold" carried no organic identification.
+        sold_not_organic_count=balance.sold_not_organic_count,
         sold_not_organic=(
+            fmt_total(balance.sold_not_organic, balance.unit)
+            if balance.sold_not_organic is not None and balance.unit
+            else ""
+        ),
+        # The buffer crop's sales (`buffer_sales`), counted apart from the organic lot on evidence.
+        buffer_sale_count=balance.buffer_sale_count,
+        buffer_sold=(
             fmt_total(balance.buffer_sold, balance.unit) if balance.buffer_sold is not None and balance.unit else ""
         ),
         # Sales are recorded while the season is still being picked. Until it is finished these
