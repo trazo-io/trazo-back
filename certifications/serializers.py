@@ -80,6 +80,8 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
             "facility_material_type",
             "where_used",
             "applied_by_fumigation",
+            "other_review_agency",
+            "other_review_reference",
             "national_list_substance",
             "omri_product",
             "wsda_material",
@@ -164,6 +166,21 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
                         "Name the certifier letter that approved this material. "
                         "\u201cApproved by our certifier\u201d with nothing behind it is the kind of "
                         "unsupported claim a reviewer sends the packet back for."
+                    )
+                }
+            )
+        # OTCO C11 asks one review agency per row: OMRI, WSDA or OTHER. An OMRI or WSDA row's reviewer is
+        # its listing, so a second, typed one would print two answers to a one-answer column.
+        other_agency = attrs.get("other_review_agency", getattr(self.instance, "other_review_agency", ""))
+        other_ref = attrs.get("other_review_reference", getattr(self.instance, "other_review_reference", ""))
+        if basis in (PlanMaterialEntry.BASIS_OMRI, PlanMaterialEntry.BASIS_WSDA) and (
+            (other_agency or "").strip() or (other_ref or "").strip()
+        ):
+            raise serializers.ValidationError(
+                {
+                    "other_review_agency": (
+                        "This material's review agency is its OMRI or WSDA listing. Another agency is "
+                        "recorded only for a material that is neither."
                     )
                 }
             )

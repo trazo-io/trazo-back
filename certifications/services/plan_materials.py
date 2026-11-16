@@ -117,6 +117,49 @@ class PlanMaterial:
     facility_material_type: str = ""
     where_used: str = ""
     applied_by_fumigation: Optional[bool] = None
+    #: OTCO C11's OTHER review agency, as the operator records it: "<agency>, <reference>". Operator
+    #: rows only, and never on an OMRI or WSDA row (the serializer refuses it there).
+    other_review: str = ""
+    #: True when the operator's row for a National List or nonsynthetic substance carries the
+    #: substance's own name: the answers are about the substance, and the product applied is still
+    #: unnamed. Until 2026-11-16 any operator row suppressed "brand and formulation not stated", so
+    #: stating only a use for "Lime sulfur" made the line read as if its brand had been given.
+    brand_unstated: bool = False
+
+    @property
+    def review_position(self) -> str:
+        """Which box of OTCO C11's review-agency cell this row's own record fills: "omri", "wsda" or
+        "other". A lapsed OMRI listing is no longer OMRI's review."""
+        if self.source == "OMRI" and not self.delisted_on:
+            return "omri"
+        if self.source == "WSDA":
+            return "wsda"
+        return "other"
+
+    def review_notes(self) -> list[str]:
+        """The [REVIEW] and restricted-use sentences `display` appends, one per line."""
+        notes = []
+        if self.prohibited:
+            notes.append("[REVIEW] PROHIBITED in organic production — remove from this plan")
+        elif self.condition and self.condition_answered:
+            notes.append(
+                f"restricted use: {self.condition} The restriction is answered in G4.0: applied as a foliar "
+                f"spray, disorder stated as {self.condition_answered}."
+            )
+        elif self.condition:
+            notes.append(f"[REVIEW] restricted use: {self.condition}")
+        if self.delisted_on:
+            notes.append(
+                f"[REVIEW] no longer on the OMRI list as of {self.delisted_on}; "
+                "confirm the product's status with your certifier"
+            )
+        return notes
+
+    @property
+    def names_a_substance_only(self) -> bool:
+        """A National List or nonsynthetic substance with no product named for it."""
+        named_substance = self.source in ("National List", NONSYNTHETIC_SOURCE)
+        return named_substance and (self.entry_id is None or self.brand_unstated) and not self.prohibited
 
     @property
     def needs_label(self) -> bool:
@@ -139,8 +182,7 @@ class PlanMaterial:
         The default stays compact for the editor and the narrative.
         """
         bits = [self.name]
-        named_substance = self.source in ("National List", NONSYNTHETIC_SOURCE)
-        if stated_absences and named_substance and self.entry_id is None and not self.prohibited:
+        if stated_absences and self.names_a_substance_only:
             bits.append("brand and formulation not stated")
         if self.manufacturer:
             bits.append(self.manufacturer)
@@ -159,20 +201,8 @@ class PlanMaterial:
             if self.agent_review:
                 bits.append(self.agent_review)
         line = " — ".join(bits)
-        if self.prohibited:
-            line += " [REVIEW] PROHIBITED in organic production — remove from this plan"
-        elif self.condition and self.condition_answered:
-            line += (
-                f" restricted use: {self.condition} The restriction is answered in G4.0: applied as a foliar "
-                f"spray, disorder stated as {self.condition_answered}."
-            )
-        elif self.condition:
-            line += f" [REVIEW] restricted use: {self.condition}"
-        if self.delisted_on:
-            line += (
-                f" [REVIEW] no longer on the OMRI list as of {self.delisted_on}; "
-                "confirm the product's status with your certifier"
-            )
+        for note in self.review_notes():
+            line += f" {note}"
         return line
 
 
@@ -241,6 +271,7 @@ def _fold_into_entry(entry, catalog_rows: list, linked_conditions: Optional[dict
     source, source_id = "Operator-entered", entry.pk
     delisted_on = ""
     listing_ref = ""
+    brand_unstated = False
     # The substance's own condition, whether the entry claimed the listing by name or by its
     # foreign key: the rule restricts the substance, whatever the product is called.
     condition = (linked_conditions or {}).get(getattr(entry, "national_list_substance_id", None), "")
@@ -257,9 +288,14 @@ def _fold_into_entry(entry, catalog_rows: list, linked_conditions: Optional[dict
         # filing it under "Operator-entered" because the grower typed a reason next to it would
         # move it out from under the heading where it belongs.
         source, source_id = row.source, row.source_id
-        if row.identifier:
+        # A nonsynthetic substance has no listing to cite, and its row says so by its heading. The
+        # entry's own `listing_statement` ("National List substance", from the basis the attach gives
+        # it) would print a listing the substance does not have.
+        if row.identifier or row.source == NONSYNTHETIC_SOURCE:
             identifier = row.identifier
             listing_ref = row.listing_ref
+        if row.source in ("National List", NONSYNTHETIC_SOURCE) and _norm(entry.product_name) == _norm(row.name):
+            brand_unstated = True
         # A lapse travels with the listing it belongs to. OMRI rows do not reach here (a
         # delisted one is held back from the fold above), but promoting `source` and
         # `identifier` without this would make any future folding source assert a listing its
@@ -284,7 +320,17 @@ def _fold_into_entry(entry, catalog_rows: list, linked_conditions: Optional[dict
         label_document_id=entry.label_document_id,
         listing_ref=listing_ref,
         condition=condition,
+        other_review=_other_review(entry),
+        brand_unstated=brand_unstated,
     )
+
+
+def _other_review(entry) -> str:
+    agency = (getattr(entry, "other_review_agency", "") or "").strip()
+    reference = (getattr(entry, "other_review_reference", "") or "").strip()
+    if not agency:
+        return f"agency not named, {reference}" if reference else ""
+    return f"{agency}, {reference}" if reference else agency
 
 
 def _condition(substance) -> str:
@@ -556,6 +602,116 @@ def labels_asked_for(osp) -> bool:
     return (packet_agent(osp).slug or "") in LABEL_ASKING_AGENTS
 
 
+# ---------------------------------------------------------------------------
+# OTCO C11 Crop Materials List: the four columns, from the same rows
+# ---------------------------------------------------------------------------
+
+#: Agents whose materials form is OTCO's C11 table (rev. 2023/09/14, source hash checked 2026-11-16):
+#: Full Product Name, Full Manufacturer Name, Third Party Review Agency (OMRI / WSDA / OTHER) and
+#: Intended Use, one row per product. For their plans the module page prints the list in those columns.
+C11_TABLE_AGENTS = frozenset({"otco"})
+
+
+def c11_table_asked(osp) -> bool:
+    from certifications.services.packet_coverage import packet_agent
+
+    return (packet_agent(osp).slug or "") in C11_TABLE_AGENTS
+
+
+#: C11's Intended Use is a category word ("Fertility, Pest Control, Post-Harvest Sanitation"), which is
+#: `PlanMaterialEntry.category`'s granularity. Words of their own: the category's picker labels name
+#: CCOF's sections, which have no place on another agent's page.
+C11_USE_WORDS = {
+    "fertilizer_amendment": "Fertility and soil amendment",
+    "pest_disease_weed": "Pest, disease or weed control",
+    "production_aid": "Production aid (seed treatment, growing media, adjuvant)",
+    "post_harvest": "Post-harvest (wash water, sanitation)",
+    "facility_pest": "Pest control in facilities",
+    "other": "Other",
+}
+
+
+def c11_product_cell(row: PlanMaterial) -> list[str]:
+    lines = [row.name]
+    if row.names_a_substance_only:
+        lines.append("brand and formulation not stated")
+    return lines
+
+
+def c11_review_cell(row: PlanMaterial) -> list[str]:
+    """OMRI, WSDA or Other, from the row's own record, and what that record is.
+
+    The OMRI and WSDA boxes are the catalog listing the operator attached (Trazo resolved the name;
+    the operator confirmed it), never a review Trazo made. Other is the agency the operator names.
+    A row with neither says so rather than ticking a box nobody ticked.
+    """
+    position = row.review_position
+    if position == "omri":
+        return ["OMRI", row.identifier or "OMRI listed"]
+    if position == "wsda":
+        return ["WSDA", row.identifier or "WSDA Brand Name Material List"]
+    lines = [f"Other: {row.other_review}" if row.other_review else "No review agency named"]
+    if row.source == "National List":
+        lines.append(f"National List substance, {row.identifier}" if row.identifier else "National List substance")
+    elif row.source == NONSYNTHETIC_SOURCE:
+        lines.append("nonsynthetic, no National List entry")
+    elif row.source == "OMRI":
+        lines.append(f"OMRI listing lapsed as of {row.delisted_on}")
+    elif row.identifier:
+        lines.append(row.identifier)
+    return lines
+
+
+def c11_use_cell(row: PlanMaterial) -> list[str]:
+    return [
+        C11_USE_WORDS.get(row.category, "use category not stated"),
+        f"reason for use: {row.reason}" if row.reason else "reason for use not stated",
+        _STATUS_WORDS.get(row.status, "use not stated"),
+    ]
+
+
+def materials_changes_since_filing(osp) -> Optional[dict]:
+    """What was added to and taken off the materials list since the plan was last filed.
+
+    OTCO C11's second mode ("The products identified below are to be added to my current Materials
+    List") and CCOF's materials list update both ask for the additions apart from the standing list.
+    The window opens at the newest filing in the plan's lineage (this version's own, else the version
+    it continues) and runs to now; a plan never filed has no additions, only its list. Read from the
+    append-only change log, catalog and operator-entered alike. Net per material: a product added and
+    then taken off again inside the window is neither.
+    """
+    from certifications.models import ApprovedInputChangeLog
+
+    lineage, filed, cursor = [], None, osp
+    while cursor is not None and cursor.pk not in lineage:
+        lineage.append(cursor.pk)
+        if filed is None and cursor.submitted_at:
+            filed = cursor.submitted_at
+        cursor = cursor.previous_version
+    if filed is None:
+        return None
+    first: dict = {}
+    last: dict = {}
+    for log in ApprovedInputChangeLog.objects.filter(osp_id__in=lineage, changed_at__gt=filed).order_by(
+        "changed_at", "pk"
+    ):
+        key = _norm(log.target_name_at_change)
+        first.setdefault(key, log)
+        last[key] = log
+    added = [
+        (log.target_name_at_change, log.changed_at.date().isoformat())
+        for log in last.values()
+        if log.action == ApprovedInputChangeLog.ACTION_ADDED
+    ]
+    removed = [
+        (log.target_name_at_change, log.changed_at.date().isoformat())
+        for key, log in last.items()
+        if log.action == ApprovedInputChangeLog.ACTION_REMOVED
+        and first[key].action != ApprovedInputChangeLog.ACTION_ADDED
+    ]
+    return {"since": filed.date().isoformat(), "added": added, "removed": removed}
+
+
 def materials_list_rows(osp) -> list[dict]:
     """The Materials List exactly as the attachment renders it, plus what it takes to finish it.
 
@@ -616,11 +772,25 @@ def materials_list_rows(osp) -> list[dict]:
                 "where_used": getattr(entry, "where_used", "") or "",
                 "applied_by_fumigation": getattr(entry, "applied_by_fumigation", None),
                 "label_document_title": entry.label_document.title if entry and entry.label_document_id else "",
+                # OTCO C11's review agency: which box the row's own record fills, and the Other agency
+                # the operator names when it is neither OMRI nor WSDA.
+                "review_position": _review_position(plan, entry),
+                "other_review_agency": getattr(entry, "other_review_agency", "") or "",
+                "other_review_reference": getattr(entry, "other_review_reference", "") or "",
                 # Only an OTCO plan asks for the label; the editor offers the upload on every row.
                 "needs_label": labels_asked and (plan is None or plan.needs_label),
             }
         )
     return rows
+
+
+def _review_position(plan, entry) -> str:
+    """The row's review box for the editor. The entry's own basis decides when it names OMRI or WSDA, so
+    the editor never offers an Other agency the server would refuse."""
+    basis = getattr(entry, "listing_basis", "")
+    if basis in ("omri", "wsda"):
+        return basis
+    return plan.review_position if plan is not None else "other"
 
 
 # ---------------------------------------------------------------------------

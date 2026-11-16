@@ -60,9 +60,10 @@ items:
     system. This Materials List must include all fertilizers, pest and disease control materials, compost and
     manure products, inoculants, planting mixes, seed treatments, cleaners and sanitizers, adjuvants, mulches,
     etc.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: 'modules/materials_application.pdf: the materials list, which on an OTCO plan is C11''s table with
+      in use or intended for use stated in each row''s Intended use cell, and the four category attestations'
     questions:
     - materials_application.materials_list_panel
     - materials_application.materials_list_complete
@@ -74,7 +75,8 @@ items:
     models:
     - certifications.services.plan_materials (all FOUR sources — National List, OMRI, WSDA, operator-entered)
     - certifications.PlanMaterialEntry.status
-    prints: modules/materials_application.pdf §A, §B; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
+    - certifications.views.OrganicSystemPlanViewSet.add_approved_input (status and category taken with the attach)
+    prints: modules/materials_application.pdf §A (C11 table on an OTCO plan), §B; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
   gap: Same verdict as WSDA AGR 2196 Hdr and CCOF ORGB41 Header B, brought up to date. OTCO asks for ONE list
     covering every category; Trazo holds one list, read through `plan_materials()` from all four sources, and
     attests completeness four times, once per category (fertilizers and soil amendments; pest, disease and
@@ -86,9 +88,11 @@ items:
     from a catalog (an OMRI, WSDA or National List FK with no operator row) carries no status, so the list
     states use for only part of itself. Since 2026-11-09 seed treatments on planting records and tank-mix
     partners on application records join the Materials List and its reconciliation, as post-harvest sanitizers
-    have since 2026-09-12.
-  fix: Require `status` on a catalog attach (create the operator row alongside the FK, as the fold in `plan_materials`
-    already anticipates); keep the per-category attestations.
+    have since 2026-09-12. Closed 2026-11-16 (feat/c11-materials-list). The catalog attach asks the material's
+    use (in use or intended for use) and its section, and files both on the operator's row for that product,
+    carrying the catalog FK, as the fold anticipated; adding a material in the operator's own words asks the
+    same. A material attached before then, or by an older client, prints "use not stated" until the
+    Materials List editor answers it.
 - ref: 11.1 (not applicable)
   asks: Not Applicable; no materials/inputs are used.
   status: covered
@@ -111,50 +115,47 @@ items:
     attestation, and it is checked against the records rather than taken on its own.'
 - ref: 11.1 (own list attached)
   asks: I have attached my own list with this information.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    prints: modules/materials_application.pdf §A; workbooks/Materials List.xlsx
-  gap: 'Trazo''s generated list IS the operator''s own list, so this is the path an OTCO operation using Trazo
-    takes — and OTCO''s condition is that the attached list carry "this information", the four columns of the
-    table. The two Trazo artifacts between them do not: the module PDF prints name — manufacturer — identifier
-    grouped by source (no intended use); the workbook prints Product, Manufacturer, Reason for use, In use,
-    Intended for use (no review agency). Neither prints the per-row OMRI / WSDA / OTHER position or a label
-    reference. The column rows below state each shortfall; this row records that an OTCO reviewer receiving
-    either artifact under this checkbox will find columns missing.'
-  fix: Give the module PDF a four-column table matching C11 (name incl. formulation · manufacturer · review
-    agency + identifier · intended use), built from the same `plan_materials()` rows the grouped list already
-    uses, so the attachment carries every column the form asks for.
-- ref: 11.1 (additions to current list)
-  asks: The products identified below are to be added to my current Materials List.
-  status: partial
-  severity: P2
-  trazo:
+    where: 'modules/materials_application.pdf: on an OTCO plan the list prints as C11''s table, one row per product
+      with its full product name, manufacturer, third party review agency and intended use, each cell filled
+      or stated as not stated'
     questions:
     - materials_application.materials_list_panel
     models:
-    - certifications.models.ApprovedInputChangeLog (append-only; written by add_approved_input for catalog
-      rows only)
-    - certifications.models.OSPChangeNotification (category "Practice / input / procedure change — § 205.400(f)(2)")
-    - certifications.PlanMaterialEntry.created_at
-    prints: 03-change-notifications.pdf (filed notifications only); audit dossier (approved-input change log);
-      plan_review flags inputs_changed
-  gap: 'CCOF ORGB41 Header E ("to add or remove materials after your initial application, update your OSP Materials
-    List") is `covered` on `ApprovedInputChangeLog` + `OSPChangeNotification`, and that verdict was right for
-    the product it described: a material can be added to the list at any time, and a CATALOG attach writes
-    a dated, append-only change-log row that the audit dossier prints and `plan_review` reads to flag `inputs_changed`.
-    It is stale on one point since the operator-entered row shipped (2026-08-28): `ApprovedInputChangeLog`
-    is written only by `add_approved_input` (kinds national_list / omri / wsda), so a `PlanMaterialEntry` added
-    mid-year has a `created_at` and nothing else — no change-log row, nothing for `plan_review` to flag, and
-    nothing in 03-change-notifications.pdf unless the operator files a § 205.400(f)(2) notification by hand.
-    OTCO''s checkbox exists precisely to separate "new since approval" from the standing list; Trazo cannot
-    make that separation for operator-entered rows, which is the same "list what is NEW" gap WSDA AGR 2196
-    Hdr names.'
-  fix: Write an `ApprovedInputChangeLog` row (or a parallel `PlanMaterialEntryChangeLog`) on every operator-entered
-    create/delete; let the packet's materials page mark rows added since the plan was last submitted, and let
-    a "C11 additions" view filter to them.
+    - certifications.services.plan_materials.c11_product_cell
+    - certifications.services.plan_materials.c11_review_cell
+    - certifications.services.plan_materials.c11_use_cell
+    prints: modules/materials_application.pdf §A (C11 table); workbooks/Materials List.xlsx
+  gap: 'Closed 2026-11-16 (feat/c11-materials-list). Trazo''s generated list is the operator''s own list, and
+    OTCO''s condition is that it carry "this information", the four columns of the table. The module page now
+    prints the list in those columns for a plan whose agent is OTCO (`C11_TABLE_AGENTS`), from the same
+    `plan_materials()` rows, in place of the grouped list: the listing moves to the review agency cell, reason
+    and use to the intended use cell, and the agent''s review, [REVIEW] lines and label line sit under the row.
+    Another agent''s plan keeps the grouped list and never sees OTCO''s form named.'
+- ref: 11.1 (additions to current list)
+  asks: The products identified below are to be added to my current Materials List.
+  status: covered
+  trazo:
+    where: 'modules/materials_application.pdf: a row added since the plan was filed says "Added to the list on
+      <date>, after the plan was filed on <date>", and the page lists every material added to and taken off
+      the list since that filing'
+    questions:
+    - materials_application.materials_list_panel
+    models:
+    - certifications.models.ApprovedInputChangeLog (append-only; catalog attaches, and operator-entered materials
+      as kind operator_entered since 2026-11-16)
+    - certifications.services.plan_materials.materials_changes_since_filing
+    - certifications.models.OSPChangeNotification (category "Practice / input / procedure change, § 205.400(f)(2)")
+    prints: modules/materials_application.pdf §A (C11 table and the additions since the filing); audit dossier
+      (approved-input change log); plan_review flags inputs_changed
+  gap: 'Closed 2026-11-16 (feat/c11-materials-list). An operator-entered material added or removed writes the
+    same dated, append-only `ApprovedInputChangeLog` row a catalog attach does (kind `operator_entered`), from
+    the add-your-own path, from the Materials List editor when an answer puts a logged material on the plan,
+    and from its removal; an answers row about a catalog-attached product is not a second material and logs
+    nothing. `plan_review` reads it as `inputs_changed`. The module page separates the new from the standing
+    list: the window opens at the newest filing in the plan''s lineage (`submitted_at`, this version''s or the
+    one it continues) and the change log decides, net per material.'
 - ref: 11.1 (labels or photos attached)
   asks: Labels or photos of container are attached for each product that is not OMRI or WSDA listed.
   status: covered
@@ -193,7 +194,9 @@ items:
     — instead of omitting it, so a row that needs the cell no longer reads like a row that never did. The Materials
     List workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names where
     it is answered. Remaining, as CCOF A (product name): no separate `formulation` field, and a National List
-    attach does not yet require the operator row naming the brand applied.'
+    attach does not yet require the operator row naming the brand applied. Since 2026-11-16 an operator row
+    that carries only the substance''s own name (a use answered, no brand) still prints ''brand and formulation
+    not stated'', in the plan line and in the C11 table''s product cell.'
   fix: Same as CCOF A (product name).
 - ref: 11.1 Table (manufacturer)
   asks: 'Full Manufacturer Name (ex: "XYZ Manufacturing, LLC"). The specific brand name and manufacturer must
@@ -219,55 +222,47 @@ items:
   fix: Completion gate on `manufacturer` for rows marked in use.
 - ref: 11.1 Table (third party review agency)
   asks: 'Third Party Review Agency (ex: OMRI, WSDA) — per row, check OMRI / WSDA / OTHER.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: 'modules/materials_application.pdf: the C11 table''s Third party review agency cell: OMRI or WSDA with
+      the listing''s own identifier, "Other: <agency>, <reference>" as the operator names it, or "No review
+      agency named" with the row''s basis'
     questions:
     - materials_application.materials_list_panel
     models:
+    - certifications.PlanMaterialEntry.other_review_agency
+    - certifications.PlanMaterialEntry.other_review_reference
     - certifications.PlanMaterialEntry.listing_basis
-    - certifications.PlanMaterialEntry.certifier_letter_reference
     - certifications.PlanMaterialEntry.omri_product
     - certifications.PlanMaterialEntry.wsda_material
     - certifications.PlanMaterialEntry.national_list_substance
-    prints: modules/materials_application.pdf §A (source heading — National List / OMRI / WSDA / Operator-entered
-      — plus OMRI
-  gap: 'A fresh OTCO column, adjacent to WSDA AGR 2196''s "WSDA List cross-reference" row but a different ask
-    (that row is about surfacing the per-source badge to the OPERATOR). For the OMRI and WSDA positions Trazo
-    already prints the answer: each row sits under its source heading with the registry''s own identifier,
-    and the basis is checkable — `listing_basis` may say OMRI or WSDA only while the matching FK resolves,
-    and the fold refuses to print a catalog number onto a row whose FK does not point at that exact listing.
-    Trazo resolves the name; the operator''s confirmed FK is the statement, and it is never OTCO''s review.
-    The OTHER position is the gap: everything else — a National List substance basis, a certifier''s written
-    approval, a row with no third-party listing — lands under OTHER on OTCO''s form, and Trazo has no field
-    to name the other reviewer. `certifier_letter_reference` is the nearest and covers only the letter case;
-    there is nowhere to record that a manufacturer has supplied OTCO''s Crop Input Verification Evaluation
-    (a manufacturer-signed declaration, valid five years, which is what OTCO''s OTHER column typically points
-    at) or another ACA''s review. The `listing_statement` for those rows — "National List substance", "no third-party
-    listing on file" — is honest about the basis and says nothing about which agency, if any, reviewed the
-    product.'
-  fix: 'Add `other_review_agency` [text] and `other_review_reference` [text] on `PlanMaterialEntry`, visible
-    when `listing_basis` is not `omri` or `wsda`; print the C11 trio per row (OMRI / WSDA / OTHER: <agency,
-    reference>) in the module PDF table proposed at "11.1 (own list attached)". Never print a resolution as a review.'
+    - certifications.services.plan_materials.c11_review_cell
+    prints: modules/materials_application.pdf §A (C11 table)
+  gap: 'Closed 2026-11-16 (feat/c11-materials-list). The OMRI and WSDA boxes are the catalog listing the operator
+    attached, with the registry''s own identifier; Trazo resolves the name and the operator''s confirmed FK is
+    the statement, never a review Trazo made, and a lapsed OMRI listing no longer fills the OMRI box. OTHER is
+    `other_review_agency` and `other_review_reference`, which the operator records from the review''s own
+    document (a manufacturer''s Crop Input Verification Evaluation, another agent''s review) in the Materials
+    List editor, offered only on a row that is neither OMRI nor WSDA and refused by the serializer on one that
+    is. A row with none of the three says "No review agency named" beside its basis (National List substance
+    with its paragraph, nonsynthetic, or no third-party listing on file) rather than ticking a box nobody
+    ticked.'
 - ref: 11.1 Table (intended use)
   asks: 'Intended Use (ex: Fertility, Pest Control, Post-Harvest Sanitation).'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
+    where: 'modules/materials_application.pdf: the C11 table''s Intended use cell: the category word, the reason
+      for use and in use or intended for use, each stated or said to be not stated'
     questions:
     - materials_application.materials_list_panel
     models:
     - certifications.PlanMaterialEntry.category
     - certifications.PlanMaterialEntry.reason_for_use
-    prints: workbooks/Materials List.xlsx ("Reason for use" — the operator's reason, else the event-type word);
-      absent from modules/materials_application.pdf
-  gap: 'Same verdict as WSDA AGR 2196 "Intended purpose" — OTCO, like WSDA, wants a category word, not CCOF''s
-    specific reason ("zinc deficiency"), and Trazo has that word: `PlanMaterialEntry. category` is exactly
-    OTCO''s granularity (fertilizers and soil amendments / pest, weed and disease control / production aids
-    / post-harvest / other) and `reason_for_use` is the operator''s fuller answer. Both exist only on operator-entered
-    rows, and neither reaches the module PDF: `display()` prints name — manufacturer — identifier and nothing
-    about use, so the list a reviewer reads has an empty Intended Use column on every row. The workbook prints
-    the reason (or, for an event-derived row with no plan entry, the event type word — "Fertilizer", "Pest
-    control"); a catalog-attached row with no operator entry and no logged application prints nothing anywhere.'
-  fix: Print `category` (falling back to `reason_for_use`, then the event-type word) beside each row in the
-    module PDF; require `category` on a catalog attach, the same way the "Instructions (all input materials)" fix requires `status`.
+    - certifications.PlanMaterialEntry.status
+    - certifications.services.plan_materials.C11_USE_WORDS
+    prints: modules/materials_application.pdf §A (C11 table); workbooks/Materials List.xlsx ("Reason for use")
+  gap: 'Closed 2026-11-16 (feat/c11-materials-list). OTCO wants a category word, and `PlanMaterialEntry.category`
+    is its granularity; the cell prints it in words of its own (`C11_USE_WORDS`, not the picker labels, which
+    name CCOF''s sections), then the operator''s reason and the use. The catalog attach asks the section with the
+    use, so a newly attached material carries the word; one attached earlier prints "use category not stated"
+    until the Materials List editor answers it.'
