@@ -69,6 +69,15 @@ class TheModelIsCalledProductionTests(SimpleTestCase):
             ("from .models import History", "history/services/example.py", [1]),
             ("from prompt_toolkit.history import History", "history/views.py", [1]),
             ("class History:\n    pass", "product/tests/test_example.py", [1]),
+            # Any other binding, the deleted alias first: rewriting it would leave `Production = Production`.
+            ("History = Production", "history/models.py", [1]),
+            ("History: type = Production", "history/models.py", [1]),
+            ("for History in rows:\n    pass", "product/views.py", [1]),
+            ("with open(path) as History:\n    pass", "product/views.py", [1]),
+            ("try:\n    pass\nexcept ValueError as History:\n    pass", "product/views.py", [3]),
+            ("def count(History):\n    return History", "product/views.py", [1]),
+            ("import prompt_toolkit.history as History", "history/views.py", [1]),
+            ("from history.models import Production as History", "history/views.py", [1]),
         )
         for source, rel, expected in cases:
             with self.subTest(source=source, rel=rel):

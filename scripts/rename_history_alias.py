@@ -64,14 +64,25 @@ def _absolute(module: str | None, level: int, rel: str) -> str:
 
 
 def other_bindings(source: str, rel: str) -> list[int]:
-    """Lines where `History` is bound to something other than the model."""
+    """Lines where `History` is bound to something other than the model.
+
+    Imports from elsewhere and classes or functions of that name, and also every other way code
+    binds a name: an assignment (`History = Production`, the deleted alias itself), a loop, `with`
+    or `except` target, a parameter, and `import x as History`. Rewriting any of these would bind
+    `Production` to something else, or leave a dead `Production = Production`.
+    """
     lines = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ImportFrom) and _absolute(node.module, node.level, rel) != MODEL_MODULE:
             lines += [node.lineno for alias in node.names if alias.name == OLD]
-        elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == OLD:
+        elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.ExceptHandler)):
+            if node.name == OLD:
+                lines.append(node.lineno)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store) and node.id == OLD:
             lines.append(node.lineno)
-    return lines
+        elif (isinstance(node, ast.arg) and node.arg == OLD) or (isinstance(node, ast.alias) and node.asname == OLD):
+            lines.append(node.lineno)
+    return sorted(set(lines))
 
 
 def rewrite(source: str) -> str:
