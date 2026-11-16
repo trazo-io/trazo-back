@@ -12480,7 +12480,9 @@ class AuditExportService:
         ]
         if not events:
             return None
-        units = {(_val(ev.yield_unit, "") or "").strip().lower() for ev in events}
+        # `_canonical_unit`, as `_resolve_harvest_total` does: summing "lb" and "lbs" picks there
+        # while this saw two units hid the very gap this check reports (review of back #448).
+        units = {self._canonical_unit(_val(ev.yield_unit, "")) for ev in events}
         header_amount = self.production.production_amount
         if len(units) != 1 or header_amount is None:
             return None
@@ -12761,10 +12763,11 @@ class AuditExportService:
         # sales) has no other document to disagree with and keeps the rows below.
         lot_notes: list[str] = []
         lot_review = ""
-        # No harvest record on file: the balance is not computed (as on the trace), and the
-        # header total is the only harvest figure there is, so the oversell check below still
-        # reads it, labelled as the header's.
-        lot_header_only = False
+        # The balance not computed (as on the trace): the yield row's total, picks or header, is
+        # the only harvest figure there is, so the oversell check below still reads it, as it did
+        # before the shared balance (review of back #448: gating this on "no harvest record" alone
+        # let a season with a blank-quantity pick or mixed pick units oversell with no flag).
+        lot_not_computed = False
         if sales:
             from certifications.services.audit_trail_exhibit import _lot_balance, balance_statement, buffer_statement
 
@@ -12774,7 +12777,7 @@ class AuditExportService:
             text, review = balance_statement(lot, season_open=self.production.finish_date is None, as_at=_as_of)
             if lot.difference is None:
                 text += " Reconcile from the itemised sales below."
-            lot_header_only = lot.not_computed_code == "no_harvest"
+            lot_not_computed = lot.difference is None
             if review:
                 # Escaped: the flag paragraph below is raw markup, and a unit is operator text.
                 lot_review = _esc(f"Organic lot, harvested minus sold: {text}")
@@ -12853,7 +12856,7 @@ class AuditExportService:
         if lot_review:
             mb_flags.append(lot_review)
         elif (
-            (not sales or lot_header_only)
+            (not sales or lot_not_computed)
             and harvest_amount
             and quantity_sold
             and self._canonical_unit(harvest_unit) == self._canonical_unit(sold_unit)

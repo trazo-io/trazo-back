@@ -221,3 +221,46 @@ class OneRuleTests(_Season):
         dossier = self._dossier_text(season)
         self.assertIn("sum of 2 harvest record(s)", dossier)
         self.assertIn("harvest and sales balance", dossier)
+
+
+class ReviewOf448Tests(_Season):
+    """The review of back #448: evidence, invoice wording, the oversell check, and the header gap."""
+
+    def test_a_lot_record_answering_the_buffer_question_is_not_evidence_of_a_buffer_sale(self):
+        # The disposition with no buffer quantity is the lot's own record (`_is_buffer_pick`).
+        season = self._season()
+        self._pick(season, 212, buffer_disposition="sold_conventional")
+        self._sale(season, 182, organic=False)
+        balance = sample_trail(self.est).balance
+        self.assertEqual((balance.sold, balance.difference, balance.buffer_sale_count), (182, 30, 0))
+        self.assertEqual(balance.sold_not_organic_count, 1)
+
+    def test_a_buffer_sale_invoiced_as_organic_is_never_said_to_be_unidentified(self):
+        season = self._season()
+        self._pick(season, 200)
+        buffer = self._pick(
+            season, 20, day=15, buffer_disposition="sold_conventional", buffer_disposition_quantity="20 bins"
+        )
+        self._sale(season, 20, picks=[buffer], organic=True, invoice="BUF-ORG")
+        dossier = self._dossier_text(season)
+        self.assertIn("20 bins sold on 1 invoice, each identifying it as organic", dossier)
+        self.assertNotIn("that do not identify it as organic", dossier)
+
+    def test_overselling_is_flagged_when_the_balance_cannot_be_computed(self):
+        # One pick carries no quantity: the balance is not computed, and the yield row's total
+        # (the picks that carry one) still catches a sale above it.
+        season = self._season()
+        self._pick(season, 100, unit="lb")
+        self._pick(season, None, unit="lb", day=21)
+        self._sale(season, 150, unit="lb")
+        dossier = self._dossier_text(season)
+        self.assertIn("Balance not computed: 1 of 2 harvest record(s) carry no quantity", dossier)
+        self.assertIn("EXCEEDS harvest yield", dossier)
+
+    def test_the_header_gap_is_reported_across_lb_and_lbs(self):
+        season = self._season()
+        History.objects.filter(pk=season.pk).update(production_amount=9000, production_unit="lb")
+        self._pick(season, 6200, unit="lbs")
+        self._pick(season, 3000, unit="lb", day=21)
+        self._sale(season, 9200, unit="lb")
+        self.assertIn("The harvest records total", self._dossier_text(season))

@@ -221,6 +221,10 @@ class LotBalance:
     buffer_harvested: Optional[Decimal] = None
     buffer_sold: Optional[Decimal] = None
     buffer_sale_count: int = 0
+    #: Of `buffer_sale_count`, the sales whose invoice identifies the product as organic. A sale
+    #: linked only to buffer picks is the buffer crop whatever its invoice says, so the statement
+    #: must not say those invoices do not identify it as organic (review of back #448).
+    buffer_sale_organic_count: int = 0
     #: The part of `sold` whose invoice does not identify the product as organic. It left the
     #: organic lot all the same, so it is subtracted; it is named so a reader sees it (overall
     #: review 2026-11, OV-FJ-C24: it was counted apart as buffer crop, and the trace said the
@@ -268,17 +272,24 @@ def _is_buffer_pick(ev) -> bool:
 
 def season_sells_buffer_crop(season_ids) -> bool:
     """True when any of these seasons records § 205.202(c) buffer crop going into someone else's
-    hands: a harvest record or a buffer-use (BU) record whose disposition entered commerce."""
+    hands: a buffer-use (BU) record whose disposition entered commerce, or a harvest record that
+    is a buffer-row pick (`_is_buffer_pick`: the disposition AND the buffer quantity).
+
+    A harvest record with the disposition and no quantity is the operator answering the buffer
+    question on the lot's own record (its yield is the lot's). Reading it as evidence put every
+    unmarked sale of that season back outside the lot: the defect `buffer_sales` exists to end,
+    reached through another field (review of back #448)."""
     from history.models import ProductionEvent
 
     ids = {pk for pk in season_ids if pk is not None}
     if not ids:
         return False
-    return ProductionEvent.objects.filter(
-        history_id__in=ids,
-        type__in=(ProductionEvent.HARVESTING, ProductionEvent.BUFFER_USE),
-        buffer_disposition__in=ProductionEvent.BUFFER_DISPOSITIONS_ENTERING_COMMERCE,
-    ).exists()
+    entering = ProductionEvent.objects.filter(
+        history_id__in=ids, buffer_disposition__in=ProductionEvent.BUFFER_DISPOSITIONS_ENTERING_COMMERCE
+    )
+    if entering.filter(type=ProductionEvent.BUFFER_USE).exists():
+        return True
+    return any(_is_buffer_pick(ev) for ev in entering.filter(type=ProductionEvent.HARVESTING))
 
 
 def buffer_sales(all_harvest_events, all_sales) -> list:
@@ -348,6 +359,7 @@ def _lot_balance(all_harvest_events, all_sales) -> LotBalance:
         buffer_harvested=buffer_harvested,
         buffer_sold=buffer_sold,
         buffer_sale_count=len(apart),
+        buffer_sale_organic_count=sum(1 for s in apart if s.organic_on_invoice),
         sold_not_organic_count=len(not_organic),
     )
     if not harvest_events:
@@ -513,10 +525,17 @@ def buffer_statement(balance) -> str:
     if balance.buffer_harvested is not None:
         bits.append(f"{fmt_total(balance.buffer_harvested, balance.unit)} harvested from the buffer row")
     if balance.buffer_sold is not None:
-        bits.append(
-            f"{fmt_total(balance.buffer_sold, balance.unit)} sold on "
-            f"{_count_of(balance.buffer_sale_count, 'invoice')} that do not identify it as organic"
+        sold = (
+            f"{fmt_total(balance.buffer_sold, balance.unit)} sold on {_count_of(balance.buffer_sale_count, 'invoice')}"
         )
+        organic = balance.buffer_sale_organic_count
+        if not organic:
+            sold += " that do not identify it as organic"
+        elif organic == balance.buffer_sale_count:
+            sold += ", each identifying it as organic"
+        else:
+            sold += f", {organic} of them identifying it as organic"
+        bits.append(sold)
     return "Buffer crop (7 CFR 205.202(c)), counted apart from the organic lot: " + " \u00b7 ".join(bits) + "."
 
 
