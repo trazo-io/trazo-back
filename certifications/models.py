@@ -2873,6 +2873,15 @@ class PlanMaterialEntry(models.Model):
     )
     where_used = models.CharField(max_length=200, blank=True, default="")
     applied_by_fumigation = models.BooleanField(null=True, blank=True)
+    #: OTCO C11 11.1 asks, per row, which third party reviewed the product: OMRI, WSDA or OTHER. The first
+    #: two are the catalog listing above; OTHER is anyone else, most often a manufacturer's OTCO Crop
+    #: Input Verification Evaluation or another certifying agent's review. As the operator records it,
+    #: from the review's own document; Trazo never names a reviewer. Refused on an OMRI or WSDA row,
+    #: whose reviewer is the listing (2026-11-16).
+    other_review_agency = models.CharField(max_length=200, blank=True, default="")
+    other_review_reference = models.CharField(
+        max_length=200, blank=True, default="", help_text="The review's own number, date or document"
+    )
     #: The product's label, or a photo of its container, filed in the farm's Documents. OTCO C11 11.1
     #: asks for one "for each product that is not OMRI or WSDA listed" (read live 2026-11-04). PROTECT:
     #: the documents route refuses to delete a file a material still names.
@@ -2919,6 +2928,18 @@ class PlanMaterialEntry(models.Model):
         """
         field = self.BASIS_CATALOG_FIELD.get(self.listing_basis)
         return bool(field) and getattr(self, f"{field}_id", None) is None
+
+    @property
+    def listing_review_position(self) -> str:
+        """Which box of OTCO C11's review-agency cell this row's own listing fills: "omri", "wsda" or
+        "other". A lapsed OMRI listing, or one whose catalog row is gone, is no longer OMRI's review, so
+        the row may name another agency (review of back #457: the stored basis alone kept it stuck)."""
+        if self.listing_basis == self.BASIS_OMRI:
+            product = self.omri_product if self.omri_product_id else None
+            return "omri" if product is not None and not product.delisted_on else "other"
+        if self.listing_basis == self.BASIS_WSDA:
+            return "wsda" if self.wsda_material_id else "other"
+        return "other"
 
     @property
     def agent_review_statement(self) -> str:
@@ -2981,18 +3002,26 @@ class ApprovedInputChangeLog(models.Model):
     approved list, and which certifier letter authorised it?" under
     7 CFR 205.400(f)(2) change-notification obligations (operation change).
 
-    Write-only from the API perspective — rows are created exclusively by
-    OrganicSystemPlanViewSet.add_approved_input / remove_approved_input.
+    Write-only from the API perspective: rows are created by
+    OrganicSystemPlanViewSet.add_approved_input / remove_approved_input, and since
+    2026-11-16 by the operator-entered materials paths when they add or remove a
+    material the plan carried no other way (`KIND_OPERATOR`).
     No update / delete endpoints are exposed; the log is append-only.
     """
 
     KIND_NATIONAL_LIST = "national_list"
     KIND_OMRI = "omri"
     KIND_WSDA = "wsda"
+    #: A material the operator put on the plan in their own words (`PlanMaterialEntry`), with no catalog
+    #: attachment behind it. Until 2026-11-16 only catalog attaches were logged, so a compost added
+    #: mid-year left no dated row: nothing for `plan_review` to flag and nothing to mark as an addition
+    #: on OTCO's C11 ("to be added to my current Materials List") or CCOF's materials list update.
+    KIND_OPERATOR = "operator_entered"
     KIND_CHOICES = [
         (KIND_NATIONAL_LIST, "National List substance (7 CFR 205.601–606)"),
         (KIND_OMRI, "OMRI-listed product (farmer-reported)"),
         (KIND_WSDA, "WSDA Brand Name Materials List (Washington State Dept of Ag)"),
+        (KIND_OPERATOR, "Operator-entered material"),
     ]
 
     ACTION_ADDED = "added"

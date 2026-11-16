@@ -1190,8 +1190,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     def add_approved_input(self, request, **kwargs):
         """
         Attach a NationalListSubstance or OMRIProduct to this OSP's approved
-        inputs. Payload: { "kind": "national_list" | "omri", "id": <pk>,
-        "change_notification_reference": "<optional>", "notes": "<optional>" }.
+        inputs. Payload: { "kind": "national_list" | "omri" | "wsda", "id": <pk>,
+        "change_notification_reference": "<optional>", "notes": "<optional>",
+        "status": "<optional, in_use|planned>", "category": "<optional>" }.
 
         Drives the drift detector: once attached, future ChemicalEvent /
         SoilManagementEvent saves referencing this input will not raise a
@@ -1231,6 +1232,12 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
         ref = (request.data.get("change_notification_reference") or "").strip()
         notes = (request.data.get("notes") or "").strip()
+        # OTCO C11 asks every material "in use or intended for use", and its Intended Use column; CCOF and
+        # WSDA ask the same per row. A catalog listing answers neither, so the attach takes them with it
+        # (2026-11-16) and files them on the operator's row for this product, the row the Materials List
+        # editor writes. Both optional here: an older client attaches as before and the list states the
+        # cells as not stated.
+        answers = {f: request.data[f] for f in ("status", "category") if request.data.get(f)}
 
         with transaction.atomic():
             if kind == "national_list":
@@ -1242,6 +1249,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             else:
                 osp.approved_omri_products.add(target)
                 target_name = target.product_name
+            if answers:
+                self._file_attach_answers(osp, request, kind, target, target_name, answers)
 
             log_kwargs = dict(
                 osp=osp,
@@ -1268,6 +1277,81 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # Re-fetch so serializer reflects the freshly prefetched relations.
         osp.refresh_from_db()
         return Response(OrganicSystemPlanSerializer(osp).data)
+
+    @staticmethod
+    def _file_attach_answers(osp, request, kind, target, target_name, answers) -> None:
+        """The use and section given with a catalog attach, on the operator's row for that product.
+
+        Found the way the editor finds it (`_find_material_entry`, by name), else created carrying the
+        catalog FK, so its listing basis is the one the attachment really has. Called inside the
+        attach's transaction: a refused answer leaves nothing attached.
+        """
+        from certifications.models import PlanMaterialEntry
+
+        OrganicSystemPlan.objects.select_for_update().filter(pk=osp.pk).first()
+        entry = OrganicSystemPlanViewSet._find_material_entry(osp, target_name)
+        if entry is not None:
+            serializer = PlanMaterialEntrySerializer(entry, data=answers, partial=True, context={"osp": osp})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return
+        basis, field = {
+            "national_list": (PlanMaterialEntry.BASIS_NATIONAL_LIST, "national_list_substance"),
+            "wsda": (PlanMaterialEntry.BASIS_WSDA, "wsda_material"),
+        }.get(kind, (PlanMaterialEntry.BASIS_OMRI, "omri_product"))
+        payload = {**answers, "product_name": target_name, "listing_basis": basis, field: target.pk}
+        serializer = PlanMaterialEntrySerializer(data=payload, context={"osp": osp})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(osp=osp, created_by=request.user if request.user.is_authenticated else None)
+
+    @staticmethod
+    def _remove_attach_answers(osp, kind, target, target_name) -> None:
+        from certifications.models import PlanMaterialEntry
+        from certifications.services.plan_materials import _norm
+
+        link = {"national_list": "national_list_substance_id", "wsda": "wsda_material_id"}.get(kind, "omri_product_id")
+        name = _norm(target_name)
+        for entry in PlanMaterialEntry.objects.filter(osp_id=osp.pk, **{link: target.pk}):
+            if _norm(entry.product_name) == name:
+                entry.delete()
+
+    @staticmethod
+    def _carried_by_a_catalog_attach(osp, entry) -> bool:
+        """True when this operator row holds answers about a product the plan carries from a catalog.
+
+        Such a row is not a material of its own: the catalog attach put the product on the plan and
+        logged it, and `plan_materials` prints the two as one row. Read from the database, not the
+        viewset's prefetch, for the same reason `_find_material_entry` does.
+        """
+        from certifications.services.plan_materials import _norm
+
+        plan = OrganicSystemPlan.objects.get(pk=osp.pk)
+        name = _norm(entry.product_name)
+        for relation, attr, link in (
+            (plan.approved_national_list_substances, "substance_name", "national_list_substance_id"),
+            (plan.approved_omri_products, "product_name", "omri_product_id"),
+            (plan.approved_wsda_materials, "brand_name", "wsda_material_id"),
+        ):
+            for row in relation.all():
+                if _norm(getattr(row, attr, "")) == name or getattr(entry, link, None) == row.pk:
+                    return True
+        return False
+
+    @staticmethod
+    def _log_operator_material(osp, request, name, action) -> None:
+        """A dated, append-only row for an operator-entered material added to or removed from the plan.
+
+        The catalog paths always wrote one; an operator row did not, so a compost added mid-year left
+        nothing for `plan_review` to flag and nothing to mark as an addition (OTCO C11 "to be added to
+        my current Materials List", CCOF's materials list update).
+        """
+        ApprovedInputChangeLog.objects.create(
+            osp=osp,
+            kind=ApprovedInputChangeLog.KIND_OPERATOR,
+            target_name_at_change=name,
+            action=action,
+            changed_by=request.user if request.user.is_authenticated else None,
+        )
 
     @staticmethod
     def _recompile_after_materials_change(osp) -> None:
@@ -1314,10 +1398,13 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         self._ensure_approved_inputs_editable(osp)
         serializer = PlanMaterialEntrySerializer(data=request.data, context={"osp": osp})
         serializer.is_valid(raise_exception=True)
-        entry = serializer.save(
-            osp=osp,
-            created_by=request.user if request.user.is_authenticated else None,
-        )
+        with transaction.atomic():
+            entry = serializer.save(
+                osp=osp,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            if not self._carried_by_a_catalog_attach(osp, entry):
+                self._log_operator_material(osp, request, entry.product_name, ApprovedInputChangeLog.ACTION_ADDED)
         # Adding a material may clear a drift warning raised for it, exactly as attaching a
         # catalog input does.
         self._recompute_drift_for_establishment(osp.establishment_id)
@@ -1343,7 +1430,12 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.method == "DELETE":
-            entry.delete()
+            with transaction.atomic():
+                stands_alone = not self._carried_by_a_catalog_attach(osp, entry)
+                name = entry.product_name
+                entry.delete()
+                if stands_alone:
+                    self._log_operator_material(osp, request, name, ApprovedInputChangeLog.ACTION_REMOVED)
             self._recompute_drift_for_establishment(osp.establishment_id)
             self._recompile_after_materials_change(osp)
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -1477,6 +1569,8 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 "facility_material_type",
                 "where_used",
                 "applied_by_fumigation",
+                "other_review_agency",
+                "other_review_reference",
             )
             if field in request.data
         }
@@ -1516,12 +1610,16 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 payload.update(self._listing_basis_for(osp, name))
                 serializer = PlanMaterialEntrySerializer(data=payload, context={"osp": osp})
                 serializer.is_valid(raise_exception=True)
-                serializer.save(
+                entry = serializer.save(
                     osp=osp,
                     created_by=request.user if request.user.is_authenticated else None,
                     **extra,
                 )
                 created = True
+                # A material the records showed and the plan did not is now ON the plan: an addition.
+                # An answer about a catalog-attached product adds nothing; its attach was logged.
+                if not self._carried_by_a_catalog_attach(osp, entry):
+                    self._log_operator_material(osp, request, entry.product_name, ApprovedInputChangeLog.ACTION_ADDED)
 
         # A material the records showed but the plan did not now IS on the plan, so the drift
         # finding it raised has to be recomputed here exactly as it is on the other two write
@@ -1699,6 +1797,12 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             else:
                 osp.approved_omri_products.remove(target)
                 target_name = target.product_name
+            # The operator's answers about this product (use, section, reason, review, label) leave with
+            # it. Left behind, the row came back as a material of its own, still saying "OMRI listed"
+            # through its foreign key, on a plan the product had just been taken off (2026-11-16). A row
+            # under another name that links this listing (a brand of a National List substance) is a
+            # material in its own right and stays.
+            self._remove_attach_answers(osp, kind, target, target_name)
 
             log_kwargs = dict(
                 osp=osp,

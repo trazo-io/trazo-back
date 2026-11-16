@@ -1229,6 +1229,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
     """
     from certifications.osp_modules.conditions import answer_value
     from certifications.services.plan_materials import (
+        c11_table_asked,
         labels_asked_for,
         none_used_contradictions,
         plan_materials,
@@ -1270,6 +1271,20 @@ def _approved_inputs_flowables(osp, styles) -> list:
         ]
 
     out = [Paragraph("<b>Input materials on this plan</b>", styles["body"])]
+    if c11_table_asked(osp):
+        out += _c11_table_flowables(osp, rows, styles, labels_asked)
+    else:
+        out += _grouped_materials_flowables(rows, styles, labels_asked)
+
+    # A logged wash-water sanitizer the plan lists only under § 205.601, or under nothing.
+    for line in post_harvest_listing_review(osp):
+        out.append(Paragraph(_escape(line), styles["meta"]))
+    return out + _materials_sections_after_list(osp, rows, answers, styles)
+
+
+def _grouped_materials_flowables(rows, styles, labels_asked) -> list:
+    """The list grouped by where each material is listed, one line per material."""
+    out = []
     out.append(
         Paragraph(
             "Each row: product — manufacturer — listing — reason for use — use (in use, intended for use "
@@ -1296,11 +1311,105 @@ def _approved_inputs_flowables(osp, styles) -> list:
             out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
             for line in _material_label_lines(row, labels_asked):
                 out.append(Paragraph(_escape(line), styles["meta_indent"]))
+    return out
 
-    # A logged wash-water sanitizer the plan lists only under § 205.601, or under nothing.
-    for line in post_harvest_listing_review(osp):
-        out.append(Paragraph(_escape(line), styles["meta"]))
 
+def _c11_table_flowables(osp, rows, styles, labels_asked) -> list:
+    """The list in OTCO C11's own four columns, for a plan filed with OTCO.
+
+    C11 offers "I have attached my own list with this information", and the information is its table:
+    full product name with formulation, full manufacturer name, third party review agency (OMRI, WSDA
+    or OTHER) and intended use. The grouped list printed the first two and the listing, and no
+    intended use, so the attached list was missing columns the form names (2026-11-16). Every fact
+    the grouped line carried is still here: the listing in the review cell, reason and use in the
+    intended use cell, and the agent's review, [REVIEW] lines and label line under the row.
+    """
+    from certifications.services.plan_materials import (
+        c11_product_cell,
+        c11_review_cell,
+        c11_use_cell,
+        materials_changes_since_filing,
+    )
+
+    changes = materials_changes_since_filing(osp)
+    added_on = {" ".join(name.split()).lower(): day for name, day in (changes or {}).get("added", [])}
+    out = [
+        Paragraph(
+            "In the columns of OTCO's C11 Crop Materials List. A cell the plan does not hold is stated as not "
+            "stated. The review agency is the listing the operator attached (OMRI or WSDA), or the agency the "
+            "operator names; Trazo names no reviewer. Under a row: the agent's review as the operator recorded "
+            "it, any [REVIEW] line, and its label or container photo.",
+            styles["meta"],
+        )
+    ]
+    items = []
+    for row in rows:
+        notes = list(row.review_notes())
+        if row.agent_review:
+            notes.append(row.agent_review)
+        notes += _material_label_lines(row, labels_asked)
+        day = added_on.get(" ".join(row.name.split()).lower())
+        if day:
+            notes.append(f"Added to the list on {day}, after the plan was filed on {changes['since']}.")
+        items.append(
+            (
+                [
+                    c11_product_cell(row),
+                    [row.manufacturer or "not stated"],
+                    c11_review_cell(row),
+                    c11_use_cell(row),
+                ],
+                notes,
+            )
+        )
+    out.append(
+        _register_table(
+            ["Full product name", "Manufacturer", "Third party review agency", "Intended use"],
+            [2.0, 1.5, 1.7, 1.8],
+            items,
+            styles,
+        )
+    )
+    if changes is not None:
+        out.append(Spacer(1, 4))
+        if changes["added"] or changes["removed"]:
+            if changes["added"]:
+                listed = "; ".join(f"{name} ({day})" for name, day in changes["added"])
+                out.append(
+                    Paragraph(
+                        _escape(
+                            f"Added to the Materials List since the plan was filed on {changes['since']}: {listed}."
+                        ),
+                        styles["meta"],
+                    )
+                )
+            if changes["removed"]:
+                listed = "; ".join(f"{name} ({day})" for name, day in changes["removed"])
+                out.append(
+                    Paragraph(
+                        _escape(
+                            f"Taken off the Materials List since the plan was filed on {changes['since']}: {listed}."
+                        ),
+                        styles["meta"],
+                    )
+                )
+        else:
+            out.append(
+                Paragraph(
+                    _escape(
+                        f"No material was added to or taken off the list since the plan was filed on {changes['since']}."
+                    ),
+                    styles["meta"],
+                )
+            )
+    return out
+
+
+def _materials_sections_after_list(osp, rows, answers, styles) -> list:
+    """The per-category sections, facility pest control, and the checks that follow the list."""
+    from certifications.services.plan_materials import none_used_contradictions
+
+    out = []
     # CCOF Materials Application §C, "Crop Management Tools and Production Aids": seed treatments, growing
     # media and adjuvants, each with product, manufacturer and reason for use. Printed again under §C's own
     # heading from the rows the operator filed under that category, as §D below. Only when rows exist.
