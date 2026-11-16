@@ -332,6 +332,65 @@ class MultiParcelActivityTests(APITestCase):
         # The control: the same base body with nothing wrong in it is accepted.
         self.assertEqual(self._post(self._spray(two)).status_code, status.HTTP_201_CREATED)
 
+    # --- start and stop times per parcel (an `either` key) ---------------------------------------
+    # One airblast job over several blocks takes hours: the sprayer finishes one block before it
+    # starts the next. A drift question asks when THIS block was sprayed, so each target may carry
+    # its own window. Shared stays the default, and a window sent both ways is refused.
+
+    def test_each_parcel_can_carry_its_own_start_and_stop(self):
+        def at(hour, minute=0):
+            return self.when.replace(hour=hour, minute=minute).isoformat()
+
+        targets = self._three_blocks()
+        targets[0].update(application_start=at(7), application_end=at(8, 30))
+        targets[1].update(application_start=at(8, 40), application_end=at(10))
+        body = self._spray(targets)
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content)
+
+        records = ChemicalEvent.objects.filter(application_group=body["application_group"])
+        a = records.get(history=self.season_a)
+        b = records.get(history=self.season_b)
+        c = records.get(history=self.season_c)
+        self.assertEqual((a.application_start.hour, a.application_end.hour, a.application_end.minute), (7, 8, 30))
+        self.assertEqual((b.application_start.minute, b.application_end.hour), (40, 10))
+        # A parcel the grower left blank gets no window: never another parcel's.
+        self.assertIsNone(c.application_start)
+        self.assertIsNone(c.application_end)
+
+    def test_a_shared_start_and_stop_are_every_parcels(self):
+        start = self.when.replace(hour=7).isoformat()
+        end = self.when.replace(hour=11).isoformat()
+        body = self._spray(self._three_blocks(), application_start=start, application_end=end)
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.content)
+        windows = {
+            (r.application_start, r.application_end)
+            for r in ChemicalEvent.objects.filter(application_group=body["application_group"])
+        }
+        self.assertEqual(len(windows), 1)
+        self.assertEqual(next(iter(windows))[0].hour, 7)
+
+    def test_a_start_sent_shared_and_per_parcel_is_refused(self):
+        targets = self._three_blocks()
+        targets[0]["application_start"] = self.when.replace(hour=7).isoformat()
+        res = self._post(self._spray(targets, application_start=self.when.replace(hour=6).isoformat()))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+        self.assertIn("either", res.json())
+        self.assertIn("application_start", res.json()["either"][0])
+        self.assertFalse(ChemicalEvent.objects.exists())
+
+    def test_time_not_on_the_record_refuses_a_parcels_own_time(self):
+        """The grower's "the time is not on my record" covers every parcel of the job, so a time on
+        one card contradicts it there just as it would on the shared form."""
+        targets = self._three_blocks()
+        targets[1]["application_end"] = self.when.replace(hour=10).isoformat()
+        body = self._spray(targets, time_not_recorded=True, date=self.when.date().isoformat())
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+        self.assertIn("application_end", res.content.decode())
+        self.assertFalse(ChemicalEvent.objects.exists())
+
     def test_a_farm_in_the_url_must_be_the_farm_of_every_parcel(self):
         url = reverse(
             "establishment-events-list",

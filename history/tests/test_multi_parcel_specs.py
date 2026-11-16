@@ -128,6 +128,17 @@ class SpecMatchesTheCodeTests(SimpleTestCase):
             with self.subTest(event_type=event_type):
                 self.assertLessEqual(units, set(spec.either) | set(spec.per_target_any()))
 
+    def test_times_a_card_may_ask_are_either_keys(self):
+        """A card asks a start and stop only when the grower says they differ by parcel, and then
+        the form sends them per parcel instead of shared. The server must take both ways, and
+        refuse both at once (`either`); a per-parcel-only key would refuse the shared default."""
+        for event_type, spec in SPECS.items():
+            raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))["types"][str(event_type)]["ui"]
+            with self.subTest(event_type=event_type):
+                self.assertLessEqual(set(raw.get("time_keys", [])), set(spec.either))
+        chemical = json.loads(SPEC_PATH.read_text(encoding="utf-8"))["types"]["2"]["ui"]
+        self.assertEqual(chemical["time_keys"], ["application_start", "application_end"])
+
     def test_excluded_subtypes_are_not_in_the_spec(self):
         for event_type, codes in EXCLUDED.items():
             with self.subTest(event_type=event_type):

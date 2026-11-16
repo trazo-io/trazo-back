@@ -1,5 +1,5 @@
 {
-  "_about": "One activity on several parcels: what is shared, what differs per parcel, what is refused. Read by history/services/multi_target.py and, through a parity test, by trazo-app src/config/events/multiParcel.ts. Keys are REQUEST keys (what the serializer accepts), not columns. 'refused_values' refuses a shared key only when it holds one of the listed values: a carrier volume per acre is the same on every parcel, a total for the tank is not. 'ui' is for the frontend only; the server ignores it.",
+  "_about": "One activity on several parcels: what is shared, what differs per parcel, what is refused. Read by history/services/multi_target.py and, through a parity test, by trazo-app src/config/events/multiParcel.ts. Keys are REQUEST keys (what the serializer accepts), not columns. 'refused_values' refuses a shared key only when it holds one of the listed values: a carrier volume per acre is the same on every parcel, a total for the tank is not. 'ui' is for the frontend only; the server ignores it. 'ui.time_keys' are the start and stop times a card may ask when the grower says they differ by parcel; each is an 'either' key.",
   "version": 1,
   "types": {
     "2": {
@@ -26,7 +26,9 @@
       ],
       "per_target_by_subtype": {},
       "either": [
-        "application_fuel_unit"
+        "application_fuel_unit",
+        "application_start",
+        "application_end"
       ],
       "refused": [
         "tank_mix_partners",
@@ -57,7 +59,7 @@
         ]
       },
       "tank_mix": {
-        "_about": "Several products from one tank: one record per product line and per target, tied by tank_mix_group (history/services/tank_mix.py). 'per_line' keys belong to one product and are refused in the shared body; 'per_line_default_from_shared' may also be sent once in the shared body as every line's default. 'per_line_per_target' is the amount of one product on one target: inside each target's 'products' list, or on the line when there is one target. 'first_line_only' is the one pass's fuel: written to line 1 only. The target pest is per line: a tank of Kocide for fire blight and Entrust for codling moth names a different pest on each record. Every other key the serializer accepts is SHARED: date and times, method, conditions, carrier, apparatus, applicator, notes.",
+        "_about": "Several products from one tank: one record per product line and per target, tied by tank_mix_group (history/services/tank_mix.py). 'per_line' keys belong to one product and are refused in the shared body; 'per_line_default_from_shared' may also be sent once in the shared body as every line's default. 'per_line_per_target' is the amount of one product on one target: inside each target's 'products' list, or on the line when there is one target. 'first_line_only' is the one pass's fuel: written to line 1 only. The target pest is per line: a tank of Kocide for fire blight and Entrust for codling moth names a different pest on each record. Every other key the serializer accepts is SHARED: date, method, conditions, carrier, apparatus, applicator, notes. The start and stop times are shared unless each target sends its own (an 'either' key): every line on a target then carries that target's times.",
         "min_lines": 2,
         "max_lines": 10,
         "roles": [
@@ -126,6 +128,10 @@
         "scope_keys": [
           "applied_scope",
           "applied_scope_detail"
+        ],
+        "time_keys": [
+          "application_start",
+          "application_end"
         ],
         "fields": [
           {
