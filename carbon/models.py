@@ -32,8 +32,11 @@ class CropType(models.Model):
     ]
 
     # Categories whose edible part does not touch the soil, so the raw-manure floor is
-    # 90 days (7 CFR 205.203(c)(1)(iii)). The crop seeder sets `has_soil_contact` from this;
-    # the field default (True, the 120-day floor) is only right for everything else.
+    # 90 days (7 CFR 205.203(c)(1)(iii)). The crop seeder falls back to this for a crop entry
+    # that does not state `has_soil_contact`. It is a fallback only: a category does not
+    # decide the class ("berry" holds blueberries, off the ground, and strawberries, on it),
+    # so seeded crops outside these categories that hold the edible part off the ground
+    # state False themselves.
     NO_SOIL_CONTACT_CATEGORIES = ("tree_fruit", "tree_nut")
 
     name = models.CharField(max_length=100, unique=True, help_text="e.g., Citrus, Almonds")

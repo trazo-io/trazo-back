@@ -144,6 +144,10 @@ class Command(BaseCommand):
             # row is CREATED only: a re-run must not overwrite a value someone set on purpose
             # (a demo puts ground-collected avocados on the 120-day floor). A crop entry that
             # states the flag still writes it on update, through the loop below.
+            # The category is a fallback, not the rule: the rule is about the crop. Entries
+            # outside the tree categories whose edible part is held off the ground (blueberries,
+            # hops, grain heads) state False; without that, blueberries were refused 90 days
+            # with a message saying the fruit touches the soil.
             create_values = dict(clean_data)
             create_values.setdefault(
                 "has_soil_contact", clean_data.get("category") not in CropType.NO_SOIL_CONTACT_CATEGORIES
@@ -317,6 +321,8 @@ class Command(BaseCommand):
                 "name": "Corn (Field)",
                 "slug": "corn_field",
                 "category": "grain",
+                # 90-day floor, § 205.203(c)(1)(iii): ears are borne on the stalk.
+                "has_soil_contact": False,
                 "description": "Major grain crop for feed, ethanol, and food production. High nitrogen requirements but excellent yields.",
                 "typical_farm_size": "200-800 hectares",
                 "growing_season": "4-5 months",
@@ -349,6 +355,8 @@ class Command(BaseCommand):
                 "name": "Wheat",
                 "slug": "wheat",
                 "category": "grain",
+                # 90-day floor, § 205.203(c)(1)(iii): heads are borne on the stem.
+                "has_soil_contact": False,
                 "description": "Major cereal grain crop for flour and feed production. Lower input requirements than corn.",
                 "typical_farm_size": "300-1000 hectares",
                 "growing_season": "8-9 months",
@@ -381,6 +389,8 @@ class Command(BaseCommand):
                 "name": "Rice",
                 "slug": "rice",
                 "category": "grain",
+                # 90-day floor, § 205.203(c)(1)(iii): panicles are borne on the stem.
+                "has_soil_contact": False,
                 "description": "Water-intensive grain crop primarily grown in flooded fields. Major staple food crop grown using traditional water management practices.",
                 "typical_farm_size": "50-200 hectares",
                 "growing_season": "4-6 months",
@@ -446,6 +456,8 @@ class Command(BaseCommand):
                 "name": "Cotton",
                 "slug": "cotton",
                 "category": "other",
+                # 90-day floor, § 205.203(c)(1)(iii): bolls (seed pressed for oil) are borne on the plant.
+                "has_soil_contact": False,
                 "description": "Major fiber crop with high input requirements. Primarily grown in Southern states.",
                 "typical_farm_size": "150-600 hectares",
                 "growing_season": "5-6 months",
@@ -478,6 +490,8 @@ class Command(BaseCommand):
                 "name": "Sunflowers",
                 "slug": "sunflowers",
                 "category": "oilseed",
+                # 90-day floor, § 205.203(c)(1)(iii): seed heads are borne on the stalk.
+                "has_soil_contact": False,
                 "description": "Drought-tolerant oilseed crop popular in Great Plains. Good rotation crop with lower input requirements.",
                 "typical_farm_size": "150-600 hectares",
                 "growing_season": "3-4 months",
@@ -1346,6 +1360,8 @@ class Command(BaseCommand):
                 "name": "Blueberries",
                 "slug": "blueberries",
                 "category": "berry",
+                # 90-day floor, § 205.203(c)(1)(iii): fruit hangs on a shrub (strawberries lie on soil).
+                "has_soil_contact": False,
                 "description": "Highbush blueberry production (Michigan, Oregon, Washington, New Jersey, Georgia). "
                 "Acid-loving perennial shrub requiring sustained low soil pH; spotted wing drosophila "
                 "is the dominant pest pressure.",
@@ -1380,6 +1396,8 @@ class Command(BaseCommand):
                 "name": "Hops",
                 "slug": "hops",
                 "category": "other",
+                # 90-day floor, § 205.203(c)(1)(iii): cones grow on bines trained up a trellis.
+                "has_soil_contact": False,
                 # "other" routes to the generic event generator. Hops is a trellised
                 # perennial bine — neither a tree, a berry nor an annual vegetable —
                 # so no existing generator fits it properly. Generic events are honest;
