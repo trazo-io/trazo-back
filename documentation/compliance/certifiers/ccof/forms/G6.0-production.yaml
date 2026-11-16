@@ -17,30 +17,20 @@ form:
   source_sha256: e679a23fbde73870149d3765f618f14643a90a6335b093d6a36d1cdfb4fa5a27
 items:
 - ref: A1
-  asks: If crops are grown in buffer areas, how are they separated during harvest, storage, and sales?
-    (Not applicable, no buffer crop grown / harvest containers are not marked 'organic' / crop is destroyed,
-    given away, or not harvested / stored apart / harvested at different times / crops are not marked
-    'organic' on crop records / mark or flag buffer areas / sold to a different buyer than the organic
-    / keep separate records to track harvest and sales / other.) Maintain documentation of separation.
-  status: partial
-  severity: P3
+  asks: If crops are grown in buffer areas, how are they separated during harvest, storage, and sales? (Not applicable,
+    no buffer crop grown / harvest containers are not marked 'organic' / crop is destroyed, given away, or not harvested
+    / stored apart / harvested at different times / crops are not marked 'organic' on crop records / mark or flag
+    buffer areas / sold to a different buyer than the organic / keep separate records to track harvest and sales
+    / other.) Maintain documentation of separation.
+  status: covered
   trazo:
     questions:
     - g6_0_production.buffer_strategies
     - g6_0_production.buffer_strategy_other
-    prints: modules/G6_0.pdf §B; narrative § 205.202(c)
-  gap: 'No option for ''not applicable, no buffer crop grown'' — the closest, `no_adjoining_conventional`,
-    means no conventional neighbor, not no crop grown in the buffer. ''Crops not marked organic on crop
-    records'' is only approximated by the broader `buffer_separate_records`. ''Crop destroyed, given away,
-    or not harvested'' collapses into the single `do_not_harvest_buffer` option even though buffer-harvest
-    event records (`buffer_disposition`) already distinguish not-harvested from disposed from given-away.
-    The Parcel Application half of this row is CLOSED (2026-08-27): the parcel PDF used to derive a §
-    205.202(c) disposition — "never sold as organic" — from the free-text `crop_grown_in_buffer` field
-    the operator uses only to name the crop. It now prints the crop and nothing more, with disposition
-    carried by the operator-entered `ProductionEvent.buffer_disposition`.'
-  fix: Add `no_buffer_crop` and `buffer_records_not_marked_organic` options to `buffer_strategies`; consider
-    splitting `do_not_harvest_buffer` into its three distinct dispositions to match the record-level detail
-    already captured.
+    prints: modules/G6_0.pdf §B
+  note: Closed 2026-11-15. `no_buffer_crop`, `buffer_records_not_marked_organic` and `buffer_destroyed_or_given_away`
+    join the options; with `do_not_harvest_buffer` every box of CCOF's list has one. The Parcel Application half
+    closed 2026-08-27.
 - ref: A2
   asks: What safeguards do you use to prevent contamination from drift? (None, no surrounding use of prohibited
     materials / written notification to neighbors / written agreement with neighbor (attach) / register

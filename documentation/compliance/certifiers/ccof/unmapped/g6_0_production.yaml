@@ -24,3 +24,7 @@ questions:
     OTCO C9 9.3-1 asks for a Yes/No on the risk of drift from neighboring non-organic producers. CCOF
     G6.0 A2 asks the safeguards directly, with 'None, no surrounding use of prohibited materials' as its
     negative.
+  g6_0_production.contamination_prevention: >-
+    How organic product is kept from non-organic material and prohibited substances through production and
+    handling. Asked by OTCO C9 9.4-3; CCOF asks the separation (`split_operation_separation`) and
+    prohibited-material storage (G6.0 §D).

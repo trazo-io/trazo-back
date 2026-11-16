@@ -30,3 +30,7 @@ questions:
     The sales channels, described. It stood in for the OFPP's simple supply chain description (2-1) until
     that row got its own question, `g2_0_fraud_prevention.supply_chain_description`, on 2026-11-14; no
     other OTCO row asks the channels as prose.
+  g6_5_sales_soe.sales_soe_supplier_verification: >-
+    How bought-in product is verified. It stood in for OTCO C12 12.2-4's sourcing yes or no until that row
+    got its own question, `g8_0_record_keeping.sources_organic_products`, on 2026-11-15; OTCO asks
+    supplier approval and certificate checks on its fraud prevention plan (2-2), answered by G2.0.

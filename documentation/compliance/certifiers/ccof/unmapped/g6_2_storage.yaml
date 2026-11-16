@@ -14,3 +14,11 @@ questions:
     question that sealed-package operations never see would leave B2c open for them.
   g6_2_storage.storage_location_records_other: >-
     Free text for the `other` option of `storage_location_records`, a WSDA §K3b question (see above).
+  g6_2_storage.inventory_system_description: >-
+    The crop inventory system. Asked by OTCO C12 12.2-7; CCOF's storage and recordkeeping forms do not ask
+    it.
+  g6_2_storage.inventory_frequency: >-
+    The crop inventory system's frequency. Asked by OTCO C12 12.2-7; CCOF's storage and recordkeeping
+    forms do not ask it.
+  g6_2_storage.inventory_frequency_other: >-
+    The other frequency of `inventory_frequency`; same reason.

@@ -258,8 +258,7 @@ items:
   asks: Do you produce the same visually identical crop both organically and non-organically? (No / Yes — describe
     how you prevent the commingling of visually identical organic and non-organic crops (including crops harvested
     from buffer zones) during production, harvest, transportation from the field, and storage.)
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_0_production.parallel_production
@@ -267,34 +266,25 @@ items:
     - g6_0_production.buffer_strategies
     - g6_0_production.buffer_strategy_other
     - g6_0_production.harvest_transport_separation
-    prints: modules/G6_0.pdf
-  gap: >-
-    Visually identical crops grown both ways, and how they are kept apart during harvest and transport from the field, are asked and printed. Keeping them apart in storage is not asked in the same place; it is answered in the storage section's shared-storage questions.
-  fix: >-
-    Point the storage half of this question at the storage section's shared-storage answers.
+    - g6_2_storage.storage_shared_with_nonorganic
+    - g6_2_storage.storage_shared_separation
+    prints: modules/G6_0.pdf §A, §B; modules/G6_2.pdf §A
+  note: Closed 2026-11-15. The storage half points at G6.2's shared-storage answers (whether storage is shared with
+    non-organic product, and the separation), as the row's fix proposed.
 - ref: 9.4-3
   asks: How do you prevent contamination of organic products by non-organic materials and prohibited substances
     during production and handling?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
     - g6_0_production.split_operation_separation
+    - g6_0_production.contamination_prevention
     - g6_0_production.prohibited_materials_on_site
     - g6_0_production.prohibited_materials_storage
-    prints: modules/G6_0.pdf §A (split_operation_separation), §D (prohibited-material storage); narrative §
-      205.201(a)(5)
-  gap: 'The content exists and prints, spread across three places none of which is framed as OTCO''s question.
-    `split_operation_separation` asks how organic and conventional PRODUCTION are kept separate — equipment,
-    storage, records — which is the commingling framing (§ 9.4-2) with contact prevention implicit in "cleaned-between-uses
-    equipment"; §D asks where prohibited materials are kept, which is the storage half of contact prevention;
-    and the HANDLING half lives on G6.4 (`commingling_controls`: dedicated equipment, cleanout between runs,
-    single product runs), which this module never references. A reviewer holding C9 has to assemble the answer
-    from three module PDFs. WSDA §I 1a cites `split_operation_separation` `partial` for the same reason — the
-    fact is present, the specific framing is not.'
-  fix: Add a `contamination_prevention` [textarea] on G6.0 §A, visible when `split_operation`, with coaching
-    that names production AND handling; compile it into the (a)(5) narrative beside the storage answer, and
-    cross-reference the G6.4 handling controls on the same page.
+    prints: modules/G6_0.pdf §A, §D
+  note: Closed 2026-11-15. `contamination_prevention` asks OTCO's question in its own terms, production and handling,
+    its coaching pointing at the handling controls named in On-Farm Handling; storage of prohibited materials stays
+    on §D.
 - ref: 9.4-4
   asks: Provide a list of all materials used in your non-organic production system, including treated seed,
     fertilizers, pesticides, post-harvest handling sanitizers, etc. It is acceptable to list general product

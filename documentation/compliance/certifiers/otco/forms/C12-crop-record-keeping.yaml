@@ -70,20 +70,16 @@ items:
 - ref: 12.2-1
   asks: 'RECORDKEEPING SYSTEM — what method(s) do you use to keep records? Select all that apply: Paper/Notebooks
     · Computer Software/Spreadsheet · Phone App · Online/Cloud Program · Other (describe).'
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     questions:
     - g8_0_record_keeping.records_maintained_as
-    prints: 'modules/G8_0.pdf §A — "Records are maintained as: …"'
-  gap: '`records_maintained_as` offers {electronic, hardcopy} — WSDA §O 7''s two boxes, against which it is
-    `covered`. OTCO splits electronic three ways (software/spreadsheet, phone app, online/cloud) and offers
-    an `other` with a description line; Trazo''s closed pair has no `other` and no description, so a reviewer
-    reading G8.0 §A learns electronic vs paper but not which of OTCO''s five boxes the operation would tick.
-    `partial` beside WSDA''s `covered` is the register''s rule for a form that asks the same fact at finer
-    grain.'
-  fix: Add `software_spreadsheet`, `phone_app`, `online_cloud` and `other` (with a `records_method_other` text)
-    to `records_maintained_as`, compiling any of the three to "electronic" for WSDA's form.
+    - g8_0_record_keeping.records_maintained_as_other
+    prints: modules/G8_0.pdf §A
+  note: Closed 2026-11-15. Software or spreadsheet, phone app, online or cloud program and other (described) join
+    paper; `electronic` stays beside them because nearly every filed plan chose it, and retiring it would send each
+    back to unanswered over a finer grain. A plan still on `electronic` alone tells an OTCO reviewer less than the
+    form asks; the finer boxes are there to tick.
 - ref: 12.2-2
   asks: Do you maintain organic records for a minimum of five (5) years? Yes / No (explain).
   status: covered
@@ -111,24 +107,15 @@ items:
   # farm name (single field) and other (`trace_mechanisms`, which adds harvest and invoice dates). No lot
   # numbering together with "lot numbers only" prints a [REVIEW].
 - ref: 12.2-4
-  asks: Do you source organic agricultural products, such as but not limited to seed or other agricultural
-    products, for your operation? Yes / No — skip to question 5.
-  status: partial
-  severity: P2
+  asks: Do you source organic agricultural products, such as but not limited to seed or other agricultural products,
+    for your operation? Yes / No — skip to question 5.
+  status: covered
   trazo:
     questions:
-    - g6_5_sales_soe.sales_soe_supplier_verification
-    - g3_0_seeds.seeds_used
-    - g3_0_seeds.seedlings_used
-    - g3_0_seeds.planting_stock_used
-    - g2_0_fraud_prevention.fraud_risk_areas
-    prints: modules/G6_5.pdf §A; modules/G3_0.pdf §A; modules/G2_0.pdf §A
-  gap: Reused from CCOF G8.0 D1 (P2). There is no single "do you source organic agricultural products" yes/no;
-    OTCO's gate is the union of three pages — G3.0 (organic seed, seedlings or planting stock purchased), G6.5
-    ("Do you buy or resell organic product from anyone else?") and G2.0's risk areas — and a reviewer assembles
-    it. The follow-ups 12.2-4a and 12.2-4b hang off a gate the packet never states in one place.
-  fix: Reuse D1 — derive a sourcing yes/no from the three source modules and print it at the head of G8.0 §B
-    (or G2.0 §A) so the gate and its follow-ups read together.
+    - g8_0_record_keeping.sources_organic_products
+    prints: modules/G8_0.pdf §B
+  note: Closed 2026-11-15. `sources_organic_products`, OTCO's own yes or no, stated at the head of the audit trail
+    instead of being read from three pages.
 - ref: "12.2-4a"
   asks: If yes — do you maintain records that clearly link the purchase and transport of all sourced organic agricultural products through the supply chain back to the last certified entity? Yes / No — explain.
   status: covered
@@ -153,37 +140,27 @@ items:
   # Closed 2026-11-02 by the third-party certificates slice.
 - ref: 12.2-5
   asks: Do you sell any crops and/or crop products as organic? Yes / No.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
     questions:
-    - g7_0_labeling.organic_label_categories
-    prints: modules/G7_0.pdf §A
-  gap: No explicit yes/no; it is implied by the label categories and by `SalesRecord.organic_on_invoice`.
-  fix: Ask it as its own question, or print it derived from the label categories.
+    - g8_0_record_keeping.sells_as_organic
+    prints: modules/G8_0.pdf §B
+  note: Closed 2026-11-15. `sells_as_organic`.
 - ref: 12.2-5a
   asks: If yes, do you ensure the records identify all crops and/or crop products with organic status?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions:
+    - g8_0_record_keeping.records_identify_organic_status
+    - g8_0_record_keeping.records_organic_status_explanation
     - g7_0_labeling.invoices_identify_lot
-    - g7_0_labeling.organic_label_categories
-    - g6_2_storage.lot_identity_maintained
     models:
     - history.SalesRecord.organic_on_invoice
     - history.SalesRecord.organic_label_category
-    prints: modules/G7_0.pdf §A–B; modules/G6_2.pdf §B; the audit dossier's sales table prints the § 205.301
-      category per live sale (a certifier document, not one of the packet's files)
-  gap: 'The gate is not asked (every certified crop operation on Trazo sells as organic; G7.0''s label categories
-    and the sales records show it). The substance is half-answered: `invoices_identify_lot` ("Do your invoices
-    or bills of lading identify each organic shipment as organic and show its lot number?") is the SALES half
-    and prints; per-sale `organic_on_invoice` and the § 205.103(b)(3) label category back it. OTCO asks about
-    ALL records — harvest, storage, shipping — and Trazo''s storage question (`lot_identity_maintained`) is
-    about lot identity, not organic status, while harvest records carry organic status only implicitly through
-    the production they belong to.'
-  fix: Add `records_identify_organic_status` (boolean, explain when No) to G8.0 §B covering harvest, storage
-    and shipping records, beside the existing invoice question.
+    prints: modules/G8_0.pdf §B; modules/G7_0.pdf §B
+  note: Closed 2026-11-15. `records_identify_organic_status` asks it of every record, harvest through sale, on a
+    yes to selling as organic; a No asks which records do not and how status is known. The invoice question keeps
+    answering the sales half.
 - ref: 12.2-6
   asks: 'Complete the table below or attach a separate diagram illustrating how the recordkeeping system allows
     for a complete audit trail/trace-back for all crops and/or crop products produced and sold by your operation
@@ -226,27 +203,17 @@ items:
     the packet under attachments/.'
   fix: Extend Part B back through the season's planting and input-application events.
 - ref: 12.2-7
-  asks: Describe the crop and/or crop product inventory system. This should include how often inventory is
-    conducted and recorded.
-  status: not_covered
-  severity: P2
+  asks: Describe the crop and/or crop product inventory system. This should include how often inventory is conducted
+    and recorded.
+  status: covered
   trazo:
-    triggered_by:
-    - g8_0_record_keeping.s11_records
-    - g6_2_storage.storage_locations
-    models:
-    - certifications.services.common_osp_records — the `inventory_records` row is external_by_design (evidence
-      always 0)
-    prints: —
-  gap: 'FRESH — no question in any module describes the inventory system or its frequency. The § 205.103 registry
-    can record that "Inventory records" are maintained (a row Trazo structurally cannot see, so it is confirmed
-    from the operator''s own knowledge and prints as a bare line), and G6.2 records WHERE product is stored;
-    neither says how inventory is taken or how often. Grepped `trazo_questions.txt` and the G6.2 and G8.0 modules
-    for inventory: nothing. Neither CCOF G8.0 nor WSDA §O asks this either, which is why no verdict existed
-    to reuse.'
-  fix: Add `inventory_system_description` (textarea) and `inventory_frequency` (radio {per_movement, weekly,
-    monthly, seasonal, annual, other}) to G6.2 page B — the storage module owns the stored product — compiling
-    into § 205.201(a)(4).
+    questions:
+    - g6_2_storage.inventory_system_description
+    - g6_2_storage.inventory_frequency
+    - g6_2_storage.inventory_frequency_other
+    prints: modules/G6_2.pdf §B
+  note: Closed 2026-11-15. The inventory system and how often inventory is taken and recorded, on the storage module,
+    which owns the stored product. Trazo holds no inventory record of its own; this is the operator's statement.
 - ref: 12.3-1
   asks: MONITORING — how do you ensure your recordkeeping practices are effective, and how often do you monitor
     the practices?
@@ -275,32 +242,26 @@ items:
   # Closed 2026-11-06. The non-organic crops are named (`nonorganic_crops_products`, 2026.11.09) and where the
   # non-organic product comes from is asked. A buffer-only farm answering Yes is right under § 205.2, not pushed.
 - ref: 12.4-1a
-  asks: How do your input records distinguish between materials used on organic and non-organic crops and/or
-    crop products?
-  status: partial
-  severity: P2
+  asks: How do your input records distinguish between materials used on organic and non-organic crops and/or crop
+    products?
+  status: covered
   trazo:
     questions:
     - g6_0_production.split_operation_separation
+    - g6_0_production.split_input_records_distinction
     prints: modules/G6_0.pdf §A
-  gap: Reused from CCOF G8.0 C2 (P2). Trazo asks only a general separation textarea; it never asks specifically
-    how INPUT records (receipts, application records) distinguish organic from nonorganic material use.
-  fix: Reuse C2 — add `split_input_records_distinction` (textarea) to G6.0, visible when `split_operation`
-    is true; pre-suggest "block_id flags buffer rows; identical organic inputs used throughout" for the buffer-only
-    case.
+  note: Closed 2026-11-15. `split_input_records_distinction` asks how input records (receipts, application records)
+    tell organic from non-organic use, shown on a split operation, beside the general separation narrative.
 - ref: 12.4-1b
-  asks: How do your harvest, shipping, and sales records distinguish between organic and non-organic crops
-    and/or crop products?
-  status: partial
-  severity: P2
+  asks: How do your harvest, shipping, and sales records distinguish between organic and non-organic crops and/or
+    crop products?
+  status: covered
   trazo:
     questions:
     - g6_0_production.parallel_production_distinction
+    - g6_0_production.split_records_distinction
     - g6_0_production.buffer_strategies
-    prints: modules/G6_0.pdf §A–B
-  gap: Reused from CCOF G8.0 C3 (P2). Covered for the buffer case (`buffer_strategies` plus the harvest event's
-    buffer-disposition field and the § 11 buffer-separation record). For a true split operation the equivalent
-    question, `parallel_production_distinction`, is hidden unless `parallel_production` is true, so a split-but-not-parallel
-    operation is never asked.
-  fix: Reuse C3 — show a harvest/shipping/sales distinction textarea whenever `split_operation` is true, not
-    only when `parallel_production` is true.
+    prints: modules/G6_0.pdf §A, §B
+  note: Closed 2026-11-15. A split operation growing different crops is asked `split_records_distinction`; a parallel
+    one keeps answering `parallel_production_distinction` (the new question shows only when parallel production
+    is not yes). The buffer case stays on `buffer_strategies`.

@@ -379,7 +379,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   that is not a district's, with the measures taken (CCOF G6.0 D3, D5); materials put through the irrigation system,
 #   their types, whether all are approved, and how certified crops are kept from those that are not (CCOF D6; WSDA AGR
 #   2121 E 8, 8a, 8b).
-CONTENT_VERSION = "2026.12.13"
+# 2026.12.14: recordkeeping and split records. G8.0 adds OTCO C12's kinds of electronic records beside "electronic" (12.2-1)
+#   and asks whether organic product is sourced or sold and whether records show organic status (12.2-4, 5, 5a); G6.2
+#   asks the inventory system and how often (12.2-7); G6.0 asks how input records and harvest, shipping and sales records
+#   tell organic from non-organic on a split operation, and contamination prevention through handling (CCOF G8.0 C2, C3;
+#   OTCO 12.4-1a, 1b; C9 9.4-3), with three buffer options (CCOF G6.0 A1).
+CONTENT_VERSION = "2026.12.14"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
