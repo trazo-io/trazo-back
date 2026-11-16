@@ -238,9 +238,9 @@ GOLDEN_ANSWER_CASES = {
             "equipment_cleaning_documentation": ["sop_followed", "other"],
         },
         # Split records (2026.12.14): split but not parallel asks how records tell crops apart; parallel does not.
+        # Split with parallel unanswered is the existing `split` case.
         "split_not_parallel": {"split_operation": True, "parallel_production": False},
         "split_parallel": {"split_operation": True, "parallel_production": True},
-        "split_parallel_unanswered": {"split_operation": True},
     },
     # Sealed packaging gates on `eq False`, so an unanswered plan must hide the unsealed questions in
     # both languages (None is not False).
