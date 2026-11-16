@@ -307,6 +307,18 @@ class AListingPickSaysWhetherTheListingIsOnFileTests(_Parcel):
                 land_history = self._line(name)
                 self.assertEqual("no listing on file" in input_log, "no listing on file" in land_history)
 
+    def test_a_listing_from_the_other_catalogue_does_not_back_the_pick(self):
+        """Review of back #460: "OMRI listed" with only a WSDA row attached printed plain on both
+        pages, beside an OMRI verification table reading "OMRI ID: —"."""
+        from history.services.audit_export_service import _organic_basis_cell
+
+        omri_pick = self._spray("Champ WG", "omri_listed", wsda_material=self.wsda)
+        wsda_pick = self._spray("Entrust SC", "wsda_listed", omri_product=self.omri)
+        for event, name in ((omri_pick, "Champ WG"), (wsda_pick, "Entrust SC")):
+            with self.subTest(name):
+                self.assertTrue(self._line(name).endswith("(no listing on file)"))
+                self.assertIn("no listing on file", _organic_basis_cell(event))
+
     def test_the_parcel_page_of_the_packet_prints_the_qualified_line(self):
         self._spray("Champ WG", "omri_listed")
         osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")

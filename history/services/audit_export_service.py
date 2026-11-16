@@ -1688,7 +1688,7 @@ def _organic_basis_cell(event, raw=_UNSET):
     # "no listing on file" suffix even when the operator had attached the WSDA row.
     from product.services.input_evidence import listing_on_file
 
-    if listing_on_file(event):
+    if listing_on_file(event, raw_value):
         return label
     return f"{label} — grower-selected, no listing on file"
 

@@ -59,18 +59,32 @@ class InputRecord:
     source: str  # ChemicalEvent | SoilManagementEvent | PestManagementEvent
     record_id: int
     season_id: Optional[int] = None
-    #: An OMRI or WSDA listing is attached to the record (`listing_on_file`). Only a chemical
+    #: The record carries the listing its basis names (`listing_on_file`). Only a chemical
     #: application can hold one; an amendment's "OMRI listed" is always the operator's word alone.
     listing_on_file: bool = False
 
 
-def listing_on_file(event) -> bool:
-    """Whether the record carries the listing an "OMRI listed" or "WSDA listed" pick names.
+#: The listing each pick names, as the field on the record that holds it.
+_LISTING_FIELD = {"omri_listed": "omri_product_id", "wsda_listed": "wsda_material_id"}
+
+
+def listing_on_file(event, basis=None) -> bool:
+    """Whether the record carries the listing its "OMRI listed" or "WSDA listed" pick names.
 
     One rule for every page of a packet. The Input Log's Organic Status cell has read it since
     2026-08-20; the land history printed the bare pick until 2026-11-16 (OV-MT-C08), so two pages
-    of one packet disagreed about the same spray. Either catalogue counts, as it does there.
+    of one packet disagreed about the same spray.
+
+    The catalogue must be the one the pick names. The pick and the attached listing are two
+    controls, and a product such as a fish fertilizer sits on both lists, so "OMRI listed" with
+    only a WSDA row attached printed plain beside an OMRI verification table reading "OMRI ID: —"
+    (review of back #460). Any other basis (a seal, a certifier's review) names no catalogue,
+    and either listing counts for it, as it always has in the Input Log.
     """
+    basis = (basis if basis is not None else getattr(event, "organic_approved", None)) or ""
+    field = _LISTING_FIELD.get(str(basis).strip())
+    if field:
+        return bool(getattr(event, field, None))
     return bool(getattr(event, "omri_product_id", None) or getattr(event, "wsda_material_id", None))
 
 
