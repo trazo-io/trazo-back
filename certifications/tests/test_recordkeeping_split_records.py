@@ -36,7 +36,7 @@ NEW = (
             "records_organic_status_explanation",
         ),
     ),
-    (G6, ("split_input_records_distinction", "contamination_prevention", "split_records_distinction")),
+    (G6, ("split_input_records_distinction", "split_contamination_prevention", "split_records_distinction")),
     (G62, ("inventory_system_description", "inventory_frequency", "inventory_frequency_other")),
 )
 
@@ -51,7 +51,7 @@ SPLIT = {
     "split_operation": True,
     "split_operation_separation": "Conventional cherries are on the east block, picked by a separate crew.",
     "split_input_records_distinction": "Each spray record names the block; the conventional blocks are E1 to E3.",
-    "contamination_prevention": "The sprayer is rinsed three times before it enters an organic block.",
+    "split_contamination_prevention": "The sprayer is rinsed three times before it enters an organic block.",
     "parallel_production": False,
     "split_records_distinction": "Harvest tickets and invoices carry the block, and conventional lots start with C.",
     "harvest_transport_separation": ["different_times"],
@@ -108,7 +108,7 @@ class TheGates(TestCase):
         self.assertNotIn("split_records_distinction", _shown(G6, {"split_operation": False}))
 
     def test_input_records_and_contamination_follow_split(self):
-        for key in ("split_input_records_distinction", "contamination_prevention"):
+        for key in ("split_input_records_distinction", "split_contamination_prevention"):
             with self.subTest(question=key):
                 self.assertIn(key, _shown(G6, {"split_operation": True}))
                 self.assertNotIn(key, _shown(G6, {"split_operation": False}))

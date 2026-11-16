@@ -576,7 +576,7 @@ G6_2_STORAGE = Module(
                     required=False,
                     label=text("How often, then?", "¿Con qué frecuencia, entonces?"),
                     visible_when=(Condition("inventory_frequency", "eq", "other"),),
-                    compiles_to=CompileRule(template="Inventory is taken and recorded: {answer}."),
+                    compiles_to=CompileRule(template="Inventory frequency, in the operation's words: {answer}."),
                 ),
             ),
         ),

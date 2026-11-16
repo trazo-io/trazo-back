@@ -221,7 +221,7 @@ G6_0_PRODUCTION = Module(
                     ),
                 ),
                 Question(
-                    key="contamination_prevention",
+                    key="split_contamination_prevention",
                     kind="textarea",
                     required=False,
                     label=text(

@@ -278,11 +278,11 @@ items:
   trazo:
     questions:
     - g6_0_production.split_operation_separation
-    - g6_0_production.contamination_prevention
+    - g6_0_production.split_contamination_prevention
     - g6_0_production.prohibited_materials_on_site
     - g6_0_production.prohibited_materials_storage
     prints: modules/G6_0.pdf §A, §D
-  note: Closed 2026-11-15. `contamination_prevention` asks OTCO's question in its own terms, production and handling,
+  note: Closed 2026-11-15. `split_contamination_prevention` asks OTCO's question in its own terms, production and handling,
     its coaching pointing at the handling controls named in On-Farm Handling; storage of prohibited materials stays
     on §D.
 - ref: 9.4-4

@@ -218,10 +218,6 @@ OSP_EVIDENCE_MAP: dict = {
         note="How often inventory is taken (OTCO C12 12.2-7). Trazo holds no inventory count; the `inventory_records` "
         "registry row is external by design. Closing it needs an inventory record type.",
     ),
-    "inventory_frequency_other": EvidenceEntry(
-        NOT_EVIDENCED,
-        note="The other frequency of `inventory_frequency`; same reason.",
-    ),
     # --- G4.1 compost and manure ------------------------------------------------
     "compost_temp_logs_kept": EvidenceEntry(
         EVIDENCED,
