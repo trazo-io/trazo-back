@@ -173,9 +173,14 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
         # its listing, so a second, typed one would print two answers to a one-answer column.
         other_agency = attrs.get("other_review_agency", getattr(self.instance, "other_review_agency", ""))
         other_ref = attrs.get("other_review_reference", getattr(self.instance, "other_review_reference", ""))
-        if basis in (PlanMaterialEntry.BASIS_OMRI, PlanMaterialEntry.BASIS_WSDA) and (
-            (other_agency or "").strip() or (other_ref or "").strip()
-        ):
+        # The listing as it stands, not the stored basis alone: a lapsed OMRI listing no longer fills the
+        # OMRI box, and its row must be able to name the agency that does (review of back #457).
+        omri = attrs.get("omri_product", getattr(self.instance, "omri_product", None))
+        wsda = attrs.get("wsda_material", getattr(self.instance, "wsda_material", None))
+        listing_fills_the_box = (
+            basis == PlanMaterialEntry.BASIS_OMRI and omri is not None and not omri.delisted_on
+        ) or (basis == PlanMaterialEntry.BASIS_WSDA and wsda is not None)
+        if listing_fills_the_box and ((other_agency or "").strip() or (other_ref or "").strip()):
             raise serializers.ValidationError(
                 {
                     "other_review_agency": (

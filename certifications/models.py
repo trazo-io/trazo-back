@@ -2911,6 +2911,18 @@ class PlanMaterialEntry(models.Model):
         return bool(field) and getattr(self, f"{field}_id", None) is None
 
     @property
+    def listing_review_position(self) -> str:
+        """Which box of OTCO C11's review-agency cell this row's own listing fills: "omri", "wsda" or
+        "other". A lapsed OMRI listing, or one whose catalog row is gone, is no longer OMRI's review, so
+        the row may name another agency (review of back #457: the stored basis alone kept it stuck)."""
+        if self.listing_basis == self.BASIS_OMRI:
+            product = self.omri_product if self.omri_product_id else None
+            return "omri" if product is not None and not product.delisted_on else "other"
+        if self.listing_basis == self.BASIS_WSDA:
+            return "wsda" if self.wsda_material_id else "other"
+        return "other"
+
+    @property
     def agent_review_statement(self) -> str:
         """The agent's review as the operator recorded it, or "" when none is. Never "approved by
         Trazo", never "verified": the operator's statement about the agent's own document."""

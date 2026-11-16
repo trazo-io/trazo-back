@@ -140,6 +140,19 @@ class TheReviewAgencyCell(_Plan):
             positions, {"Entrust SC": "omri", "Nature Safe 13-0-0": "wsda", "Test sulfur": "other"}, positions
         )
 
+    def test_a_lapsed_omri_listing_may_name_the_agency_that_reviews_it_now(self):
+        """Review of back #457: the stored basis still says OMRI after the listing lapses, and refusing on
+        it left the row stuck at "No review agency named" with no way to say who reviewed it."""
+        self.attach("omri", self.omri.pk)
+        self.answer(name="Entrust SC", status="in_use")
+        OMRIProduct.objects.filter(pk=self.omri.pk).update(delisted_on=timezone.localdate())
+        row = next(r for r in materials_list_rows(self.osp) if r["name"] == "Entrust SC")
+        self.assertEqual(row["review_position"], "other")
+        res = self.answer(name="Entrust SC", other_review_agency=CIVE, other_review_reference="CIVE 3310")
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        entry = PlanMaterialEntry.objects.get(osp=self.osp, product_name="Entrust SC")
+        self.assertEqual((entry.listing_basis, entry.other_review_agency), ("omri", CIVE))
+
     def test_an_omri_or_wsda_row_cannot_also_name_another_agency(self):
         self.attach("omri", self.omri.pk)
         res = self.answer(name="Entrust SC", other_review_agency=CIVE)
@@ -349,6 +362,14 @@ class TheAdditionsSinceTheFiling(_Plan):
         self.assertEqual(changes["added"], [])
         self.assertEqual([name for name, _ in changes["removed"]], ["Fish emulsion"])
         self.assertIn("Taken off the Materials List since the plan was filed on", self.page())
+
+    def test_taken_off_then_put_back_is_not_an_addition(self):
+        """Review of back #457: a product already on the filed list, removed and re-added in the window,
+        printed as added."""
+        self.log("Rexius Organic Compost", "removed", when=self.filed + timedelta(days=1))
+        self.log("Rexius Organic Compost", "added", when=self.filed + timedelta(days=2))
+        changes = materials_changes_since_filing(self.osp)
+        self.assertEqual((changes["added"], changes["removed"]), ([], []))
 
     def test_no_change_is_said_and_a_plan_never_filed_has_no_additions(self):
         self.assertIn("No material was added to or taken off the list since the plan was filed on", self.page())

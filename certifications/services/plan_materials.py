@@ -698,10 +698,13 @@ def materials_changes_since_filing(osp) -> Optional[dict]:
         key = _norm(log.target_name_at_change)
         first.setdefault(key, log)
         last[key] = log
+    # Net both ways: added then taken off is neither, and taken off then put back (a product already on
+    # the filed list) is neither too (review of back #457).
     added = [
         (log.target_name_at_change, log.changed_at.date().isoformat())
-        for log in last.values()
+        for key, log in last.items()
         if log.action == ApprovedInputChangeLog.ACTION_ADDED
+        and first[key].action != ApprovedInputChangeLog.ACTION_REMOVED
     ]
     removed = [
         (log.target_name_at_change, log.changed_at.date().isoformat())
@@ -733,7 +736,10 @@ def materials_list_rows(osp) -> list[dict]:
         _material_use,
     )
 
-    entries = {entry.pk: entry for entry in osp.plan_material_entries.select_related("label_document")}
+    entries = {
+        entry.pk: entry
+        for entry in osp.plan_material_entries.select_related("label_document", "omri_product", "wsda_material")
+    }
     labels_asked = labels_asked_for(osp)
     rows = []
     for row in _material_rows(osp.establishment, osp=osp):
@@ -785,11 +791,11 @@ def materials_list_rows(osp) -> list[dict]:
 
 
 def _review_position(plan, entry) -> str:
-    """The row's review box for the editor. The entry's own basis decides when it names OMRI or WSDA, so
-    the editor never offers an Other agency the server would refuse."""
-    basis = getattr(entry, "listing_basis", "")
-    if basis in ("omri", "wsda"):
-        return basis
+    """The row's review box for the editor. The entry's own listing decides when it has one, by the same
+    rule the serializer refuses an Other agency on (`PlanMaterialEntry.listing_review_position`), so the
+    editor never offers an agency the server would refuse, nor hides one from a lapsed listing."""
+    if entry is not None and entry.listing_basis in ("omri", "wsda"):
+        return entry.listing_review_position
     return plan.review_position if plan is not None else "other"
 
 
