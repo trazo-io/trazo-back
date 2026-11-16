@@ -82,7 +82,9 @@ jobs:
   # test workers AND the Postgres container, so `--parallel 2` and `--parallel 4` both measured
   # ~458s, the same as serial. Each matrix job brings its own 2 vCPUs and its own Postgres.
   # `backend/test_runner.py` deals test CLASSES round-robin, so the three shards together run
-  # exactly the tests listed below, once each.
+  # exactly the tests listed below, once each. Since 2026-11-16 the transactional classes (the
+  # migration-chain tests, 10-30 s per test and silent) are dealt first, so they split evenly;
+  # alphabetically they clustered on shard 3, which ran past the timeout on two PRs in a row.
   #
   # Measured on the hosted runner: 3 shards -> slowest job 333s; 4 shards -> 329s. The fourth
   # bought nothing (the heaviest class, the Calapooia specimen, sets the floor of whichever shard
@@ -95,7 +97,9 @@ jobs:
     name: Backend — compliance and claim-safety suites (shard ${{ matrix.shard }})
     if: github.event_name != 'push'
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 15
+    # 20, not 15 (2026-11-16): a shard measured 13.6 min on a laptop and the same runner type has
+    # run 1.6x slower on some days. Still short enough that a hung test fails the run quickly.
+    timeout-minutes: 20
     strategy:
       # A failure in one shard must not cancel the others: the point of the run is the full list
       # of failures, not the first one.
@@ -823,9 +827,14 @@ jobs:
       # 2026-11-13: carbon.tests.test_chemical_estimate_is_labelled joins. A chemical figure's
       # status follows its basis ("estimate" when any part is estimated or left out, never the
       # published-factor label), and no N-P-K or %AI is invented. It does not read the sibling repo.
+      # 2026-11-16: backend.tests.test_sharded_runner joins. The runner deals the transactional
+      # classes (the migration-chain tests) round-robin first, so they split evenly across shards
+      # whatever their names, and a class is never split; every test runs on exactly one shard.
+      # DB-free. It does not read the sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
+            backend.tests.test_sharded_runner \
             history.tests.test_anonymous_endpoint_inventory \
             history.tests.test_consumer_qr_privacy_regression \
             history.tests.test_consumer_extra_data_claim_shapes \

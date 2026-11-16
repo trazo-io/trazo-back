@@ -17,6 +17,17 @@ a class across shards would make every shard pay its fixture. Classes are ordere
 and dealt round-robin, so a module with many heavy classes (the packet and specimen suites) is
 spread over every shard instead of landing on one.
 
+TRANSACTIONAL CLASSES ARE DEALT FIRST (2026-11-16)
+--------------------------------------------------
+A TransactionTestCase that is not a TestCase (the migration-chain tests that walk a migration
+backward and forward, the lock tests) costs 10-30 s per test and prints nothing while it runs.
+Their names cluster (`carbon.tests.test_retired_*`, `test_retiring_*`), so a plain alphabetical deal
+let one added class anywhere earlier in the list shift the whole cluster onto one shard. On
+2026-11-16 shard 3 held 8 of the 17 such classes, ran 13.6 min locally, and hit the 15 min job
+timeout on two PRs in a row, after four minutes of silence. They are now dealt round-robin among
+themselves first and every other class continues the same deal, so each shard gets an equal count
+of them whatever their names.
+
 The partition is exhaustive and disjoint by construction (index modulo the shard count), so the
 shards together run exactly the tests a single unsharded run would. Each shard prints its share,
 and the counts across shards sum to the unsharded "Found N test(s)".
@@ -24,6 +35,7 @@ and the counts across shards sum to the unsharded "Found N test(s)".
 
 import unittest
 
+from django.test import TestCase, TransactionTestCase
 from django.test.runner import DiscoverRunner, partition_suite_by_case
 
 
@@ -43,6 +55,29 @@ def _parse_shard(spec):
     if not 1 <= index <= total:
         raise ValueError(f"--shard index must be between 1 and {total}; got {spec!r}")
     return index, total
+
+
+def _class_name(test):
+    return f"{type(test).__module__}.{type(test).__qualname__}"
+
+
+def _is_transactional(cls):
+    """A TransactionTestCase that is not a TestCase: it flushes the database instead of rolling back
+    a transaction, and the migration-chain tests among them migrate for tens of seconds."""
+    return issubclass(cls, TransactionTestCase) and not issubclass(cls, TestCase)
+
+
+def deal(tests, index, total):
+    """This shard's tests: whole classes, the transactional ones dealt round-robin first, then the
+    rest continuing the same deal, each group in dotted-path order. Returns (selected, mine, classes)."""
+    by_name = {}
+    for test in tests:
+        by_name.setdefault(_class_name(test), type(test))
+    transactional = sorted(name for name, cls in by_name.items() if _is_transactional(cls))
+    held = set(transactional)
+    classes = transactional + sorted(name for name in by_name if name not in held)
+    mine = {name for position, name in enumerate(classes) if position % total == index - 1}
+    return [test for test in tests if _class_name(test) in mine], mine, classes
 
 
 class ShardedRunner(DiscoverRunner):
@@ -74,9 +109,7 @@ class ShardedRunner(DiscoverRunner):
             self.parallel = parallel
 
         tests = list(_flatten(suite))
-        classes = sorted({f"{type(t).__module__}.{type(t).__qualname__}" for t in tests})
-        mine = {name for position, name in enumerate(classes) if position % total == index - 1}
-        selected = [t for t in tests if f"{type(t).__module__}.{type(t).__qualname__}" in mine]
+        selected, mine, classes = deal(tests, index, total)
 
         print(f"Shard {index}/{total}: {len(selected)} of {len(tests)} tests, {len(mine)} of {len(classes)} classes")
         suite = self.test_suite(selected)

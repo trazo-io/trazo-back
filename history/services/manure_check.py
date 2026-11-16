@@ -58,21 +58,39 @@ class ManureConflict:
         }
 
 
+def compost_time_at_temperature_met(event) -> bool | None:
+    """The method's time at temperature under § 205.203(c)(2)(ii)/(iii): 15 days and at least 5
+    turnings in a windrow, 3 days in a static aerated pile or in-vessel.
+
+    None when the record cannot answer: no method (the time the rule asks for depends on it), or a
+    figure the method needs left blank. A blank is not a zero: a windrow with no turning count
+    recorded is unknown, not "turned 0 times", unless a recorded figure already fails it.
+
+    The one reading of the method for every surface. Until 2026-11-16 the dossier's compost table
+    had its own copy that accepted any pile at 3 days, so a windrow turned three times printed
+    "Compliant: Yes"."""
+    duration = getattr(event, "compost_duration_days_at_temp", None)
+    turnings = getattr(event, "compost_turning_count", None)
+    method = getattr(event, "compost_method", None)
+    if method == "windrow":
+        if (duration is not None and duration < 15) or (turnings is not None and turnings < 5):
+            return False
+        if duration is None or turnings is None:
+            return None
+        return True
+    if method in ("static_aerated", "in_vessel"):
+        return None if duration is None else duration >= 3
+    return None
+
+
 def compost_meets_c2(event) -> bool:
-    """C:N 25:1 to 40:1, 131 to 170 F, and the method's time at temperature (windrow 15 days and 5
-    turnings; static aerated or in-vessel 3 days): § 205.203(c)(2) as the model's harvest check reads it."""
+    """C:N 25:1 to 40:1, 131 to 170 F, and the method's time at temperature
+    (`compost_time_at_temperature_met`): § 205.203(c)(2) as the model's harvest check reads it."""
     cn = getattr(event, "compost_initial_cn_ratio", None)
     temp = getattr(event, "compost_peak_temp_f", None)
-    duration = getattr(event, "compost_duration_days_at_temp", None) or 0
-    turnings = getattr(event, "compost_turning_count", None) or 0
-    method = getattr(event, "compost_method", None)
     if cn is None or temp is None or not (25.0 <= float(cn) <= 40.0) or not (131.0 <= float(temp) <= 170.0):
         return False
-    if method == "windrow":
-        return duration >= 15 and turnings >= 5
-    if method in ("static_aerated", "in_vessel"):
-        return duration >= 3
-    return False
+    return bool(compost_time_at_temperature_met(event))
 
 
 def raw_reading(event) -> str:

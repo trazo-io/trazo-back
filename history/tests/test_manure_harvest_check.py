@@ -19,8 +19,9 @@ Pinned here:
 """
 
 from datetime import date, datetime
+from types import SimpleNamespace
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from rest_framework.test import APIClient
@@ -28,7 +29,12 @@ from rest_framework.test import APIClient
 from carbon.models import CropType
 from company.models import Company, Establishment
 from history.models import Production, ProductionEvent, SoilManagementEvent
-from history.services.manure_check import parcel_conflicts, season_conflicts
+from history.services.manure_check import (
+    compost_meets_c2,
+    compost_time_at_temperature_met,
+    parcel_conflicts,
+    season_conflicts,
+)
 from product.models import Parcel, Product
 from users.models import User, WorksIn
 
@@ -336,3 +342,54 @@ class ReadinessRowTests(_Farm):
         row = self._row()
         self.assertEqual((row["status"], row["params"]["recorded_as"]), ("REVIEW", "composted"))
         self.assertIn("recorded as composted, but the record carries neither", row["detail"])
+
+
+class CompostTimeAtTemperatureTests(SimpleTestCase):
+    """One reading of § 205.203(c)(2)(ii)/(iii) for every surface (2026-11-16: the dossier's own copy
+    accepted a windrow turned three times)."""
+
+    def _pile(self, method, days, turnings, cn=30, temp=145):
+        return SimpleNamespace(
+            compost_method=method,
+            compost_duration_days_at_temp=days,
+            compost_turning_count=turnings,
+            compost_initial_cn_ratio=cn,
+            compost_peak_temp_f=temp,
+        )
+
+    def test_the_method_decides_the_time(self):
+        cases = [
+            ("windrow", 15, 5, True),
+            ("windrow", 15, 4, False),
+            ("windrow", 14, 5, False),
+            ("static_aerated", 3, 0, True),
+            ("static_aerated", 2, 0, False),
+            ("in_vessel", 3, 0, True),
+        ]
+        for method, days, turnings, expected in cases:
+            with self.subTest(method=method, days=days, turnings=turnings):
+                self.assertIs(compost_time_at_temperature_met(self._pile(method, days, turnings)), expected)
+
+    def test_no_method_cannot_be_judged_and_does_not_meet_c2(self):
+        pile = self._pile(None, 16, 3)
+        self.assertIsNone(compost_time_at_temperature_met(pile))
+        self.assertFalse(compost_meets_c2(pile))
+
+    def test_a_blank_figure_is_unknown_unless_a_recorded_one_already_fails(self):
+        """Review of back #454: a windrow with no turning count is not a windrow turned 0 times."""
+        cases = [
+            ("windrow", 15, None, None),
+            ("windrow", None, 5, None),
+            ("windrow", 14, None, False),
+            ("windrow", None, 4, False),
+            ("static_aerated", None, 0, None),
+        ]
+        for method, days, turnings, expected in cases:
+            with self.subTest(method=method, days=days, turnings=turnings):
+                self.assertIs(compost_time_at_temperature_met(self._pile(method, days, turnings)), expected)
+        self.assertFalse(compost_meets_c2(self._pile("windrow", 15, None)))
+
+    def test_meets_c2_still_needs_the_cn_and_the_temperature(self):
+        self.assertTrue(compost_meets_c2(self._pile("windrow", 15, 5)))
+        self.assertFalse(compost_meets_c2(self._pile("windrow", 15, 5, cn=20)))
+        self.assertFalse(compost_meets_c2(self._pile("windrow", 15, 5, temp=120)))
