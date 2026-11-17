@@ -882,6 +882,10 @@ jobs:
       # it passed unchanged. The first pins OV-MT-C06: a record whose confirmed active ingredient
       # is a substance on the plan stays clear when its OMRI or WSDA listing is attached, and the
       # CDFA check reads the listing. Neither reads the sibling repo.
+      # 2026-11-17: certifications.tests.test_wsda_list_annotations (new, 18 tests, about 6 s) pins
+      # WSDA's own annotation per product: the seed CSV and migration 0086 agree, NONE is never "no
+      # restrictions", the annotation prints in the restrictions column and under the packet's row,
+      # and a reworded edition puts a statement back to review. No sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -997,6 +1001,7 @@ jobs:
             certifications.tests.test_material_rows_and_citations \
             certifications.tests.test_material_labels \
             certifications.tests.test_wsda_agr_2196 \
+            certifications.tests.test_wsda_list_annotations \
             certifications.tests.test_materials_print_polish \
             history.tests.test_phi_check \
             history.tests.test_manure_harvest_check \

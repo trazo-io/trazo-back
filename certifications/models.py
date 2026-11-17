@@ -1494,6 +1494,8 @@ class WSDAMaterial(models.Model):
     Every row in `certifications/data/wsda_seed.csv` is transcribed from that PDF
     (782 rows, March 06, 2026 edition, verified 2026-09-06). The 42 rows that stood
     here before were hand-typed, and most of them were not on the list at all.
+    The Annotation column was transcribed from the same edition on 2026-11-17 (360 of the
+    782 products carry one, such as "Deficiency must be documented.").
 
     This is a second global catalog alongside OMRIProduct. Drift detector
     Layer-2 name matching checks WSDA after OMRI so WSDA-only products clear
@@ -1539,6 +1541,16 @@ class WSDAMaterial(models.Model):
         blank=True,
         null=True,
         help_text="WSDA's 'Initial Approval Year' column",
+    )
+    annotation = models.TextField(
+        blank=True,
+        null=True,
+        help_text=(
+            "WSDA's 'Annotation' column, verbatim. The list states that registered products must be "
+            "used in accordance with all noted annotations. '' = WSDA prints NONE for this product; "
+            "NULL = not transcribed (a row from an older seed, or one entered by hand). A NONE is "
+            "never read as 'no restrictions': the label can still restrict use."
+        ),
     )
     list_effective_date = models.DateField(
         blank=True,
@@ -3860,12 +3872,14 @@ class PlanMaterialRestrictionStatement(models.Model):
 
     OSP alignment audit T18 (Phase 5 slice 2b; Oscar's rules, 2026-10-02). WSDA AGR 2196 and CCOF's
     Materials Application ask how each material's restrictions are met. Trazo holds verified wording
-    for few restrictions (§ 205.602 conditions of use) and none for OMRI or WSDA listings, so:
+    for few restrictions (§ 205.602 conditions of use), WSDA's own annotation for each product on its
+    list (transcribed 2026-11-17, printed as WSDA's words), and nothing for OMRI listings, so:
 
       * a statement is bound to ONE material on ONE plan version and ONE identified restriction; a
         material can carry several;
       * the restriction is either REGULATION text Trazo holds (citation, its effective date and when
-        Trazo last read it) or TRANSCRIBED by the operator (the copied wording, the kind of source, its
+        Trazo last read it), WSDA'S OWN ANNOTATION for a WSDA-listed product (the list's edition date),
+        or TRANSCRIBED by the operator (the copied wording, the kind of source, its
         identifier, page or section, and an optional attachment or reference). Transcribed text prints
         as "transcribed by the operator; not independently verified by Trazo". Verified wording says
         nothing about whether the restriction applies to this material or use;
@@ -3888,9 +3902,13 @@ class PlanMaterialRestrictionStatement(models.Model):
     ]
     SOURCE_REGULATION = "regulation"
     SOURCE_TRANSCRIBED = "operator_transcribed"
+    #: The annotation WSDA prints for the product on its Organic Input Material List
+    #: (`WSDAMaterial.annotation`), held by Trazo with the list's edition date (2026-11-17).
+    SOURCE_WSDA_LIST = "wsda_list_annotation"
     SOURCE_CHOICES = [
         (SOURCE_REGULATION, "Regulation text held by Trazo"),
         (SOURCE_TRANSCRIBED, "Transcribed by the operator"),
+        (SOURCE_WSDA_LIST, "WSDA list annotation held by Trazo"),
     ]
     DOC_LABEL = "product_label"
     DOC_OMRI = "omri_listing"

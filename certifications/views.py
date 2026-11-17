@@ -344,6 +344,16 @@ def verify_input(request):
             "wsda_material_id": (wsda_product_number(matched_wsda.wsda_id) or None) if matched_wsda else None,
             "wsda_material_name": matched_wsda.brand_name if matched_wsda else None,
             "wsda_material_category": matched_wsda.category if matched_wsda else None,
+            # WSDA's own Annotation column for the product, verbatim and in English, with the edition it
+            # was read from. "" is WSDA's NONE (the label can still restrict use); None is "not
+            # transcribed". The list states that registered products must be used in accordance with
+            # all noted annotations, so the client shows it before the grower attaches the listing.
+            "wsda_material_annotation": matched_wsda.annotation if matched_wsda else None,
+            "wsda_list_effective_date": (
+                matched_wsda.list_effective_date.isoformat()
+                if matched_wsda and matched_wsda.list_effective_date
+                else None
+            ),
             "wsda_candidates": [
                 {
                     "pk": m.pk,
@@ -351,6 +361,7 @@ def verify_input(request):
                     "brand_name": m.brand_name,
                     "manufacturer": m.manufacturer,
                     "category": m.category,
+                    "annotation": m.annotation,
                 }
                 for m in wsda_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
             ],

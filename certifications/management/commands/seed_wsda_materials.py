@@ -5,7 +5,9 @@ Source: WSDA Organic Input Material List — a FREE public PDF, no licence neede
   https://cms.agr.wa.gov/WSDAKentico/Documents/FSCS/Organic/Pubs_organic/WSDA_Organic_Input_Material_List.pdf
   - Program page: https://agr.wa.gov/departments/organic/input-material-registration
   - Committed CSV: certifications/data/wsda_seed.csv — 782 rows transcribed from the
-    March 06, 2026 edition (parsed 2026-09-06), one row per published product.
+    March 06, 2026 edition (parsed 2026-09-06), one row per published product. Its
+    `annotation` column, WSDA's own Annotation column verbatim ("NONE" where WSDA prints
+    it), was transcribed from the same edition on 2026-11-17.
 
 The CSV's `wsda_id` is the list's own **WSDA Product #**, a bare integer. It is NOT
 decorative: `registry_identifiers.wsda_identifier_label` prints an identifier only when
@@ -55,6 +57,17 @@ REQUIRED_COLUMNS = {"wsda_id", "brand_name"}
 def _parse_year(value):
     value = (value or "").strip()
     return int(value) if value.isdigit() else None
+
+
+def _parse_annotation(value):
+    """WSDA's Annotation cell: its text, "" for WSDA's NONE, None for an empty cell (not transcribed).
+
+    NONE is stored as "", never as None: WSDA printed it, so the absence of an annotation is a fact
+    about the listing. It is still never read as "no restrictions" (the label can restrict use)."""
+    value = " ".join((value or "").split())
+    if not value:
+        return None
+    return "" if value.upper() == "NONE" else value
 
 
 def _parse_date(value):
@@ -125,6 +138,10 @@ class Command(BaseCommand):
             if missing:
                 raise CommandError(f"CSV is missing required columns: {sorted(missing)}")
 
+            # A CSV without the column (an older snapshot, or an export that does not carry it) leaves
+            # every stored annotation as it is, rather than blanking it to "not transcribed".
+            has_annotation = "annotation" in (reader.fieldnames or [])
+
             for row in reader:
                 wsda_id = (row.get("wsda_id") or "").strip()
                 if not wsda_id:
@@ -136,18 +153,18 @@ class Command(BaseCommand):
                     rejected.append(wsda_id)
                     continue
 
-                _, was_created = WSDAMaterial.objects.update_or_create(
-                    wsda_id=wsda_id,
-                    defaults={
-                        "brand_name": (row.get("brand_name") or "").strip(),
-                        "manufacturer": (row.get("manufacturer") or "").strip() or None,
-                        "category": (row.get("category") or "").strip() or None,
-                        "subtype": (row.get("subtype") or "").strip() or None,
-                        "initial_approval_year": _parse_year(row.get("initial_approval_year")),
-                        "list_effective_date": _parse_date(row.get("list_effective_date")),
-                        "source_url": (row.get("source_url") or "").strip() or None,
-                    },
-                )
+                defaults = {
+                    "brand_name": (row.get("brand_name") or "").strip(),
+                    "manufacturer": (row.get("manufacturer") or "").strip() or None,
+                    "category": (row.get("category") or "").strip() or None,
+                    "subtype": (row.get("subtype") or "").strip() or None,
+                    "initial_approval_year": _parse_year(row.get("initial_approval_year")),
+                    "list_effective_date": _parse_date(row.get("list_effective_date")),
+                    "source_url": (row.get("source_url") or "").strip() or None,
+                }
+                if has_annotation:
+                    defaults["annotation"] = _parse_annotation(row.get("annotation"))
+                _, was_created = WSDAMaterial.objects.update_or_create(wsda_id=wsda_id, defaults=defaults)
                 if was_created:
                     created += 1
                 else:
