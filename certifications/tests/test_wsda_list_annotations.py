@@ -247,6 +247,35 @@ class StatementTests(_Plan):
         self.assertIn("[REVIEW]", printed)
         self.assertIn('"Zinc deficiency must be documented by testing." How it is met: not stated.', printed)
 
+    def _transcribed_from_the_listing(self, text="deficiency must be documented", how_met="Leaf test each July."):
+        """How a WSDA restriction had to be recorded before Trazo held the annotation."""
+        return record_statement(
+            self.osp,
+            self.user,
+            {
+                "material_kind": "wsda",
+                "material_id": self.zinc.pk,
+                "restriction_source": PRS.SOURCE_TRANSCRIBED,
+                "restriction_text": text,
+                "source_type": PRS.DOC_WSDA,
+                "source_identifier": "WSDA list 2026-03-06",
+                "how_met": how_met,
+            },
+        )
+
+    def test_an_answer_transcribed_from_the_listing_answers_the_annotation(self):
+        """Review of back #470: the old way of recording it printed the annotation a second time as
+        "not stated" next to the operator's answer."""
+        self._transcribed_from_the_listing()
+        printed = material_restriction_text(self.osp, "wsda", self.zinc.pk)
+        self.assertIn("Leaf test each July.", printed)
+        self.assertNotIn("How it is met: not stated.", printed)
+
+    def test_a_transcription_in_other_words_still_leaves_the_annotation_unanswered(self):
+        self._transcribed_from_the_listing(text="Apply only after a soil test.")
+        printed = material_restriction_text(self.osp, "wsda", self.zinc.pk)
+        self.assertIn(f'"{DEFICIENCY}" How it is met: not stated.', printed)
+
     def test_a_withdrawn_statement_names_wsdas_annotation(self):
         st = self._state()
         withdraw_statement(self.osp, self.user, {"withdraw": st.pk, "reason": "Wrong block"})
@@ -294,6 +323,24 @@ class PacketLineTests(_Plan):
         )
         (line,) = _material_wsda_annotation_lines(self.osp, self._rows()["Zinc Sulfate Test"])
         self.assertTrue(line.endswith('How the operator states it is met: "Tissue test each July.".'), line)
+
+    def test_it_quotes_an_answer_transcribed_from_the_listing(self):
+        from certifications.services.osp_module_pdf import _material_wsda_annotation_lines
+
+        record_statement(
+            self.osp,
+            self.user,
+            {
+                "material_kind": "wsda",
+                "material_id": self.zinc.pk,
+                "restriction_source": PRS.SOURCE_TRANSCRIBED,
+                "restriction_text": "Deficiency must be documented",
+                "source_type": PRS.DOC_WSDA,
+                "how_met": "Leaf test each July.",
+            },
+        )
+        (line,) = _material_wsda_annotation_lines(self.osp, self._rows()["Zinc Sulfate Test"])
+        self.assertTrue(line.endswith('How the operator states it is met: "Leaf test each July.".'), line)
 
 
 class LookupTests(_Plan):

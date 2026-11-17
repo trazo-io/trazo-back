@@ -124,6 +124,27 @@ def wsda_list_restriction(osp, kind, mid) -> Optional[dict]:
     }
 
 
+def _comparable(text) -> str:
+    return " ".join((text or "").split()).lower().rstrip(". ")
+
+
+def answers_wsda_annotation(statement, held) -> bool:
+    """True when a current statement answers the WSDA annotation `held` (from `wsda_list_restriction`).
+
+    Two kinds do: one made against the annotation itself (its key, and the same words, so a reworded
+    edition is not answered by the old one), and one the operator transcribed from the WSDA listing
+    before Trazo held the annotation, whose words are the annotation's (case, spacing and a closing
+    full stop aside). Without the second, an answer recorded the old way printed beside a second copy
+    of the annotation marked "How it is met: not stated" (review of back #470)."""
+    if statement.restriction_key == held["key"]:
+        return statement.restriction_text == held["text"]
+    return (
+        statement.restriction_source == PRS.SOURCE_TRANSCRIBED
+        and statement.source_type == PRS.DOC_WSDA
+        and _comparable(statement.restriction_text) == _comparable(held["text"])
+    )
+
+
 def _wsda_source(citation, effective_date) -> str:
     edition = effective_date.isoformat() if effective_date else "edition date not held"
     return f"WSDA annotation, {citation} (Organic Input Material List of {edition}, {WSDA_WORDS})"
@@ -407,9 +428,7 @@ def material_restriction_text(osp, kind, mid) -> str:
     wsda = wsda_list_restriction(osp, kind, mid)
     # Matched on the words too: a new WSDA edition keeps the key and rewords the annotation, and the
     # statement under [REVIEW] answers the old words, so the current ones print as not yet answered.
-    if wsda is not None and not any(
-        s.restriction_key == wsda["key"] and s.restriction_text == wsda["text"] for s in statements
-    ):
+    if wsda is not None and not any(answers_wsda_annotation(s, wsda) for s in statements):
         parts.append(
             f"{_wsda_source(wsda['citation'], wsda['effective_date'])}: \"{wsda['text']}\" How it is met: not stated."
         )

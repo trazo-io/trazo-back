@@ -541,11 +541,13 @@ def _material_wsda_annotation_lines(osp, row) -> list:
     and WSDA AGR 2196 asks how each material's restrictions are met. Until this line the packet printed
     "Deficiency must be documented." nowhere, for 140 of the products a grower could list. A product
     WSDA prints NONE for gets no line: NONE is not "no restrictions", and the label is not on file here.
-    The operator's answer is quoted only from a current statement made against this annotation."""
+    The operator's answer is quoted only from a current statement that answers this annotation: one made
+    against it, or one transcribed from the WSDA listing in the annotation's words."""
     from certifications.models import PlanMaterialRestrictionStatement as PRS
     from certifications.services.material_restrictions import (
         CURRENT,
         _wsda_source,
+        answers_wsda_annotation,
         material_ref,
         statement_state,
         wsda_list_restriction,
@@ -557,10 +559,10 @@ def _material_wsda_annotation_lines(osp, row) -> list:
         return []
     answers = [
         st.how_met.strip()
-        for st in PRS.objects.filter(
-            osp=osp, material_kind=kind, material_id=mid, restriction_key=held["key"], superseded_at__isnull=True
-        ).order_by("stated_at", "id")
-        if (st.how_met or "").strip() and statement_state(st, osp) == CURRENT
+        for st in PRS.objects.filter(osp=osp, material_kind=kind, material_id=mid, superseded_at__isnull=True).order_by(
+            "stated_at", "id"
+        )
+        if answers_wsda_annotation(st, held) and (st.how_met or "").strip() and statement_state(st, osp) == CURRENT
     ]
     met = f'How the operator states it is met: "{"; ".join(answers)}".' if answers else "How it is met: not stated."
     return [f"{_wsda_source(held['citation'], held['effective_date'])}: \"{held['text']}\" {met}"]
