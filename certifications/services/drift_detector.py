@@ -807,7 +807,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             cdfa_ts = _now_iso()
             cdfa = _ca_sub(resolved)
             dpr = _dpr_sub(label, resolved)
-            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr, resolved)
             if issue_reason:
                 return _build_drift_warning(
                     osp=osp,
@@ -1139,7 +1139,9 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
         )
     cdfa = ca_sub(obj) if obj is not None and decision.target_kind != MID.TARGET_PLAN_ENTRY else None
     dpr = dpr_sub(label, obj)
-    issue_reason, issue_codes, issue_params = approved_issue_reason(cdfa, dpr)
+    # The identified product is the approval, so an OMRI listing that lapsed by this application is
+    # read here as on every other approved path (review of back #472).
+    issue_reason, issue_codes, issue_params = approved_issue_reason(cdfa, dpr, obj)
     if issue_reason:
         return True, _build_drift_warning(
             osp=osp,
@@ -1505,7 +1507,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
             national_list_verified_at=nl_ts,
         )
 
-    def _soil_issue_reason(cdfa, _dpr):
+    def _soil_issue_reason(cdfa, _dpr, _product=None):
         # The same CDFA rule the approved branch above applies to a soil amendment.
         if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
             return (

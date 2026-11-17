@@ -122,6 +122,36 @@ class DriftTests(_Orchard):
         self.assertEqual(ev.national_list_substance_id, fish.id)
         self.assertIsNone(ev.drift_warning)
 
+    def test_an_operator_identity_decision_reads_it_too(self):
+        """Review of back #472: a name that matches no catalog row, declared by the operator to be the
+        plan's OMRI product, reached the approved check without the product."""
+        from certifications.models import MaterialIdentityDecision as MID
+        from certifications.services.material_identity import record_decision
+        from users.models import WorksIn
+
+        user = User.objects.create_user(email="ident@test.com", password="x", is_verified=True, first_name="Ana")
+        WorksIn.objects.create(user=user, company=self.establishment.company, role=WorksIn.COMPANY_ADMIN)
+        ev = self._spray(DROPPED + datetime.timedelta(days=3), commercial_name="Grandpa fish mix")
+        self.assertEqual(ev.drift_warning["reason_code"], "unresolved")
+        record_decision(
+            self.osp,
+            user,
+            {
+                "source": "chemical",
+                "logged_name": "Grandpa fish mix",
+                "decision": MID.SAME_AS,
+                "target_kind": MID.TARGET_OMRI,
+                "target_id": self.dropped.pk,
+                "event_ids": [ev.pk],
+                "formulation_difference_acknowledged": True,
+                "formulation_note": "Same product, bought in bulk under a farm name.",
+            },
+        )
+        ev.save()
+        ev.refresh_from_db()
+        self.assertEqual(ev.drift_warning["reason_code"], "approved_with_issues")
+        self.assertIn("omri_listing_lapsed", ev.drift_warning["reason_params"]["issues"])
+
 
 class LookupTests(_Orchard):
     def test_the_lookup_returns_the_drop_date(self):
