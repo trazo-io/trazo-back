@@ -3877,7 +3877,7 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         # 🔴 2026-09-08 — the SEASON NOTE, owner-only from here on.
         #
         # `History.description` is farmer free text twice over: it is what the operator typed on
-        # the Start Production form, and `History.finish()` (history/models.py, "Finalization
+        # the Start Production form, and `History.finish()` (history/models/production.py, "Finalization
         # NOTES are aliased onto `description`") overwrites it with the Observations box from
         # the finish dialog — a box whose own help text tells the farmer it is not shown to
         # buyers. It shipped RAW on this anonymous payload: no `public_free_text`, no vendor
