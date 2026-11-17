@@ -232,8 +232,102 @@ class NoInputsStatementTests(_Parcel):
         text = " ".join(
             extract_text(io.BytesIO(generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=self.parcel))).split()
         )
-        self.assertIn("Entrust SC · input application · logged by the operator as allowed: OMRI listed", text)
+        # No OMRI listing is attached to this record, so the line says so (OV-MT-C08).
+        self.assertIn(
+            "Entrust SC · input application · logged by the operator as allowed: OMRI listed (no listing on file)",
+            text,
+        )
         self.assertNotIn("organic-approved", text.replace("not organic-approved", ""))
+
+
+class AListingPickSaysWhetherTheListingIsOnFileTests(_Parcel):
+    """OV-MT-C08 (overall review 2026-11-10). The land history printed the grower's "OMRI listed"
+    pick as "logged by the operator as allowed: OMRI listed" whether or not a listing was attached,
+    while the Input Log in the same packet printed "OMRI Listed — grower-selected, no listing on
+    file" for the same spray. A reviewer reading both pages could not tell which one the packet
+    meant. Both now read the one predicate, `input_evidence.listing_on_file`."""
+
+    def setUp(self):
+        super().setUp()
+        from certifications.models import OMRIProduct, WSDAMaterial
+
+        self.day = date(self.today.year, 1, 15) if self.today.month > 1 else date(self.today.year - 1, 6, 15)
+        self.season = self._season(self.day - timedelta(days=5), None, name="This year")
+        self.omri = OMRIProduct.objects.create(product_name="Entrust SC", omri_id="dow-2900")
+        self.wsda = WSDAMaterial.objects.create(
+            wsda_id="W-CU1", brand_name="Champ WG", category="disease-and-pest-control", subtype="Copper Hydroxide"
+        )
+
+    def _spray(self, name, basis, **listing):
+        return ChemicalEvent.objects.create(
+            history=self.season,
+            date=_aware(self.day),
+            description="spray",
+            commercial_name=name,
+            organic_approved=basis,
+            **listing,
+        )
+
+    def _line(self, name):
+        from product.services.input_evidence import describe, parcel_inputs
+
+        (record,) = [r for r in parcel_inputs(self.parcel) if r.product == name]
+        return describe(record)
+
+    def test_an_attached_omri_listing_prints_the_pick_plain(self):
+        self._spray("Entrust SC", "omri_listed", omri_product=self.omri)
+        self.assertTrue(self._line("Entrust SC").endswith("logged by the operator as allowed: OMRI listed"))
+
+    def test_an_attached_wsda_listing_prints_the_pick_plain(self):
+        self._spray("Champ WG", "wsda_listed", wsda_material=self.wsda)
+        self.assertTrue(self._line("Champ WG").endswith("logged by the operator as allowed: WSDA listed"))
+
+    def test_a_pick_with_no_listing_says_none_is_on_file(self):
+        self._spray("Champ WG", "wsda_listed")
+        self.assertTrue(self._line("Champ WG").endswith("as allowed: WSDA listed (no listing on file)"))
+
+    def test_an_amendment_cannot_hold_a_listing_so_its_pick_is_always_qualified(self):
+        self._soil(self.season, self.day, "omri_listed", product="Feather meal 12-0-0")
+        self.assertTrue(self._line("Feather meal 12-0-0").endswith("as allowed: OMRI listed (no listing on file)"))
+
+    def test_a_basis_that_is_not_a_listing_is_unchanged(self):
+        self._spray("Kocide 3000-O", "certifier_approved")
+        line = self._line("Kocide 3000-O")
+        self.assertTrue(line.endswith("as allowed: reviewed by the certifier, per the operator"))
+        self.assertNotIn("listing on file", line)
+
+    def test_the_land_history_and_the_input_log_agree_on_the_same_spray(self):
+        from history.services.audit_export_service import _organic_basis_cell
+
+        backed = self._spray("Entrust SC", "omri_listed", omri_product=self.omri)
+        bare = self._spray("Champ WG", "omri_listed")
+        for event, name in ((backed, "Entrust SC"), (bare, "Champ WG")):
+            with self.subTest(name):
+                input_log = _organic_basis_cell(event)
+                land_history = self._line(name)
+                self.assertEqual("no listing on file" in input_log, "no listing on file" in land_history)
+
+    def test_a_listing_from_the_other_catalogue_does_not_back_the_pick(self):
+        """Review of back #460: "OMRI listed" with only a WSDA row attached printed plain on both
+        pages, beside an OMRI verification table reading "OMRI ID: —"."""
+        from history.services.audit_export_service import _organic_basis_cell
+
+        omri_pick = self._spray("Champ WG", "omri_listed", wsda_material=self.wsda)
+        wsda_pick = self._spray("Entrust SC", "wsda_listed", omri_product=self.omri)
+        for event, name in ((omri_pick, "Champ WG"), (wsda_pick, "Entrust SC")):
+            with self.subTest(name):
+                self.assertTrue(self._line(name).endswith("(no listing on file)"))
+                self.assertIn("no listing on file", _organic_basis_cell(event))
+
+    def test_the_parcel_page_of_the_packet_prints_the_qualified_line(self):
+        self._spray("Champ WG", "omri_listed")
+        osp = OrganicSystemPlan.objects.create(establishment=self.est, version_number=1, status="draft")
+        text = " ".join(
+            extract_text(io.BytesIO(generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=self.parcel))).split()
+        )
+        self.assertIn(
+            "Champ WG · input application · logged by the operator as allowed: OMRI listed (no listing on", text
+        )
 
 
 class ReviewOfBack83Tests(_Parcel):
