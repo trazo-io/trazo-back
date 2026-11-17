@@ -13,9 +13,14 @@ rendered a hardcoded $15 offer for months.
 from unittest.mock import patch
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 
+# The Stripe branch is what this module guards, so it pins a key of its own. Reading the runner's
+# environment made the active add-on test fail wherever STRIPE_SECRET_KEY is blank: `create_plans`
+# then seeds local rows only and calls Stripe for nothing. Every Stripe entry point is patched below,
+# so the key is never sent anywhere.
+@override_settings(STRIPE_SECRET_KEY="sk_test_not_a_real_key")
 class WithdrawnAddOnsNeverReachStripeTests(TestCase):
     def setUp(self):
         # Every Stripe entry point is patched: a test that reached the network would be both

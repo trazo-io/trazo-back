@@ -837,6 +837,15 @@ jobs:
       # record with no amount gets no manufacturing figure and says why (it was priced on a default
       # of 50); the pass counts recorded fuel, else an area estimate, else nothing; no area is never
       # one hectare; the preview matches the save. It does not read the sibling repo.
+      # 2026-11-17: 44 modules join from a sweep of every test module this list did not name (254
+      # run one by one against main; 231 passed). These are the ones that guard billing, the paid
+      # exports, consumer and public payloads and permissions: every subscriptions module, among
+      # them test_seeded_lineup and test_addon_billing_integrity, which CLAUDE.md cites as the
+      # lineup and add-on guards and which never ran here; history.tests.test_pur_export,
+      # test_records_export and the audit-export modules; the consumer no-score, no-grade and
+      # public-leak modules. About 150 s of tests in all. subscriptions.tests.test_create_plans_stripe_safety
+      # now pins its own Stripe key, so it no longer depends on the runner's environment. None reads
+      # the sibling repo. The other passing modules wait on a shard decision (about 6 more minutes).
       # 2026-11-13: carbon.tests.test_chemical_estimate_is_labelled joins. A chemical figure's
       # status follows its basis ("estimate" when any part is estimated or left out, never the
       # published-factor label), and no N-P-K or %AI is invented. It does not read the sibling repo.
@@ -1221,6 +1230,50 @@ jobs:
             company.tests.test_parcel_geometry_endpoint \
             history.tests.test_block_ids \
             documents.tests.test_documents \
+            backend.tests.test_public_urls \
+            certifications.tests.test_cert_type_set_authority \
+            certifications.tests.test_consumer_claim \
+            certifications.tests.test_consumer_claim_label_i18n \
+            certifications.tests.test_consumer_display_status_substantiation \
+            company.tests.test_viewset_permission_composition \
+            documents.tests.test_export_jobs \
+            history.tests.test_audit_export_bigger_tasks \
+            history.tests.test_audit_export_query_budget \
+            history.tests.test_audit_export_section_sets \
+            history.tests.test_audit_export_snapshot \
+            history.tests.test_claim_authority_certification_types \
+            history.tests.test_consumer_carbon_grade_removed \
+            history.tests.test_consumer_highlights \
+            history.tests.test_consumer_payload_carries_no_score \
+            history.tests.test_consumer_payload_size \
+            history.tests.test_event_amend_permissions \
+            history.tests.test_no_regulatory_date_claims_in_export \
+            history.tests.test_packet_carbon_scope \
+            history.tests.test_packet_scope_and_trap_columns \
+            history.tests.test_pest_ipm_warning_scope \
+            history.tests.test_public_parcel_agronomy_not_leaked \
+            history.tests.test_public_response_schema \
+            history.tests.test_public_unit_fidelity \
+            history.tests.test_public_views \
+            history.tests.test_public_views_simple \
+            history.tests.test_pur_export \
+            history.tests.test_records_export \
+            history.tests.test_transport_export \
+            product.tests.test_location_disclosure_consent \
+            subscriptions.tests.test_addon_billing_integrity \
+            subscriptions.tests.test_billing \
+            subscriptions.tests.test_cancel_endpoint_and_notices \
+            subscriptions.tests.test_cancellation_lands_on_starter \
+            subscriptions.tests.test_create_plans_stripe_safety \
+            subscriptions.tests.test_creation_limits \
+            subscriptions.tests.test_dashboard_company_scope \
+            subscriptions.tests.test_internal_plans_not_self_serve \
+            subscriptions.tests.test_no_phantom_trial_on_paid_plans \
+            subscriptions.tests.test_pilot_plan_and_limits \
+            subscriptions.tests.test_seeded_lineup \
+            subscriptions.tests.test_storage_accounting \
+            subscriptions.tests.test_subscription_events \
+            users.tests.test_onboarding_email_claims \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
