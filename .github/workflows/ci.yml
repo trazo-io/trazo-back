@@ -99,7 +99,11 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     # 20, not 15 (2026-11-16): a shard measured 13.6 min on a laptop and the same runner type has
     # run 1.6x slower on some days. Still short enough that a hung test fails the run quickly.
-    timeout-minutes: 20
+    # 25, not 20 (2026-11-17): after back #468 enrolled 44 modules, shards ran 15 to 16 min on a PR
+    # with no migration. A PR that adds a migration misses the migrated-test-database cache and
+    # spends about 3 more minutes migrating, so back #470's shard 3 was cancelled at 20 min with its
+    # tests still passing (migrate 21:10 to 21:13, last test output 21:27, cancel 21:30).
+    timeout-minutes: 25
     strategy:
       # A failure in one shard must not cancel the others: the point of the run is the full list
       # of failures, not the first one.
