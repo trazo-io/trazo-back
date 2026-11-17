@@ -533,6 +533,41 @@ def seedling_supplier_lines(row, buys_certified: bool = False) -> list[str]:
     return lines
 
 
+def _material_wsda_annotation_lines(osp, row) -> list:
+    """The line under a WSDA-listed material giving WSDA's own annotation for it, and how the operator
+    states it is met (2026-11-17).
+
+    WSDA's list states that registered products must be used in accordance with all noted annotations,
+    and WSDA AGR 2196 asks how each material's restrictions are met. Until this line the packet printed
+    "Deficiency must be documented." nowhere, for 140 of the products a grower could list. A product
+    WSDA prints NONE for gets no line: NONE is not "no restrictions", and the label is not on file here.
+    The operator's answer is quoted only from a current statement that answers this annotation: one made
+    against it, or one transcribed from the WSDA listing in the annotation's words."""
+    from certifications.models import PlanMaterialRestrictionStatement as PRS
+    from certifications.services.material_restrictions import (
+        CURRENT,
+        _wsda_source,
+        answers_wsda_annotation,
+        material_ref,
+        statement_state,
+        wsda_list_restriction,
+    )
+
+    kind, mid, _name = material_ref(row)
+    held = wsda_list_restriction(osp, kind, mid) if kind else None
+    if held is None:
+        return []
+    answers = [
+        st.how_met.strip()
+        for st in PRS.objects.filter(osp=osp, material_kind=kind, material_id=mid, superseded_at__isnull=True).order_by(
+            "stated_at", "id"
+        )
+        if answers_wsda_annotation(st, held) and (st.how_met or "").strip() and statement_state(st, osp) == CURRENT
+    ]
+    met = f'How the operator states it is met: "{"; ".join(answers)}".' if answers else "How it is met: not stated."
+    return [f"{_wsda_source(held['citation'], held['effective_date'])}: \"{held['text']}\" {met}"]
+
+
 def _material_label_lines(row, labels_asked: bool) -> list:
     """The line under one material about its label or container photo.
 
@@ -1276,7 +1311,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
     if c11_table_asked(osp):
         out += _c11_table_flowables(osp, rows, styles, labels_asked)
     else:
-        out += _grouped_materials_flowables(rows, styles, labels_asked)
+        out += _grouped_materials_flowables(osp, rows, styles, labels_asked)
 
     # A logged wash-water sanitizer the plan lists only under § 205.601, or under nothing.
     for line in post_harvest_listing_review(osp):
@@ -1284,7 +1319,7 @@ def _approved_inputs_flowables(osp, styles) -> list:
     return out + _materials_sections_after_list(osp, rows, answers, styles)
 
 
-def _grouped_materials_flowables(rows, styles, labels_asked) -> list:
+def _grouped_materials_flowables(osp, rows, styles, labels_asked) -> list:
     """The list grouped by where each material is listed, one line per material."""
     out = []
     out.append(
@@ -1292,8 +1327,8 @@ def _grouped_materials_flowables(rows, styles, labels_asked) -> list:
             "Each row: product — manufacturer — listing — reason for use — use (in use, intended for use "
             "or no longer used) — the agent's review, where the operator recorded one; a National List "
             "substance with no product row also says so. A cell the plan does not hold is stated as not "
-            "stated, never left blank. A line under a row gives its label or container photo, where one "
-            "is on file or the agent asks for one.",
+            "stated, never left blank. A line under a row gives WSDA's annotation for a WSDA-listed product, "
+            "and its label or container photo, where one is on file or the agent asks for one.",
             styles["meta"],
         )
     )
@@ -1311,7 +1346,7 @@ def _grouped_materials_flowables(rows, styles, labels_asked) -> list:
         out.append(Paragraph(_escape(source), styles["meta"]))
         for row in group:
             out.append(Paragraph(f"• {_escape(row.display(stated_absences=True))}", styles["body"]))
-            for line in _material_label_lines(row, labels_asked):
+            for line in _material_wsda_annotation_lines(osp, row) + _material_label_lines(row, labels_asked):
                 out.append(Paragraph(_escape(line), styles["meta_indent"]))
     return out
 
@@ -1340,7 +1375,7 @@ def _c11_table_flowables(osp, rows, styles, labels_asked) -> list:
             "In the columns of OTCO's C11 Crop Materials List. A cell the plan does not hold is stated as not "
             "stated. The review agency is the listing the operator attached (OMRI or WSDA), or the agency the "
             "operator names; Trazo names no reviewer. Under a row: the agent's review as the operator recorded "
-            "it, any [REVIEW] line, and its label or container photo.",
+            "it, any [REVIEW] line, WSDA's annotation for a WSDA-listed product, and its label or container photo.",
             styles["meta"],
         )
     ]
@@ -1349,6 +1384,7 @@ def _c11_table_flowables(osp, rows, styles, labels_asked) -> list:
         notes = list(row.review_notes())
         if row.agent_review:
             notes.append(row.agent_review)
+        notes += _material_wsda_annotation_lines(osp, row)
         notes += _material_label_lines(row, labels_asked)
         day = added_on.get(" ".join(row.name.split()).lower())
         if day:

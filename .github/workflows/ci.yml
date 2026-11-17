@@ -99,7 +99,11 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     # 20, not 15 (2026-11-16): a shard measured 13.6 min on a laptop and the same runner type has
     # run 1.6x slower on some days. Still short enough that a hung test fails the run quickly.
-    timeout-minutes: 20
+    # 25, not 20 (2026-11-17): after back #468 enrolled 44 modules, shards ran 15 to 16 min on a PR
+    # with no migration. A PR that adds a migration misses the migrated-test-database cache and
+    # spends about 3 more minutes migrating, so back #470's shard 3 was cancelled at 20 min with its
+    # tests still passing (migrate 21:10 to 21:13, last test output 21:27, cancel 21:30).
+    timeout-minutes: 25
     strategy:
       # A failure in one shard must not cancel the others: the point of the run is the full list
       # of failures, not the first one.
@@ -887,6 +891,10 @@ jobs:
       # it passed unchanged. The first pins OV-MT-C06: a record whose confirmed active ingredient
       # is a substance on the plan stays clear when its OMRI or WSDA listing is attached, and the
       # CDFA check reads the listing. Neither reads the sibling repo.
+      # 2026-11-17: certifications.tests.test_wsda_list_annotations (new, 21 tests, about 7 s) pins
+      # WSDA's own annotation per product: the seed CSV and migration 0086 agree, NONE is never "no
+      # restrictions", the annotation prints in the restrictions column and under the packet's row,
+      # and a reworded edition puts a statement back to review. No sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -1002,6 +1010,7 @@ jobs:
             certifications.tests.test_material_rows_and_citations \
             certifications.tests.test_material_labels \
             certifications.tests.test_wsda_agr_2196 \
+            certifications.tests.test_wsda_list_annotations \
             certifications.tests.test_materials_print_polish \
             history.tests.test_phi_check \
             history.tests.test_manure_harvest_check \
