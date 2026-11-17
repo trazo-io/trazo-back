@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -88,6 +89,19 @@ class UserViewSet(viewsets.ModelViewSet):
         self.check_object_permissions(self.request, obj)
 
         return obj
+
+    # NEVER: create or delete an account through this route. It reads and edits a profile. A
+    # DELETE of one's own id left a company with a season and no member and blanked authorship on
+    # every SET_NULL column (overall review 2026-11, OV-SEC-C01); records are kept five years
+    # (7 CFR 205.103(b)(4)) and an account closes through `close_account`, export first. A POST
+    # made a user row for any email a signed-in caller typed, taking the address before its owner
+    # signed up; accounts come from `RegistrationViewSet` and invitations. Guard:
+    # users/tests/test_user_endpoint_no_create_or_delete.py.
+    def create(self, request, *args, **kwargs):
+        raise MethodNotAllowed(request.method)
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed(request.method)
 
     def get_permissions(self):
         # Public actions declare their own permissions via @action decorator

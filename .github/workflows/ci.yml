@@ -728,6 +728,11 @@ jobs:
       # the old one; a password change, reset or email change ends every session (access tokens by
       # issue time, refresh tokens blacklisted). It does not read the sibling repo.
       #
+      # 2026-11-17: users.tests.test_user_endpoint_no_create_or_delete joins (overall review
+      # 2026-11, OV-SEC-C01). /api/users/ reads and edits a profile; DELETE of one's own id had
+      # orphaned a company and POST made an account for any typed email. Both are refused now.
+      # It does not read the sibling repo.
+      #
       # 2026-11-13: certifications.tests.test_refresh_usda_organic_mirror joins. The daily refresh
       # imports a newer USDA Organic Integrity export only when one exists, stamps it with USDA's
       # month, re-verifies after, and fails the run only when the mirror is over a month behind. The
@@ -1191,6 +1196,7 @@ jobs:
             users.tests.test_user_privilege_fields_read_only \
             users.tests.test_superuser_from_environment \
             users.tests.test_account_takeover_chain \
+            users.tests.test_user_endpoint_no_create_or_delete \
             history.tests.test_multi_parcel_activity \
             history.tests.test_multi_parcel_specs \
             history.tests.test_ambiguous_season_refused \
