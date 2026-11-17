@@ -6,7 +6,7 @@ individual record. `TransparencyCalculator` counts what a production logged per 
 consumer QR page, not a field-level check); `AuditExportService.compliance_snapshot_rows()` runs 16
 CFR-cited checks but none of them look inside a chemical event's own fields. Every field on
 `ChemicalEvent` that a certifier actually reads — commercial name, rate, area, target pest — is
-`blank=True, null=True` at the model level (`history/models/common_event.py`), so a farmer can save a
+`blank=True, null=True` at the model level (`history/models/chemical_event.py`), so a farmer can save a
 spray record with none of them and Trazo says nothing until the certifier PDF prints a blank cell.
 
 This module is the missing layer, modelled directly on the one required-field registry that
@@ -85,7 +85,7 @@ class RequiredField:
             return False
         if self.applies_to is None:
             return True
-        # `type` is nullable at the model level (history/models/common_event.py). An event with no
+        # `type` is nullable at the model level (history/models/chemical_event.py). An event with no
         # recorded subtype is a separate data-integrity problem (see
         # test_event_subtype_validation.py), not grounds to ALSO flag it as missing a
         # target pest it may not need. Stay silent rather than guess.

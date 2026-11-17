@@ -1118,8 +1118,8 @@ class ProductionEvent(CommonEvent):
         # Unknown crop: 120, the floor that satisfies both paragraphs.
         interval_days = minimum_interval_days(getattr(self.history, "crop_type", None))
 
-        # SoilManagementEvent is defined later in this module; by the time this method
-        # runs the entire module is loaded, so direct reference works without import.
+        # SoilManagementEvent lives in a module registered after this one, so it is imported in
+        # this method (above), not at the top: a top-level import would register it early.
         parcel_id = self.history.parcel_id
         manure_events = SoilManagementEvent.objects.filter(
             history__parcel_id=parcel_id,

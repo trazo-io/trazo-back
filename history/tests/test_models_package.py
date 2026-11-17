@@ -11,9 +11,13 @@ The single file history/models.py was split into one module per model or group o
 3. A module imports a LATER module at the top. That registers the later module's models early,
    which changes content type ids in a fresh database and the order `apps.get_models()` walks
    (account closure and the schema census walk it).
+4. A relative import that meant `history.x` from history/models.py means `history.models.x` one
+   directory down. Inside a method it fails only when the method runs (`Production.get_events()`
+   did, review of back #464), and no import check or linter sees it.
 """
 
 import ast
+import importlib.util
 from pathlib import Path
 
 from django.apps import apps
@@ -67,3 +71,19 @@ class ModelsPackageTests(SimpleTestCase):
         self.assertGreater(len(seen), 15)
         positions = [position[module] for module in seen]
         self.assertEqual(positions, sorted(positions), f"registered out of order: {seen}")
+
+    def test_every_import_in_the_package_names_a_module_that_exists(self):
+        """Function-local imports included: those are the ones nothing else checks."""
+        checked, missing = 0, []
+        for path in sorted(PACKAGE.glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.ImportFrom):
+                    name = node.module or ""
+                    if node.level:
+                        base = ["history", "models"][: 2 - (node.level - 1)]
+                        name = ".".join(base + ([node.module] if node.module else []))
+                    checked += 1
+                    if importlib.util.find_spec(name) is None:
+                        missing.append(f"{path.name}:{node.lineno} {name}")
+        self.assertGreater(checked, 50, "the walk read too few imports to mean anything")
+        self.assertEqual(missing, [])

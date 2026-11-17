@@ -1,22 +1,27 @@
 """Split history/models.py into the package history/models/ (2026-11-17).
 
 The single file had grown to 5,849 lines and 25 top-level definitions. This moves each definition,
-with the comments above it, into a module named for what it holds. The code itself does not change:
-every class and function keeps its text, and the package's `__init__.py` imports the modules in the
-old file's order. That order is also the order Django registers the models in, which decides
+with the comments above it, into a module named for what it holds. The code does not change what it
+does, and the package's `__init__.py` imports the modules in the old file's order. That order is also the order Django registers the models in, which decides
 content type ids in a fresh database and the order `apps.get_models()` walks (account closure and
 the schema census both walk it), so it is kept exactly.
 
-Two methods referred to a model defined LATER in the old file, which a module cannot import at the
-top without registering that model early. Those two get a function-local import from the package,
-`from history.models import ...`, and nothing else changes in them.
+Two kinds of line change, so that the code keeps its meaning one directory down:
+- a RELATIVE import is resolved against the module it sits in, so `from .serializers import x` meant
+  `history.serializers` in history/models.py and would mean the missing `history.models.serializers`
+  in history/models/production.py. Every relative import is rewritten to its absolute form, as
+  resolved from the old file;
+- two methods referred to a model defined LATER in the old file, which a module cannot import at
+  the top without registering that model early. Those get a function-local import from the
+  package, `from history.models import ...`.
 
 Re-runnable, so a branch written before the split can follow it. On that branch, before merging
 main:
 
-    git show origin/main:scripts/split_history_models.py > /tmp/split_history_models.py
-    poetry run python /tmp/split_history_models.py
-    git add -A history/models history/models.py && git commit -m "refactor(history): split models.py"
+    git show origin/main:scripts/split_history_models.py > scripts/split_history_models.py
+    poetry run python scripts/split_history_models.py
+    git add -A history/models history/models.py scripts/split_history_models.py
+    git commit -m "refactor(history): split models.py"
 
 then merge main: what conflicts is only what both sides changed. A definition the branch added
 that MODULES below does not name stops the script with its name; add it to the module it belongs
@@ -24,11 +29,16 @@ to (keeping file order) and run again.
 """
 
 import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+# The checkout the command runs in, so a copy of this script run from elsewhere still finds it.
+ROOT = Path(
+    subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
+)
+OLD_MODULE = "history.models"
 SOURCE = ROOT / "history" / "models.py"
 PACKAGE = ROOT / "history" / "models"
 
@@ -149,6 +159,18 @@ def plan(source: str):
     return tree, lines, imports, chunks, home
 
 
+def _absolute(node: ast.ImportFrom) -> str:
+    """The module a relative import named from history/models.py (`.x` is `history.x`, `..x` is `x`)."""
+    if not node.level:
+        return node.module
+    package = OLD_MODULE.split(".")[:-1]
+    up = node.level - 1
+    base = package[: len(package) - up] if up <= len(package) else None
+    if base is None or not (base or node.module):
+        raise Refused(f"line {node.lineno}: a relative import that leaves the repository")
+    return ".".join(base + ([node.module] if node.module else []))
+
+
 def _import_lines(imports, wanted: set[str]) -> list[str]:
     out = []
     for node in imports:
@@ -159,7 +181,7 @@ def _import_lines(imports, wanted: set[str]) -> list[str]:
         if isinstance(node, ast.Import):
             out.append(f"import {names}\n")
         else:
-            out.append(f"from {'.' * node.level}{node.module or ''} import {names}\n")
+            out.append(f"from {_absolute(node)} import {names}\n")
     return out
 
 
@@ -207,6 +229,19 @@ def render(source: str) -> dict[str, str]:
                     first = _first_statement(function)
                     line = f"{' ' * first.col_offset}from history.models import {', '.join(sorted(found))}\n"
                     inserts.append((first.lineno, line))
+            # Relative imports inside the moved code, rewritten in place (same line count).
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.ImportFrom) and inner.level:
+                    at = inner.lineno - start
+                    dots = "\\." * inner.level + (re.escape(inner.module) if inner.module else "")
+                    fixed, count = re.subn(
+                        rf"\bfrom\s+{dots}\s+import\b", f"from {_absolute(inner)} import", segment[at], count=1
+                    )
+                    if count != 1:
+                        raise Refused(
+                            f"line {inner.lineno}: could not rewrite the relative import {segment[at].strip()!r}"
+                        )
+                    segment[at] = fixed
             for lineno, line in sorted(inserts, reverse=True):
                 segment.insert(lineno - start, line)
             body_parts.append("".join(segment).lstrip("\n").rstrip("\n") + "\n")
@@ -247,7 +282,8 @@ def _init() -> str:
 
 def main() -> int:
     if not SOURCE.exists():
-        print(f"{SOURCE.relative_to(ROOT)} does not exist; nothing to split.", file=sys.stderr)
+        state = "already split" if (PACKAGE / "__init__.py").exists() else "not a trazo-back checkout?"
+        print(f"{SOURCE} does not exist ({state}); nothing to split.", file=sys.stderr)
         return 2
     if PACKAGE.exists():
         print(

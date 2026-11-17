@@ -938,7 +938,7 @@ class Production(models.Model):
             return hashlib.sha256(event_data.encode()).hexdigest(), len(all_events)
 
     def get_events(self):
-        from .serializers import (
+        from history.serializers import (
             BusinessEventSerializer,
             ChemicalEventSerializer,
             EquipmentEventSerializer,
