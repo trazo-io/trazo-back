@@ -261,8 +261,8 @@ class SeedSourceDriftTests(TransactionTestCase):
 
     def test_seed_reasons_state_the_rule_and_the_guidance_apart(self):
         """§ 205.204(a)(1) names no supplier count and § 205.204 has no recordkeeping clause.
-        The three-source figure is NOP 5029 § 4.2 b.1, guidance (overall review 2026-11,
-        OV-PK-CIT15; the dossier's seed section already says so)."""
+        The three-source figure is NOP 5029 § 4.2.1 b.1, guidance written for producers as well
+        as certifiers (overall review 2026-11, OV-PK-CIT15)."""
         searched = self._make_pl_event(
             seed_certification_status="non_organic_untreated",
             variety="Romaine",
@@ -276,12 +276,42 @@ class SeedSourceDriftTests(TransactionTestCase):
             reasons[name] = event.drift_warning["reason"]
 
         self.assertIn("1 supplier search recorded", reasons["searched"])
-        self.assertIn("certifier guidance (NOP 5029)", reasons["searched"])
+        self.assertIn("NOP guidance (NOP 5029)", reasons["searched"])
         self.assertIn("§ 205.204 sets which seed a planting may use", reasons["unstated"])
+        # § 205.204(a)(2) has two conditions, not one: no equivalent organic or untreated variety
+        # commercially available, and a National List treatment.
+        self.assertIn("untreated variety is not commercially available", reasons["treated"])
+        self.assertIn("§ 205.601", reasons["treated"])
         for name, reason in reasons.items():
             with self.subTest(reason=name):
                 self.assertNotRegex(reason, r"(?i)\brequire[sd]?\b")
                 self.assertNotIn("disqualif", reason)
+
+    def test_a_stored_seed_finding_prints_in_todays_wording(self):
+        """`drift_warning` is stored on the event and the dossier prints it. A finding stored with
+        the old "requires" text prints the current reason; any other finding prints as stored."""
+        from certifications.services.drift_detector import drift_reason_text
+
+        old = {
+            "reason_code": "seed_search_incomplete",
+            "reason_params": {"input": "Romaine", "count": 2},
+            "reason": "Non-organic untreated seed declared with 2 of 3 required supplier searches. "
+            "NOP 5029 (§ 205.204(a)(1)) requires documented commercial-availability search.",
+        }
+        printed = drift_reason_text(old)
+        self.assertIn("2 supplier searches recorded", printed)
+        self.assertNotIn("require", printed)
+        self.assertIn(
+            "fewer than three supplier searches recorded",
+            drift_reason_text({"reason_code": "seed_search_incomplete", "reason": "x"}),
+        )
+        self.assertIn(
+            "§ 205.204 sets which seed",
+            drift_reason_text({"reason_code": "seed_cert_missing", "reason": "§ 205.204 requires each planting"}),
+        )
+        other = {"reason_code": "unresolved", "reason": "Input not on the plan's materials list"}
+        self.assertEqual(drift_reason_text(other), "Input not on the plan's materials list")
+        self.assertEqual(drift_reason_text(None), "")
 
     def test_non_organic_untreated_with_3_searches_clears(self):
         ev = self._make_pl_event(

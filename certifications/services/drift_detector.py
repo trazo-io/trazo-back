@@ -262,6 +262,50 @@ def _aosca_seed_search_url(variety: str) -> str:
     return f"https://www.organicseedfinder.org/search.aspx?query={quote_plus(variety or '')}"
 
 
+#: The seed reasons, one wording for a new finding and for one stored before it changed. Until
+#: 2026-11-16 these said "NOP 5029 (§ 205.204(a)(1)) requires" three supplier searches and that
+#: "§ 205.204 requires each planting to record" its seed status; neither paragraph says so
+#: (overall review 2026-11, OV-PK-CIT15). `drift_warning` is stored on the event and the dossier
+#: prints it, so `drift_reason_text` rebuilds a seed reason from its code instead of reprinting
+#: the stored words.
+SEED_REASON_CODES = ("seed_treated", "seed_search_incomplete", "seed_cert_missing")
+
+
+def _seed_reason(code: str, params: Optional[Dict[str, Any]] = None) -> str:
+    if code == "seed_treated":
+        return (
+            "Non-organic TREATED seed declared. § 205.204(a)(2) allows treated seed only when an "
+            "equivalent organic or untreated variety is not commercially available and the "
+            "treatment is on the National List (§ 205.601). Confirm the treatment with your certifier."
+        )
+    if code == "seed_search_incomplete":
+        count = (params or {}).get("count")
+        if isinstance(count, int):
+            recorded = f"{count} supplier search{'' if count == 1 else 'es'} recorded"
+        else:
+            recorded = "fewer than three supplier searches recorded"
+        return (
+            f"Non-organic untreated seed declared with {recorded}. § 205.204(a)(1) allows "
+            "non-organic seed only when an equivalent organic variety is not commercially "
+            "available, and NOP guidance (NOP 5029) asks for contact with three or more sources."
+        )
+    return (
+        "Seed status not recorded (organic, transitional or non-organic). § 205.204 sets which "
+        "seed a planting may use, and without the status this record cannot show that rule was met."
+    )
+
+
+def drift_reason_text(drift_warning) -> str:
+    """The reason to print for a stored finding: a seed reason in today's wording, any other
+    reason as it was stored."""
+    if not isinstance(drift_warning, dict):
+        return str(drift_warning or "")
+    code = drift_warning.get("reason_code")
+    if code in SEED_REASON_CODES:
+        return _seed_reason(code, drift_warning.get("reason_params"))
+    return drift_warning.get("reason") or ""
+
+
 def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
     """Returns drift_warning dict for a Planting (type='PL') ProductionEvent
     if the seed certification status / supplier-search documentation is
@@ -270,11 +314,12 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
     Rules (from § 205.204(a) and NOP Handbook 5029):
       - certified_organic OR transitional → clean, no finding
       - non_organic_untreated → § 205.204(a)(1) allows it only when no equivalent organic
-        variety is commercially available. The rule names no number; NOP 5029 § 4.2 b.1, which
+        variety is commercially available. The rule names no number; NOP 5029 § 4.2.1 b.1, which
         is guidance, asks for contact with three or more sources, and fewer than three recorded
         is a finding. The reason text says which is which (overall review 2026-11, OV-PK-CIT15).
-      - non_organic_treated → PROHIBITED if treated with synthetic substances
-        not on § 205.601. Always flag for reconciliation.
+      - non_organic_treated → § 205.204(a)(2): only when no equivalent organic or untreated
+        variety is commercially available, and the treatment is on § 205.601. Always flag for
+        reconciliation.
       - empty / unset → insufficient documentation to make a determination.
 
     Cover-crop seeds (SoilManagementEvent type='CC') go through a sibling
@@ -301,17 +346,13 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
     label = variety or supplier or "planting event"
     aosca_url = _aosca_seed_search_url(variety or supplier)
 
-    # Case 1: non-organic treated seed. § 205.204(a)(2) allows treated seed only
-    # when the treatment substance is listed on § 205.601. We can't verify
-    # the specific treatment here — we flag for reconciliation.
+    # Case 1: non-organic treated seed. § 205.204(a)(2) allows treated seed only when no
+    # equivalent organic or untreated variety is commercially available and the treatment is
+    # listed on § 205.601. We can't verify the specific treatment here; we flag for reconciliation.
     if cert_status == "non_organic_treated":
         return _build_drift_warning(
             osp=osp,
-            reason=(
-                "Non-organic TREATED seed declared. § 205.204(a)(2) allows treated "
-                "seed only if the treatment is on the National List (§ 205.601). "
-                "Confirm the treatment with your certifier."
-            ),
+            reason=_seed_reason("seed_treated"),
             reason_code="seed_treated",
             reason_params={"input": label},
             input_label=label,
@@ -320,20 +361,13 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
             omri_search_url=aosca_url,
         )
 
-    # Case 2: non-organic untreated with fewer than the three sources certifier guidance
-    # (NOP 5029 § 4.2 b.1) asks for. The rule itself, § 205.204(a)(1), names no number.
+    # Case 2: non-organic untreated with fewer than the three sources NOP guidance
+    # (NOP 5029 § 4.2.1 b.1) asks for. The rule itself, § 205.204(a)(1), names no number.
     if cert_status == "non_organic_untreated":
         if len(search_attempts) < 3:
-            searches = len(search_attempts)
             return _build_drift_warning(
                 osp=osp,
-                reason=(
-                    "Non-organic untreated seed declared with "
-                    f"{searches} supplier search{'' if searches == 1 else 'es'} recorded. "
-                    "§ 205.204(a)(1) allows non-organic seed only when an equivalent "
-                    "organic variety is not commercially available, and certifier "
-                    "guidance (NOP 5029) asks for contact with three or more sources."
-                ),
+                reason=_seed_reason("seed_search_incomplete", {"count": len(search_attempts)}),
                 reason_code="seed_search_incomplete",
                 reason_params={"input": label, "count": len(search_attempts)},
                 input_label=label,
@@ -348,11 +382,7 @@ def _classify_seed_event(event, osp) -> Optional[Dict[str, Any]]:
     # is incomplete.
     return _build_drift_warning(
         osp=osp,
-        reason=(
-            "Seed status not recorded (organic, transitional or non-organic). "
-            "§ 205.204 sets which seed a planting may use, and without the "
-            "status this record cannot show that rule was met."
-        ),
+        reason=_seed_reason("seed_cert_missing"),
         reason_code="seed_cert_missing",
         reason_params={"input": label},
         input_label=label,
