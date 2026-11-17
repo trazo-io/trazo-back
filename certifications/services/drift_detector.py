@@ -520,6 +520,12 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
     approved_nl_ids = set(osp.approved_national_list_substances.values_list("id", flat=True))
     approved_wsda_ids = set(osp.approved_wsda_materials.values_list("id", flat=True))
     is_ca = _establishment_is_in_california(event)
+    # Phase 5 slice 1: only a confirmed classification (exact or alias match on the active ingredient
+    # or name, or the operator's own pick) says what substance the record is. A legacy link or a
+    # partial-name suggestion is no evidence either way.
+    from history.services.national_list_basis import confirmed_national_list_substance
+
+    confirmed_nl = confirmed_national_list_substance(event)
 
     def _ca_sub(resolved_obj):
         # Only attach the CA sub-finding for fertilizer/amendment categories —
@@ -625,13 +631,18 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             return (entry, "operator_entered", entry.product_name, o_ts, w_ts)
         return None
 
-    def _rescued_approved_result(rescue, label):
+    def _rescued_approved_result(rescue, label, checked_obj=None):
         """Finding-or-None for an FK-flagged event rescued by a name-level OSP
-        approval: None clears it outright; CA sub-findings still surface."""
+        approval: None clears it outright; CA sub-findings still surface.
+
+        `checked_obj` is the product the CDFA and DPR checks run on: the listing the record names,
+        when it names one. The approval that rescued the record may not be a product at all (a
+        National List row or a plan entry has no CDFA registration)."""
         approved_obj, via, approved_name, o_ts, w_ts = rescue
+        product = checked_obj if checked_obj is not None else approved_obj
         cdfa_ts = _now_iso()
-        cdfa = _ca_sub(approved_obj)
-        dpr = _dpr_sub(label, approved_obj)
+        cdfa = _ca_sub(product)
+        dpr = _dpr_sub(label, product)
         issue_prose, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
         if issue_prose:
             return _build_drift_warning(
@@ -655,6 +666,40 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 cdfa_oim_verified_at=cdfa_ts if cdfa else None,
             )
         return None
+
+    def _plan_substance_rescue(o_ts=None, w_ts=None):
+        """A rescue tuple when the plan lists the substance this record is confirmed as, else None.
+
+        Overall review 2026-11, OV-MT-C06. The National List branch below already clears a record
+        whose confirmed classification is a substance the plan lists ("Entrust SC" with Spinosad
+        typed as its active ingredient, on a plan that lists Spinosad). The OMRI and WSDA branches
+        returned before reaching it, so attaching the product's own listing to that same record
+        turned it into a "not on the plan" finding: more evidence, a worse answer. Those branches
+        now ask the same question before they flag. Nothing is inferred: the classification is the
+        one a document may already cite, and the caller runs the CDFA and DPR checks on the listing.
+        """
+        if confirmed_nl is None or confirmed_nl.id not in approved_nl_ids:
+            return None
+        return (confirmed_nl, "national_list", confirmed_nl.substance_name, o_ts, w_ts)
+
+    def _plan_substances_hint():
+        """{"planSubstances": [...]} for a finding on a record with no classification, on a plan that
+        lists National List substances; else {}.
+
+        The same review: on a plan written by substance, every brand-name spray flagged and the
+        finding never said how it clears. The detector does not guess a brand's active ingredient
+        (OMRI and WSDA rows carry none); the grower types it on the record, as the plan names it,
+        and the National List branch reads it. A record that already has a classification gets no
+        hint: typing does not reclassify it, so the hint would point at a step that changes nothing.
+        """
+        if event.national_list_substance_id is not None or not approved_nl_ids:
+            return {}
+        from certifications.services.reference_data_status import national_list_crop_rows
+
+        names = sorted(
+            national_list_crop_rows().filter(id__in=approved_nl_ids).values_list("substance_name", flat=True)
+        )
+        return {"planSubstances": names} if names else {}
 
     # Layer 1 — structured FK match (highest confidence). Per-finding
     # timestamps capture WHEN the FK cross-reference was performed so the
@@ -693,16 +738,20 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         label = event.commercial_name or f"OMRI #{event.omri_product_id}"
         # The linked OMRI product is not on the plan — but the same product may be
         # approved on the plan through its WSDA listing. Any catalog approval clears.
-        rescue = _name_approval_clears((event.commercial_name or "").strip())
+        # The CDFA and DPR checks read the listing this record names: it is the product applied,
+        # and a National List row or a plan entry has no CDFA registration to read. Checking the
+        # rescuing row printed "CDFA OIM registration was not checked" for a product Trazo's CDFA set
+        # holds whenever the rescue came through the National List (OV-MT-C06 review).
+        rescue = _name_approval_clears((event.commercial_name or "").strip()) or _plan_substance_rescue(o_ts=omri_ts)
         if rescue:
-            return _rescued_approved_result(rescue, label)
+            return _rescued_approved_result(rescue, label, checked_obj=resolved)
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(resolved)
         return _build_drift_warning(
             osp=osp,
             reason="OMRI product not on the active OSP's materials list",
             reason_code="omri_not_in_osp",
-            reason_params={"input": label},
+            reason_params={"input": label, **_plan_substances_hint()},
             input_label=label,
             resolved_via="omri",
             resolved_id=event.omri_product_id,
@@ -749,16 +798,21 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 )
             return None
         # Same cross-registry rule as the other FK branches: ANY catalog approval clears.
-        rescue = _name_approval_clears((event.commercial_name or "").strip())
+        # CDFA and DPR read the listing this record names, as in the OMRI branch above.
+        rescue = _name_approval_clears((event.commercial_name or "").strip()) or _plan_substance_rescue(w_ts=wsda_ts)
         if rescue:
-            return _rescued_approved_result(rescue, label)
+            return _rescued_approved_result(rescue, label, checked_obj=resolved)
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(resolved)
         return _build_drift_warning(
             osp=osp,
             reason="WSDA material not on the active OSP's materials list",
             reason_code="wsda_not_in_osp",
-            reason_params={"input": label, "resolvedName": getattr(resolved, "brand_name", None)},
+            reason_params={
+                "input": label,
+                "resolvedName": getattr(resolved, "brand_name", None),
+                **_plan_substances_hint(),
+            },
             input_label=label,
             resolved_via="wsda",
             resolved_id=event.wsda_material_id,
@@ -770,9 +824,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         )
     # Phase 5 slice 1: only a confirmed classification routes the event here. A legacy or suggested
     # one is no evidence either way; the event is judged by name below, exactly.
-    from history.services.national_list_basis import confirmed_national_list_substance
-
-    if confirmed_national_list_substance(event) is not None:
+    if confirmed_nl is not None:
         from certifications.models import NationalListSubstance
 
         nl_ts = _now_iso()
@@ -912,7 +964,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 "but that product is not in the active OSP's materials list."
             ),
             reason_code="name_omri_not_in_osp",
-            reason_params={"input": name, "resolvedName": resolved_omri.product_name},
+            reason_params={"input": name, "resolvedName": resolved_omri.product_name, **_plan_substances_hint()},
             input_label=name,
             resolved_via="omri",
             resolved_id=resolved_omri.id,
@@ -936,7 +988,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
                 "active OSP's materials list."
             ),
             reason_code="name_wsda_not_in_osp",
-            reason_params={"input": name, "resolvedName": resolved_wsda.brand_name},
+            reason_params={"input": name, "resolvedName": resolved_wsda.brand_name, **_plan_substances_hint()},
             input_label=name,
             resolved_via="wsda",
             resolved_id=resolved_wsda.id,
@@ -1002,7 +1054,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         osp=osp,
         reason=f"'{name}' is not confirmed against the plan's inputs list.{_possible_note(possible)}",
         reason_code="unresolved",
-        reason_params={"input": name, "possibleMatches": [n for _c, n in possible]},
+        reason_params={"input": name, "possibleMatches": [n for _c, n in possible], **_plan_substances_hint()},
         input_label=name,
         resolved_via="unresolved",
         resolved_name=name,
