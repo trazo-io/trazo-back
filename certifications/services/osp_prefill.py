@@ -740,6 +740,7 @@ PREFILL_RESOLVERS = {
     "calcium_chloride_evidence": lambda bundle, q: _restricted().calcium_chloride_evidence(bundle, q),
     "potassium_chloride_evidence": lambda bundle, q: _restricted().potassium_chloride_evidence(bundle, q),
     "copper_evidence": lambda bundle, q: _restricted().copper_evidence(bundle, q),
+    "sodium_nitrate_evidence": lambda bundle, q: _restricted().sodium_nitrate_evidence(bundle, q),
 }
 
 

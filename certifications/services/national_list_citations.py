@@ -215,6 +215,11 @@ RULE_TEXT: dict[tuple[str, str], str] = {
         "Potassium chloride—unless derived from a mined source and applied in a manner that minimizes chloride "
         "accumulation in the soil."
     ),
+    # Read from the eCFR versioner API, Title 7 issue of 2026-11-13 (2026-11-17); unchanged since 2019-01-28.
+    ("205.602", "(h)"): (
+        "Sodium nitrate—unless use is restricted to no more than 20% of the crop's total nitrogen requirement; use "
+        "in spirulina production is unrestricted until October 21, 2005."
+    ),
 }
 
 #: Where RULE_WORDS_601 was read: the eCFR versioner API, Title 7 issue of 2026-11-12, fetched

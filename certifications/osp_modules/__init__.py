@@ -392,7 +392,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   rootstock (which no longer suggest seed); grafting and nonorganic stock treatments each gain a "yes, not
 #   every material is on the inputs list yet" answer (CCOF G3.0 E1, WSDA AGR 2121 C3c); G3.0b asks whether
 #   stock sold as organic was bought nonorganic (WSDA AGR 2121 C4).
-CONTENT_VERSION = "2026.12.16"
+# 2026.12.17: international trade. G8.0 page C offers importing seed or planting stock for the farm's own use
+#   (WSDA AGR 2121 §Q 1), which opens the import questions and asks the countries and organic standards (Q 2, 3);
+#   the import documents kept per shipment (Q 4); export packages and the documents that travel with each
+#   shipment (Q 8, 9); how exported products meet the equivalency arrangement (OTCO C8 8.4-4); whether crops may
+#   reach Canada, whether sodium nitrate is used and how the two are kept apart (Q Critical Variances: Canada).
+CONTENT_VERSION = "2026.12.17"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

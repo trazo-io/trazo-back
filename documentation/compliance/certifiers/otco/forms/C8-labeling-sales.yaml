@@ -209,6 +209,8 @@ items:
     - g8_0_record_keeping.export_certificate_types
     - g8_0_record_keeping.export_certificate_process
     - g8_0_record_keeping.import_export_records
+    - g8_0_record_keeping.export_shipment_documents
+    - g8_0_record_keeping.export_shipment_documents_other
     prints: modules/G8_0.pdf §C — export_certificate_types names which certificates the destinations require;
       export_certificate_process asks 'how do you request, verify, and keep these export certificates' (who
       requests, how far ahead of shipment, where filed); import_export_records lists the shipment documents
@@ -217,18 +219,11 @@ items:
   asks: How does your operation ensure that exported products comply with the equivalency arrangement for the
     destination country? Products are submitted to OTCO for review and approval under the equivalency arrangement
     before export / Other (explain).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g8_0_record_keeping.export_destination_requirements
-    - g8_0_record_keeping.export_certificate_types
-    prints: modules/G8_0.pdf §C (export_destination_requirements, export_certificate_types)
-  gap: Reuses WSDA §Q CV-1. `export_destination_requirements` is where an operation states how it meets the
-    destination's permitted-practice rules and it prints; `export_certificate_types` names the arrangement's
-    certificate (EU/UK/Swiss Certificate of Inspection, Canada attestation). What is not held is OTCO's specific
-    mechanism — that each product was submitted to OTCO for review under the arrangement before export — nor
-    the critical variances the arrangements carry (WSDA CV-2's sodium-nitrate / Canada rule), so the prose
-    is the only thing standing between the plan and a variance breach.
-  fix: An `equivalency_review_submitted` [boolean] per export destination and the `sodium_nitrate_used` cross-check
-    proposed for WSDA CV-2.
+    questions: [g8_0_record_keeping.equivalency_compliance_method, g8_0_record_keeping.equivalency_compliance_method_other, g8_0_record_keeping.export_destination_requirements, g8_0_record_keeping.export_certificate_types, g8_0_record_keeping.canada_export_possible, g8_0_record_keeping.sodium_nitrate_used, g8_0_record_keeping.sodium_nitrate_canada_separation]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: G8.0 asks OTCO's question with its option (products submitted
+  # to the certifier for review under the arrangement before export) and Other (equivalency_compliance_method).
+  # Canada's critical variance is asked as WSDA asks it: whether crops may reach Canada, whether sodium nitrate is
+  # used and how the two are kept apart.

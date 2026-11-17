@@ -11,6 +11,9 @@ Five classes, each tied to the paragraph whose condition it carries:
     potassium_chloride   § 205.602(e)     mined, applied so chloride does not accumulate
     copper               § 205.601(i)(2), (i)(3)  applied so copper does not accumulate in the soil;
                                           for disease control, after § 205.206(a)-(d) prove insufficient
+    sodium_nitrate       § 205.602(h)     no more than 20% of the crop's total nitrogen requirement; asked in
+                                          G8.0 because Canada does not accept crops grown with it as organic
+                                          (WSDA AGR 2121 §Q, Critical Variances: Canada)
 
 What decides a material's class, in this order and nothing else:
   * a confirmed National List classification (`confirmed_national_list_substance`), never the
@@ -41,6 +44,7 @@ MAGNESIUM_SULFATE = "magnesium_sulfate"
 CALCIUM_CHLORIDE = "calcium_chloride"
 POTASSIUM_CHLORIDE = "potassium_chloride"
 COPPER = "copper"
+SODIUM_NITRATE = "sodium_nitrate"
 
 #: The words a printed line uses for each class.
 CLASS_WORDS = {
@@ -49,6 +53,7 @@ CLASS_WORDS = {
     CALCIUM_CHLORIDE: "calcium chloride",
     POTASSIUM_CHLORIDE: "potassium chloride",
     COPPER: "copper sulfate or fixed coppers",
+    SODIUM_NITRATE: "sodium nitrate",
 }
 
 #: The paragraphs printed beside an answer about each class, as `RULE_TEXT` keys.
@@ -58,6 +63,7 @@ CLASS_RULES = {
     CALCIUM_CHLORIDE: (("205.602", "(c)"),),
     POTASSIUM_CHLORIDE: (("205.602", "(e)"),),
     COPPER: (("205.601", "introductory text"), ("205.601", "(i)(2)"), ("205.601", "(i)(3)")),
+    SODIUM_NITRATE: (("205.602", "(h)"),),
 }
 
 #: (section, catalogue row name, lowercase) -> class.
@@ -74,6 +80,7 @@ _SUBSTANCE_CLASS = {
     ("205.601", "copper oxide"): COPPER,
     ("205.601", "copper oxychloride"): COPPER,
     ("205.601", "copper sulfate (fungicide)"): COPPER,
+    ("205.602", "sodium nitrate"): SODIUM_NITRATE,
 }
 
 _FSA = "fertilizer-and-soil-amendment"
@@ -97,6 +104,8 @@ _WSDA_CLASS = {
     (_FSA, "Magnesium Sulfate"): MAGNESIUM_SULFATE,
     (_FSA, "Calcium Chloride"): CALCIUM_CHLORIDE,
     (_FSA, "Potassium Chloride"): POTASSIUM_CHLORIDE,
+    # WSDA's own subtype, which it also gives to sodium potassium nitrate blends (2026-03-06 list).
+    (_FSA, "Sodium Nitrate"): SODIUM_NITRATE,
 }
 
 #: `ChemicalEvent.micronutrient_type` values that are § 205.601(j)(7) micronutrients. The audit
@@ -109,7 +118,12 @@ GATES = {
     "applies_calcium_chloride": (CALCIUM_CHLORIDE,),
     "applies_potassium_chloride": (POTASSIUM_CHLORIDE,),
     "applies_copper_materials": (COPPER,),
+    "sodium_nitrate_used": (SODIUM_NITRATE,),
 }
+
+#: The classes whose No the plan's own materials list can contradict. Not calcium chloride: a plan may list
+#: it for a post-harvest dip while G4.0 says truly that none is applied in the field.
+_LIST_CONTRADICTS_NO = frozenset({SODIUM_NITRATE})
 
 #: The classes whose rule turns on the product's SOURCE, which only a product's listing can show:
 #: § 205.602(e) prohibits potassium chloride "unless derived from a mined source". § 205.602(c) is not
@@ -451,6 +465,17 @@ def _materials_lines(osp, cls) -> list[str]:
     return lines
 
 
+def listed_against_no(osp, cls) -> list[str]:
+    """The plan's own materials of `cls`, printed under an answer that none is used."""
+    matched, _omri_only = plan_materials_of_class(osp, cls)
+    if not matched:
+        return []
+    names = ", ".join(f"{material.name} ({material.source})" for material, _how in matched)
+    return [
+        f"[REVIEW] This plan's materials list holds {len(matched)} material(s) classified as {CLASS_WORDS[cls]}: {names}."
+    ]
+
+
 def _chosen_classes(question_key, answers) -> tuple:
     from certifications.osp_modules.conditions import answer_value
 
@@ -463,7 +488,7 @@ def _chosen_classes(question_key, answers) -> tuple:
 
 def module_lines(osp, module, question, value, answers, bundles: dict) -> list[str]:
     """The lines printed under one answered question of G4.0 or G5.0 about these materials."""
-    if module.key not in ("g4_0_rotation_soil", "g5_0_pest"):
+    if module.key not in ("g4_0_rotation_soil", "g5_0_pest", "g8_0_record_keeping"):
         return []
     key = question.key
     if key == "magnesium_sulfate_verification" and isinstance(value, (list, tuple)):
@@ -493,6 +518,8 @@ def module_lines(osp, module, question, value, answers, bundles: dict) -> list[s
             if "bundle" not in bundles:
                 bundles["bundle"] = EvidenceBundle(osp.establishment)
             for cls in GATES[key]:
+                if cls in _LIST_CONTRADICTS_NO:
+                    lines += listed_against_no(osp, cls)
                 events = logged_applications(bundles["bundle"], cls)
                 if events:
                     lines.append(
@@ -541,3 +568,7 @@ def potassium_chloride_evidence(bundle, question):
 
 def copper_evidence(bundle, question):
     return _suggest(bundle, (COPPER,))
+
+
+def sodium_nitrate_evidence(bundle, question):
+    return _suggest(bundle, (SODIUM_NITRATE,))

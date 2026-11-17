@@ -28,3 +28,16 @@ questions:
   g8_0_record_keeping.port_integrity_measures: >-
     Measures that keep organic integrity intact at the port of export or entry. Not asked on C12 or
     O1; WSDA asks it at §Q 5.
+  g8_0_record_keeping.export_package_types: >-
+    Packages and labels used for export markets (WSDA AGR 2121 §Q 8). C8 8.4-2 asks how only compliant labels
+    are used on exported products, not which kinds of package carry them.
+  g8_0_record_keeping.import_seed_countries: >-
+    Countries organic seed or planting stock is imported from (WSDA AGR 2121 §Q 2). C12's only import line
+    asks whether import documentation is kept (12.1-4).
+  g8_0_record_keeping.import_seed_countries_other: >-
+    The other countries of `import_seed_countries`, unmapped with their parent.
+  g8_0_record_keeping.import_seed_standards: >-
+    Organic standards imported seed or planting stock is certified to (WSDA AGR 2121 §Q 3). Not asked on C12
+    or C3.
+  g8_0_record_keeping.import_seed_standards_other: >-
+    The other standard of `import_seed_standards`, unmapped with its parent.

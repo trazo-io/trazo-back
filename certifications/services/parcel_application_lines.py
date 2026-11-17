@@ -98,6 +98,12 @@ def operation_export_lines(osp) -> list[str]:
             if is_answered(destinations)
             else "No destination countries are named on the plan."
         )
+    # WSDA AGR 2264 9 asks it of each site; G8.0 asks it once (AGR 2121 §Q, Critical Variances: Canada).
+    canada = answer_value(answers, "canada_export_possible")
+    if canada is True:
+        lines.append("Canada: the operation states its crops or products may be exported to Canada.")
+    elif canada is False:
+        lines.append("Canada: the operation states no crops or products are expected to reach Canada.")
     return lines
 
 

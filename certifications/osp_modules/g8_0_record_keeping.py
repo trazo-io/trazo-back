@@ -33,7 +33,7 @@ C. Import & export — the Common OSP puts this inside Section 11 rather than gi
    the shipment departs — a load that sails without one cannot be fixed retroactively.
 """
 
-from .schema import CompileRule, Condition, Module, ModulePage, Option, Question, text
+from .schema import CompileRule, Condition, Module, ModulePage, Option, Prefill, Question, text
 
 G8_0_RECORD_KEEPING = Module(
     key="g8_0_record_keeping",
@@ -512,13 +512,13 @@ G8_0_RECORD_KEEPING = Module(
             education=(
                 text(
                     "Most operations selling only within the United States answer the first "
-                    "question and are done with this page. It matters for tree nuts, dried "
+                    "question and the one about Canada, and are done with this page. It matters for tree nuts, dried "
                     "fruit, and other crops that commonly ship abroad: several trade partners "
                     "require an export certificate issued by your certifier BEFORE the "
                     "shipment leaves, and a shipment that departs without one cannot be "
                     "corrected afterwards.",
                     "La mayoría de las operaciones que venden solo dentro de Estados Unidos responden la primera "
-                    "pregunta y terminan con esta página. Importa para frutos secos, fruta deshidratada y otros "
+                    "pregunta y la de Canadá, y terminan con esta página. Importa para frutos secos, fruta deshidratada y otros "
                     "cultivos que suelen enviarse al exterior: varios socios comerciales exigen un certificado de "
                     "exportación emitido por tu certificador ANTES de que salga el envío, y un envío que parte sin "
                     "él no puede corregirse después.",
@@ -568,6 +568,18 @@ G8_0_RECORD_KEEPING = Module(
                                 "United States",
                                 "Importamos, o planeamos importar, producto o ingredientes orgánicos a "
                                 "Estados Unidos",
+                            ),
+                        ),
+                        # WSDA AGR 2121 §Q 1. Seed bought abroad for the operation's own planting is
+                        # neither a product nor an ingredient, so a farm importing only seed had no
+                        # true box to tick and the import questions never opened (2026-11-17).
+                        Option(
+                            "import_seed",
+                            text(
+                                "We import, or plan to import, organic seed or planting stock directly from "
+                                "other countries for use on our farm",
+                                "Importamos, o planeamos importar, semilla o material de plantación orgánico "
+                                "directamente de otros países para usarlo en nuestra finca",
                             ),
                         ),
                         Option(
@@ -699,6 +711,292 @@ G8_0_RECORD_KEEPING = Module(
                     visible_when=(Condition("import_export_activity", "includes", "export"),),
                     compiles_to=CompileRule(template="Meeting destination-country requirements: {answer}"),
                 ),
+                # WSDA AGR 2121 §Q 8. Asked of a direct exporter only, as the form asks it: packaging
+                # chosen by a buyer who exports is the buyer's.
+                Question(
+                    key="export_package_types",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "What types of packages and labels do you use for export markets?",
+                        "¿Qué tipos de empaques y etiquetas usas para los mercados de exportación?",
+                    ),
+                    coaching=text(
+                        "Organic product must be labeled for the destination market's rules.",
+                        "El producto orgánico debe etiquetarse según las reglas del mercado de destino.",
+                    ),
+                    nop_cite="§ 205.307",
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(template="Packages and labels used for export markets: {answer}."),
+                    options=(
+                        Option(
+                            "retail_consumer",
+                            text("Retail consumer packages", "Empaques para venta al consumidor"),
+                        ),
+                        Option(
+                            "wholesale_shipping",
+                            text("Wholesale shipping containers", "Contenedores de envío mayorista"),
+                        ),
+                        Option(
+                            "bulk",
+                            text(
+                                "Bulk shipping or storage containers",
+                                "Contenedores a granel para envío o almacenamiento",
+                            ),
+                        ),
+                    ),
+                ),
+                # WSDA AGR 2121 §Q 9. What travels WITH each shipment, which is not the same question as
+                # which certificates a destination requires (`export_certificate_types`).
+                Question(
+                    key="export_shipment_documents",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "Which documents accompany each organic export shipment?",
+                        "¿Qué documentos acompañan cada envío orgánico de exportación?",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(template="Documents accompanying each organic export shipment: {answer}."),
+                    options=(
+                        Option("bill_of_lading", text("Bill of lading", "Conocimiento de embarque")),
+                        Option("certificate_of_analysis", text("Certificate of analysis", "Certificado de análisis")),
+                        Option(
+                            "eu_coi",
+                            text("EU Certificate of Inspection", "Certificado de Inspección de la UE"),
+                        ),
+                        Option("invoice", text("Invoice", "Factura")),
+                        Option(
+                            "naqs",
+                            text(
+                                "NAQS import certificate (South Korea)",
+                                "Certificado de importación NAQS (Corea del Sur)",
+                            ),
+                        ),
+                        Option("organic_certificate", text("Organic certificate", "Certificado orgánico")),
+                        Option("phytosanitary", text("Phytosanitary certificate", "Certificado fitosanitario")),
+                        Option(
+                            "tm11",
+                            text("USDA TM-11 export certificate", "Certificado de exportación TM-11 del USDA"),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="export_shipment_documents_other",
+                    kind="text",
+                    label=text(
+                        "Describe the other export shipment document",
+                        "Describe el otro documento del envío de exportación",
+                    ),
+                    visible_when=(Condition("export_shipment_documents", "includes", "other"),),
+                    compiles_to=CompileRule(template="Additional document accompanying export shipments: {answer}"),
+                ),
+                # OTCO C8 8.4-4.
+                Question(
+                    key="equivalency_compliance_method",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text(
+                        "How do you make sure exported products meet the organic equivalency arrangement with "
+                        "the destination country?",
+                        "¿Cómo te aseguras de que los productos exportados cumplan el acuerdo de equivalencia "
+                        "orgánica con el país de destino?",
+                    ),
+                    coaching=text(
+                        "The United States has organic equivalency arrangements with Canada, the European "
+                        "Union, the United Kingdom, Switzerland, Japan, South Korea and Taiwan. Each one "
+                        "carries its own conditions.",
+                        "Estados Unidos tiene acuerdos de equivalencia orgánica con Canadá, la Unión Europea, el "
+                        "Reino Unido, Suiza, Japón, Corea del Sur y Taiwán. Cada uno tiene sus propias "
+                        "condiciones.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "export"),),
+                    compiles_to=CompileRule(
+                        template="How exported products are kept within the destination's equivalency "
+                        "arrangement: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "certifier_review",
+                            text(
+                                "Products are submitted to our certifier for review under the arrangement "
+                                "before export",
+                                "Enviamos los productos a nuestro certificador para que los revise según el "
+                                "acuerdo antes de exportarlos",
+                            ),
+                        ),
+                        Option("other", text("Another way (describe below)", "De otra forma (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="equivalency_compliance_method_other",
+                    kind="text",
+                    label=text(
+                        "Describe how exported products are kept within the arrangement",
+                        "Describe cómo los productos exportados se mantienen dentro del acuerdo",
+                    ),
+                    visible_when=(Condition("equivalency_compliance_method", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other way exported products meet the arrangement: {answer}"),
+                ),
+                # WSDA AGR 2121 §Q Critical Variances: Canada, 1, 2 and 2a. Asked of every operation that
+                # answered the first question, as WSDA asks it of every grower: a crop sold to a packer can
+                # reach Canada without the grower exporting anything.
+                Question(
+                    key="canada_export_possible",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Do you produce crops or products that may be exported to Canada, directly, by a "
+                        "distributor or buyer, or as an ingredient in a processed product?",
+                        "¿Produces cultivos o productos que podrían exportarse a Canadá, directamente, a través de "
+                        "un distribuidor o comprador, o como ingrediente de un producto procesado?",
+                    ),
+                    coaching=text(
+                        "If a buyer may ship some of your crop to Canada and you cannot rule it out, answer Yes. "
+                        "Canada does not accept as organic the crops produced with sodium nitrate.",
+                        "Si un comprador podría enviar parte de tu cosecha a Canadá y no puedes descartarlo, "
+                        "responde Sí. Canadá no acepta como orgánicos los cultivos producidos con nitrato de sodio.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Crops or products may be exported to Canada, directly, through a distributor "
+                        "or buyer, or as an ingredient.",
+                        template_false="No crops or products are expected to reach Canada, directly, through a "
+                        "distributor or buyer, or as an ingredient.",
+                    ),
+                ),
+                Question(
+                    key="sodium_nitrate_used",
+                    kind="boolean",
+                    prefill=Prefill(source="sodium_nitrate_evidence"),
+                    label=text(
+                        "Do you use sodium nitrate (Chilean nitrate) to produce organic crops?",
+                        "¿Usas nitrato de sodio (nitrato de Chile) para producir cultivos orgánicos?",
+                    ),
+                    coaching=text(
+                        "The USDA organic regulations allow sodium nitrate up to 20% of a crop's total nitrogen "
+                        "requirement (§ 205.602(h)). Canada does not accept as organic the crops produced with it.",
+                        "El reglamento orgánico del USDA permite el nitrato de sodio hasta el 20% del requerimiento "
+                        "total de nitrógeno del cultivo (§ 205.602(h)). Canadá no acepta como orgánicos los "
+                        "cultivos producidos con él.",
+                    ),
+                    nop_cite="§ 205.602(h)",
+                    visible_when=(Condition("canada_export_possible", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Sodium nitrate is used to produce organic crops.",
+                        template_false="Sodium nitrate is not used to produce organic crops.",
+                    ),
+                ),
+                Question(
+                    key="sodium_nitrate_canada_separation",
+                    kind="textarea",
+                    label=text(
+                        "How do you tell apart the organic crops produced with sodium nitrate from the organic "
+                        "crops eligible for export to Canada?",
+                        "¿Cómo distingues los cultivos orgánicos producidos con nitrato de sodio de los cultivos "
+                        "orgánicos aptos para exportarse a Canadá?",
+                    ),
+                    coaching=text(
+                        "Say which fields or lots receive it, how the records and lot codes mark them, and how "
+                        "buyers are told those lots cannot go to Canada.",
+                        "Indica qué campos o lotes lo reciben, cómo los marcan los registros y los códigos de lote, "
+                        "y cómo se informa a los compradores que esos lotes no pueden ir a Canadá.",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("sodium_nitrate_used", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="How crops produced with sodium nitrate are kept apart from crops eligible for "
+                        "export to Canada: {answer}"
+                    ),
+                ),
+                # WSDA AGR 2121 §Q 2 and 3, asked when the operation imports seed or planting stock.
+                Question(
+                    key="import_seed_countries",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which countries do you import organic seed or planting stock from?",
+                        "¿De qué países importas semilla o material de plantación orgánico?",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "import_seed"),),
+                    compiles_to=CompileRule(
+                        template="Countries organic seed or planting stock is imported from: {answer}."
+                    ),
+                    options=(
+                        Option("canada", text("Canada", "Canadá")),
+                        Option("european_union", text("European Union", "Unión Europea")),
+                        Option("great_britain", text("Great Britain", "Gran Bretaña")),
+                        Option("india", text("India", "India")),
+                        Option("israel", text("Israel", "Israel")),
+                        Option("japan", text("Japan", "Japón")),
+                        Option("mexico", text("Mexico", "México")),
+                        Option("new_zealand", text("New Zealand", "Nueva Zelanda")),
+                        Option("south_korea", text("South Korea", "Corea del Sur")),
+                        Option("switzerland", text("Switzerland", "Suiza")),
+                        Option("other", text("Other (name below)", "Otro (indícalo abajo)")),
+                    ),
+                ),
+                Question(
+                    key="import_seed_countries_other",
+                    kind="text",
+                    label=text("Name the other countries", "Indica los otros países"),
+                    visible_when=(Condition("import_seed_countries", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other countries seed or planting stock is imported from: {answer}"
+                    ),
+                ),
+                Question(
+                    key="import_seed_standards",
+                    kind="checkbox_group",
+                    label=text(
+                        "Which organic standards is the imported seed or planting stock certified to?",
+                        "¿Según qué normas orgánicas está certificada la semilla o el material de plantación "
+                        "importado?",
+                    ),
+                    nop_cite="§ 205.103",
+                    visible_when=(Condition("import_export_activity", "includes", "import_seed"),),
+                    compiles_to=CompileRule(
+                        template="Organic standards the imported seed or planting stock is certified to: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "usda_nop",
+                            text(
+                                "USDA organic regulations, 7 CFR Part 205",
+                                "Reglamento orgánico del USDA, 7 CFR Parte 205",
+                            ),
+                        ),
+                        Option(
+                            "canada_cor",
+                            text(
+                                "Canada Organic Regime (COR), CAN/CGSB standards",
+                                "Régimen Orgánico de Canadá (COR), normas CAN/CGSB",
+                            ),
+                        ),
+                        Option(
+                            "eu_organic",
+                            text(
+                                "EU organic regulation: (EC) No 834/2007, replaced since 2022 by (EU) 2018/848",
+                                "Reglamento orgánico de la UE: (CE) n.º 834/2007, sustituido desde 2022 por el "
+                                "(UE) 2018/848",
+                            ),
+                        ),
+                        Option("other", text("Other (name below)", "Otra (indícala abajo)")),
+                    ),
+                ),
+                Question(
+                    key="import_seed_standards_other",
+                    kind="text",
+                    label=text("Name the other standard", "Indica la otra norma"),
+                    visible_when=(Condition("import_seed_standards", "includes", "other"),),
+                    compiles_to=CompileRule(
+                        template="Other standard the imported seed or planting stock is certified to: {answer}"
+                    ),
+                ),
                 Question(
                     key="import_documentation",
                     kind="checkbox_group",
@@ -715,7 +1013,7 @@ G8_0_RECORD_KEEPING = Module(
                         "puede obtenerse después de la llegada.",
                     ),
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("import_export_activity", "includes", "import"),),
+                    visible_when=(Condition("import_export_activity", "includes_any", ["import", "import_seed"]),),
                     compiles_to=CompileRule(template="Import documentation controls: {answer}."),
                     options=(
                         Option(
@@ -723,6 +1021,39 @@ G8_0_RECORD_KEEPING = Module(
                             text(
                                 "A current NOP Import Certificate is kept for each shipment",
                                 "Se conserva un Certificado de Importación NOP vigente para " "cada envío",
+                            ),
+                        ),
+                        # WSDA AGR 2121 §Q 4 names these, per imported shipment (2026-11-17).
+                        Option(
+                            "bill_of_lading",
+                            text(
+                                "A bill of lading is kept for each shipment",
+                                "Se conserva un conocimiento de embarque para cada envío",
+                            ),
+                        ),
+                        Option(
+                            "certificate_of_analysis",
+                            text(
+                                "A certificate of analysis is kept for each shipment",
+                                "Se conserva un certificado de análisis para cada envío",
+                            ),
+                        ),
+                        Option(
+                            "invoice",
+                            text("An invoice is kept for each shipment", "Se conserva una factura para cada envío"),
+                        ),
+                        Option(
+                            "phytosanitary_certificate",
+                            text(
+                                "A phytosanitary certificate is kept for each shipment",
+                                "Se conserva un certificado fitosanitario para cada envío",
+                            ),
+                        ),
+                        Option(
+                            "transaction_certificate",
+                            text(
+                                "A transaction certificate is kept for each shipment",
+                                "Se conserva un certificado de transacción para cada envío",
                             ),
                         ),
                         Option(
@@ -764,7 +1095,7 @@ G8_0_RECORD_KEEPING = Module(
                         "prohibidas ni radiación ionizante desde su exportación?",
                     ),
                     nop_cite="§ 205.272",
-                    visible_when=(Condition("import_export_activity", "includes", "import"),),
+                    visible_when=(Condition("import_export_activity", "includes_any", ["import", "import_seed"]),),
                     compiles_to=CompileRule(
                         template="Verification that imported shipments avoided prohibited "
                         "substances and ionizing radiation since export: {answer}",
@@ -789,7 +1120,9 @@ G8_0_RECORD_KEEPING = Module(
                         "material prohibido en el puerto termina con el estatus orgánico de esa carga.",
                     ),
                     nop_cite="§ 205.272",
-                    visible_when=(Condition("import_export_activity", "includes_any", ["export", "import"]),),
+                    visible_when=(
+                        Condition("import_export_activity", "includes_any", ["export", "import", "import_seed"]),
+                    ),
                     compiles_to=CompileRule(
                         template="Measures preserving organic integrity at port: {answer}",
                         section_key="commingling_barriers",
@@ -803,7 +1136,9 @@ G8_0_RECORD_KEEPING = Module(
                         "¿Qué registros de importación y exportación conservas?",
                     ),
                     nop_cite="§ 205.103",
-                    visible_when=(Condition("import_export_activity", "includes_any", ["export", "import"]),),
+                    visible_when=(
+                        Condition("import_export_activity", "includes_any", ["export", "import", "import_seed"]),
+                    ),
                     compiles_to=CompileRule(template="Import and export records maintained: {answer}."),
                     options=(
                         Option(

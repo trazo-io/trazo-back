@@ -2936,6 +2936,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
                 for line in answer_lines(osp, module.key, question.key, value, evidence_bundles):
                     story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g8_0_record_keeping":
+                from certifications.services.international_trade_review import answer_lines as trade_lines
+
+                for line in trade_lines(osp, question.key, value, evidence_bundles):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
                 for line in _facility_pest_pointer(osp):
                     story.append(Paragraph(_escape(line), styles["meta"]))

@@ -24,3 +24,8 @@ questions:
   g8_0_record_keeping.records_organic_status_explanation: >-
     Whether records identify organic status from harvest through sale, on a No. Asked by OTCO C12 12.2-5a;
     same reason as `records_identify_organic_status`.
+  g8_0_record_keeping.equivalency_compliance_method: >-
+    How exported products meet the destination's equivalency arrangement (OTCO C8 8.4-4). §Q asks which
+    documents accompany each shipment (9) and Canada's critical variance, not how the arrangement is met.
+  g8_0_record_keeping.equivalency_compliance_method_other: >-
+    The other way of `equivalency_compliance_method`, unmapped with its parent.

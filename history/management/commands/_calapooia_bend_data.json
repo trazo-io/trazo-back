@@ -4322,6 +4322,10 @@
          "none_no_known_export"
         ]
        },
+       "canada_export_possible": {
+        "at": "2026-11-17T10:00:00+00:00",
+        "value": false
+       },
        "lot_numbering": {
         "at": "2026-08-21T11:28:46.766365+00:00",
         "value": "own_system"
