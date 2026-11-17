@@ -33,6 +33,7 @@ from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemp
 
 from certifications.constants import NOP_CERTIFICATION_TYPES as _NOP_CERTIFICATION_TYPES
 from certifications.constants import ORGANIC_CONFERRING_CERT_TYPES as _ORGANIC_CONFERRING_CERT_TYPES
+from certifications.services.drift_detector import drift_reason_text
 from certifications.services.registry_identifiers import CDFA_OIM_REGISTERED_LABEL, wsda_identifier_label
 from common.field_registry import (
     AMBIGUOUS_OUNCE,
@@ -8280,7 +8281,7 @@ class AuditExportService:
         * **7 CFR 205.204(a)(1) — BINDING.** Non-organic seed is permitted only when an
           equivalent organic variety is not commercially available. It imposes NO supplier
           count.
-        * **NOP 5029 § 4.2 b.1 — GUIDANCE.** Asks for "documentation of contact with three or
+        * **NOP 5029 § 4.2.1 b.1: GUIDANCE.** Asks for "documentation of contact with three or
           more seed or planting stock sources". AMS states the Handbook is non-binding and
           that any citation issued must reference the regulations.
 
@@ -8329,7 +8330,7 @@ class AuditExportService:
                         "<b>[REVIEW] 7 CFR 205.204:</b> no planting record for this season, and the parcel record "
                         "does not show this crop here before it. If seed or planting stock was planted, its source "
                         "and organic status are required. Where non-organic seed or stock is used, certifiers look "
-                        "for commercial-availability searches; how many is certifier guidance (NOP 5029), not the "
+                        "for commercial-availability searches; how many is NOP guidance (NOP 5029), not the "
                         "regulation.",
                         self._warning_style(),
                     )
@@ -8502,7 +8503,7 @@ class AuditExportService:
                 elements.append(
                     Paragraph(
                         # 7 CFR 205.204 imposes NO supplier count. "At least three" is NOP
-                        # 5029 § 4.2 b.1 — "documentation of contact with three or more seed or
+                        # 5029 § 4.2.1 b.1: "documentation of contact with three or more seed or
                         # planting stock sources" — now frozen at
                         # documentation/reference/usda-nop-handbook/txt/NOP-5029.txt. That is
                         # GUIDANCE: AMS states the Handbook is non-binding and that any citation
@@ -16481,7 +16482,9 @@ class AuditExportService:
                 self._cell(_fmt_date(event.date)),
                 self._cell(event_type_label),
                 self._cell(dw.get("input_label") or "(unknown)"),
-                self._cell(dw.get("reason") or "\u2014"),
+                # A seed reason in today's wording, not the words stored when it was found
+                # (overall review 2026-11, OV-PK-CIT15).
+                self._cell(drift_reason_text(dw) or "\u2014"),
                 self._cell(resolution_cell),
                 # "Verified" column — up to 4 catalog timestamps joined with
                 # " · " so a 120-char cap is right-sized (allows word-wrap
@@ -19506,7 +19509,7 @@ class AuditExportService:
                             family,
                             _val(name),
                             _val(dw.get("reason_code")) if isinstance(dw, dict) else "",
-                            _val(dw.get("reason")) if isinstance(dw, dict) else _val(dw),
+                            _val(drift_reason_text(dw)),
                         ]
                     )
             writer.writerow([])

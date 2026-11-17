@@ -848,6 +848,11 @@ jobs:
       # certifications.tests.test_certifier_access_links passed unchanged (105 tests). None reads
       # the sibling repo. history.tests.test_completeness_gap_label_parity stays out: it reads
       # trazo-app through parents[3] and would skip here, a pass that checks nothing.
+      # 2026-11-16: certifications.tests.test_drift_detector and test_drift_detector_phase1 join
+      # (39 tests, about 56 s locally, all TransactionTestCase so the runner deals them first).
+      # Neither was listed, so the seed drift reasons that stated NOP 5029's three-source guidance
+      # as a rule were never pinned (overall review 2026-11, OV-PK-CIT15). Neither reads the
+      # sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -1058,6 +1063,8 @@ jobs:
             certifications.tests.test_national_list_seed_keys \
             certifications.tests.test_national_list_held_annotations \
             certifications.tests.test_national_list_601_conditions \
+            certifications.tests.test_drift_detector \
+            certifications.tests.test_drift_detector_phase1 \
             certifications.tests.test_restricted_materials \
             history.tests.test_national_list_conditions_row \
             history.tests.test_lab_analysis_and_micronutrients \
