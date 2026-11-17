@@ -730,6 +730,7 @@ def materials_list_rows(osp) -> list[dict]:
     plan, found in the records, or both.
     """
     from certifications.services.common_osp_workbooks import (
+        _material_kind_words,
         _material_manufacturer,
         _material_reason,
         _material_rows,
@@ -750,7 +751,13 @@ def materials_list_rows(osp) -> list[dict]:
             {
                 "name": row.name,
                 "manufacturer": _material_manufacturer(row) or "",
+                # The operator's own words only; the kind the records log it as is a hint for the
+                # blank, never the answer (CCOF ORGB41 §B, 2026-11-17).
                 "reason": _material_reason(row) or "",
+                "reason_kind": (_material_kind_words(row) or "") if not _material_reason(row) else "",
+                # The latest application the records show, so the editor can offer "in use" for a row
+                # still stated as planned (or not stated). An offer the operator takes, never a write.
+                "last_logged_on": _last_logged_on(row),
                 "status": getattr(plan, "status", "") or "",
                 "in_use": in_use is not None,
                 "intended_for_use": intended is not None,
@@ -788,6 +795,44 @@ def materials_list_rows(osp) -> list[dict]:
             }
         )
     return rows
+
+
+def _last_logged_on(row) -> str:
+    """ISO date of the row's own logged application, "" when the records hold none."""
+    event = getattr(row, "event", None)
+    when = getattr(event, "date", None)
+    if when is None:
+        return ""
+    return (when.date() if hasattr(when, "date") else when).isoformat()
+
+
+def incomplete_rows(osp) -> list[str]:
+    """The plan's materials missing a cell every agent's materials form asks of each row.
+
+    CCOF ORGB41 §A and §B ask the full product name (with formulation), the manufacturer and the reason for
+    use; WSDA AGR 2196 and OTCO C11 ask the same, and all three ask whether it is in use or intended for use.
+    The module PDF has stated each missing cell since 2026-09-09; this lists them before filing, so a row
+    needing an answer is found on the plan review rather than by the reviewer (2026-11-17). A material no
+    longer used, or one the list must not hold at all, is left out: neither is asked to be complete.
+    """
+    from certifications.models import PlanMaterialEntry
+
+    out = []
+    for row in plan_materials(osp):
+        if row.prohibited or row.status == PlanMaterialEntry.STATUS_DISCONTINUED:
+            continue
+        missing = []
+        if row.names_a_substance_only:
+            missing.append("brand and formulation")
+        if not (row.manufacturer or "").strip():
+            missing.append("manufacturer")
+        if not (row.reason or "").strip():
+            missing.append("reason for use")
+        if not row.status:
+            missing.append("in use or intended for use")
+        if missing:
+            out.append(f"{row.name} ({row.source}): {', '.join(missing)} not stated")
+    return out
 
 
 def _review_position(plan, entry) -> str:

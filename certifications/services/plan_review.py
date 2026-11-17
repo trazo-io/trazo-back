@@ -488,6 +488,23 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             )
         )
 
+    # ---- materials list rows missing what every agent's form asks of each row ---------------
+    # CCOF ORGB41 §A/§B, WSDA AGR 2196, OTCO C11: product (with formulation), manufacturer, reason for use,
+    # in use or intended for use. The module PDF states each blank; this finds them before filing.
+    from certifications.services.plan_materials import incomplete_rows
+
+    incomplete = incomplete_rows(osp)
+    if incomplete:
+        findings.append(
+            ReviewFinding(
+                code="materials_rows_incomplete",
+                message="These materials on the plan's list are missing a cell the certifier's materials form asks for",
+                count=len(incomplete),
+                details=incomplete,
+                module_key="materials_application",
+            )
+        )
+
     # ---- import and export: Canada's critical variance read against the list and records ------
     # WSDA AGR 2121 §Q Critical Variances: Canada; OTCO C8 8.4-4. A "no" the plan's own list or the
     # records contradict is listed here so the operator sees it before filing.

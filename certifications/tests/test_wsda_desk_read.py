@@ -98,9 +98,12 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
     def test_calcium_chloride_carries_its_602_condition(self):
         self._log("Calcium chloride 33%", self.calcium)
         row = self._rows()["Calcium chloride 33%"]
-        self.assertEqual(row["Reason for use"], "Fertilizer")
+        # The record's kind is not the operator's reason: the cell stays blank, the kind is in the comments.
+        self.assertIsNone(row["Reason for use"])
         self.assertEqual(
-            row["Comments"], f"National List § 205.602(c) {CALCIUM}: {CALCIUM_NOTE} {IDENTITY_NOT_CONFIRMED}"
+            row["Comments"],
+            "Reason for use not stated; the records log it as fertilizer. "
+            f"National List § 205.602(c) {CALCIUM}: {CALCIUM_NOTE} {IDENTITY_NOT_CONFIRMED}",
         )
 
     def test_a_crop_production_note_is_not_quoted(self):
@@ -116,7 +119,10 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
         )
         self._log("Rex Lime Sulfur", lime_sulfur, "FU")
         # No condition quoted; only the identity note remains.
-        self.assertEqual(self._rows()["Rex Lime Sulfur"]["Comments"], IDENTITY_NOT_CONFIRMED)
+        self.assertEqual(
+            self._rows()["Rex Lime Sulfur"]["Comments"],
+            f"Reason for use not stated; the records log it as disease control. {IDENTITY_NOT_CONFIRMED}",
+        )
 
     def test_a_205_105_prohibition_is_cited_to_its_own_section(self):
         glyphosate = NationalListSubstance.objects.create(
@@ -130,13 +136,17 @@ class TheMaterialsListStatesTheListingConditionTests(_Orchard):
         self._log("Roundup PowerMax", glyphosate, "HE")
         self.assertEqual(
             self._rows()["Roundup PowerMax"]["Comments"],
+            "Reason for use not stated; the records log it as weed control. "
             f"§ 205.105 Glyphosate: prohibited in organic crop production. {IDENTITY_NOT_CONFIRMED}",
         )
 
     def test_an_unclassified_product_still_carries_the_identity_note(self):
         self._log("CYD-X HP", None, "PE")
         # No listing condition to state; only the identity note remains.
-        self.assertEqual(self._rows()["CYD-X HP"]["Comments"], IDENTITY_NOT_CONFIRMED)
+        self.assertEqual(
+            self._rows()["CYD-X HP"]["Comments"],
+            f"Reason for use not stated; the records log it as pest control. {IDENTITY_NOT_CONFIRMED}",
+        )
 
     def test_a_national_list_row_on_the_plan_carries_it_too(self):
         self.osp.approved_national_list_substances.add(self.calcium)
