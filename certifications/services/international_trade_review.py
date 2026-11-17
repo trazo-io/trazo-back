@@ -52,11 +52,13 @@ def mined_nitrogen_records(bundle) -> list:
     the ones already classified as sodium nitrate (they are counted on that line)."""
     from certifications.services.restricted_materials import SODIUM_NITRATE, logged_applications
 
-    classified = {e.pk for e in logged_applications(bundle, SODIUM_NITRATE)}
+    # Keyed by model as well as pk: the classified list holds soil amendments beside chemical records, and the
+    # two tables number their rows independently (review of back #471).
+    classified = {(type(e), e.pk) for e in logged_applications(bundle, SODIUM_NITRATE)}
     found = [
         e
         for e in bundle.chemical
-        if (getattr(e, "nitrogen_source", "") or "") == MINED_NITROGEN and e.pk not in classified
+        if (getattr(e, "nitrogen_source", "") or "") == MINED_NITROGEN and (type(e), e.pk) not in classified
     ]
     return sorted(found, key=lambda e: (e.date is None, e.date))
 

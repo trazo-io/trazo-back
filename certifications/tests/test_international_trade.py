@@ -26,13 +26,15 @@ import yaml
 from certifications.models import NationalListSubstance, OrganicSystemPlan, WSDAMaterial
 from certifications.osp_modules import MODULES_BY_KEY
 from certifications.osp_modules.conditions import missing_required, visible_questions
+from certifications.services.common_osp_records import EvidenceBundle
+from certifications.services.international_trade_review import mined_nitrogen_records
 from certifications.services.osp_module_pdf import generate_module_pdf
 from certifications.services.osp_prefill import resolve_suggestions
 from certifications.services.parcel_application_lines import operation_export_lines
 from certifications.services.plan_review import plan_review
 from certifications.services.restricted_materials import SODIUM_NITRATE, module_lines, substance_class, wsda_class
 from company.models import Company, Establishment
-from history.models import ChemicalEvent, Production
+from history.models import ChemicalEvent, Production, SoilManagementEvent
 from product.models import Parcel
 
 G4 = MODULES_BY_KEY["g4_0_rotation_soil"]
@@ -253,6 +255,22 @@ class TheModulePdfAndThePlanReview(_Orchard):
         self.assertIsNotNone(finding)
         self.assertEqual(finding.module_key, "g8_0_record_keeping")
         self.assertIn("Andean 14-0-9", " ".join(finding.details))
+
+    def test_a_soil_amendment_sharing_its_id_does_not_hide_a_mined_nitrogen_record(self):
+        # Review of back #471: soil and chemical records number their rows independently.
+        mined = self._chem("Andean 14-0-9", nitrogen_source="mined_natural")
+        SoilManagementEvent.objects.create(
+            pk=mined.pk,
+            history=self.history,
+            type="OM",
+            amendment_type="mineral",
+            amendment_product_name="Sodium nitrate",
+            date=timezone.now(),
+        )
+        self.assertEqual(
+            [e.pk for e in mined_nitrogen_records(EvidenceBundle(self.est, osp=self.osp))],
+            [mined.pk],
+        )
 
     def test_a_no_against_the_plans_list_is_listed(self):
         self._list_sodium_nitrate()
