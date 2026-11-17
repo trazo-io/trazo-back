@@ -22,13 +22,13 @@ items:
 
   - ref: "A1"
     asks: "Seeds — mark all that apply: None used / Organic (untreated) / Organic (with treatment) / Non-organic (untreated) / Non-organic (with treatment). 'With treatment' means fungicide/insecticide treated or carrying other materials at planting (inoculants, pelleting, coating/priming/encrusting)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.seeds_used]
       prints: "modules/G3_0.pdf §A; narrative § 205.204"
-    gap: "Prefill (`seed_status`) reads only PL (planting) events; TR (transplant) events carrying a `seed_certification_status` are ignored, so a farm logging purchased transplants gets no seed-status suggestion for them."
-    fix: "Extend the `seed_status` resolver to `bundle.prod(\"PL\", \"TR\")`."
+    # Closed 2026-11-17 by the seeds and planting stock slice: a transplant is not seed, so the Seeds suggestion reads
+    # seed planting records only, and a record of a tree, vine or berry plant, or one naming a rootstock, now suggests
+    # Planting stock instead (osp_prefill.is_planting_stock_record).
 
   - ref: "A2"
     asks: "Annual seedlings (transplants) — None used / Purchase certified organic seedlings (attach organic certificate for each supplier) / Produce own organic seedlings (describe in G3.1 Container & Greenhouse/Shadehouse Production)."
@@ -42,13 +42,14 @@ items:
 
   - ref: "A3"
     asks: "Planting stock — None used (skip to section B) / Organic (skip to section B) / Non-organic (complete this section)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.planting_stock_used, g3_2_planting_stock.stock_organic_status]
-      prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A"
-    gap: "The same fact is recorded twice — here as a checkbox and again as `stock_organic_status` (all_organic/mixed/all_nonorganic) in the perennial-stock module — with nothing binding the two answers together, so they can silently disagree."
-    fix: "Add a `plan_review` cross-check flagging 'G3.0 A3 vs G3.0b organic status disagree', or fold G3.0b into G3.0 as a page gated on this answer."
+      prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A; a [REVIEW] line on both when the answers disagree"
+    # Closed 2026-11-17 by the seeds and planting stock slice: the two answers are read against each other
+    # (seed_stock_review). Where G3.0b names a status G3.0 leaves out, or describes stock established this period
+    # beside G3.0's None used or Established perennials only, both module PDFs print a [REVIEW] line and the plan
+    # review lists it.
 
   - ref: "A3a"
     asks: "Do you use non-organic planting stock to produce an organic crop (for example, plant non-organic stock in an organic system to grow fruit or nuts for harvest and sale as organic)? No (skip to 3b) / Yes (complete this section)."
@@ -72,22 +73,22 @@ items:
     trazo:
       questions:
       - g3_2_planting_stock.stock_sold_as_organic
+      - g3_2_planting_stock.resold_stock_bought_nonorganic
       prints: modules/G3_0b.pdf §C
+    # 2026-11-17: resold_stock_bought_nonorganic is the question's own fact (non-organic stock grown out and sold as
+    # organic), asked of an operation that sells planting stock as organic.
   - ref: A3b(i)
     asks: Is the non-organic planting stock maintained under a system of organic management for at least one
       year, prior to sale of the planting stock as organic? Yes, describe in G3.1 Container & Greenhouse/Shadehouse
       Production.
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g3_2_planting_stock.organic_management_start_date
-      - g3_2_planting_stock.twelve_month_attestation
-      prints: modules/G3_0b.pdf §C; narrative § 205.204(a)(4)
-    gap: 'The one-year clock is a superset of CCOF''s plain ''Yes'' (a start date plus an attestation). What
-      is missing is the description CCOF sends to G3.1 (growing media, structures, locations): Trazo has no G3.1
-      module to receive it.'
-    fix: Once a G3.1 module exists, prompt it when `stock_sold_as_organic == sold_organic_stock`.
+      questions: [g3_2_planting_stock.organic_management_start_date, g3_2_planting_stock.twelve_month_attestation, g3_1_container_greenhouse.structure_production_types]
+      prints: "modules/G3_0b.pdf §C; modules/G3_1.pdf §A; a [REVIEW] line under a G3.1 not-applicable attestation when G3.0b says planting stock is sold as organic"
+    # Closed 2026-11-17 by the seeds and planting stock slice: G3.1 Container and Greenhouse Production now exists
+    # (2026-11-09) and receives the description CCOF sends there (planting stock or nursery production in pots, for
+    # sale or on-farm use); structure_production prints the [REVIEW] line when G3.1 is marked not applicable beside
+    # stock sold as organic.
 
   - ref: "B1"
     asks: "Before using non-organic seed and/or planting stock, do you evaluate whether an equivalent organic variety is available in the form, quality, or quantity needed? Not applicable, my operation uses all organic seed and/or planting stock at this time (skip to section D) / Yes (complete this section)."
@@ -149,23 +150,25 @@ items:
 
   - ref: "D2"
     asks: "Are all seed treatment materials included on your Grower Materials Application (OSP Materials List)? Yes."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.treatments_on_inputs_list]
-      prints: "modules/G3_0.pdf §D; narrative § 205.201(a)(2)"
-    gap: "Trazo allows an honest 'No' where CCOF only prints 'Yes' — a superset — but nothing downstream reacts to a 'No': the readiness check doesn't test this attestation, and the Materials Application module has no seed-treatment category even though CCOF's own Grower Materials Application (ORGB41 §C) names 'seed treatments (coatings, pelleting materials, inoculants)' explicitly."
-    fix: "Add a readiness finding for an unresolved 'No', and a seed-treatment category to the Materials Application panel."
+      prints: "modules/G3_0.pdf §D, with a [REVIEW] line for a No or for unlisted treatments the records name; workbooks/Materials List.xlsx"
+    # Closed 2026-11-17 by the seeds and planting stock slice: a Yes is refused at the write while a seed planting
+    # record names a treatment the materials list does not hold, and a stored one prints those names; a No prints a
+    # [REVIEW] line and is listed on the plan review. Seed treatments are on the Materials List as production aids
+    # (CCOF Materials Application section C).
 
   - ref: "E1"
     asks: "Does your operation graft planting stock? No (stop, form complete) / Yes (list all materials on your Grower Materials Application / OSP Materials List)."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.grafts_stock]
-      prints: "modules/G3_0.pdf §E"
-    gap: "The 'Yes' option's label bundles an attestation ('grafting materials are listed on the OSP inputs list') into the fact itself, so an operator who grafts but has not yet listed wax, tape or sealant cannot answer truthfully. The page is also gated on `planting_stock_used`, narrower than CCOF (E applies to everyone; top-working existing trees with purchased scion wood is grafting without 'using' new planting stock in a grower's reading)."
-    fix: "Split into `grafts_stock` yes/no plus a separate `grafting_materials_listed` boolean; make the page unconditional."
+      prints: "modules/G3_0.pdf §E; Yes, and not every grafting material is on the OSP inputs list yet prints a [REVIEW] line and is listed on the plan review"
+    # Closed 2026-11-17 by the seeds and planting stock slice: grafting is answerable without the listing attestation
+    # (yes_not_listed, beside the stored yes, which keeps its meaning). Page E opens on Organic, Non-organic or
+    # Established perennials only; by § 205.2 scion wood and rootstock are planting stock, so an operation that grafts
+    # reaches it.
 
   - ref: "E1a"
     asks: "Describe grafting practices."

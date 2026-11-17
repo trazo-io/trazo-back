@@ -30,13 +30,13 @@ items:
 
   - ref: "2"
     asks: "Do you use certified organic seed? Yes / No."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.seeds_used]
       prints: "modules/G3_0.pdf §A; narrative § 205.204"
-    gap: "Reuses CCOF A1's gap: prefill (`seed_status`) reads only PL (planting) events, so a farm logging purchased organic seed as a TR (transplant) event carrying `seed_certification_status` gets no suggestion."
-    fix: "Extend the `seed_status` resolver to `bundle.prod(\"PL\", \"TR\")` — same fix as CCOF A1."
+    # Closed 2026-11-17 by the seeds and planting stock slice: a transplant is not seed, so the Seeds suggestion reads
+    # seed planting records only, and a record of a tree, vine or berry plant, or one naming a rootstock, now suggests
+    # Planting stock instead (osp_prefill.is_planting_stock_record).
 
   - ref: "2a"
     asks: "If yes, describe how you verify the seed is certified organic. Include a description of the records you maintain to demonstrate compliance."
@@ -48,23 +48,24 @@ items:
 
   - ref: "2b"
     asks: "Are pre-plant treatments applied to organic seed by the farm, supplier, or a third party? Yes, include all materials applied to seeds before planting on your Input Material List. / No."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.seeds_used, g3_0_seeds.seed_treatment_applied_by, g3_0_seeds.treatments_on_inputs_list]
-      prints: "modules/G3_0.pdf §A, §D; narrative § 205.201(a)(2)"
-    gap: "Who applies the treatment is now asked (`seed_treatment_applied_by`). Still open, as CCOF D2: nothing downstream reacts to an honest 'No' to `treatments_on_inputs_list`, and the TR-event prefill gap of CCOF A1 stands."
-    fix: "Same fixes as CCOF A1 and D2: extend the seed_status prefill to TR events, and add a readiness finding for an unresolved 'No'."
+      prints: "modules/G3_0.pdf §A, §D, with a [REVIEW] line for a No or for unlisted treatments the records name"
+    # Closed 2026-11-17 by the seeds and planting stock slice: a Yes is refused at the write while a seed planting
+    # record names a treatment the materials list does not hold, and a stored one prints those names; a No prints a
+    # [REVIEW] line and is listed on the plan review. Seed treatments are on the Materials List as production aids
+    # (CCOF Materials Application section C).
 
   - ref: "3"
     asks: "Do you use nonorganic seed? Yes / No."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.seeds_used]
       prints: "modules/G3_0.pdf §A; narrative § 205.204"
-    gap: "Same field and same gap as ref 2 — WSDA splits the organic/nonorganic question into two yes/no gates where CCOF and Trazo both use one 5-way checkbox."
-    fix: "Same fix as ref 2."
+    # Closed 2026-11-17 by the seeds and planting stock slice: a transplant is not seed, so the Seeds suggestion reads
+    # seed planting records only, and a record of a tree, vine or berry plant, or one naming a rootstock, now suggests
+    # Planting stock instead (osp_prefill.is_planting_stock_record).
 
   - ref: "3a"
     asks: "If yes, describe your process to determine if organic seeds are commercially available before using nonorganic seed. Include a description of how you attempt to source organic seeds from at least three organic seed suppliers and the records you maintain to document your search."
@@ -84,13 +85,14 @@ items:
 
   - ref: "3c"
     asks: "Are pre-plant treatments applied to nonorganic seed by your farm, supplier, or a third party? Yes, include all materials applied to seeds before planting on your Input Material List. / No."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g3_0_seeds.seeds_used, g3_0_seeds.seed_treatment_applied_by, g3_0_seeds.treatments_on_inputs_list]
-      prints: "modules/G3_0.pdf §A, §D; narrative § 205.201(a)(2)"
-    gap: "Same as ref 2b, for the `non_organic_treated` option: who applies the treatment is asked; the Input Material List follow-through is still an attestation nothing reconciles."
-    fix: "Same fix as ref 2b."
+      prints: "modules/G3_0.pdf §A, §D, with a [REVIEW] line for a No or for unlisted treatments the records name"
+    # Closed 2026-11-17 by the seeds and planting stock slice: a Yes is refused at the write while a seed planting
+    # record names a treatment the materials list does not hold, and a stored one prints those names; a No prints a
+    # [REVIEW] line and is listed on the plan review. Seed treatments are on the Materials List as production aids
+    # (CCOF Materials Application section C).
   - ref: '4'
     asks: Optional space for additional information.
     optional: true

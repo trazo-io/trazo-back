@@ -33,16 +33,14 @@ items:
   # Closed 2026-10-31 by the seed and planting stock slice.
 - ref: '2'
   asks: Do you use certified organic planting stock? Yes / No.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g3_2_planting_stock.stock_organic_status
-    prints: modules/G3_0.pdf §A; modules/G3_0b.pdf §A
-  gap: 'Reuses CCOF A3''s gap: the same fact is recorded twice — as a checkbox on the master form''s own
-    Section A/C gate and again as `stock_organic_status` here — with nothing binding the two answers together,
-    so they can silently disagree.'
-  fix: 'Same fix as CCOF A3: a `plan_review` cross-check flagging a disagreement between the two answers.'
+    questions: [g3_0_seeds.planting_stock_used, g3_2_planting_stock.stock_organic_status]
+    prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A; a [REVIEW] line on both when the answers disagree"
+  # Closed 2026-11-17 by the seeds and planting stock slice: the two answers are read against each other
+  # (seed_stock_review). Where G3.0b names a status G3.0 leaves out, or describes stock established this period beside
+  # G3.0's None used or Established perennials only, both module PDFs print a [REVIEW] line and the plan review lists
+  # it.
 - ref: 2a
   asks: If yes, describe how you verify the planting stock is certified organic. Include a description
     of the records you maintain to demonstrate compliance.
@@ -62,15 +60,14 @@ items:
   # Closed 2026-10-31 by the seed and planting stock slice.
 - ref: '3'
   asks: Do you use nonorganic planting stock? Yes / No.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g3_2_planting_stock.stock_organic_status
-    prints: modules/G3_0.pdf §A; modules/G3_0b.pdf §A
-  gap: Same field and same gap as ref 2 — WSDA splits organic-stock and nonorganic-stock into two yes/no
-    gates where Trazo (and CCOF A3) use one three-way radio.
-  fix: Same fix as ref 2.
+    questions: [g3_0_seeds.planting_stock_used, g3_2_planting_stock.stock_organic_status]
+    prints: "modules/G3_0.pdf §A; modules/G3_0b.pdf §A; a [REVIEW] line on both when the answers disagree"
+  # Closed 2026-11-17 by the seeds and planting stock slice: the two answers are read against each other
+  # (seed_stock_review). Where G3.0b names a status G3.0 leaves out, or describes stock established this period beside
+  # G3.0's None used or Established perennials only, both module PDFs print a [REVIEW] line and the plan review lists
+  # it.
 - ref: 3a
   asks: If yes, describe your process to determine if certified organic planting or grafting stock is
     commercially available before using nonorganic planting stock. Include a description of how you attempt
@@ -93,24 +90,22 @@ items:
   asks: Are pre-plant treatments applied to nonorganic planting stock by your farm, supplier, or a third
     party? Yes, include all materials applied to planting stock before planting on your Input Material
     List. / No.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
     questions: [g3_2_planting_stock.stock_treatments, g3_2_planting_stock.stock_treatment_applied_by]
-    prints: "modules/G3_0b.pdf §B"
-  gap: "Who applied the treatment is now asked (`stock_treatment_applied_by`). Still open: `treated_listed` asserts the Input Material List entry rather than driving it, and no readiness check reconciles the two."
-  fix: "Reconcile `treated_listed` against the Input Material List in the readiness checks, the way `prohibited_materials_on_site` is reconciled."
+    prints: "modules/G3_0b.pdf §B; a [REVIEW] line for treated stock whose materials are not all listed, or for unlisted treatments the records name"
+  # Closed 2026-11-17 by the seeds and planting stock slice: Yes, and not every treatment material is on our OSP
+  # inputs list yet is a true answer for treated stock; the listed answer is refused at the write while a record of
+  # nonorganic planting stock names a treatment the materials list does not hold, and a stored one prints those names.
 - ref: '4'
   asks: Do you purchase and resell nonorganic planting stock? Yes / No.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g3_2_planting_stock.stock_sold_as_organic
-    prints: modules/G3_0b.pdf §C; narrative § 205.204(a)(4)
-  gap: Reuses CCOF A3b's gate fact. Low real-world frequency for the ICP, since orchards sell fruit, not
-    nursery stock (CCOF A3b's own note).
-  fix: No change needed beyond ref 4a.
+    questions: [g3_2_planting_stock.stock_sold_as_organic, g3_2_planting_stock.resold_stock_bought_nonorganic]
+    prints: "modules/G3_0b.pdf §C"
+  # Closed 2026-11-17 by the seeds and planting stock slice: G3.0b asks whether planting stock sold as organic was
+  # bought as nonorganic stock (resold_stock_bought_nonorganic); an operation that sells no planting stock answers No
+  # by stock_sold_as_organic.
 - ref: 4a
   asks: If yes, how do you ensure the planting stock was managed organically for 12 months prior to the
     certified sale? Include a description of the records you maintain to verify compliance.

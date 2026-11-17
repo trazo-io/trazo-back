@@ -118,6 +118,9 @@ G3_0_SEEDS = Module(
                         "de vivero (§ 205.2).",
                     ),
                     nop_cite="§ 205.2",
+                    # From planting and transplanting records of trees, vines, berry plants or rootstock
+                    # (`osp_prefill.is_planting_stock_record`); seed records feed `seeds_used` instead.
+                    prefill=Prefill(source="planting_stock_status"),
                     compiles_to=CompileRule(template="Planting stock: {answer}."),
                     options=(
                         Option("none", text("None used", "No se usa"), exclusive=True),
@@ -133,6 +136,33 @@ G3_0_SEEDS = Module(
                             ),
                             exclusive=True,
                         ),
+                    ),
+                ),
+                Question(
+                    # OTCO C3 3.1-4 asks the organic status of this kind of planting stock apart from
+                    # perennial nursery stock (3.1-3), so a farm planting organic trees and nonorganic
+                    # strawberry crowns can state both. Its statuses sit inside `planting_stock_used`,
+                    # which covers all planting stock; `seed_stock_review` flags an answer outside it.
+                    key="other_planting_stock_used",
+                    kind="checkbox_group",
+                    label=text(
+                        "Planting stock other than perennial nursery stock: rhizomes, shoots, tubers, cuttings, "
+                        "clones or roots (for example strawberry crowns, raspberry canes, potato seed pieces)",
+                        "Material de plantación distinto del material perenne de vivero: rizomas, brotes, "
+                        "tubérculos, esquejes, clones o raíces (por ejemplo coronas de fresa, cañas de frambuesa, "
+                        "trozos de papa semilla)",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.2",
+                    visible_when=(Condition("planting_stock_used", "includes_any", ("organic", "non_organic")),),
+                    compiles_to=CompileRule(
+                        template="Planting stock other than perennial nursery stock (rhizomes, shoots, tubers, "
+                        "cuttings, clones or roots): {answer}."
+                    ),
+                    options=(
+                        Option("none", text("None of this kind", "Ninguno de este tipo"), exclusive=True),
+                        Option("organic", text("Organic", "Orgánico")),
+                        Option("non_organic", text("Non-organic", "No orgánico")),
                     ),
                 ),
                 Question(
@@ -679,6 +709,21 @@ G3_0_SEEDS = Module(
                                 "Sí — los materiales de injerto están en la lista de insumos " "del OSP",
                             ),
                         ),
+                        # CCOF G3.0 E1: the "Yes" above carries the listing attestation with it, so an
+                        # operation that grafts and has not yet listed its wax, tape or sealant had no
+                        # true answer. Added beside it rather than splitting "yes": a stored "yes"
+                        # keeps exactly what the operator said.
+                        Option(
+                            "yes_not_listed",
+                            text(
+                                "Yes, and not every grafting material is on the OSP inputs list yet",
+                                "Sí, y todavía no todos los materiales de injerto están en la lista de insumos del OSP",
+                            ),
+                            review=(
+                                "The operation grafts planting stock, and the plan says not every grafting material "
+                                "(wax, sealant, tape) is on the OSP inputs list yet."
+                            ),
+                        ),
                     ),
                 ),
                 Question(
@@ -693,7 +738,7 @@ G3_0_SEEDS = Module(
                     ),
                     required=False,
                     nop_cite="§ 205.204",
-                    visible_when=(Condition("grafts_stock", "eq", "yes"),),
+                    visible_when=(Condition("grafts_stock", "one_of", ["yes", "yes_not_listed"]),),
                     compiles_to=CompileRule(template="Grafting practices: {answer}"),
                 ),
             ),

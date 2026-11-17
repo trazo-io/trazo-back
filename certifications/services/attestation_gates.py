@@ -124,7 +124,15 @@ _RECONCILED_STATEMENTS = {
     # CCOF G4.0 A3: "List all fertility materials planned for use on your Grower Materials Application".
     # The fertilizer row's statement, asked on G4.0; read against the same products (2026.11.26).
     "fertility_inputs_listed": "fertilizers_listed",
+    # G3.0 §D, read against the treatments named on seed planting records (CCOF G3.0 D2, OTCO C3 3.5-2,
+    # WSDA AGR 2121 A2b/A3c), and G3.0b's "treated, materials on our inputs list" against the ones named on
+    # records of nonorganic planting stock (WSDA AGR 2121 C3c).
+    "treatments_on_inputs_list": "seed_treatments_listed",
+    "stock_treatments": "stock_treatments_listed",
 }
+
+#: A reconciled statement asked as a choice rather than a Yes/No: the option that makes the statement.
+_AFFIRMATIVE_OPTION = {"stock_treatments": "treated_listed"}
 
 #: The module each reconciled statement is asked on.
 _RECONCILED_BY_MODULE = {
@@ -136,7 +144,33 @@ _RECONCILED_BY_MODULE = {
         "post_harvest_contact_listed",
     ),
     "g4_0_rotation_soil": ("fertility_inputs_listed",),
+    "g3_0_seeds": ("treatments_on_inputs_list",),
+    "g3_2_planting_stock": ("stock_treatments",),
 }
+
+
+def affirms(question_key: str, value) -> bool:
+    """Does this answer make the reconciled statement ("Yes", or the option that says the same)?"""
+    option = _AFFIRMATIVE_OPTION.get(question_key)
+    return value == option if option else value is True
+
+
+def _hidden_by_an_answer(module, question_key: str, answers: dict) -> bool:
+    """Is the statement on a page or behind a question the plan's answers close?
+
+    G3.0 §D shows only while treated seed is declared. An answer stored there before the seed answer
+    changed is still in the plan, hidden, and refusing the module over it would leave the operator a
+    finding on a question they cannot see. A trigger that is not in `answers` decides nothing (the write
+    path passes only the keys being written), so the statement is then judged as asked.
+    """
+    from certifications.services.packet_answers import _question_and_page, hidden_state
+
+    page, question = _question_and_page(module, question_key)
+    if question is None:
+        return False
+    state = hidden_state(module, page, question, answers)
+    return state is not None and state[0] == "not_applicable"
+
 
 RECONCILIATION_MESSAGE = (
     "The records name {count} product(s) this list does not hold: {names}. Add each one to the list, "
@@ -205,9 +239,11 @@ def blocked_attestations(module, answers: dict, osp) -> dict[str, str]:
                 )
                 continue
     for question_key in _RECONCILED_BY_MODULE.get(getattr(module, "key", ""), ()):
-        if answer_value(answers, question_key) is not True:
+        if not affirms(question_key, answer_value(answers, question_key)):
             continue
         try:
+            if _hidden_by_an_answer(module, question_key, answers):
+                continue
             unlisted = unlisted_products(question_key, osp)
         except Exception:  # noqa: BLE001 (fail open, logged, as above)
             logger.exception("Materials reconciliation could not run for OSP %s", getattr(osp, "pk", None))

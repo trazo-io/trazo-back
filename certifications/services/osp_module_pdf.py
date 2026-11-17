@@ -251,8 +251,10 @@ def _answer_as_it_stands(module, question, value, answers, osp, cache: dict) -> 
     the operator affirming what the same page disproved (reviewer reads, 2026-11-04). It is still the
     operator's answer and stays visible; it just says it no longer stands. Computed once per module.
     """
+    from certifications.services.attestation_gates import affirms
+
     text = _format_answer_en(question, value)
-    if value is not True:
+    if not affirms(question.key, value):
         return text
     if getattr(question, "attests_embed", None):
         # The embed attestation already prints its own note right below, naming what is not
@@ -2928,6 +2930,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 from certifications.services.structure_production import answer_contradictions
 
                 for line in answer_contradictions(question.key, value, answers):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key in ("g3_0_seeds", "g3_2_planting_stock"):
+                from certifications.services.seed_stock_review import answer_lines
+
+                for line in answer_lines(osp, module.key, question.key, value, evidence_bundles):
                     story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
                 for line in _facility_pest_pointer(osp):

@@ -149,9 +149,41 @@ _SEED_STATUS_TO_OPTION = {
 }
 
 
+#: Crops planted as nursery stock (trees, vines, berry plants), never sown, in commercial production:
+#: a planting record on one of these is planting stock under § 205.2 whatever its seed fields say.
+STOCK_CROP_CATEGORIES = frozenset({"tree_fruit", "tree_nut", "berry"})
+
+
+def is_planting_stock_record(event) -> bool:
+    """Is this planting or transplanting record planting stock rather than seed or an annual seedling?
+
+    Planting and transplanting records share one block of seed fields, so `seed_certification_status`
+    on them can describe seed, a seedling, or a nursery tree. Until 2026-11-17 every planting record fed
+    G3.0 `seeds_used`, so an orchard that logged its replant trees as certified organic was offered
+    "Seeds: Organic, untreated" (CCOF G3.0 A1, OTCO C3 3.1-1, WSDA AGR 2121 A2-A3). A record names
+    planting stock when it names a rootstock, or when its production's crop is one planted as nursery
+    stock (`STOCK_CROP_CATEGORIES`). Anything else is left where it was.
+    """
+    if _has_content(getattr(event, "rootstock", None)):
+        return True
+    production = getattr(event, "history", None)
+    crop = getattr(production, "crop_type", None) if production is not None else None
+    return getattr(crop, "category", None) in STOCK_CROP_CATEGORIES
+
+
+def seed_records(events) -> list:
+    """Planting records of seed: planting (PL), not planting stock. A transplant is not seed."""
+    return [e for e in events if e.type == "PL" and not is_planting_stock_record(e)]
+
+
+def stock_records(events) -> list:
+    """Planting and transplanting records of planting stock (`is_planting_stock_record`)."""
+    return [e for e in events if e.type in ("PL", "TR") and is_planting_stock_record(e)]
+
+
 def _seed_status(bundle, question):
-    """G3.0 seeds_used — seed classes evidenced by planting events."""
-    plantings = [e for e in bundle.prod("PL") if getattr(e, "seed_certification_status", None)]
+    """G3.0 seeds_used: seed classes evidenced by planting events of seed (never of planting stock)."""
+    plantings = [e for e in seed_records(bundle.prod("PL")) if getattr(e, "seed_certification_status", None)]
     if not plantings:
         return None
     values = set()
@@ -168,6 +200,33 @@ def _seed_status(bundle, question):
     return {
         "value": values,
         "basis": f"seed status recorded on {n} planting event{'s' if n != 1 else ''}",
+        "count": n,
+    }
+
+
+def _planting_stock_status(bundle, question):
+    """G3.0 planting_stock_used: organic or non-organic, from planting records of planting stock.
+
+    Transitional stock is not certified organic and reads as non-organic, as it does for seed.
+    "None used" and "established perennials only" are never suggested: a record of stock going in
+    says the opposite of both, and the absence of records says nothing.
+    """
+    records = [e for e in stock_records(bundle.prod("PL", "TR")) if getattr(e, "seed_certification_status", None)]
+    if not records:
+        return None
+    values = sorted(
+        {"organic" if e.seed_certification_status == "certified_organic" else "non_organic" for e in records}
+    )
+    values = _limit_to_options(values, question)
+    if not values:
+        return None
+    n = len(records)
+    return {
+        "value": values,
+        "basis": (
+            f"organic status recorded on {n} planting or transplanting record{'s' if n != 1 else ''} of trees, "
+            "vines, berry plants or rootstock"
+        ),
         "count": n,
     }
 
@@ -330,12 +389,32 @@ MATERIALS_CATEGORIES = {
     # CCOF Materials Application §C: seed treatments on planting records and tank-mix partners on
     # application records (growing media have no record of their own; the list is their only source).
     "crop_production_aids_listed": ((), "seed treatment or adjuvant"),
+    # Narrower slices of the row above, for the statements G3.0 and G3.0b make about their own materials
+    # (below). Not Materials Application rows: no question is keyed by them.
+    "seed_treatments_listed": ((), "seed treatment"),
+    "stock_treatments_listed": ((), "nonorganic planting stock treatment"),
 }
 
 #: Statements elsewhere in the plan that say the same thing as a Materials Application row, read against
 #: that row's products: CCOF G4.0 A3 "List all fertility materials planned for use on your Grower Materials
-#: Application" is the fertilizer row's statement asked on G4.0.
-MATERIALS_CATEGORY_OF = {"fertility_inputs_listed": "fertilizers_listed"}
+#: Application" is the fertilizer row's statement asked on G4.0. G3.0 §D "Are all seed treatment materials
+#: included on your OSP inputs list?" (CCOF D2, OTCO C3 3.5-2, WSDA AGR 2121 A2b/A3c) reads the treatments
+#: named on seed planting records; G3.0b "treated, materials on our inputs list" (WSDA AGR 2121 C3c) the
+#: treatments named on records of nonorganic planting stock.
+MATERIALS_CATEGORY_OF = {
+    "fertility_inputs_listed": "fertilizers_listed",
+    "treatments_on_inputs_list": "seed_treatments_listed",
+    "stock_treatments": "stock_treatments_listed",
+}
+
+
+def nonorganic_stock_records(events) -> list:
+    """Records of planting stock whose stated status is not certified organic (transitional included)."""
+    return [
+        e
+        for e in stock_records(events)
+        if getattr(e, "seed_certification_status", None) and e.seed_certification_status != "certified_organic"
+    ]
 
 
 def materials_category(question_key):
@@ -390,6 +469,10 @@ def category_applications(bundle, question_key):
     if question_key == "crop_production_aids_listed":
         named = _seed_treatment_names(getattr(bundle, "production_events", []))
         named += _tank_mix_names(getattr(bundle, "chemical", []))
+    elif question_key == "seed_treatments_listed":
+        named = _seed_treatment_names(seed_records(getattr(bundle, "production_events", [])))
+    elif question_key == "stock_treatments_listed":
+        named = _seed_treatment_names(nonorganic_stock_records(getattr(bundle, "production_events", [])))
     elif question_key == "post_harvest_contact_listed":
         # NOTE: dead until 2026-09-12. This branch filtered ChemicalEvent for type "PH", a code that
         # model never carries (FE/PE/FU/HE only). A post-harvest sanitizer is a ProductionEvent
@@ -429,6 +512,17 @@ def logged_category_names(establishment, question_key) -> list[str]:
         applied = ChemicalEvent.objects.filter(**scope).filter(Q(tank_mix_role="adjuvant") | ~Q(tank_mix_partners=[]))
         named = _seed_treatment_names(planting) + _tank_mix_names(applied)
         return sorted({n for _e, n in named if n})
+    if question_key in ("seed_treatments_listed", "stock_treatments_listed"):
+        planting = (
+            ProductionEvent.objects.filter(type__in=("PL", "TR"), **scope)
+            .exclude(seed_treatment__isnull=True)
+            .exclude(seed_treatment="")
+            .select_related("history__crop_type")
+        )
+        records = (
+            seed_records(planting) if question_key == "seed_treatments_listed" else nonorganic_stock_records(planting)
+        )
+        return sorted({n for _e, n in _seed_treatment_names(records) if n})
     if question_key == "post_harvest_contact_listed":
         names = ProductionEvent.objects.filter(type="PH", **scope).values_list("sanitizer_name", flat=True)
     else:
@@ -636,6 +730,7 @@ PREFILL_RESOLVERS = {
     "soil_amendment_evidence": _soil_amendment_evidence,
     "tillage_evidence": _tillage_evidence,
     "seed_status": _seed_status,
+    "planting_stock_status": _planting_stock_status,
     "seed_search_evidence": _seed_search_evidence,
     "pest_monitoring_scope": _pest_monitoring_scope,
     "pest_monitoring_frequency": _pest_monitoring_frequency,

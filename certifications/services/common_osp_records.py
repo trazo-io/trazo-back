@@ -169,7 +169,9 @@ class EvidenceBundle:
             qs = qs.filter(Q(finish_date__gte=start_date) | Q(finish_date__isnull=True))
         if end_date:
             qs = qs.filter(start_date__lte=end_date)
-        qs = qs.prefetch_related(
+        # `crop_type`: a planting record on a tree, vine or berry crop is planting stock, not seed
+        # (`osp_prefill.is_planting_stock_record`), read through each event's production.
+        qs = qs.select_related("crop_type").prefetch_related(
             "history_chemicalevent_events",
             "history_productionevent_events",
             "history_soilmanagementevent_events",

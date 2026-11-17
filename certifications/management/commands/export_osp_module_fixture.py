@@ -56,6 +56,19 @@ GOLDEN_ANSWER_CASES = {
             "seeds_used": ["none"],
             "ca_search_before_use": "documented_search",
         },
+        # 2026.12.16: grafting practices open on either Yes (`one_of`); other planting stock (OTCO C3 3.1-4)
+        # opens on a status and stays closed on "established perennials only".
+        "grafts_not_listed_yet": {"planting_stock_used": ["organic"], "grafts_stock": "yes_not_listed"},
+        "established_only": {"planting_stock_used": ["established_in_place"], "grafts_stock": "no"},
+    },
+    # 2026.12.16: the applied-by follow-up opens on either treated answer (WSDA AGR 2121 C3c), and the
+    # bought-nonorganic question (C4) only for stock sold as organic.
+    "g3_2_planting_stock": {
+        "unanswered": {},
+        "treated_not_listed": {"stock_organic_status": "mixed", "stock_treatments": "treated_not_listed"},
+        "treated_unknown": {"stock_organic_status": "all_nonorganic", "stock_treatments": "unknown"},
+        "sells_stock": {"stock_sold_as_organic": "sold_organic_stock"},
+        "sells_crop_only": {"stock_sold_as_organic": "not_sold"},
     },
     # Irrigation sources and shared lines (2026.11.09): `not_includes` is TRUE while unanswered, so the
     # shared-lines question shows until "we do not irrigate" is ticked; the TS twin must agree.

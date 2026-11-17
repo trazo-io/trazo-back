@@ -460,6 +460,34 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
                 )
             )
 
+    # ---- seed and planting stock: two answers to one fact, and materials not listed yet -------
+    # G3.0 and G3.0b both state the organic status of planting stock (CCOF G3.0 A3, OTCO C3 3.1-3,
+    # WSDA AGR 2121 C2/C3); a reviewer reading one page beside the other sees two answers.
+    from certifications.services.seed_stock_review import listing_gaps, planting_stock_disagreements
+
+    disagreements = [sentence for _kind, sentence in planting_stock_disagreements(osp)]
+    if disagreements:
+        findings.append(
+            ReviewFinding(
+                code="planting_stock_answers_disagree",
+                message="G3.0 and G3.0b state the organic status of planting stock differently",
+                count=len(disagreements),
+                details=disagreements,
+                module_key="g3_0_seeds",
+            )
+        )
+    gaps = listing_gaps(osp)
+    if gaps:
+        findings.append(
+            ReviewFinding(
+                code="seed_stock_materials_not_listed",
+                message="The plan says these seed, planting stock or grafting materials are not on the inputs list yet",
+                count=len(gaps),
+                details=gaps,
+                module_key="g3_0_seeds",
+            )
+        )
+
     # ---- modules not revisited in a renewal cycle -----------------------------------------
     stale = []
     for key, newest in sorted(times.items(), key=lambda kv: kv[1]):
