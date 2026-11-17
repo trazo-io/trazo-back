@@ -54,3 +54,43 @@ questions:
   g8_0_record_keeping.records_organic_status_explanation: >-
     Whether records identify organic status from harvest through sale, on a No. Asked by OTCO C12 12.2-5a;
     same reason as `records_identify_organic_status`.
+  g8_0_record_keeping.export_package_types: >-
+    Packages and labels used for export markets (WSDA AGR 2121 §Q 8). CCOF asks import and export on its
+    Global Market Access Application (GMA04), which ccof/scope.yaml excludes as export-programme enrolment;
+    its contract D2 asks only the markets.
+  g8_0_record_keeping.export_shipment_documents: >-
+    Documents that travel with each export shipment (WSDA AGR 2121 §Q 9, OTCO C8 8.4-3). CCOF asks import and
+    export on its Global Market Access Application (GMA04), which ccof/scope.yaml excludes as export-programme
+    enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.export_shipment_documents_other: >-
+    The other document of `export_shipment_documents`, unmapped with its parent.
+  g8_0_record_keeping.equivalency_compliance_method: >-
+    How exported products meet the destination's equivalency arrangement (OTCO C8 8.4-4). CCOF asks import and
+    export on its Global Market Access Application (GMA04), which ccof/scope.yaml excludes as export-programme
+    enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.equivalency_compliance_method_other: >-
+    The other way of `equivalency_compliance_method`, unmapped with its parent.
+  g8_0_record_keeping.canada_export_possible: >-
+    Whether crops may reach Canada, directly or through a buyer (WSDA AGR 2121 §Q Critical Variances: Canada
+    1). CCOF asks import and export on its Global Market Access Application (GMA04), which ccof/scope.yaml
+    excludes as export-programme enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.sodium_nitrate_used: >-
+    Whether sodium nitrate is used, asked where crops may reach Canada (WSDA AGR 2121 §Q Critical Variances:
+    Canada 2). CCOF asks import and export on its Global Market Access Application (GMA04), which
+    ccof/scope.yaml excludes as export-programme enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.sodium_nitrate_canada_separation: >-
+    How crops grown with sodium nitrate are kept from those eligible for Canada (WSDA AGR 2121 §Q Critical
+    Variances: Canada 2a). CCOF asks import and export on its Global Market Access Application (GMA04), which
+    ccof/scope.yaml excludes as export-programme enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.import_seed_countries: >-
+    Countries organic seed or planting stock is imported from (WSDA AGR 2121 §Q 2). CCOF asks import and
+    export on its Global Market Access Application (GMA04), which ccof/scope.yaml excludes as export-programme
+    enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.import_seed_countries_other: >-
+    The other countries of `import_seed_countries`, unmapped with their parent.
+  g8_0_record_keeping.import_seed_standards: >-
+    Organic standards imported seed or planting stock is certified to (WSDA AGR 2121 §Q 3). CCOF asks import
+    and export on its Global Market Access Application (GMA04), which ccof/scope.yaml excludes as
+    export-programme enrolment; its contract D2 asks only the markets.
+  g8_0_record_keeping.import_seed_standards_other: >-
+    The other standard of `import_seed_standards`, unmapped with its parent.

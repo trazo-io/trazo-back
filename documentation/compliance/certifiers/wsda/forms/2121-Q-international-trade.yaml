@@ -21,74 +21,54 @@ items:
 - ref: '1'
   asks: Do you source organic seeds directly from other countries and import them for use on your farm?
     Yes / No — skip to Exports.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g8_0_record_keeping.import_export_activity
-    prints: modules/G8_0.pdf §C
-  gap: '`import_export_activity` (export / import / none) captures that the operation imports SOMETHING
-    at a general ''organic products'' level — the same field CCOF''s Certification Contract D2 already
-    relies on — but nothing distinguishes an imported SEED from an imported harvested product, and `g3_0_seeds.seeds_used`
-    has no import flag of its own even though WSDA gates its entire seed-import sub-section on this distinction.'
-  fix: Add an `import_item_type` checkbox_group {seed_planting_stock, harvested_product, packaging_materials,
-    other} shown when `import_export_activity` includes `import`.
+    questions: [g8_0_record_keeping.import_export_activity]
+    prints: "modules/G8_0.pdf §C (We import organic seed or planting stock for use on our farm is the Yes)"
+  # Closed 2026-11-17 by the international trade slice: G8.0 offers importing organic seed or planting stock directly
+  # from other countries for the farm's own use (import_seed), which opens the import questions; an answer without it
+  # is the No.
 - ref: '2'
   asks: Which countries do you import organic seeds from? Canada, European Union, Great Britain, India,
     Israel, Japan, Mexico, New Zealand, South Korea, Switzerland, other.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No `import_origin_countries` field exists — page C has `export_destinations` for outbound shipments
-    but no symmetric field for where an import comes from.
-  fix: Add `import_origin_countries` [text] to page C, shown when `import_export_activity` includes `import`.
+    questions: [g8_0_record_keeping.import_export_activity, g8_0_record_keeping.import_seed_countries, g8_0_record_keeping.import_seed_countries_other]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: G8.0 asks the countries in the form's list
+  # (import_seed_countries), shown when the operation imports seed or planting stock.
 - ref: '3'
   asks: Which organic standard(s) is the organic seed certified to? USDA NOP 7 CFR Part 205; Canadian
     Organic Regime (COR) CAN/CGSB; Council Regulation (EC) No. 834/2007; other.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field records which foreign equivalency arrangement or standard covers an imported input.
-  fix: Add `import_certifying_standard` checkbox_group {usda_nop, canada_cor, eu_834_2007, other} to page
-    C.
+    questions: [g8_0_record_keeping.import_seed_standards, g8_0_record_keeping.import_seed_standards_other]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: G8.0 asks the standards in the form's list
+  # (import_seed_standards). The EU option names (EC) No 834/2007, as the form does, and (EU) 2018/848, which replaced
+  # it in 2022.
 - ref: '4'
   asks: What types of documentation do you maintain for each imported shipment? Bill of Lading, Certificate
     of Analysis, Invoice, NOP Import Certificate, Phytosanitary Certificate, Transaction Certificate,
     other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    prints: modules/G8_0.pdf §C
-    questions:
-    - g8_0_record_keeping.import_documentation
-    - g8_0_record_keeping.import_documentation_other
-  gap: Between `import_documentation` (nop_import_certificate, ace_declaration, marked_organic, other)
-    and `import_export_records` (certificates, operation_certificate, contracts, phytosanitary, fda_ean,
-    entry_summary, labeling), NOP Import Certificate and Phytosanitary Certificate are covered, but Bill
-    of Lading, Certificate of Analysis, Invoice and Transaction Certificate have no explicit option.
-  fix: Add those four as options on `import_export_records`, which already carries the shared import/export
-    document inventory.
+    questions: [g8_0_record_keeping.import_documentation, g8_0_record_keeping.import_documentation_other]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: import_documentation offers a bill of lading, certificate of
+  # analysis, invoice, phytosanitary certificate and transaction certificate kept for each shipment, beside the NOP
+  # Import Certificate, and opens for imported seed as well as product.
 - ref: '5'
   asks: How do you verify imported organic seeds were not treated with prohibited substances or irradiated
     during transport or entry into the United States? Include a description of the records you will maintain
     to demonstrate compliance.
-  status: partial
+  status: covered
   trazo:
-    prints: modules/G8_0.pdf §C
-    questions:
-    - g8_0_record_keeping.import_integrity_verification
-    - g8_0_record_keeping.port_integrity_measures
-  severity: P2
-  gap: WSDA gates this on importing SEED for use on your own farm. Trazo's gate is `import_export_activity`
-    including `import`, whose option text is "We import organic product or ingredients into the United
-    States" — seed for planting is neither. A farm that imports only seed answers `none`, and the cited
-    verification textarea is `visible_when` that gate, so it never renders and the module PDF prints nothing
-    for this question. (downgraded from `covered` 2026-08-28 by an adversarial re-read of every covered
-    row.)
-  fix: Add `seed_planting_stock` to the `import_export_activity` options (or the `import_item_type` group
-    proposed at ref 1) and widen the `visible_when` on `import_integrity_verification` to include it.
+    questions: [g8_0_record_keeping.import_export_activity, g8_0_record_keeping.import_integrity_verification, g8_0_record_keeping.port_integrity_measures]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: the verification question opens for an operation that imports
+  # only seed or planting stock (import_seed), and asks how each shipment is verified free of prohibited substances
+  # and ionizing radiation since export, with the records kept.
 - ref: '6'
   asks: 'Do you package organic crops for export yourself, or directly export organic crops or products
     to other countries? (Do not consider crops or products handled by another certified organic business.)
@@ -112,71 +92,51 @@ items:
 - ref: '8'
   asks: What types of packages and/or labels do you use for export markets? Retail consumer packages,
     wholesale shipping containers, bulk shipping or storage containers.
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    triggered_by:
-    - g7_0_labeling.product_leaves_as
-    prints: —
-  gap: No field scopes packaging type to EXPORT shipments specifically — `product_leaves_as` records general
-    packaging for all product, not packaging used for exported product.
-  fix: Add an `export_package_types` checkbox_group {retail_consumer, wholesale_shipping, bulk} to page
-    C, shown when `import_export_activity` includes `export`.
+    questions: [g8_0_record_keeping.export_package_types]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: asked of a direct exporter (export_package_types), in the
+  # form's three kinds of package.
 - ref: '9'
   asks: What types of documentation accompany each organic export shipment? Bill of lading, Certificate
     of analysis, EU Certificate of Inspection, Invoice, NAQS Import Certificate (South Korea), Organic
     Certificate, Phytosanitary Certificate, USDA TM-11 Export Certificate, other.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g8_0_record_keeping.export_certificate_types
-    - g8_0_record_keeping.import_export_records
-    prints: modules/G8_0.pdf §C
-  gap: '`export_certificate_types` (coi_eu, tm11, naqs, canada, none_required, other) plus `import_export_records`''s
-    `phytosanitary`/`certificates` options cover most of WSDA''s named schemes, but Bill of Lading, Certificate
-    of Analysis and Invoice have no explicit option either place.'
-  fix: Add those three to `import_export_records`.
+    questions: [g8_0_record_keeping.export_shipment_documents, g8_0_record_keeping.export_shipment_documents_other, g8_0_record_keeping.export_certificate_types, g8_0_record_keeping.import_export_records]
+    prints: "modules/G8_0.pdf §C"
+  # Closed 2026-11-17 by the international trade slice: export_shipment_documents asks what travels with each export
+  # shipment, in the form's list; export_certificate_types still names the certificates the destinations require.
 - ref: 1 (Canada variances)
   asks: 'Critical Variances: Canada. Do you produce crops or products that may be exported to Canada? Consider
     both crops you export directly, as well as crops or products which may be exported by a distributor or
     used as ingredients in processed products that will eventually be exported to Canada. Yes / No — skip to
     next section.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g8_0_record_keeping.export_certificate_types
-    - g8_0_record_keeping.export_destination_requirements
-    prints: modules/G8_0.pdf §C
-  gap: The `canada` option inside `export_certificate_types` captures a DIRECT Canada export certificate need,
-    but not the broader scenario WSDA asks about — indirect exposure via a distributor or as an ingredient
-    in a processed product that eventually reaches Canada. `export_destination_requirements` is the field that
-    carries the substance of a critical variance — how the operation ensures exported product meets the destination
-    country's labelling and permitted-practice rules — and it prints, so an operation aware of the sodium-nitrate
-    variance can state its handling here in prose. Nothing reconciles that prose against anything else, though,
-    because no field records whether sodium nitrate is used (CV-2); the narrative is the only thing standing
-    between the plan and a variance breach.
-  fix: Add an `indirect_canada_exposure` boolean alongside the `canada` option, and a `sodium_nitrate_used`
-    boolean that can be cross-checked against the Input Material List for CV-2/CV-2a.
+    questions: [g8_0_record_keeping.import_export_activity, g8_0_record_keeping.canada_export_possible, g8_0_record_keeping.export_certificate_types, g8_0_record_keeping.export_destination_requirements]
+    prints: "modules/G8_0.pdf §C, with a [REVIEW] line for a No beside the Canada attestation; the parcel application pages §B"
+  # Closed 2026-11-17 by the international trade slice: G8.0 asks it of every operation that answered the first
+  # question (canada_export_possible), export by a distributor or buyer or as an ingredient included, as WSDA asks it
+  # of every grower. A No beside the Canada attestation among the certificates the destinations require prints a
+  # [REVIEW] line and is listed on the plan review; each parcel application page prints the answer.
 - ref: 2 (Canada variances)
   asks: Do you use Sodium Nitrate to produce organic crops? Yes / No. (Sodium nitrate is approved for use in
     the USDA Organic Regulations but prohibited for use on crops exported to Canada.)
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field asks whether sodium nitrate is used — it would fall generically under `fertility_components`'s
-    `mined_minerals` option or a free-text materials-list row, with nothing distinguishing it as the one input
-    that disqualifies a crop from Canada export.
-  fix: Add a `sodium_nitrate_used` boolean to page C, shown when `export_certificate_types` includes `canada`
-    or `indirect_canada_exposure` is true.
+    questions: [g8_0_record_keeping.canada_export_possible, g8_0_record_keeping.sodium_nitrate_used]
+    prints: "modules/G8_0.pdf §C; under a Yes, the words of § 205.602(h) and the plan's sodium nitrate materials, or a [REVIEW] line when the list holds none; under a No, [REVIEW] lines for a sodium nitrate material on the plan's list, records classified as sodium nitrate, or fertilizer records whose nitrogen source is mined or natural"
+  # Closed 2026-11-17 by the international trade slice: sodium_nitrate_used is asked where crops may reach Canada, and
+  # suggested from records classified as sodium nitrate (restricted_materials: the National List row or WSDA's Sodium
+  # Nitrate subtype, never a partial name match). A No the plan's list or the records contradict is listed on the plan review.
 - ref: 2a (Canada variances)
   asks: If yes, how do you distinguish between organic crops that are produced using sodium nitrate and the
     organic crops that are eligible for export to Canada?
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: No field or block-level flag exists to separate sodium-nitrate-treated crops from Canada-eligible crops.
-  fix: Add a `sodium_nitrate_segregation` textarea, shown when `sodium_nitrate_used` is true.
+    questions: [g8_0_record_keeping.sodium_nitrate_used, g8_0_record_keeping.sodium_nitrate_canada_separation]
+    prints: "modules/G8_0.pdf §C, with a [REVIEW] line under the Yes that Canada does not accept crops produced with it"
+  # Closed 2026-11-17 by the international trade slice: required when sodium nitrate is used
+  # (sodium_nitrate_canada_separation).

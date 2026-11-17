@@ -488,6 +488,23 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             )
         )
 
+    # ---- import and export: Canada's critical variance read against the list and records ------
+    # WSDA AGR 2121 §Q Critical Variances: Canada; OTCO C8 8.4-4. A "no" the plan's own list or the
+    # records contradict is listed here so the operator sees it before filing.
+    from certifications.services.international_trade_review import trade_disagreements
+
+    trade = trade_disagreements(osp)
+    if trade:
+        findings.append(
+            ReviewFinding(
+                code="international_trade_answers_disagree",
+                message="G8.0's answers on export to Canada and sodium nitrate disagree with the plan or the records",
+                count=len(trade),
+                details=trade,
+                module_key="g8_0_record_keeping",
+            )
+        )
+
     # ---- modules not revisited in a renewal cycle -----------------------------------------
     stale = []
     for key, newest in sorted(times.items(), key=lambda kv: kv[1]):

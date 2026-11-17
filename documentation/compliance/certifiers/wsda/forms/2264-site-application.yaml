@@ -232,6 +232,7 @@ items:
     - parcel_application.operation_export_answer
     - g8_0_record_keeping.import_export_activity
     - g8_0_record_keeping.export_destinations
+    - g8_0_record_keeping.canada_export_possible
     prints: >-
       parcels/parcel-application-<name>.pdf §B; modules/G8_0.pdf
   note: >-

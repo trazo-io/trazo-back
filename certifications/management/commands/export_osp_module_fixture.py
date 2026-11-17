@@ -322,6 +322,22 @@ GOLDEN_ANSWER_CASES = {
         # Sells as organic, records short of organic status; other ways records are kept (2026.12.15).
         "sells_records_short": {"sells_as_organic": True, "records_identify_organic_status": False},
         "records_other": {"records_maintained_as": ["phone_app", "other"]},
+        # International trade (2026.12.17): seed imported for the farm opens the import questions; Canada is
+        # asked of every answer; sodium nitrate only where crops may reach Canada.
+        "imports_seed_only": {"import_export_activity": ["import_seed"], "import_seed_countries": ["other"]},
+        "imports_product_and_seed": {"import_export_activity": ["import", "import_seed"]},
+        "exports_canada_nitrate": {
+            "import_export_activity": ["export"],
+            "canada_export_possible": True,
+            "sodium_nitrate_used": True,
+            "export_shipment_documents": ["other"],
+            "equivalency_compliance_method": ["other"],
+        },
+        "no_canada_stale_nitrate": {
+            "import_export_activity": ["none_no_known_export"],
+            "canada_export_possible": False,
+            "sodium_nitrate_used": True,
+        },
     },
 }
 

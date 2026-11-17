@@ -166,6 +166,21 @@ OSP_EVIDENCE_MAP: dict = {
         OUT_OF_SCOPE,
         note="Same as export_certificate_types.",
     ),
+    "export_shipment_documents": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "The documents that travel with each export shipment (bill of lading, invoice, certificates); none "
+            "of them is stored in Trazo, so the answer is the operation's statement."
+        ),
+    ),
+    "export_shipment_documents_other": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Free-text rider on export_shipment_documents; the same limit applies.",
+    ),
+    "export_package_types": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="Names the kinds of package used for export (retail, wholesale, bulk); it states a practice, not a record.",
+    ),
     "export_certificate_process": EvidenceEntry(
         NOT_EVIDENCED,
         note="Describes how export certificates are requested and kept; no export certificate is stored in Trazo.",
