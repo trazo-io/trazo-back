@@ -192,9 +192,12 @@ CASES = (
             "drift-notification letter on file (§ 205.400(f)(1))",
             "drift-notification readiness",
             "Operator maintains the drift-prevention measures above",
+            # Review of back #462: the field is a yes and a date, never the letter itself.
+            "letter to this neighbor on file",
+            "those on file are listed above",
         ),
         (
-            "letter to this neighbor on file (drift prevention, § 205.201(a)(5))",
+            " (drift prevention, § 205.201(a)(5))",
             "prevention practice the plan describes under § 205.201(a)(5)",
             "to the certifying agent immediately (§ 205.400(f)(1))",
         ),

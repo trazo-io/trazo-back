@@ -152,10 +152,12 @@ class ClaimPrecisionTests(TestCase):
         """The note prints on every dossier, including one with no buffer record. Until
         2026-11-17 it said the operator "maintains" a neighbor letter on file, and cited the
         letter to § 205.400(f)(1), which is the operation telling its certifier about drift.
-        A letter to a neighbor is a prevention practice the plan describes, § 205.201(a)(5)."""
+        Notifying a neighbor is a prevention practice the plan describes, § 205.201(a)(5). The
+        field behind it is a yes and a date, so the note never says a letter is on file."""
         text = self._text(self._service()._buffer_zone_footnote())
         self.assertNotIn("Operator maintains", text)
         self.assertNotIn("drift-notification readiness", text)
+        self.assertNotIn("on file", text)
         self.assertIn("prevention practice the plan describes under § 205.201(a)(5)", text)
         self.assertIn("reported to the certifying agent immediately (§ 205.400(f)(1))", text)
 
