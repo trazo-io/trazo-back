@@ -853,6 +853,11 @@ jobs:
       # certifications.tests.test_certifier_access_links passed unchanged (105 tests). None reads
       # the sibling repo. history.tests.test_completeness_gap_label_parity stays out: it reads
       # trazo-app through parents[3] and would skip here, a pass that checks nothing.
+      # 2026-11-17: history.tests.test_event_amendments joins (31 tests, about 8 s). It was never
+      # listed, and its LockedEventResponseContractTests failed 3 of 4 on main: the fixture gave its
+      # user a second membership row with no role, the write check reads the first row, and the edit
+      # was refused 403 before the lock answered 423. The 423, its `correctable` keys and the
+      # correction route all hold once the fixture has one membership. No sibling repo.
       # 2026-11-16: certifications.tests.test_drift_detector and test_drift_detector_phase1 join
       # (39 tests, about 56 s locally, all TransactionTestCase so the runner deals them first).
       # Neither was listed, so the seed drift reasons that stated NOP 5029's three-source guidance
@@ -1092,6 +1097,7 @@ jobs:
             certifications.tests.test_attested_unchanged_checked_at_signing \
             certifications.tests.test_annual_update_signer_is_the_responsible_person \
             certifications.tests.test_annual_update_lock \
+            history.tests.test_event_amendments \
             certifications.tests.test_annual_update_company_details \
             certifications.tests.test_osp_annual_update_api \
             certifications.tests.test_annual_update_documents \

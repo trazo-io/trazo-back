@@ -362,7 +362,9 @@ class LockedEventResponseContractTests(TestCase):
         User = get_user_model()
         cls.user = User.objects.create_user(email="lockcontract@test.com", password="x")
         cls.company = Company.objects.create(name="Lock Contract Co")
-        cls.user.companies.add(cls.company)
+        # One membership. `user.companies.add` wrote a second WorksIn row with no role, and since the
+        # 2026-10-21 tenancy fix the write check reads the caller's first membership row, so the
+        # edit was refused 403 for lacking a role and the lock was never reached.
         WorksIn.objects.create(user=cls.user, company=cls.company, role="CA")
         est = Establishment.objects.create(name="LC1", company=cls.company, state="WA")
         parcel = Parcel.objects.create(name="LCP", establishment=est, area=5.0)
