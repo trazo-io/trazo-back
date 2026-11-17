@@ -156,7 +156,10 @@ _S103 = (
             "covers planting through post-harvest, and the seven event types cover the "
             "activity surface. This is the clause the whole event model answers."
         ),
-        implementation=("trazo-back/history/models/production_event.py::ProductionEvent", "trazo-back/history/models/common_event.py::CommonEvent"),
+        implementation=(
+            "trazo-back/history/models/production_event.py::ProductionEvent",
+            "trazo-back/history/models/common_event.py::CommonEvent",
+        ),
         tests=("trazo-back/history/tests/test_event_subtype_validation.py",),
     ),
     Clause(
@@ -520,7 +523,10 @@ _PRODUCTION_STANDARDS = (
             "events which evidence 205.203-205.206 are attached to the PARCEL, so the "
             "'this field was managed accordingly' question has per-field evidence behind it."
         ),
-        implementation=("trazo-back/product/models.py::Parcel", "trazo-back/history/models/common_event.py::CommonEvent"),
+        implementation=(
+            "trazo-back/product/models.py::Parcel",
+            "trazo-back/history/models/common_event.py::CommonEvent",
+        ),
         tests=("trazo-back/history/tests/test_record_completeness.py",),
     ),
     Clause(
