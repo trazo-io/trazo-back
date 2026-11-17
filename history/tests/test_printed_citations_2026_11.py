@@ -49,7 +49,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DOSSIER = "history/services/audit_export_service.py"
 PLAN = "certifications/services/osp_pdf_snapshot.py"
 MODULE_PDF = "certifications/services/osp_module_pdf.py"
-MODELS = "history/models.py"
+PRODUCTION_EVENT_MODEL = "history/models/production_event.py"
+CHEMICAL_EVENT_MODEL = "history/models/chemical_event.py"
 SERIALIZERS = "history/serializers.py"
 SEED_TEMPLATE = "certifications/management/commands/seed_osp_template.py"
 
@@ -58,7 +59,7 @@ SEED_TEMPLATE = "certifications/management/commands/seed_osp_template.py"
 CASES = (
     (
         "CIT03/CIT13",
-        MODELS,
+        PRODUCTION_EVENT_MODEL,
         ("disqualifies the crop", "before the crop it produces may be sold as organic"),
         ("may itself be sold, ", "is the certifying agent's decision"),
     ),
@@ -95,7 +96,7 @@ CASES = (
     ),
     (
         "CIT05",
-        MODELS,
+        CHEMICAL_EVENT_MODEL,
         ("170.309", "per EPA Worker Protection Standard"),
         ("7 U.S.C. 136j(a)(2)(F)",),
     ),

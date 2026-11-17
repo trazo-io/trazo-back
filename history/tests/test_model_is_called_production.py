@@ -41,7 +41,7 @@ class TheModelIsCalledProductionTests(SimpleTestCase):
         The walk is `git ls-files`, so a local virtualenv or a nested worktree is never in it."""
         files = {path.relative_to(ROOT).as_posix() for path in script.python_files()}
         self.assertGreater(len(files), 700, f"only {len(files)} files read")
-        self.assertIn("history/models.py", files)
+        self.assertIn("history/models/production.py", files)
         self.assertIn("scripts/rename_history_alias.py", files)
         self.assertFalse([f for f in files if "/migrations/" in f])
 

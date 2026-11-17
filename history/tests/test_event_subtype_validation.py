@@ -103,7 +103,7 @@ class NpkMixedNumericTypeTests(TestCase):
     """`ChemicalEvent.clean()` must not explode when NPK values have mixed numeric types.
 
     Found 2026-08-10 while baselining the history suite (4 errors traced to one line,
-    `history/models.py` NPK total). N/P/K are `DecimalField`s, so a value read back from the
+    the NPK total, now in `history/models/chemical_event.py`). N/P/K are `DecimalField`s, so a value read back from the
     database is a `Decimal` — but a value assigned in Python stays whatever it was: a float
     off deserialised JSON, a template default, a management command. Summing the mix raised
 
