@@ -346,7 +346,9 @@ COMMON_OSP_RECORD_TYPES: list[RecordType] = [
         key="cultivation",
         label="Cultivation",
         group=GROUP_CROP,
-        cfr_cite="7 CFR 205.206(a)(1)",
+        # Mechanical weed cultivation (the CU production subtype): § 205.206(c)(4). It cited
+        # (a)(1), which is crop rotation and nutrient management, until 2026-11-17.
+        cfr_cite="7 CFR 205.206(c)(4)",
         evidence=lambda b: _count(b.prod("CU"), "cultivation event"),
     ),
     RecordType(

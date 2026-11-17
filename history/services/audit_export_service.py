@@ -13718,10 +13718,14 @@ class AuditExportService:
             if prohibited_last:
                 parts.append(f"adjoining land last received a prohibited material: {prohibited_last}")
             if neighbor_notified:
-                notify_txt = "drift-notification letter on file (§ 205.400(f)(1))"
+                # § 205.201(a)(5), not § 205.400(f)(1): notifying a neighbor is a practice to
+                # prevent contact; (f)(1) is the operation telling its certifier about drift.
+                # The field is a yes and a date, never the letter itself, so this says what was
+                # recorded ("neighbor notified", as the packet prints it), not "letter on file".
+                notify_txt = "neighbor notified"
                 if notify_date:
-                    notify_txt += f", dated {notify_date}"
-                parts.append(notify_txt)
+                    notify_txt += f" on {notify_date}"
+                parts.append(notify_txt + " (drift prevention, § 205.201(a)(5))")
             de_lines.append(f"<b>{_esc(b.get('direction'))}:</b> " + "; ".join(parts))
         if de_lines:
             elements.append(self._spacer(0.08))
@@ -13847,9 +13851,15 @@ class AuditExportService:
             # product and the operation. This is the sentence an operator acts on in the hours
             # after a drift event, when the difference between "this block's crop is out" and
             # "we have lost certification" decides whether they call the certifier or panic.
-            "Operator maintains the drift-prevention measures above and, "
-            "where a neighbor applies prohibited substances, an annual neighbor-"
-            "notification letter on file (§ 205.400(f)(1) drift-notification readiness).",
+            # NOTE 2026-11-17: this said "Operator maintains the drift-prevention measures above
+            # and ... an annual neighbor-notification letter on file (§ 205.400(f)(1) ...)" on
+            # every dossier, including one with no buffer record and no letter, and cited the
+            # duty to notify the certifier for a letter to a neighbor. It now states the rule and
+            # leaves what the operation recorded to the rows above.
+            "Notifying neighbors about drift is a prevention practice the plan describes "
+            "under § 205.201(a)(5); a notification the operation recorded is listed above. An "
+            "application or drift of a prohibited substance onto the operation must be reported "
+            "to the certifying agent immediately (§ 205.400(f)(1)).",
             self._styles["footer_note"],
         )
 

@@ -148,6 +148,19 @@ class ClaimPrecisionTests(TestCase):
         self.assertIn("does not by itself revoke", text)
         self.assertNotIn("can cause loss of organic status", text)
 
+    def test_the_drift_note_claims_no_letter_and_cites_each_rule_for_its_own_duty(self):
+        """The note prints on every dossier, including one with no buffer record. Until
+        2026-11-17 it said the operator "maintains" a neighbor letter on file, and cited the
+        letter to § 205.400(f)(1), which is the operation telling its certifier about drift.
+        Notifying a neighbor is a prevention practice the plan describes, § 205.201(a)(5). The
+        field behind it is a yes and a date, so the note never says a letter is on file."""
+        text = self._text(self._service()._buffer_zone_footnote())
+        self.assertNotIn("Operator maintains", text)
+        self.assertNotIn("drift-notification readiness", text)
+        self.assertNotIn("on file", text)
+        self.assertIn("prevention practice the plan describes under § 205.201(a)(5)", text)
+        self.assertIn("reported to the certifying agent immediately (§ 205.400(f)(1))", text)
+
     def test_trazo_does_not_assert_records_are_contemporaneous(self):
         """That is a finding about the operation, made by the inspector from the record dates.
 
