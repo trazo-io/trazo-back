@@ -931,10 +931,11 @@ class ChemicalEvent(CommonEvent):
             )
         )
 
-        # A carrier volume and its unit: both halves or neither.
-        from history.services.application_conditions import carrier_conflicts
+        # A carrier volume and its unit: both halves or neither. The stop at or after the start.
+        from history.services.application_conditions import carrier_conflicts, window_conflicts
 
         errors.update(carrier_conflicts(self.carrier_volume, self.carrier_volume_unit))
+        errors.update(window_conflicts(self.application_start, self.application_end))
 
         if errors:
             raise ValidationError(errors)

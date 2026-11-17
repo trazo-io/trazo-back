@@ -781,6 +781,28 @@ def _validate_not_on_source_record(serializer, data):
     return data
 
 
+def _validate_application_window(serializer, data):
+    """The stop at or after the start (`application_conditions.window_conflicts`).
+
+    Read from the request when it carries the field and from the stored record otherwise, so a
+    partial edit that moves only one end cannot put the stop before a start it did not send. A
+    per-parcel window (multi-parcel spray) runs through here too: each target is its own request.
+    """
+    from history.services.application_conditions import window_conflicts
+
+    instance = getattr(serializer, "instance", None)
+
+    def effective(key):
+        if key in data:
+            return data[key]
+        return getattr(instance, key, None) if instance is not None else None
+
+    errors = window_conflicts(effective("application_start"), effective("application_end"))
+    if errors:
+        raise serializers.ValidationError(errors)
+    return data
+
+
 def _validate_carrier_volume(serializer, data):
     """A carrier volume and its unit: both halves or neither (`application_conditions`).
 
@@ -1312,6 +1334,7 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
             raise serializers.ValidationError({"phi_days": "Pre-Harvest Interval (PHI) cannot be negative"})
 
         _validate_carrier_volume(self, data)
+        _validate_application_window(self, data)
         _validate_tank_line_fuel(self, data)
         _validate_tank_line_move(self, data)
         data = _validate_not_on_source_record(self, data)
