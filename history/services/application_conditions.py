@@ -63,6 +63,24 @@ def carrier_conflicts(carrier_volume, carrier_volume_unit) -> dict:
     return {}
 
 
+#: A stop before its start (2026-11-17). Nothing checked the order on any path, single record or
+#: per parcel, and the Washington spray record prints both times as entered (WAC 16-228-1320(1)(g)
+#: asks for the start and stop), so a swapped pair reached the inspector as written.
+STOP_BEFORE_START = "The stop is before the start. Check both times."
+
+
+def window_conflicts(application_start, application_end) -> dict:
+    """The stop comes at or after the start. Either one alone, or neither, is fine.
+
+    Returns {field: message}; empty when fine. Equal times pass: a stated instant is not a
+    contradiction, and refusing it would push a grower to invent a minute."""
+    if application_start is None or application_end is None:
+        return {}
+    if application_end < application_start:
+        return {"application_end": STOP_BEFORE_START}
+    return {}
+
+
 def _number(value) -> Optional[str]:
     """A reading as the operator would write it: 4, 4.5, 62, -3.5. Never "4.0" or "62.00"."""
     if _blank(value):

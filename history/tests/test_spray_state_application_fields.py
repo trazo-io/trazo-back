@@ -41,6 +41,7 @@ from history.serializers import ChemicalEventSerializer, PublicHistorySerializer
 from history.services import multi_target
 from history.services.application_conditions import (
     CARRIER_UNIT_MISSING,
+    STOP_BEFORE_START,
     air_temperature_text,
     application_conditions,
     carrier_text,
@@ -248,6 +249,34 @@ class SerializerRoundTripTests(_Orchard):
         serializer = self._serializer({"carrier_volume": ""}, instance=event, partial=True)
         self.assertFalse(serializer.is_valid())
         self.assertIn("carrier_volume", serializer.errors)
+
+    def test_the_stop_comes_at_or_after_the_start(self):
+        """Nothing checked the order until 2026-11-17, and the Washington export prints both times
+        as entered."""
+        swapped = self._serializer({"application_start": "2026-05-02T09:00", "application_end": "2026-05-02T06:30"})
+        self.assertFalse(swapped.is_valid())
+        self.assertEqual(swapped.errors["application_end"], [STOP_BEFORE_START])
+        same = self._serializer({"application_start": "2026-05-02T06:30", "application_end": "2026-05-02T06:30"})
+        self.assertTrue(same.is_valid(), same.errors)
+        one_end = self._serializer({"application_end": "2026-05-02T06:30"})
+        self.assertTrue(one_end.is_valid(), one_end.errors)
+        # A partial edit that moves only the start past the stored stop is refused too.
+        event = self._spray(
+            application_start=datetime(2026, 5, 2, 6, 30, tzinfo=dt_tz.utc),
+            application_end=datetime(2026, 5, 2, 9, 0, tzinfo=dt_tz.utc),
+        )
+        moved = self._serializer({"application_start": "2026-05-02T10:00"}, instance=event, partial=True)
+        self.assertFalse(moved.is_valid())
+        self.assertIn("application_end", moved.errors)
+
+    def test_a_stop_before_its_start_is_refused_by_the_model(self):
+        event = self._spray(
+            application_start=datetime(2026, 5, 2, 9, 0, tzinfo=dt_tz.utc),
+            application_end=datetime(2026, 5, 2, 6, 30, tzinfo=dt_tz.utc),
+        )
+        with self.assertRaises(DjangoValidationError) as caught:
+            event.full_clean()
+        self.assertIn("application_end", caught.exception.message_dict)
 
     def test_the_applicator_contact_is_a_copy_on_the_record_not_a_link(self):
         """The owner's rule (2026-11-11): a later profile edit never rewrites a past record. The

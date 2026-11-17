@@ -407,6 +407,34 @@ class MultiParcelActivityTests(APITestCase):
         self.assertIn("application_end", res.content.decode())
         self.assertFalse(ChemicalEvent.objects.exists())
 
+    def test_a_parcels_stop_before_its_start_is_refused_and_nothing_is_saved(self):
+        """Each target runs through its own serializer, so the order check holds per parcel: one
+        swapped card refuses the whole job, all or none, and says which time."""
+        targets = self._three_blocks()
+        targets[0].update(
+            application_start=self.when.replace(hour=7).isoformat(),
+            application_end=self.when.replace(hour=8).isoformat(),
+        )
+        targets[1].update(
+            application_start=self.when.replace(hour=10).isoformat(),
+            application_end=self.when.replace(hour=9).isoformat(),
+        )
+        res = self._post(self._spray(targets))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+        self.assertIn("The stop is before the start", res.content.decode())
+        self.assertFalse(ChemicalEvent.objects.exists())
+
+    def test_a_shared_stop_before_its_start_is_refused(self):
+        body = self._spray(
+            self._three_blocks(),
+            application_start=self.when.replace(hour=11).isoformat(),
+            application_end=self.when.replace(hour=7).isoformat(),
+        )
+        res = self._post(body)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.content)
+        self.assertIn("application_end", res.content.decode())
+        self.assertFalse(ChemicalEvent.objects.exists())
+
     def test_a_farm_in_the_url_must_be_the_farm_of_every_parcel(self):
         url = reverse(
             "establishment-events-list",
