@@ -37,7 +37,8 @@ class _Plan(TestCase):
             key: {"answers": {k: {"value": v} for k, v in answers.items()}} for key, answers in (modules or {}).items()
         }
         for key in na:
-            payload[key] = {"answers": {}, "not_applicable": True, "na_attestation": {"by": None, "at": "2026-11-16"}}
+            payload.setdefault(key, {"answers": {}})
+            payload[key].update({"not_applicable": True, "na_attestation": {"by": None, "at": "2026-11-16"}})
         return OrganicSystemPlan.objects.create(
             establishment=self.est,
             version_number=OrganicSystemPlan.objects.filter(establishment=self.est).count() + 1,
@@ -57,15 +58,15 @@ class TheFactsAreTheOnesThePlanStates(_Plan):
                 "g4_0_rotation_soil": {"system_type": ["perennial"]},
                 "certification_contract": {"contract_scopes": ["crops"]},
                 "g3_0_seeds": {"seeds_used": ["none"], "planting_stock_used": ["organic"]},
-                "g3_2_planting_stock": {"stock_organic_status": "mixed"},
+                "g3_2_planting_stock": {"stock_organic_status": "mixed", "stock_source": ["nursery", "produce_own"]},
             }
         )
         facts = self.facts(osp)
         self.assertEqual(facts["Perennial crops grown"], ("yes", "G4.0 system type"))
         self.assertEqual(facts["Wild crops harvested"], ("no", "certification scope"))
         self.assertEqual(
-            facts["Certified organic seed, seedlings or planting stock on this plan"],
-            ("yes", "G3.0 and G3.2: organic planting stock, some certified organic planting stock"),
+            facts["Certified organic seed, seedlings or planting stock from outside the farm"],
+            ("yes", "G3.0 and G3.2: organic planting stock from a nursery"),
         )
 
     def test_nothing_answered_is_not_stated_never_no(self):
@@ -81,10 +82,39 @@ class TheFactsAreTheOnesThePlanStates(_Plan):
     def test_only_the_seed_module_can_say_no(self):
         """G3.2 not applying says no perennial stock went in this period, nothing about seed."""
         stock_only = self.plan(na=("g3_2_planting_stock",))
-        key = "Certified organic seed, seedlings or planting stock on this plan"
+        key = "Certified organic seed, seedlings or planting stock from outside the farm"
         self.assertEqual(self.facts(stock_only)[key][0], "not stated")
         no_organic = self.plan({"g3_0_seeds": {"seeds_used": ["non_organic_untreated"], "seedlings_used": ["none"]}})
         self.assertEqual(self.facts(no_organic)[key], ("no", "G3.0 and G3.2"))
+
+    def test_what_the_farm_saves_grows_or_propagates_itself_is_not_bought(self):
+        """Review of back #459: OFPP 1-3 asks what the operation buys."""
+        key = "Certified organic seed, seedlings or planting stock from outside the farm"
+        own = self.plan(
+            {
+                "g3_0_seeds": {
+                    "seeds_used": ["organic_untreated"],
+                    "seed_source": ["save_own"],
+                    "seedlings_used": ["own_organic"],
+                    "planting_stock_used": ["organic"],
+                },
+                "g3_2_planting_stock": {"stock_organic_status": "all_organic", "stock_source": ["produce_own"]},
+            }
+        )
+        self.assertEqual(self.facts(own)[key], ("no", "G3.0 and G3.2"))
+        unsourced = self.plan({"g3_0_seeds": {"seeds_used": ["organic_treated"]}})
+        self.assertEqual(
+            self.facts(unsourced)[key], ("not stated", "G3.0 and G3.2: organic seed, its source not stated")
+        )
+
+    def test_a_module_marked_not_applicable_holds_no_answers(self):
+        """Review of back #459: answers stored before the N/A election printed as a yes."""
+        osp = self.plan(
+            {"g3_0_seeds": {"seedlings_used": ["purchased_organic"]}},
+            na=("g3_0_seeds",),
+        )
+        key = "Certified organic seed, seedlings or planting stock from outside the farm"
+        self.assertEqual(self.facts(osp)[key], ("no", "G3.0 and G3.2"))
 
 
 class TheG20PagePrintsItForOtcoOnly(_Plan):
@@ -102,7 +132,7 @@ class TheG20PagePrintsItForOtcoOnly(_Plan):
             "§ 205.201(a)(3)",
             "Perennial crops grown: yes (G4.0 system type).",
             "Wild crops harvested: no (certification scope).",
-            "Certified organic seed, seedlings or planting stock on this plan: yes (G3.0 and G3.2: purchased "
+            "Certified organic seed, seedlings or planting stock from outside the farm: yes (G3.0 and G3.2: purchased "
             "organic seedlings).",
         ):
             with self.subTest(words=words):

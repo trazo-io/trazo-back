@@ -16,15 +16,20 @@ from __future__ import annotations
 
 OFPP_SCOPE_AGENTS = frozenset({"otco"})
 
-#: G3.0 answers that put certified organic seed, seedlings or planting stock on the plan, with the
-#: words the note prints for each.
-ORGANIC_SEED = {"organic_untreated": "organic seed", "organic_treated": "organic seed"}
-ORGANIC_SEEDLINGS = {"purchased_organic": "purchased organic seedlings", "own_organic": "organic seedlings grown here"}
-ORGANIC_STOCK = {"organic": "organic planting stock"}
-ORGANIC_STOCK_STATUS = {
-    "all_organic": "certified organic planting stock",
-    "mixed": "some certified organic planting stock",
+#: Where certified organic seed, seedlings or planting stock came from, in the words the note prints.
+#: OFPP 1-3 asks what the operation BUYS: seed saved on the farm, seedlings grown here and stock it
+#: propagates itself are its own, not a supply chain (review of back #459).
+SEED_FROM_OUTSIDE = {
+    "seed_companies": "organic seed from seed companies",
+    "contract_provided": "organic seed supplied under contract",
+    "other": "organic seed from another source",
 }
+STOCK_FROM_OUTSIDE = {
+    "nursery": "organic planting stock from a nursery",
+    "contract_provided": "organic planting stock produced for it under contract",
+    "other": "organic planting stock from another source",
+}
+ORGANIC_SEED = frozenset({"organic_untreated", "organic_treated"})
 
 
 def _answers(osp, module_key) -> tuple[dict, bool]:
@@ -32,7 +37,9 @@ def _answers(osp, module_key) -> tuple[dict, bool]:
 
     entry = _module_entry(osp, module_key)
     attested_na = bool(entry.get("not_applicable")) and bool(entry.get("na_attestation"))
-    return entry.get("answers") or {}, attested_na
+    # An attested not-applicable module holds no answers, whatever it stored before the election
+    # (review of back #459: an earlier organic seed answer printed "yes" beside G3.0 marked N/A).
+    return ({} if attested_na else entry.get("answers") or {}), attested_na
 
 
 def _value(answers, key):
@@ -68,33 +75,43 @@ def scope_facts(osp) -> list[tuple[str, str, str]]:
 
     g3, g3_na = _answers(osp, "g3_0_seeds")
     g32, _g32_na = _answers(osp, "g3_2_planting_stock")
-    named, answered = [], False
-    for key, words in (
-        ("seeds_used", ORGANIC_SEED),
-        ("seedlings_used", ORGANIC_SEEDLINGS),
-        ("planting_stock_used", ORGANIC_STOCK),
-    ):
-        chosen = _listed(_value(g3, key))
-        answered = answered or bool(chosen)
-        named += [words[v] for v in chosen if v in words]
-    status = _value(g32, "stock_organic_status")
+    outside, unsure = [], []
+
+    seeds = set(_listed(_value(g3, "seeds_used")))
+    if seeds & ORGANIC_SEED:
+        sources = _listed(_value(g3, "seed_source"))
+        if not sources:
+            unsure.append("organic seed, its source not stated")
+        outside += [SEED_FROM_OUTSIDE[v] for v in sources if v in SEED_FROM_OUTSIDE]
+
+    if "purchased_organic" in _listed(_value(g3, "seedlings_used")):
+        outside.append("purchased organic seedlings")
+
+    organic_stock = "organic" in _listed(_value(g3, "planting_stock_used")) or _value(g32, "stock_organic_status") in (
+        "all_organic",
+        "mixed",
+    )
+    if organic_stock:
+        sources = _listed(_value(g32, "stock_source"))
+        if not sources:
+            unsure.append("organic planting stock, its source not stated")
+        outside += [STOCK_FROM_OUTSIDE[v] for v in sources if v in STOCK_FROM_OUTSIDE]
+
+    outside, unsure = list(dict.fromkeys(outside)), list(dict.fromkeys(unsure))
     # G3.0 decides a "no": G3.2 not applying says only that no perennial stock went in this period.
-    answered = answered or g3_na
-    if status in ORGANIC_STOCK_STATUS:
-        named.append(ORGANIC_STOCK_STATUS[status])
-    named = list(dict.fromkeys(named))
-    if named:
-        organic = "yes"
-    elif answered:
-        organic = "no"
+    answered = g3_na or any(_listed(_value(g3, k)) for k in ("seeds_used", "seedlings_used", "planting_stock_used"))
+    if outside:
+        organic, named = "yes", outside
+    elif unsure or not answered:
+        organic, named = "not stated", unsure
     else:
-        organic = "not stated"
+        organic, named = "no", []
     organic_from = "G3.0 and G3.2" + (f": {', '.join(named)}" if named else "")
 
     return [
         ("Perennial crops grown", perennial, "G4.0 system type"),
         ("Wild crops harvested", wild, wild_from),
-        ("Certified organic seed, seedlings or planting stock on this plan", organic, organic_from),
+        ("Certified organic seed, seedlings or planting stock from outside the farm", organic, organic_from),
     ]
 
 
