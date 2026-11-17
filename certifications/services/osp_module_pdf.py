@@ -2685,6 +2685,15 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
     if entry.get("status_line"):
         story.append(Paragraph(_escape(entry["status_line"]), styles["meta"]))
     story.append(Spacer(1, 12))
+    if module.key == "g2_0_fraud_prevention":
+        # OTCO OFPP 1-3: why an OTCO plan answers the whole module, and the facts its gate turns on.
+        from certifications.services.ofpp_scope import ofpp_scope_note
+
+        note = ofpp_scope_note(osp)
+        for i, line in enumerate(note):
+            story.append(Paragraph(_escape(line), styles["meta"] if i else styles["body"]))
+        if note:
+            story.append(Spacer(1, 10))
 
     if not_applicable:
         stamp = ""
