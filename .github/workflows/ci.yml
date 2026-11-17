@@ -526,6 +526,10 @@ jobs:
       # prevention module is answered in full and states the three facts OTCO OFPP 1-3 turns on; other agents'
       # pages carry no such note. Builds its own farm; no sibling repo.
       #
+      # 2026-11-17: certifications.tests.test_seed_stock_cluster joins. Records of trees, vines and berry plants
+      # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
+      # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
+      #
       # 2026-11-16: certifications.tests.test_c11_materials_list joins. OTCO C11's four columns on an OTCO plan's
       # materials page, the Other review agency, use and section taken with a catalog attach, the change log for
       # operator-entered materials and the additions since the filing (C11 11.1; CCOF materials list update).
@@ -1045,6 +1049,7 @@ jobs:
             certifications.tests.test_audit_trail_linking_and_planting \
             certifications.tests.test_c11_materials_list \
             certifications.tests.test_ofpp_scope_note \
+            certifications.tests.test_seed_stock_cluster \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

@@ -387,7 +387,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   asks the inventory system and how often (12.2-7); G6.0 asks how input records and harvest, shipping and sales records
 #   tell organic from non-organic on a split operation, and contamination prevention through handling (CCOF G8.0 C2, C3;
 #   OTCO 12.4-1a, 1b; C9 9.4-3), with three buffer options (CCOF G6.0 A1).
-CONTENT_VERSION = "2026.12.15"
+# 2026.12.16: seeds and planting stock. G3.0 asks the status of planting stock other than perennial nursery
+#   stock (OTCO C3 3.1-4) and suggests `planting_stock_used` from records of trees, vines, berry plants or
+#   rootstock (which no longer suggest seed); grafting and nonorganic stock treatments each gain a "yes, not
+#   every material is on the inputs list yet" answer (CCOF G3.0 E1, WSDA AGR 2121 C3c); G3.0b asks whether
+#   stock sold as organic was bought nonorganic (WSDA AGR 2121 C4).
+CONTENT_VERSION = "2026.12.16"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

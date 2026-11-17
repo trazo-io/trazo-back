@@ -18,3 +18,5 @@ questions:
     Who applies the seed treatment. WSDA AGR 2121 A2b and A3c ask it; CCOF's G3.0 D does not.
   g3_0_seeds.seeds_additional_notes: >-
     A free-text notes field. WSDA AGR 2121 A4 offers one; CCOF's G3.0 has none.
+  g3_0_seeds.other_planting_stock_used: >-
+    The organic status of planting stock other than perennial nursery stock (rhizomes, tubers, crowns, canes). OTCO C3 3.1-4 asks it apart from perennial stock; CCOF's G3.0 A3 asks one status for all planting stock.

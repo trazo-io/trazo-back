@@ -45,3 +45,5 @@ questions:
     How resold planting stock is labeled. WSDA AGR 2121 C4b asks it; OTCO's C3 does not.
   g3_2_planting_stock.planting_stock_additional_notes: >-
     A free-text notes field. WSDA AGR 2121 C5 offers one; OTCO's C3 has none.
+  g3_2_planting_stock.resold_stock_bought_nonorganic: >-
+    Whether planting stock sold as organic was bought as nonorganic stock. C3 3.2-2 stops at stock used for planting or sale; CCOF G3.0 A3b and WSDA AGR 2121 C4 ask it.

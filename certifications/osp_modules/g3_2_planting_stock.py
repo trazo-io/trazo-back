@@ -586,12 +586,28 @@ G3_2_PLANTING_STOCK = Module(
                                 "Sí — los materiales del tratamiento están en nuestra lista de " "insumos del OSP",
                             ),
                         ),
+                        # WSDA AGR 2121 C3c: "Yes, include all materials ... on your Input Material List".
+                        # "treated_listed" carries the listing with it, so treated stock whose materials are
+                        # not listed yet had no true answer.
+                        Option(
+                            "treated_not_listed",
+                            text(
+                                "Yes, and not every treatment material is on our OSP inputs list yet",
+                                "Sí, y todavía no todos los materiales del tratamiento están en nuestra lista de "
+                                "insumos del OSP",
+                            ),
+                            review=(
+                                "The nonorganic planting stock was treated, and the plan says not every treatment "
+                                "material is on the OSP inputs list yet."
+                            ),
+                        ),
                         Option(
                             "unknown",
                             text(
                                 "Not yet confirmed with the nursery",
                                 "Todavía no confirmado con el vivero",
                             ),
+                            review="Whether the nonorganic planting stock was treated is not yet confirmed with the nursery.",
                         ),
                     ),
                 ),
@@ -602,7 +618,7 @@ G3_2_PLANTING_STOCK = Module(
                     label=text("Who applied the treatment?", "¿Quién aplicó el tratamiento?"),
                     required=False,
                     nop_cite="§ 205.204(a)",
-                    visible_when=(Condition("stock_treatments", "eq", "treated_listed"),),
+                    visible_when=(Condition("stock_treatments", "one_of", ["treated_listed", "treated_not_listed"]),),
                     compiles_to=CompileRule(template="Treatment of nonorganic planting stock applied by: {answer}."),
                     options=(
                         Option("farm", text("This farm", "Esta finca")),
@@ -655,6 +671,24 @@ G3_2_PLANTING_STOCK = Module(
                             ),
                         ),
                     ),
+                ),
+                Question(
+                    # WSDA AGR 2121 C4: "Do you purchase and resell nonorganic planting stock?" The one-year
+                    # rule below is about exactly that stock; stock bought organic carries its own status.
+                    key="resold_stock_bought_nonorganic",
+                    kind="radio",
+                    label=text(
+                        "Was any of the planting stock you sell as organic bought as nonorganic stock?",
+                        "¿Parte del material de plantación que vendes como orgánico se compró como material no "
+                        "orgánico?",
+                    ),
+                    required=False,
+                    nop_cite="§ 205.204(a)(4)",
+                    visible_when=(Condition("stock_sold_as_organic", "eq", "sold_organic_stock"),),
+                    compiles_to=CompileRule(
+                        template="Planting stock sold as organic that was bought as nonorganic stock: {answer}."
+                    ),
+                    options=(Option("no", text("No", "No")), Option("yes", text("Yes", "Sí"))),
                 ),
                 Question(
                     key="organic_management_start_date",

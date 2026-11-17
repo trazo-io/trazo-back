@@ -12,3 +12,5 @@ questions:
     An inventory of treatment types. OTCO C3 3.5-1 asks it; WSDA AGR 2121 A2b and A3c ask yes or no and the materials list.
   g3_0_seeds.grafting_practices: >-
     Grafting practices. CCOF G3.0 E1a asks it; WSDA AGR 2121 C mentions grafting stock only within the commercial-availability search.
+  g3_0_seeds.other_planting_stock_used: >-
+    The organic status of planting stock other than perennial nursery stock (rhizomes, tubers, crowns, canes). OTCO C3 3.1-4 asks it apart from perennial stock; WSDA AGR 2121 asks organic and nonorganic planting stock on §C, for perennial stock.
