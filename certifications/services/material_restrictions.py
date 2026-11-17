@@ -6,10 +6,15 @@ THE RULES (Oscar, 2026-10-02)
   may carry several restrictions.
 * Restriction text is either regulation text Trazo holds (a § 205.602 condition of use, or a § 205.601
   annotation held verbatim in `national_list_citations.ANNOTATIONS`, with its citation, its effective
-  date and when Trazo read it) or text the operator transcribed from a source
+  date and when Trazo read it), WSDA's own annotation for a WSDA-listed product (`WSDAMaterial.annotation`,
+  with the list's edition date; 2026-11-17), or text the operator transcribed from a source
   (label, OMRI or WSDA listing, certifier letter...), printed as "Restriction transcribed by the
   operator; not independently verified by Trazo." Verified wording never says the restriction applies
-  to this material or use.
+  to this material or use. A WSDA annotation is WSDA's own condition on that product, so it is printed
+  as WSDA's words for that product number, with no applicability caveat; it still says nothing about
+  whether the use meets it.
+* Trazo holds no OMRI restriction wording (OMRI's terms are an open question, 2026-10-14), so an OMRI
+  product's restriction is always transcribed by the operator from the listing.
 * "How it is met" is the operator's statement, attributed and dated. It is never a compliance result.
 * A material with no restriction on record reads "restriction not documented", never "no
   restrictions".
@@ -31,6 +36,8 @@ from certifications.models import PlanMaterialRestrictionStatement as PRS
 TRANSCRIBED_LABEL = "Restriction transcribed by the operator; not independently verified by Trazo."
 NOT_DOCUMENTED = "Restriction not documented in Trazo."
 APPLICABILITY_NOT_ESTABLISHED = "Whether it applies to this material and use is not established by Trazo."
+#: How a WSDA annotation is attributed wherever it prints: WSDA's words, as Trazo copied them from the list.
+WSDA_WORDS = "WSDA's words, transcribed by Trazo"
 
 CURRENT = "current"
 NEEDS_REVIEW = "needs_review"
@@ -81,6 +88,68 @@ def _linked_substance(osp, kind, mid):
     return None
 
 
+def _linked_wsda(osp, kind, mid):
+    """The WSDA listing a material is, or that the operator's entry links, if any."""
+    from certifications.models import PlanMaterialEntry, WSDAMaterial
+
+    if kind == PRS.MATERIAL_WSDA:
+        return WSDAMaterial.objects.filter(pk=mid).first()
+    if kind == PRS.MATERIAL_PLAN_ENTRY:
+        entry = PlanMaterialEntry.objects.filter(pk=mid, osp=osp).select_related("wsda_material").first()
+        return getattr(entry, "wsda_material", None)
+    return None
+
+
+def wsda_list_restriction(osp, kind, mid) -> Optional[dict]:
+    """WSDA's own annotation for this material's WSDA listing, or None.
+
+    None when the material has no WSDA listing, when WSDA prints NONE for it (stored as "") and when the
+    annotation was never transcribed (NULL). NONE is not offered as a restriction and is never printed as
+    "no restrictions": the label can still restrict use, and that stays "restriction not documented"."""
+    from certifications.services.registry_identifiers import wsda_identifier_label
+
+    material = _linked_wsda(osp, kind, mid)
+    text = " ".join((getattr(material, "annotation", None) or "").split())
+    if material is None or not text:
+        return None
+    return {
+        "key": f"wsda:{material.pk}",
+        "material": material,
+        "text": text,
+        # "WSDA Product #3376"; a row with no real product number is still WSDA's listing.
+        "citation": wsda_identifier_label(material.wsda_id) or "WSDA listing",
+        "effective_date": material.list_effective_date,
+        "read_at": material.updated_at,
+        "source_url": material.source_url or "",
+    }
+
+
+def _comparable(text) -> str:
+    return " ".join((text or "").split()).lower().rstrip(". ")
+
+
+def answers_wsda_annotation(statement, held) -> bool:
+    """True when a current statement answers the WSDA annotation `held` (from `wsda_list_restriction`).
+
+    Two kinds do: one made against the annotation itself (its key, and the same words, so a reworded
+    edition is not answered by the old one), and one the operator transcribed from the WSDA listing
+    before Trazo held the annotation, whose words are the annotation's (case, spacing and a closing
+    full stop aside). Without the second, an answer recorded the old way printed beside a second copy
+    of the annotation marked "How it is met: not stated" (review of back #470)."""
+    if statement.restriction_key == held["key"]:
+        return statement.restriction_text == held["text"]
+    return (
+        statement.restriction_source == PRS.SOURCE_TRANSCRIBED
+        and statement.source_type == PRS.DOC_WSDA
+        and _comparable(statement.restriction_text) == _comparable(held["text"])
+    )
+
+
+def _wsda_source(citation, effective_date) -> str:
+    edition = effective_date.isoformat() if effective_date else "edition date not held"
+    return f"WSDA annotation, {citation} (Organic Input Material List of {edition}, {WSDA_WORDS})"
+
+
 def regulation_restriction(osp, kind, mid) -> Optional[dict]:
     """The restriction Trazo holds as REGULATION wording for this material, or None.
 
@@ -127,6 +196,12 @@ def statement_state(statement, osp) -> str:
         held = regulation_restriction(osp, statement.material_kind, statement.material_id)
         if held is None or held["key"] != statement.restriction_key or held["text"] != statement.restriction_text:
             return NEEDS_REVIEW
+    if statement.restriction_source == PRS.SOURCE_WSDA_LIST:
+        # A new WSDA edition that rewords or drops the annotation puts the answer back in front of the
+        # operator: they answered the old words.
+        held = wsda_list_restriction(osp, statement.material_kind, statement.material_id)
+        if held is None or held["key"] != statement.restriction_key or held["text"] != statement.restriction_text:
+            return NEEDS_REVIEW
     return CURRENT
 
 
@@ -159,6 +234,20 @@ def record_statement(osp, user, data) -> PRS:
             "restriction_key": held["key"],
             "restriction_text": held["text"],
             "national_list_substance": held["substance"],
+            "citation": held["citation"],
+            "source_effective_date": held["effective_date"],
+            "source_read_at": held["read_at"],
+        }
+    elif source == PRS.SOURCE_WSDA_LIST:
+        held = wsda_list_restriction(osp, kind, mid)
+        if held is None:
+            raise RestrictionError(
+                "Trazo holds no WSDA annotation for this material. Transcribe the restriction from its source.",
+                field="restriction_source",
+            )
+        fields = {
+            "restriction_key": held["key"],
+            "restriction_text": held["text"],
             "citation": held["citation"],
             "source_effective_date": held["effective_date"],
             "source_read_at": held["read_at"],
@@ -258,6 +347,10 @@ def statement_lines(statement) -> list:
             f"Restriction, {statement.citation} (regulation wording held by Trazo, effective {when}, read {read}): "
             f'"{statement.restriction_text}" {APPLICABILITY_NOT_ESTABLISHED}'
         )
+    elif statement.restriction_source == PRS.SOURCE_WSDA_LIST:
+        restriction = (
+            f"{_wsda_source(statement.citation, statement.source_effective_date)}: " f'"{statement.restriction_text}"'
+        )
     else:
         source = dict(PRS.DOC_CHOICES).get(statement.source_type, statement.source_type)
         where = ", ".join(x for x in (statement.source_identifier, statement.source_locator) if x)
@@ -332,6 +425,13 @@ def material_restriction_text(osp, kind, mid) -> str:
             f"Restriction, {held['citation']} (regulation wording held by Trazo): \"{held['text']}\" "
             f"{APPLICABILITY_NOT_ESTABLISHED} How it is met: not stated."
         )
+    wsda = wsda_list_restriction(osp, kind, mid)
+    # Matched on the words too: a new WSDA edition keeps the key and rewords the annotation, and the
+    # statement under [REVIEW] answers the old words, so the current ones print as not yet answered.
+    if wsda is not None and not any(answers_wsda_annotation(s, wsda) for s in statements):
+        parts.append(
+            f"{_wsda_source(wsda['citation'], wsda['effective_date'])}: \"{wsda['text']}\" How it is met: not stated."
+        )
     if not statements:
         versions = sorted({s.osp.version_number for s in earlier_version_statements(osp, kind, mid)})
         if versions:
@@ -381,10 +481,13 @@ def withdrawn_statement_lines(osp) -> list:
     for st in PRS.objects.filter(osp=osp, withdrawn_at__isnull=False).order_by("withdrawn_at", "id"):
         stated = st.stated_at.date().isoformat() if st.stated_at else "date not recorded"
         regulation = st.restriction_source == PRS.SOURCE_REGULATION
-        origin = st.citation if regulation else "transcribed by the operator"
+        wsda = st.restriction_source == PRS.SOURCE_WSDA_LIST
+        origin = (
+            st.citation if regulation else f"WSDA annotation, {st.citation}" if wsda else "transcribed by the operator"
+        )
         # The same qualifier `statement_lines` prints: withdrawn wording is still never a claim that it
         # applies, or that Trazo verified it (review of back #109).
-        qualifier = APPLICABILITY_NOT_ESTABLISHED if regulation else TRANSCRIBED_LABEL
+        qualifier = APPLICABILITY_NOT_ESTABLISHED if regulation else f"({WSDA_WORDS}.)" if wsda else TRANSCRIBED_LABEL
         lines.append(
             f'Restriction statement for {st.material_name} ({origin}): "{st.restriction_text}" {qualifier} Stated by '
             f"{st.stated_by_name or 'the operator'} on {stated}; withdrawn on {st.withdrawn_at.date().isoformat()} "
@@ -431,6 +534,7 @@ def restrictions_view(osp) -> list:
     out = []
     for kind, mid, name in plan_material_refs(osp):
         held = regulation_restriction(osp, kind, mid)
+        wsda = wsda_list_restriction(osp, kind, mid)
         # This plan version only, matching `material_restriction_text` and the workbook (review of
         # back #99). Other versions' statements are listed apart, for review.
         history = list(PRS.objects.filter(osp=osp, material_kind=kind, material_id=mid).order_by("stated_at", "id"))
@@ -441,6 +545,18 @@ def restrictions_view(osp) -> list:
                 "material_name": name,
                 "regulation_restriction": (
                     {"key": held["key"], "text": held["text"], "citation": held["citation"]} if held else None
+                ),
+                # WSDA's annotation for the material's WSDA listing, with the list's edition date.
+                "wsda_list_restriction": (
+                    {
+                        "key": wsda["key"],
+                        "text": wsda["text"],
+                        "citation": wsda["citation"],
+                        "edition": wsda["effective_date"].isoformat() if wsda["effective_date"] else None,
+                        "source_url": wsda["source_url"],
+                    }
+                    if wsda
+                    else None
                 ),
                 "statements": [_statement_json(s, osp) for s in history if s.superseded_at is None],
                 "history": [_statement_json(s, osp) for s in history],
