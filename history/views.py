@@ -4186,7 +4186,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         """
         if prepared is None:
             return None
-        from .models import Gallery
+        from common.models import Gallery
 
         gallery = Gallery.objects.create()
         for image in prepared:
@@ -4813,7 +4813,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
             from django.conf import settings
 
-            from .models import Gallery
+            from common.models import Gallery
 
             # Create album if doesn't exist
             if not hasattr(instance, "album") or not instance.album:

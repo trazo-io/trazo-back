@@ -401,7 +401,7 @@ class MicronutrientCitationIsCurrentTests(SimpleTestCase):
 
     #: Files that state the citation to a certifier, an operator, or a reviewer.
     _CITING_FILES = (
-        "history/models.py",
+        "history/models/",  # every module of the package
         "history/serializers.py",
         "history/services/audit_export_service.py",
         "certifications/services/national_list_aliases.py",
@@ -410,7 +410,10 @@ class MicronutrientCitationIsCurrentTests(SimpleTestCase):
     def _sources(self):
         root = Path(__file__).resolve().parents[2]
         for rel in self._CITING_FILES:
-            yield rel, (root / rel).read_text(encoding="utf-8")
+            paths = sorted((root / rel).glob("*.py")) if rel.endswith("/") else [root / rel]
+            self.assertTrue(paths, f"{rel} holds no source: this sweep would pass by reading nothing")
+            for path in paths:
+                yield path.relative_to(root).as_posix(), path.read_text(encoding="utf-8")
 
     def test_no_source_still_cites_the_pre_2016_micronutrient_paragraph(self):
         """(j)(6) is cited now, for what it is (magnesium sulfate, the readiness row and the

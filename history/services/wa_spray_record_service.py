@@ -48,7 +48,7 @@ the rule asks the farm's record to name the firm, item (n).
 TIMES
 -----
 `application_start` / `application_end` are the wall clock the operator typed, stored as UTC
-(`history/models.py`, ChemicalEvent.application_start), so they print verbatim. The day a record
+(`history/models/chemical_event.py`, ChemicalEvent.application_start), so they print verbatim. The day a record
 was entered is an instant from the audit log (events carry no `created_at`; the retention floor
 reads the same log), printed in Pacific time: Washington lies wholly in that zone, and Trazo stores
 no per-farm zone, so for a Washington farm this is a fact rather than a guess.

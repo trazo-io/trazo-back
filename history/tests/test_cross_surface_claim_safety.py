@@ -1009,7 +1009,7 @@ class NoClaimFromAGuessTests(TestCase):
 
         root = Path(__file__).resolve().parents[2]
         allowed = {
-            "history/models.py",
+            "history/models/chemical_event.py",
             "history/signals.py",
             "history/serializers.py",
             "history/services/national_list_basis.py",

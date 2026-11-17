@@ -298,7 +298,7 @@ ENVIRONMENT = config("ENVIRONMENT", default="production")
 # set ENVIRONMENT, base.py has silently handed us http://consumer.localhost:3000/, and
 # setting ENVIRONMENT further down this file is too late to undo it.
 #
-# That is not cosmetic. history/models.py bakes BASE_CONSUMER_URL into the QR *image* at
+# That is not cosmetic. history/models/production.py bakes BASE_CONSUMER_URL into the QR *image* at
 # generation time, so a wrong value means every QR code a farm prints is permanently dead —
 # and the farm only finds out when a buyer scans it. The same values back every verification,
 # password-reset and invitation email. Both failure modes are silent.

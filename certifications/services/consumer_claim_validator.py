@@ -259,7 +259,7 @@ class ConsumerClaimValidator:
     """
 
     # History.production_method values that imply organic-adjacent claims.
-    # See history/models.py:78-84. Treat these as "claimed organic" without a cert.
+    # See Production.production_method (history/models/production.py). Treat these as "claimed organic" without a cert.
     SELF_REPORTED_ORGANIC_METHODS = {"organic", "regenerative", "biodynamic"}
 
     def validate(self, history) -> ConsumerClaimResult:

@@ -446,12 +446,15 @@ class BindingClauseIntegrityTests(SimpleTestCase):
         second is what a substring sweep can never catch, and is what this file itself got
         wrong (§ 205.202(b) named `Parcel` for fields that live on `ParcelCropHistory`).
         """
-        history_models = _resolve_ref("trazo-back/history/models.py")
+        history_models = _resolve_ref("trazo-back/history/models/production_event.py")
+        production_model = _resolve_ref("trazo-back/history/models/production.py")
         product_models = _resolve_ref("trazo-back/product/models.py")
 
         self.assertTrue(_defines_symbol(history_models, "ProductionEvent"))
         self.assertTrue(_defines_symbol(history_models, "ProductionEvent.harvest_lot_code"))
-        self.assertTrue(_defines_symbol(history_models, "compute_retention_until"))
+        self.assertTrue(_defines_symbol(production_model, "compute_retention_until"))
+        # A symbol cited in the wrong module of the package is a stale citation too.
+        self.assertFalse(_defines_symbol(history_models, "compute_retention_until"))
 
         self.assertFalse(
             _defines_symbol(history_models, "ProductionEvent.totally_made_up_field"),

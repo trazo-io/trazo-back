@@ -5,7 +5,7 @@ Why this file exists: `backend/subdomain_config.py` reads ENVIRONMENT at import 
 already been consumed. Before 2026-08-07 that meant a deployment whose environment did not set
 ENVIRONMENT silently inherited `http://consumer.localhost:3000/`.
 
-That is not a degraded experience. `history/models.py` bakes BASE_CONSUMER_URL into the QR
+That is not a degraded experience. `history/models/production.py` bakes BASE_CONSUMER_URL into the QR
 *image* at generation time, so the farm prints dead codes and only discovers it when a buyer
 scans one. The same values back every verification, password-reset and invitation email.
 """

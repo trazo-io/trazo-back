@@ -156,7 +156,7 @@ _S103 = (
             "covers planting through post-harvest, and the seven event types cover the "
             "activity surface. This is the clause the whole event model answers."
         ),
-        implementation=("trazo-back/history/models.py::ProductionEvent", "trazo-back/history/models.py::CommonEvent"),
+        implementation=("trazo-back/history/models/production_event.py::ProductionEvent", "trazo-back/history/models/common_event.py::CommonEvent"),
         tests=("trazo-back/history/tests/test_event_subtype_validation.py",),
     ),
     Clause(
@@ -203,9 +203,9 @@ _S103 = (
             "from the harvest RECORDS rather than a typed season total."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent.harvest_lot_code",
-            "trazo-back/history/models.py::ProductionEvent.suggest_harvest_lot_code",
-            "trazo-back/history/models.py::SalesRecord",
+            "trazo-back/history/models/production_event.py::ProductionEvent.harvest_lot_code",
+            "trazo-back/history/models/production_event.py::ProductionEvent.suggest_harvest_lot_code",
+            "trazo-back/history/models/sales.py::SalesRecord",
             "trazo-back/history/services/audit_export_service.py::AuditExportService._resolve_harvest_total",
         ),
         tests=(
@@ -235,7 +235,7 @@ _S103 = (
             "actually asks for."
         ),
         implementation=(
-            "trazo-back/history/models.py::SalesRecord.organic_label_category",
+            "trazo-back/history/models/sales.py::SalesRecord.organic_label_category",
             "trazo-back/history/services/audit_export_service.py",
         ),
         tests=(
@@ -255,8 +255,8 @@ _S103 = (
             "including paper and other software, none of which Trazo controls."
         ),
         implementation=(
-            "trazo-back/history/models.py::compute_retention_until",
-            "trazo-back/history/models.py::Production.retention_until",
+            "trazo-back/history/models/production.py::compute_retention_until",
+            "trazo-back/history/models/production.py::Production.retention_until",
             # What the deletion guards and printed dates read: the stored date, or a later state
             # floor computed now.
             "trazo-back/history/retention.py::effective_retention_until",
@@ -361,9 +361,9 @@ _S201 = (
             "a composition field and a per-material parcel link."
         ),
         implementation=(
-            "trazo-back/history/models.py::ChemicalEvent",
+            "trazo-back/history/models/chemical_event.py::ChemicalEvent",
             "trazo-back/certifications/osp_modules/materials_application.py",
-            "trazo-back/history/models.py::ProductionEvent.seed_search_attempts",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_search_attempts",
         ),
         tests=(
             "trazo-back/history/tests/test_packet_fields_have_writers.py",
@@ -431,8 +431,8 @@ _S201 = (
         ),
         implementation=(
             "trazo-back/certifications/osp_modules/g6_0_production.py",
-            "trazo-back/history/models.py::ProductionEvent.shared_with_conventional",
-            "trazo-back/history/models.py::ProductionEvent.equipment_cleaning_event",
+            "trazo-back/history/models/production_event.py::ProductionEvent.shared_with_conventional",
+            "trazo-back/history/models/production_event.py::ProductionEvent.equipment_cleaning_event",
         ),
         tests=(
             "trazo-back/history/tests/test_transport_export.py",
@@ -520,7 +520,7 @@ _PRODUCTION_STANDARDS = (
             "events which evidence 205.203-205.206 are attached to the PARCEL, so the "
             "'this field was managed accordingly' question has per-field evidence behind it."
         ),
-        implementation=("trazo-back/product/models.py::Parcel", "trazo-back/history/models.py::CommonEvent"),
+        implementation=("trazo-back/product/models.py::Parcel", "trazo-back/history/models/common_event.py::CommonEvent"),
         tests=("trazo-back/history/tests/test_record_completeness.py",),
     ),
     Clause(
@@ -564,7 +564,7 @@ _PRODUCTION_STANDARDS = (
             "answer and the one an inspector actually asks."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent.buffer_disposition",
+            "trazo-back/history/models/production_event.py::ProductionEvent.buffer_disposition",
             "trazo-back/certifications/osp_modules/parcel_application.py",
         ),
         tests=("trazo-app/src/config/events/__tests__/bufferEntersCommerce.test.ts",),
@@ -585,7 +585,7 @@ _PRODUCTION_STANDARDS = (
         ),
         implementation=(
             "trazo-back/certifications/osp_modules/g4_0_rotation_soil.py",
-            "trazo-back/history/models.py::SoilManagementEvent",
+            "trazo-back/history/models/soil_management_event.py::SoilManagementEvent",
         ),
         tests=("trazo-back/certifications/tests/test_osp_module_compiler.py",),
     ),
@@ -604,7 +604,7 @@ _PRODUCTION_STANDARDS = (
         ),
         implementation=(
             "trazo-back/certifications/osp_modules/g4_0_rotation_soil.py",
-            "trazo-back/history/models.py::SoilManagementEvent",
+            "trazo-back/history/models/soil_management_event.py::SoilManagementEvent",
         ),
         tests=("trazo-back/certifications/tests/test_osp_module_compiler.py",),
     ),
@@ -634,10 +634,10 @@ _PRODUCTION_STANDARDS = (
             # save calls (overall review OV-RK-C02).
             "trazo-back/history/services/manure_check.py::parcel_conflicts",
             "trazo-back/history/services/manure_interval.py::below_minimum",
-            "trazo-back/history/models.py::SoilManagementEvent.manure_harvest_interval",
-            "trazo-back/history/models.py::SoilManagementEvent.compost_initial_cn_ratio",
-            "trazo-back/history/models.py::SoilManagementEvent.compost_method",
-            "trazo-back/history/models.py::SoilManagementEvent.compost_temperature_log",
+            "trazo-back/history/models/soil_management_event.py::SoilManagementEvent.manure_harvest_interval",
+            "trazo-back/history/models/soil_management_event.py::SoilManagementEvent.compost_initial_cn_ratio",
+            "trazo-back/history/models/soil_management_event.py::SoilManagementEvent.compost_method",
+            "trazo-back/history/models/soil_management_event.py::SoilManagementEvent.compost_temperature_log",
         ),
         tests=(
             "trazo-app/src/config/events/__tests__/grazingManureInterval.test.ts",
@@ -731,9 +731,9 @@ _PRODUCTION_STANDARDS = (
             "individually recordable."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent.seed_search_attempts",
-            "trazo-back/history/models.py::ProductionEvent.seed_nonavailability_reason",
-            "trazo-back/history/models.py::ProductionEvent.seed_treatment_allowed_basis",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_search_attempts",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_nonavailability_reason",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_treatment_allowed_basis",
         ),
         tests=(
             "trazo-back/history/tests/test_planting_record_completeness.py",
@@ -783,7 +783,7 @@ _PRODUCTION_STANDARDS = (
             "planting. A stored date that nobody does arithmetic on would not answer the rule."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent.stock_organic_management_start",
+            "trazo-back/history/models/production_event.py::ProductionEvent.stock_organic_management_start",
             "trazo-back/history/services/audit_export_service.py",
         ),
         tests=("trazo-back/history/tests/test_harvest_lot_identity.py",),
@@ -829,8 +829,8 @@ _PRODUCTION_STANDARDS = (
             "is attached to the lot it justifies, which is what § 205.103(b)(2) asks for."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent.seed_search_attempts",
-            "trazo-back/history/models.py::ProductionEvent.seed_nonavailability_reason",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_search_attempts",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_nonavailability_reason",
         ),
         tests=("trazo-back/history/tests/test_planting_record_completeness.py",),
         note=(
@@ -860,7 +860,7 @@ _PRODUCTION_STANDARDS = (
             "unreviewable, so the packet prints the pair or says the basis is missing."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent.seed_treatment_allowed_basis",
+            "trazo-back/history/models/production_event.py::ProductionEvent.seed_treatment_allowed_basis",
             "trazo-back/common/field_registry.py::NO_TREATMENT_ANSWERS",
         ),
         tests=("trazo-back/history/tests/test_planting_record_completeness.py",),
@@ -900,7 +900,7 @@ _PRODUCTION_STANDARDS = (
             "tried before a substance was reached for, which is what (e) conditions on."
         ),
         implementation=(
-            "trazo-back/history/models.py::PestManagementEvent",
+            "trazo-back/history/models/pest_management_event.py::PestManagementEvent",
             "trazo-back/certifications/osp_modules/g5_0_pest.py",
         ),
         tests=("trazo-back/certifications/tests/test_osp_module_compiler.py",),
@@ -916,7 +916,7 @@ _PRODUCTION_STANDARDS = (
             "orchard-floor operations, and both are recordable subtypes."
         ),
         implementation=(
-            "trazo-back/history/models.py::ProductionEvent",
+            "trazo-back/history/models/production_event.py::ProductionEvent",
             "trazo-back/certifications/osp_modules/g5_0_pest.py",
         ),
         tests=("trazo-app/src/config/events/__tests__/formRenderConformance.test.tsx",),
@@ -937,7 +937,7 @@ _PRODUCTION_STANDARDS = (
             "organic-approval basis."
         ),
         implementation=(
-            "trazo-back/history/models.py::PestManagementEvent",
+            "trazo-back/history/models/pest_management_event.py::PestManagementEvent",
             "trazo-back/certifications/osp_modules/g5_0_pest.py",
         ),
         tests=("trazo-back/certifications/tests/test_osp_module_compiler.py",),
