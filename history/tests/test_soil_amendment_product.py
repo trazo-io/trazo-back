@@ -128,5 +128,9 @@ class SoilAmendmentProductTests(TestCase):
         self.assertIn("Vegetative hedgerow", text)
         self.assertIn("Unharvested native cover", text)
         self.assertIn("also certified organic", text)  # adjacent_organic=True boundary
-        self.assertIn("drift-notification letter on file", text)  # § 205.400(f)(1)
+        # A letter to a neighbor is a prevention practice (§ 205.201(a)(5)); § 205.400(f)(1) is
+        # the operation telling its certifier about drift, and is cited only for that.
+        self.assertIn("letter to this neighbor on file (drift prevention, § 205.201(a)(5))", text)
+        self.assertNotIn("drift-notification letter", text)
+        self.assertNotIn("Operator maintains", text)
         self.assertIn("2026-02-15", text)  # notification date

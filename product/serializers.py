@@ -376,7 +376,7 @@ class CreateParcelSerializer(CallerScopedRelatedFields, USContactFieldsMixin, Mo
     agricultural_details = serializers.JSONField(required=False)
 
     # Per-boundary buffer-zone / adjoining-land / drift-prevention records
-    # (7 CFR 205.202(c); 205.400(f)(1)). Writable so a real pilot farmer can record
+    # (7 CFR 205.202(c); § 205.201(a)(5)). Writable so a real pilot farmer can record
     # buffers — previously buffer_zones was a model JSONField with no write path, so
     # the audit export fired the empty-state REVIEW flag on every non-seeded parcel.
     buffer_zones = serializers.JSONField(required=False, allow_null=True)

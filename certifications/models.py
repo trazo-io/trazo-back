@@ -2644,7 +2644,7 @@ class AdjoiningLandAffidavit(models.Model):
         null=True,
         help_text=(
             "Neighbour agreed to notify the operation before applying materials "
-            "(§ 205.400(f)(1) drift-notification readiness). NULL means unanswered."
+            "(a drift-prevention practice, § 205.201(a)(5)). NULL means unanswered."
         ),
     )
 

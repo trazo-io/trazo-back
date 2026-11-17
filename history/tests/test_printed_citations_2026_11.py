@@ -27,6 +27,14 @@ claims no paragraph makes. Each wrong string below printed on a document a certi
   C05    "Input catalogs last synced: OMRI <date>" printed the date someone ran the loader, never
          the edition of the published list, and the disclaimer promised an OMRI subscription "on
          the Trazo roadmap".
+  VID-04 (recordkeeping checklist run, 2026-11-16) a letter to a neighbor cited to
+         § 205.400(f)(1), on every boundary that had one and in a note printed on every dossier.
+         (f)(1) is the operation's duty to tell its certifying agent about an application or
+         drift; a letter to a neighbor is a practice the plan describes to prevent contact,
+         § 205.201(a)(5). The same note said the operator "maintains" such a letter whether or
+         not one was on file.
+  VID-05 the Common OSP record list cited cultivation to § 205.206(a)(1), which is crop rotation
+         and nutrient management. Mechanical cultivation is § 205.206(c)(4).
 
 HOW. The printing modules are read as Python and every string literal is collected (adjacent
 literals are joined by the parser, so a sentence split over several source lines is one string).
@@ -176,6 +184,38 @@ CASES = (
         DOSSIER,
         ("Input catalogs last synced", "on the Trazo roadmap", "partial copy of the WSDA"),
         ("Input catalogs: ", "edition date not recorded in Trazo", "each as of the edition date given below"),
+    ),
+    (
+        "VID-04",
+        DOSSIER,
+        (
+            "drift-notification letter on file (§ 205.400(f)(1))",
+            "drift-notification readiness",
+            "Operator maintains the drift-prevention measures above",
+        ),
+        (
+            "letter to this neighbor on file (drift prevention, § 205.201(a)(5))",
+            "prevention practice the plan describes under § 205.201(a)(5)",
+            "to the certifying agent immediately (§ 205.400(f)(1))",
+        ),
+    ),
+    (
+        "VID-04",
+        "certifications/models.py",
+        ("drift-notification readiness",),
+        ("(a drift-prevention practice, § 205.201(a)(5))",),
+    ),
+    (
+        "VID-04",
+        "history/management/commands/seed_showcase_walnut_farm.py",
+        ("letter on file (§ 205.400(f)(1))",),
+        ("letter on file (§ 205.201(a)(5))",),
+    ),
+    (
+        "VID-05",
+        "certifications/services/common_osp_records.py",
+        ("7 CFR 205.206(a)(1)",),
+        ("7 CFR 205.206(c)(4)",),
     ),
 )
 

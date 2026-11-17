@@ -228,7 +228,7 @@ BLOCKS = [
                 "adjoining_land_use": "Conventional row crop (tomatoes)",
                 "buffer_width_m": 15,
                 "drift_risk": "Medium",
-                "prevention": "Two buffer rows harvested separately and never sold as organic; annual neighbour-notification letter on file (§ 205.400(f)(1))",
+                "prevention": "Two buffer rows harvested separately and never sold as organic; annual neighbour-notification letter on file (§ 205.201(a)(5))",
             },
             {
                 "direction": "South",
@@ -273,7 +273,7 @@ BLOCKS = [
                 "adjoining_land_use": "Conventional row crop (tomatoes)",
                 "buffer_width_m": 15,
                 "drift_risk": "Medium",
-                "prevention": "Two buffer rows harvested separately and never sold as organic; annual neighbour-notification letter on file (§ 205.400(f)(1))",
+                "prevention": "Two buffer rows harvested separately and never sold as organic; annual neighbour-notification letter on file (§ 205.201(a)(5))",
             },
             {
                 "direction": "South",

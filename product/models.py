@@ -71,8 +71,8 @@ class Parcel(models.Model):
     polygon = models.JSONField(blank=True, null=True)
     map_metadata = models.JSONField(blank=True, null=True)
     # Structured buffer-zone / adjoining-land-use / drift-prevention records per
-    # parcel boundary (USDA NOP 7 CFR 205.202(c) buffer requirement; 205.400(f)(1)
-    # drift notification). A list of dicts, one per boundary, e.g.:
+    # parcel boundary (USDA NOP 7 CFR 205.202(c) buffer requirement; § 205.201(a)(5)
+    # practices to prevent contact). A list of dicts, one per boundary, e.g.:
     #   [{"direction": "North", "adjoining_land_use": "Conventional almond orchard",
     #     "buffer_width_m": 8, "drift_risk": "Medium",
     #     "prevention": "8 m vegetative hedgerow buffer + annual neighbor-notification letter"}]
