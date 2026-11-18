@@ -1943,6 +1943,236 @@ G6_5_SALES_SOE = Module(
                 ),
             ),
         ),
+        # CCOF G6.5 B and C (ORGB35 V2, 12/31/2023). Asked as the form asks it: whether the operation sells
+        # directly to consumers, each venue in the form's own columns, and how organic is told apart from
+        # non-organic at those venues. Added 2026-11-17; optional at the top, so plans already finished stay
+        # finished. Together with page A's sourcing answer, these are the two facts CCOF files G6.5 on.
+        ModulePage(
+            key="b_direct_marketing",
+            title=text("B. Direct marketing", "B. Venta directa"),
+            questions=(
+                Question(
+                    key="direct_sales",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "Do you sell products directly to consumers (CSA, farm stand, farmers' market, u-pick, "
+                        "online sales)?",
+                        "¿Vendes productos directamente a consumidores (CSA, puesto en la finca, mercado de "
+                        "agricultores, cosecha propia por el cliente, ventas en línea)?",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(template="Direct sales to consumers: {answer}."),
+                    options=(
+                        Option(
+                            "no",
+                            text("No sales directly to consumers", "No vendemos directamente a consumidores"),
+                        ),
+                        Option(
+                            "yes",
+                            text("Yes, we sell directly to consumers", "Sí, vendemos directamente a consumidores"),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="direct_sales_venues",
+                    kind="checkbox_group",
+                    label=text("Where do you sell directly?", "¿Dónde vendes directamente?"),
+                    visible_when=(Condition("direct_sales", "eq", "yes"),),
+                    compiles_to=CompileRule(template="Direct marketing venues: {answer}."),
+                    options=(
+                        Option("farmers_market", text("Farmers' markets", "Mercados de agricultores")),
+                        Option(
+                            "csa",
+                            text(
+                                "CSA (community supported agriculture)",
+                                "CSA (agricultura sostenida por la comunidad)",
+                            ),
+                        ),
+                        Option("farm_stand", text("Farm stand", "Puesto en la finca")),
+                        Option("u_pick", text("U-pick", "Cosecha propia por el cliente (u-pick)")),
+                        Option("online", text("Online or website sales", "Ventas en línea o por sitio web")),
+                        Option("other", text("Other", "Otro")),
+                    ),
+                ),
+                Question(
+                    key="farmers_markets_detail",
+                    kind="textarea",
+                    label=text(
+                        "List each farmers' market: the market or its organization, its address, the day(s) you sell "
+                        "there, and whether you sell non-organic products at it.",
+                        "Indica cada mercado de agricultores: el mercado o su organización, su dirección, los días en "
+                        "que vendes allí y si vendes productos no orgánicos en él.",
+                    ),
+                    coaching=text(
+                        "One market per line, for example: Farmtown Farmers' Market Association, 123 Main St, "
+                        "Farmtown; Monday and Saturday; no non-organic products.",
+                        "Un mercado por línea, por ejemplo: Asociación del Mercado de Agricultores de Farmtown, "
+                        "123 Main St, Farmtown; lunes y sábado; sin productos no orgánicos.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    visible_when=(Condition("direct_sales_venues", "includes", "farmers_market"),),
+                    compiles_to=CompileRule(
+                        template="Farmers' markets (market, address, days, non-organic products sold): {answer}"
+                    ),
+                ),
+                Question(
+                    key="other_venues_detail",
+                    kind="textarea",
+                    label=text(
+                        "List each other venue: its type, its address or website, and whether you sell non-organic "
+                        "products at it.",
+                        "Indica cada otro lugar de venta: su tipo, su dirección o sitio web y si vendes productos no "
+                        "orgánicos en él.",
+                    ),
+                    coaching=text(
+                        "One venue per line, for example: Online sales, www.example-ranch.com, yes.",
+                        "Un lugar por línea, por ejemplo: Ventas en línea, www.example-ranch.com, sí.",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    visible_when=(
+                        Condition(
+                            "direct_sales_venues", "includes_any", ["csa", "farm_stand", "u_pick", "online", "other"]
+                        ),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Other direct marketing venues (type, address or website, non-organic products sold): "
+                        "{answer}"
+                    ),
+                ),
+                Question(
+                    key="direct_sales_venue_list_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Or attach your list of direct marketing venues.",
+                        "O adjunta tu lista de lugares de venta directa.",
+                    ),
+                    visible_when=(Condition("direct_sales", "eq", "yes"),),
+                ),
+            ),
+        ),
+        ModulePage(
+            key="c_direct_marketing_signage",
+            title=text(
+                "C. Direct marketing representation and signage",
+                "C. Representación y señalización en la venta directa",
+            ),
+            visible_when=(Condition("direct_sales", "eq", "yes"),),
+            questions=(
+                Question(
+                    key="direct_sales_nonorganic",
+                    kind="radio",
+                    label=text(
+                        "Do you also sell non-organic products to consumers?",
+                        "¿También vendes productos no orgánicos a consumidores?",
+                    ),
+                    nop_cite="§ 205.300",
+                    compiles_to=CompileRule(template="Products sold directly to consumers: {answer}."),
+                    options=(
+                        Option(
+                            "only_organic",
+                            text(
+                                "No, we sell only certified organic products",
+                                "No, solo vendemos productos orgánicos certificados",
+                            ),
+                        ),
+                        Option(
+                            "also_nonorganic",
+                            text(
+                                "Yes, we also sell non-organic products", "Sí, también vendemos productos no orgánicos"
+                            ),
+                        ),
+                    ),
+                ),
+                Question(
+                    key="direct_sales_differentiation",
+                    kind="checkbox_group",
+                    label=text(
+                        "How do you tell organic and non-organic products apart for consumers?",
+                        "¿Cómo distingues para los consumidores los productos orgánicos de los no orgánicos?",
+                    ),
+                    coaching=text(
+                        "Organic and non-organic products must not be commingled, and a non-organic product must not "
+                        "be presented as organic.",
+                        "Los productos orgánicos y no orgánicos no deben mezclarse, y un producto no orgánico no debe "
+                        "presentarse como orgánico.",
+                    ),
+                    nop_cite="§ 205.300",
+                    visible_when=(Condition("direct_sales_nonorganic", "eq", "also_nonorganic"),),
+                    compiles_to=CompileRule(
+                        template="How organic and non-organic products are told apart for consumers: {answer}."
+                    ),
+                    options=(
+                        Option(
+                            "ties_stickers",
+                            text("Twist ties, stickers or rubber bands", "Amarres, etiquetas adhesivas o ligas"),
+                        ),
+                        Option(
+                            "newsletter",
+                            text(
+                                "Newsletter or delivery list (sample attached)",
+                                "Boletín o lista de entrega (muestra adjunta)",
+                            ),
+                            requires_upload="direct_sales_samples_upload",
+                        ),
+                        Option(
+                            "website",
+                            text(
+                                "Description on the website (sample attached)",
+                                "Descripción en el sitio web (muestra adjunta)",
+                            ),
+                            requires_upload="direct_sales_samples_upload",
+                        ),
+                        Option(
+                            "signage",
+                            text(
+                                'Clear "organic" and "nonorganic" signage (photo attached)',
+                                'Letreros claros de "orgánico" y "no orgánico" (foto adjunta)',
+                            ),
+                            requires_upload="direct_sales_samples_upload",
+                        ),
+                        Option(
+                            "separate_areas",
+                            text(
+                                "Separate sales areas for organic and non-organic",
+                                "Áreas de venta separadas para lo orgánico y lo no orgánico",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otro (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="direct_sales_separate_areas_detail",
+                    kind="textarea",
+                    label=text("Describe the separate sales areas.", "Describe las áreas de venta separadas."),
+                    visible_when=(Condition("direct_sales_differentiation", "includes", "separate_areas"),),
+                    compiles_to=CompileRule(template="Separate sales areas for organic and non-organic: {answer}"),
+                ),
+                Question(
+                    key="direct_sales_differentiation_other",
+                    kind="text",
+                    label=text(
+                        "Describe the other way they are told apart",
+                        "Describe la otra forma en que se distinguen",
+                    ),
+                    visible_when=(Condition("direct_sales_differentiation", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other way organic and non-organic are told apart: {answer}"),
+                ),
+                Question(
+                    key="direct_sales_samples_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach the samples: the newsletter or delivery list, the website description, or photos of "
+                        "the signage.",
+                        "Adjunta las muestras: el boletín o la lista de entrega, la descripción del sitio web o fotos de "
+                        "los letreros.",
+                    ),
+                    visible_when=(Condition("direct_sales_nonorganic", "eq", "also_nonorganic"),),
+                ),
+            ),
+        ),
     ),
 )
 

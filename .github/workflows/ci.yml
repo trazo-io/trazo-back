@@ -534,6 +534,10 @@ jobs:
       # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
       # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
       #
+      # 2026-11-17: certifications.tests.test_direct_marketing joins. G6.5 asks direct sales to consumers, each
+      # farmers' market and venue in CCOF's columns, and how organic is told apart from non-organic (CCOF G6.5 B, C).
+      # Builds its own farm; reads only this repo's registers.
+      #
       # 2026-11-17: certifications.tests.test_materials_application_rows joins. The plan review lists materials
       # rows missing a cell every agent's form asks (CCOF ORGB41 A/B, OTCO C11, WSDA AGR 2196), the workbook leaves
       # a reason the operator never gave blank, and the input forms are offered the plan's own materials. Builds
@@ -1083,6 +1087,7 @@ jobs:
             certifications.tests.test_seed_stock_cluster \
             certifications.tests.test_international_trade \
             certifications.tests.test_materials_application_rows \
+            certifications.tests.test_direct_marketing \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

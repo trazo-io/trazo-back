@@ -34,3 +34,23 @@ questions:
     How bought-in product is verified. It stood in for OTCO C12 12.2-4's sourcing yes or no until that row
     got its own question, `g8_0_record_keeping.sources_organic_products`, on 2026-11-15; OTCO asks
     supplier approval and certificate checks on its fraud prevention plan (2-2), answered by G2.0.
+  g6_5_sales_soe.direct_sales: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_venues: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.farmers_markets_detail: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.other_venues_detail: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_venue_list_upload: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_nonorganic: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_differentiation: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_separate_areas_detail: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_differentiation_other: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.
+  g6_5_sales_soe.direct_sales_samples_upload: >-
+    Direct sales to consumers, asked for CCOF G6.5 B and C. OTCO's C8 asks private-label packing and export, not direct marketing venues or point-of-sale signage.

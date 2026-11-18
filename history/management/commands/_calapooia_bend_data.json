@@ -4199,6 +4199,10 @@
         "at": "2026-08-21T11:28:46.580015+00:00",
         "value": "Every sale carries the lot code from the season it came out of — CBF-26-HFE for the Duke block, CBF-26-BGA-SP for the spring spinach, and so on. The lot is on the bill of lading, on the pallet tags and on the invoice, and the same code is the production record in Trazo, so an invoice traces back to the picks, the inputs and the parcel without anyone having to reconstruct it."
        },
+       "direct_sales": {
+        "at": "2026-11-17T10:00:00+00:00",
+        "value": "no"
+       },
        "sales_soe_supplier_verification": {
         "at": "2026-08-21T11:28:46.580015+00:00",
         "value": "no"

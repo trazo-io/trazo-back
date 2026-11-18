@@ -397,7 +397,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   the import documents kept per shipment (Q 4); export packages and the documents that travel with each
 #   shipment (Q 8, 9); how exported products meet the equivalency arrangement (OTCO C8 8.4-4); whether crops may
 #   reach Canada, whether sodium nitrate is used and how the two are kept apart (Q Critical Variances: Canada).
-CONTENT_VERSION = "2026.12.17"
+# 2026.12.18: direct marketing. G6.5 asks whether the operation sells directly to consumers, where (farmers' markets,
+#   CSA, farm stand, u-pick, online, other), each market and venue in CCOF's columns, whether non-organic products are
+#   sold too and how the two are told apart, with samples (CCOF G6.5 B1, B1a, B1b, C1). Optional at the top.
+CONTENT_VERSION = "2026.12.18"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →
