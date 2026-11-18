@@ -920,7 +920,7 @@ jobs:
       # of them read files through parents[1] or parents[2], all inside this repository, never the
       # sibling. tests.test_photo_integration_flow joins with its fixture fixed: it created a
       # Production with no name, which django-auditlog cannot print.
-      # 2026-11-18: users.tests.test_invitation_sole_admin (new, 8 tests) pins OV-SEC-C11: accepting an
+      # 2026-11-18: users.tests.test_invitation_sole_admin (new, 9 tests) pins OV-SEC-C11: accepting an
       # invitation never leaves a company with farms and no Company Admin, and only the invitee is told
       # what accepting leaves. No sibling repo. users.tests.test_invitation_flow stays out: 4 of its
       # 16 tests fail on main for reasons that predate this (invitation creation answers 400).

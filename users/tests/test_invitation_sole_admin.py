@@ -86,6 +86,17 @@ class RefusalTests(_Invite):
         self.assertTrue(WorksIn.objects.filter(pk=self.membership.pk).exists())
 
 
+class SetupOperatorTests(_Invite):
+    def test_the_pilot_setup_operator_is_not_another_admin(self):
+        """Review of back #481: a pilot company has the grower and Trazo's setup operator as Company Admins;
+        `users/team.py` does not count the operator as a remaining admin, and neither does this."""
+        operator = User.objects.create_user(email="setup@trazo.test", password="x")
+        WorksIn.objects.create(user=operator, company=self.home, role=WorksIn.COMPANY_ADMIN, is_setup_operator=True)
+        response = self._accept()
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertTrue(WorksIn.objects.filter(pk=self.membership.pk).exists())
+
+
 class WhatDoesNotBlockTests(_Invite):
     def test_another_admin_in_the_old_company(self):
         partner = User.objects.create_user(email="partner@test.com", password="x")

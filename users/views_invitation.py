@@ -236,21 +236,21 @@ def accept_invitation(request, invitation_code):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Refused before anything changes, with the reason the page shows (OV-SEC-C11). `accept()`
-            # refuses the same case for the sign-up and sign-in paths, which leave the invitation pending.
-            sole_admin_of = invitation.transfer_effect(request.user)["sole_admin_of"]
-            if sole_admin_of:
-                from users.models_invitation import SoleAdminTransferError
+            # `accept()` refuses a sole Company Admin of a company with farms under a lock, and changes
+            # nothing then; the page shows the reason (OV-SEC-C11). The sign-up and sign-in paths get the
+            # same refusal and leave the invitation pending.
+            from users.models_invitation import SoleAdminTransferError
 
-                refused = SoleAdminTransferError(sole_admin_of)
+            try:
+                with transaction.atomic():
+                    invitation.accept(request.user)
+            except SoleAdminTransferError as refused:
                 return Response(
                     {"error": str(refused), "code": "sole_company_admin", "companies": refused.companies},
                     status=status.HTTP_409_CONFLICT,
                 )
 
             with transaction.atomic():
-                works_in = invitation.accept(request.user)
-
                 # Get company subscription information
                 from subscriptions.models import Subscription
 
