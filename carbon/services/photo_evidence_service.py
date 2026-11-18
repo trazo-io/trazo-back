@@ -656,21 +656,28 @@ class PhotoEvidenceService:
             True if suspicious content detected
         """
         try:
-            # Check for executable signatures
-            suspicious_signatures = [
-                b"\x4d\x5a",  # PE executable
+            # An executable's signature is its first bytes, so it is matched at offset 0 only. Until
+            # 2026-11-18 these were searched anywhere in the first 1 KB, lowercased, and image data is
+            # close to random: "MZ" in any case turned up in about one compressed image in sixteen and
+            # refused it as suspicious (`test_valid_webp_passes` failed CI at that rate).
+            executable_signatures = (
+                b"\x4d\x5a",  # PE executable ("MZ")
                 b"\x7f\x45\x4c\x46",  # ELF executable
                 b"\xfe\xed\xfa",  # Mach-O executable
+            )
+            if file_data.startswith(executable_signatures):
+                logger.warning("Suspicious content detected in uploaded file")
+                return True
+
+            # Script text embedded in the header, matched in any case in the first 1 KB.
+            script_patterns = (
                 b"<?php",  # PHP code
                 b"<script",  # JavaScript
                 b"javascript:",  # JavaScript URL
-            ]
-
-            # Check first 1KB of file
+            )
             check_data = file_data[:1024].lower()
-
-            for sig in suspicious_signatures:
-                if sig.lower() in check_data:
+            for pattern in script_patterns:
+                if pattern in check_data:
                     logger.warning("Suspicious content detected in uploaded file")
                     return True
 

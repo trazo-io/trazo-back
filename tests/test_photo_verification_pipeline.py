@@ -571,6 +571,45 @@ class TestFullValidationPipeline(TestCase):
         assert len(result["warnings"]) > 0
 
 
+def _jpeg_with_comment(payload: bytes) -> bytes:
+    """A valid JPEG whose first segment after SOI is a COM segment carrying `payload`, so the bytes
+    sit inside the first 1 KB the suspicious-content scan reads."""
+    jpeg = _make_jpeg()
+    segment = b"\xff\xfe" + (len(payload) + 2).to_bytes(2, "big") + payload
+    return jpeg[:2] + segment + jpeg[2:]
+
+
+class TestSuspiciousContentScan(TestCase):
+    """2026-11-18. The executable signatures were searched anywhere in the first 1 KB, lowercased, so
+    any image whose compressed data held "MZ" in any case (about one in sixteen) was refused as
+    suspicious, and `test_valid_webp_passes` failed CI at that rate. An executable's signature is its
+    first bytes, so it is matched at offset 0; script text is still matched anywhere in the header."""
+
+    def setUp(self):
+        self.service = photo_evidence_service
+
+    def test_mz_inside_an_image_is_not_an_executable(self):
+        data = _jpeg_with_comment(b"lot MZ-12, mz, Mz, mZ")
+        self.assertIn(b"MZ", data[:1024])
+        self.assertFalse(self.service._has_suspicious_content(data))
+        result = self.service.validate_photo(data, "block-mz.jpg")
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_a_file_that_starts_with_an_executable_signature_is_refused(self):
+        for signature in (b"MZ", b"\x7fELF", b"\xfe\xed\xfa\xce"):
+            with self.subTest(signature=signature):
+                self.assertTrue(self.service._has_suspicious_content(signature + b"\x00" * 2000))
+
+    def test_script_text_in_the_header_is_still_refused_in_any_case(self):
+        for payload in (b"<SCRIPT>alert(1)</script>", b"<?PHP echo 1; ?>", b"JavaScript:void(0)"):
+            with self.subTest(payload=payload):
+                data = _jpeg_with_comment(payload)
+                self.assertTrue(self.service._has_suspicious_content(data))
+                result = self.service.validate_photo(data, "poisoned.jpg")
+                self.assertFalse(result["valid"])
+                self.assertIn("File contains suspicious content and cannot be uploaded", result["errors"])
+
+
 # ---------------------------------------------------------------------------
 # Serializer: Thumbnail fields exposed
 # ---------------------------------------------------------------------------
