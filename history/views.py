@@ -4057,6 +4057,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
                 # Closed-record guard: see `_refuse_inside_closed_season`.
                 self._refuse_inside_closed_season(history, serializer.validated_data.get("date"))
+                # The raw-manure floor, against the season found just above. See
+                # `_refuse_manure_below_floor`.
+                self._refuse_manure_below_floor(history, event_type, serializer.validated_data)
 
                 index = self._next_event_index(history)
 
@@ -4108,6 +4111,29 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         # status serializer refuses to accept `logged` from a client.)
         self._fulfil_plan_item(created_event, int(event_type))
         self._confirm_field_note(created_event, int(event_type), field_note)
+
+    @staticmethod
+    def _refuse_manure_below_floor(history, event_type, validated):
+        """Refuse a raw-manure interval shorter than the season's crop allows, 7 CFR 205.203(c)(1).
+
+        The soil serializer runs this check (`manure_interval.below_minimum`) only when the request
+        names `history`. The activity form sends `parcels` and the season is found in
+        `_create_events`, after validation, so the serializer saw no crop and deferred: raw manure
+        recorded at 90 days on carrots was saved, while the same request naming the season was
+        refused (recordkeeping checklist run 2026-11-16, VID-16, found rendering VID-07). The
+        multi-parcel path passes `history` to the serializer and was never affected. Same message
+        and key as the serializer, so the form shows one refusal whichever way it was sent.
+        """
+        if int(event_type) != SOIL_MANAGEMENT_EVENT_TYPE:
+            return
+        interval = validated.get("manure_harvest_interval")
+        if interval not in ("90", "120"):
+            return
+        from history.services.manure_interval import below_minimum, below_minimum_message
+
+        crop_type = getattr(history, "crop_type", None)
+        if crop_type is not None and below_minimum(interval, crop_type):
+            raise ValidationError({"manure_harvest_interval": [below_minimum_message(crop_type)]})
 
     @staticmethod
     def _refuse_inside_closed_season(history, event_when):

@@ -160,6 +160,69 @@ class SavePathAcceptsAnyIntervalAtOrAboveTheFloorTests(_Production):
             self.assertNotIn("manure_harvest_interval", exc.message_dict)
 
 
+class TheActivityFormIsHeldToTheSameFloorTests(_Production):
+    """VID-16 (2026-11-18): the activity form sends `parcels`, not `history`, and the season is
+    found after validation, so raw manure at 90 days on carrots was saved from the form while the
+    same request naming the season was refused. Both are refused now, with one message."""
+
+    def setUp(self):
+        super().setUp()
+        from rest_framework.test import APIClient
+
+        from users.models import WorksIn
+
+        self.company = self.parcel.establishment.company
+        WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _post(self, season, interval, **address):
+        Parcel.objects.filter(pk=self.parcel.pk).update(current_history=season)
+        return self.client.post(
+            f"/api/companies/{self.company.pk}/establishments/{self.parcel.establishment_id}/events/",
+            {
+                "event_type": 5,
+                "type": "OM",
+                "date": timezone.now().isoformat(),
+                "name": "Raw manure",
+                "area_covered": "5",
+                "area_unit": "ha",
+                "manure_treatment": "raw",
+                "manure_application_date": "2026-03-20",
+                "manure_harvest_interval": interval,
+                **address,
+            },
+            format="json",
+        )
+
+    def test_the_form_cannot_record_90_days_on_a_soil_contact_crop(self):
+        history = self._history(self.lettuce)
+        response = self._post(history, "90", parcels=[self.parcel.pk])
+        self.assertEqual(response.status_code, 400, response.content)
+        message = str(response.json()["manure_harvest_interval"])
+        self.assertIn("205.203(c)(1)(ii)", message)
+        self.assertIn("at least 120 days", message)
+        self.assertFalse(SoilManagementEvent.objects.filter(history=history).exists())
+
+    def test_the_form_and_a_request_naming_the_season_get_the_same_refusal(self):
+        history = self._history(self.lettuce)
+        by_parcel = self._post(history, "90", parcels=[self.parcel.pk])
+        by_season = self._post(history, "90", history=history.pk)
+        self.assertEqual((by_parcel.status_code, by_season.status_code), (400, 400))
+        self.assertEqual(by_parcel.json()["manure_harvest_interval"], by_season.json()["manure_harvest_interval"])
+
+    def test_the_form_still_saves_120_days_on_a_soil_contact_crop(self):
+        lettuce = self._history(self.lettuce)
+        response = self._post(lettuce, "120", parcels=[self.parcel.pk])
+        self.assertEqual(response.status_code, 201, response.content)
+
+    def test_the_form_still_saves_90_or_120_days_on_a_tree_crop(self):
+        walnuts = self._history(self.walnuts)
+        for interval in ("90", "120"):
+            response = self._post(walnuts, interval, parcels=[self.parcel.pk])
+            self.assertEqual(response.status_code, 201, (interval, response.content))
+
+
 class DossierReadsTheSameFloorTests(_Production):
     def _service(self, crop):
         from history.services.audit_export_service import AuditExportService
