@@ -90,6 +90,15 @@ jobs:
   # bought nothing (the heaviest class, the Calapooia specimen, sets the floor of whichever shard
   # it lands on) and costs a fourth job's worth of minutes, so it is three.
   #
+  # FOUR SHARDS, A CATALOG JOB AND ONE GATE (2026-11-17). The 333s floor is long gone: after back
+  # #468 enrolled 44 modules, the three shards ran 13 to 17 min each, two jobs were cancelled at
+  # their cap with no test failing, and 165 more passing modules sat outside this list. The list
+  # now holds them, across four shards. Three modules that run the full OMRI seed (9,000+ rows)
+  # several times per class, about 16 min between them locally, run in their own `catalog` job,
+  # and only on a PR that touches the catalogs: as one class each, they would land whole on one
+  # shard. Branch protection requires the `gate` job, "Backend: all suites passed", not the shard
+  # names, so the shard count can change without touching the repository settings.
+  #
   # Each shard still pays ~90s creating the test database through every migration. Squashing
   # migrations is the next lever. Skipping them is NOT: CHECK constraints live only in RunSQL
   # migrations, and three tests fail without them.
@@ -109,7 +118,7 @@ jobs:
       # of failures, not the first one.
       fail-fast: false
       matrix:
-        shard: ['1/3', '2/3', '3/3']
+        shard: ['1/4', '2/4', '3/4', '4/4']
     services:
       postgres:
         image: postgres:15
@@ -201,9 +210,9 @@ jobs:
       # `migrate`, before any test ran, and the tests never write to the dump file. Within a run
       # the behaviour is identical to creating the test database from scratch.
       #
-      # One shard saves; the other two would race to write the same key.
+      # One shard saves; the others would race to write the same key.
       - name: Save the migrated test database
-        if: steps.testdb.outputs.cache-hit != 'true' && matrix.shard == '1/3'
+        if: steps.testdb.outputs.cache-hit != 'true' && matrix.shard == '1/4'
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/testdb.dump
@@ -898,6 +907,11 @@ jobs:
       # 2026-11-17: certifications.tests.test_omri_listing_lapse (new, 11 tests, about 22 s, mostly
       # TransactionTestCase) pins OV-MT-C04: an OMRI listing is read as of the application date in
       # the drift detector, the lookup payload and the dossier's input table. No sibling repo.
+      # 2026-11-17: 165 modules join, the passing remainder of the sweep of modules outside this list
+      # (back #468 enrolled the first 44). Each passed on a fresh database on main the same day. Four
+      # of them read files through parents[1] or parents[2], all inside this repository, never the
+      # sibling. tests.test_photo_integration_flow joins with its fixture fixed: it created a
+      # Production with no name, which django-auditlog cannot print.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -1312,6 +1326,171 @@ jobs:
             subscriptions.tests.test_storage_accounting \
             subscriptions.tests.test_subscription_events \
             users.tests.test_onboarding_email_claims \
+            carbon.tests.test_amendment_nitrogen_n2o \
+            carbon.tests.test_anhydrous_ammonia_density_fix \
+            carbon.tests.test_business_event_carbon_dispatch \
+            carbon.tests.test_crop_catalog_and_template_resolution \
+            carbon.tests.test_crop_type_normalization \
+            carbon.tests.test_irrigation_preview_saved_parity \
+            carbon.tests.test_non_area_driven_subtypes_carbon \
+            carbon.tests.test_organic_fertilizer_field_n2o \
+            carbon.tests.test_postharvest_fuel_units_2026_07_31 \
+            carbon.tests.test_state_resolution_no_ca_default \
+            carbon.tests.test_voice_language_family \
+            certifications.tests.test_approved_input_log \
+            certifications.tests.test_audit_specimen_flags \
+            certifications.tests.test_auto_classify \
+            certifications.tests.test_business_event_certification_sync \
+            certifications.tests.test_buyer_review_links \
+            certifications.tests.test_ca_dpr_permit \
+            certifications.tests.test_catalog_reset_guard \
+            certifications.tests.test_cert_viewset_security \
+            certifications.tests.test_certifier_dossier_builds \
+            certifications.tests.test_certifying_agent_picker \
+            certifications.tests.test_common_osp_records \
+            certifications.tests.test_common_osp_records_api \
+            certifications.tests.test_common_osp_workbooks \
+            certifications.tests.test_container_safeguards_not_flattened \
+            certifications.tests.test_drift_cross_registry_rescue \
+            certifications.tests.test_input_catalog_provenance \
+            certifications.tests.test_input_search_reach \
+            certifications.tests.test_landowner_affidavit \
+            certifications.tests.test_materials_list_answers \
+            certifications.tests.test_models \
+            certifications.tests.test_national_list_aliases \
+            certifications.tests.test_nonsynthetic_catalogue \
+            certifications.tests.test_omri_candidates_ambiguity \
+            certifications.tests.test_omri_seed_csv_integrity \
+            certifications.tests.test_omri_verifier \
+            certifications.tests.test_osp \
+            certifications.tests.test_osp_change_notification \
+            certifications.tests.test_osp_change_notification_api \
+            certifications.tests.test_osp_module_compiler \
+            certifications.tests.test_osp_module_responses \
+            certifications.tests.test_osp_modules \
+            certifications.tests.test_osp_packet_answer_shapes \
+            certifications.tests.test_osp_packet_vocabulary \
+            certifications.tests.test_osp_prefill \
+            certifications.tests.test_osp_registry_sync \
+            certifications.tests.test_osp_status_not_patchable \
+            certifications.tests.test_packet_cover_identifies_operation \
+            certifications.tests.test_plan_material_entries \
+            certifications.tests.test_post_harvest_facility_api \
+            certifications.tests.test_post_harvest_sanitation \
+            certifications.tests.test_regulatory_input_hygiene \
+            certifications.tests.test_review_link_diagnostics \
+            certifications.tests.test_snapshot_reads_all_sources \
+            certifications.tests.test_split_operation_binding \
+            certifications.tests.test_usda_organic_import \
+            certifications.tests.test_usda_verifier \
+            certifications.tests.test_workbook_acreage_units \
+            common.tests.test_aws_utils \
+            common.tests.test_database_optimizer \
+            common.tests.test_models \
+            common.tests.test_pdf_text \
+            common.tests.test_us_states \
+            company.tests.test_certifier_readiness \
+            company.tests.test_certifier_readiness_actionable \
+            company.tests.test_contact_validators \
+            company.tests.test_state_validation \
+            documents.tests.test_upload_limits \
+            education.tests.test_models \
+            history.tests.test_actor_cell_email_wrap \
+            history.tests.test_amendment_packet \
+            history.tests.test_amount_rate_reconciliation \
+            history.tests.test_annual_update_change_entries \
+            history.tests.test_attach_demo_photos \
+            history.tests.test_backfill_numeric_twins_command \
+            history.tests.test_blank_date_coercion \
+            history.tests.test_buffer_crop_disposition \
+            history.tests.test_business_type_choices \
+            history.tests.test_business_type_matches_the_record \
+            history.tests.test_ccof_grower_checklist \
+            history.tests.test_chemical_lot_number \
+            history.tests.test_chemical_numeric_twins \
+            history.tests.test_choice_label_guard \
+            history.tests.test_conditional_national_list_listings \
+            history.tests.test_cultural_control_and_custom_operator \
+            history.tests.test_cultural_practice_required \
+            history.tests.test_demo_certifier_marker \
+            history.tests.test_demo_event_photos_are_not_stock \
+            history.tests.test_demo_map_matches_stated_location \
+            history.tests.test_dossier_no_false_clearance \
+            history.tests.test_equipment_rinse \
+            history.tests.test_event_description_fallback \
+            history.tests.test_event_review_signoff \
+            history.tests.test_farmer_observation_persistence \
+            history.tests.test_field_reaches_packet_roundtrip \
+            history.tests.test_finish_date_validation \
+            history.tests.test_finish_preserves_description \
+            history.tests.test_finish_publish_choice \
+            history.tests.test_history_list_param_validation \
+            history.tests.test_history_str_repr \
+            history.tests.test_input_status_preview \
+            history.tests.test_land_requirements_verification_source \
+            history.tests.test_lot_organic_eligibility \
+            history.tests.test_national_list_annotations \
+            history.tests.test_new_activities_reach_packet \
+            history.tests.test_no_sales_is_not_a_denial \
+            history.tests.test_nop5026_postharvest_sanitizer \
+            history.tests.test_nop_validators \
+            history.tests.test_organic_basis_label \
+            history.tests.test_osp_narrative_not_truncated \
+            history.tests.test_osp_rows_are_distinct \
+            history.tests.test_owner_draft_access_regression \
+            history.tests.test_p1_seed_and_frost \
+            history.tests.test_packet_cover_period_and_crop \
+            history.tests.test_packet_markup_escaping \
+            history.tests.test_packet_never_truncates_values \
+            history.tests.test_packet_post_close_edits \
+            history.tests.test_packet_rendering_fidelity \
+            history.tests.test_packet_self_reported_status \
+            history.tests.test_packet_table_density \
+            history.tests.test_packet_table_widths \
+            history.tests.test_partial_edit_preserves_event_data \
+            history.tests.test_partial_update_preserves_description \
+            history.tests.test_pest_threshold_column_mapping \
+            history.tests.test_phase4_roi_and_leads \
+            history.tests.test_pilot_qa_2026_07_31 \
+            history.tests.test_post_harvest_sanitation \
+            history.tests.test_producer_attestation_named \
+            history.tests.test_production_crop_repair \
+            history.tests.test_production_label_map_exhaustive \
+            history.tests.test_rate_per_area_units \
+            history.tests.test_readiness_matches_the_packet \
+            history.tests.test_record_completeness_snapshot \
+            history.tests.test_retired_certification_types \
+            history.tests.test_scan_geolocation \
+            history.tests.test_season_header_amendments \
+            history.tests.test_seeders_never_stamp_oid \
+            history.tests.test_soil_amendment_product \
+            history.tests.test_soil_custom_fields_payload \
+            history.tests.test_spanning_production_annual_update \
+            history.tests.test_summary_mode_reaches_packet \
+            history.tests.test_sweep_2026_09_06_gaps \
+            history.tests.test_uncited_checks_are_labelled \
+            history.tests.test_vendor_redaction_boundaries \
+            history.tests.test_water_quality \
+            history.tests.test_weather_pdf_magnitude \
+            history.tests.test_ws4_field_adds \
+            notifications.tests \
+            product.tests.test_buffer_zone_roundtrip \
+            product.tests.test_current_production_consistency \
+            product.tests.test_finalization_validation \
+            product.tests.test_finish_targets_named_season \
+            product.tests.test_import_parcels \
+            product.tests.test_land_history_merge \
+            product.tests.test_models \
+            product.tests.test_parcel_area_floor \
+            product.tests.test_parcel_area_units \
+            product.tests.test_parcel_crop_history_split_fields \
+            product.tests.test_pump_plant_roundtrip \
+            tests.performance.test_query_performance \
+            tests.test_photo_integration_flow \
+            tests.test_photo_verification_pipeline \
+            users.tests.test_plaintext_email_escaping \
+            users.tests.test_signup_recovery_paths \
+            users.tests.test_verification_code_expiry \
             notifications \
             --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
 
@@ -1326,8 +1505,114 @@ jobs:
       # unconditional again. If it starts skipping, something moved it back out.
       - name: Certifier conformance statement is current
         # Not a test, so once per run rather than once per shard.
-        if: matrix.shard == '1/3'
+        if: matrix.shard == '1/4'
         run: poetry run python manage.py certifier_conformance --check
+
+  # The three modules that run the full OMRI seed, several times per class (2026-11-17). About 16 min
+  # between them locally (test_omri_seeder 8.4, test_omri_delisting 5.4, test_registry_identifier_
+  # honesty 1.8). In the shards each class lands whole on one shard and would push it past its cap,
+  # so they run here, in parallel with the shards, and only on a PR whose diff touches the catalogs:
+  # their models, data, seeders, matchers and these tests. Any other PR passes this job in seconds.
+  catalog:
+    name: "Backend: catalog seeder suites"
+    if: github.event_name != 'push'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: trazo_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DEBUG: 'True'
+      DJANGO_SETTINGS_MODULE: backend.settings.test
+      SECRET_KEY: ci-only-not-a-real-secret
+      DATABASE_NAME: trazo_ci
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      REDIS_URL: redis://localhost:6379/1
+      CELERY_TASK_ALWAYS_EAGER: 'True'
+    steps:
+      # Depth 2: on a pull_request the checkout is the merge commit, and its first parent is the
+      # base branch, so HEAD^1..HEAD is exactly this PR's change.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Does this change touch the input catalogs?
+        id: paths
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only HEAD^1 HEAD | grep -E -q '^(certifications/(models\.py|data/|management/commands/(seed_|refresh_organic_input_catalogs|build_omri_seed_csv|sync_national_list_ecfr)|services/(omri_verifier|catalog_integrity|registry_identifiers|listing_lapse|national_list_check)\.py|tests/test_(omri_seeder|omri_delisting|registry_identifier_honesty)\.py)|\.github/workflows/ci\.yml|poetry\.lock)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No catalog path changed; the catalog seeder suites are not needed for this change."
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.paths.outputs.run == 'true'
+        with:
+          python-version: '3.12'
+      - if: steps.paths.outputs.run == 'true'
+        run: pipx install poetry
+      - if: steps.paths.outputs.run == 'true'
+        run: poetry install --no-interaction
+      # The same migrated-database cache the shards read (see the comments there).
+      - name: Restore the migrated test database
+        if: steps.paths.outputs.run == 'true'
+        id: testdb
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/testdb.dump
+          key: testdb-pg15-${{ hashFiles('**/migrations/*.py', 'poetry.lock', 'backend/settings/*.py') }}
+      - name: Build the migrated test database (cache miss)
+        if: steps.paths.outputs.run == 'true' && steps.testdb.outputs.cache-hit != 'true'
+        env:
+          DATABASE_NAME: test_trazo_ci
+        run: |
+          docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
+          poetry run python manage.py migrate --run-syncdb --noinput
+      - name: Load the migrated test database (cache hit)
+        if: steps.paths.outputs.run == 'true' && steps.testdb.outputs.cache-hit == 'true'
+        run: |
+          docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
+          docker exec -i ${{ job.services.postgres.id }} pg_restore -U postgres --no-owner --exit-on-error -d test_trazo_ci < "$RUNNER_TEMP/testdb.dump"
+      - name: Catalog seeder suites
+        if: steps.paths.outputs.run == 'true'
+        run: |
+          poetry run python manage.py test \
+            certifications.tests.test_omri_seeder \
+            certifications.tests.test_omri_delisting \
+            certifications.tests.test_registry_identifier_honesty \
+            --noinput --keepdb
+
+  # The one backend check branch protection requires (2026-11-17). It passes only when every shard
+  # and the catalog job passed, so adding or removing a shard never needs a settings change.
+  gate:
+    name: "Backend: all suites passed"
+    if: always() && github.event_name != 'push'
+    needs: [backend, catalog]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    steps:
+      - name: Every shard and the catalog job succeeded
+        run: |
+          echo "shards: ${{ needs.backend.result }}; catalog: ${{ needs.catalog.result }}"
+          test "${{ needs.backend.result }}" = "success"
+          test "${{ needs.catalog.result }}" = "success"
 
   # ONE job for the three cheap checks (2026-10-07). As three jobs they were billed three
   # rounded-up minutes plus three checkouts and three `poetry install`s per run; as one they
