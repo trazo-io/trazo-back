@@ -308,7 +308,9 @@ class PdfFieldCoverageTests(TestCase):
         )
         text = flowable_text(self._service()._build_soil_section())
         self.assertIn("6.00 in", text)
-        self.assertIn("sandy_loam", text)
+        # The label, never the stored slug (VID-12: the dossier printed "silt_loam").
+        self.assertIn("Sandy Loam", text)
+        self.assertNotIn("sandy_loam", text)
         # `soil_moisture` is deliberately NOT printed (dropped 2026-08-15). Its input was
         # removed from SoilManagementTab because it duplicated the Weather event, so the
         # column could only ever render "—" for any record created since — an empty promise

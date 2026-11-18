@@ -1694,6 +1694,37 @@ def _organic_basis_cell(event, raw=_UNSET):
     return f"{label} — grower-selected, no listing on file"
 
 
+#: A strategy at least this long, recorded word for word on more than one record, is printed once
+#: below its table and referred to in each row. Shorter ones stay in the cell: a reference to a
+#: one-line strategy saves nothing and sends the reader elsewhere.
+_LONG_REPEATED_TEXT_CHARS = 200
+
+
+def _repeated_long_texts(values) -> dict:
+    """{text: (label, count)} for the long texts that recur, labelled A, B, C... in first-seen order.
+
+    VID-12 (recordkeeping checklist run 2026-11-16): the whole ~800-character IPM programme sat in
+    the IPM Strategy cell of every scouting and trap row, 117 times on one specimen, and was most of
+    a 449-page dossier. A grower who logs with "Log this again" carries it the same way. The text is
+    printed once, with the count of records that hold it, so nothing the records say is dropped.
+    """
+    seen: dict = {}
+    for value in values:
+        text = (value or "").strip()
+        if len(text) >= _LONG_REPEATED_TEXT_CHARS:
+            seen[text] = seen.get(text, 0) + 1
+    repeated = [text for text, n in seen.items() if n > 1]
+    labels = [chr(ord("A") + i) if i < 26 else str(i + 1) for i in range(len(repeated))]
+    return {text: (label, seen[text]) for text, label in zip(repeated, labels)}
+
+
+def _strategy_cell(value, refs):
+    text = (value or "").strip()
+    if text in refs:
+        return f"Strategy {refs[text][0]} (full text below this table)"
+    return text or None
+
+
 def _qty_with_unit(value, unit):
     """A measured quantity for a table cell, or None.
 
@@ -7721,7 +7752,22 @@ class AuditExportService:
             elements.append(self._spacer(0.05))
             if water_test_events:
                 wt_data = [[self._hdr(h) for h in ["Date", "Laboratory", "Results", "Block"]]]
+                # One row per TEST, not per irrigation record: a test copied onto three records
+                # ("Log this again" carries it) printed three identical rows (recordkeeping
+                # checklist run 2026-11-16, VID-12). Same date, lab and results is one test; the
+                # blocks it was recorded against are listed together.
+                tests: dict = {}
                 for ev in water_test_events:
+                    key = (
+                        ev.water_test_date,
+                        (ev.water_test_lab or "").strip(),
+                        repr(ev.water_test_results),
+                    )
+                    _first, blocks = tests.setdefault(key, (ev, []))
+                    block = (ev.block_id or "").strip()
+                    if block and block not in blocks:
+                        blocks.append(block)
+                for ev, blocks in tests.values():
                     results = ev.water_test_results if isinstance(ev.water_test_results, list) else []
                     parts = []
                     for r in results:
@@ -7742,7 +7788,7 @@ class AuditExportService:
                             self._cell(_fmt_date(ev.water_test_date) if ev.water_test_date else None),
                             self._cell(ev.water_test_lab),
                             self._cell("; ".join(parts) or None),
-                            self._cell(ev.block_id),
+                            self._cell(", ".join(blocks) or None),
                         ]
                     )
                 wt_table = Table(wt_data, colWidths=[0.8 * inch, 1.6 * inch, 3.6 * inch, 0.6 * inch], repeatRows=1)
@@ -9450,7 +9496,8 @@ class AuditExportService:
                         self._cell(_fmt_date(ev.date)),
                         self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                         self._cell(depth_disp),
-                        self._cell(ev.soil_texture),
+                        # The label, not the stored slug: the table printed "silt_loam" (VID-12).
+                        self._cell(ev.get_soil_texture_display() if ev.soil_texture else None),
                     ]
                 )
             cond_widths = [0.85 * inch, 1.3 * inch, 1.3 * inch, 1.8 * inch]
@@ -9836,6 +9883,7 @@ class AuditExportService:
         header_row = [self._hdr(h) for h in headers]
         data = [header_row]
         has_threshold_without_rationale = False
+        strategy_refs = _repeated_long_texts(ev.ipm_strategy for ev in events)
         for ev in events:
             identified = ""
             if ev.identified_by:
@@ -9907,7 +9955,7 @@ class AuditExportService:
                     self._cell(damage_display),
                     self._cell(area_display),
                     self._cell(ev.block_id),
-                    self._cell(ev.ipm_strategy),
+                    self._cell(_strategy_cell(ev.ipm_strategy, strategy_refs)),
                     self._cell(beneficial_display or None),
                 ]
             )
@@ -9926,6 +9974,12 @@ class AuditExportService:
         t = Table(data, colWidths=PEST_EVENT_WIDTHS, repeatRows=1)
         t.setStyle(self._base_table_style())
         elements.append(t)
+        # The long strategies the rows refer to, each printed once (see `_repeated_long_texts`).
+        for text, (label, count) in strategy_refs.items():
+            elements.append(Spacer(1, 4))
+            elements.append(
+                self._body(f"<b>IPM strategy {label}</b>, as recorded on {count} of these records: {_esc(text)}")
+            )
 
         # --- Summary-mode scouting (§ 205.206(a)) ---
         #
