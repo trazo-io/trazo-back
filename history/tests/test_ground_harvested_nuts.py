@@ -69,7 +69,9 @@ class _Orchard(_Production):
             amendment_type="manure",
             manure_application_date=self.applied,
             manure_harvest_interval=interval,
-            manure_harvest_date_planned=(self.applied + timedelta(days=planned_after)) if planned_after else None,
+            manure_harvest_date_planned=(
+                (self.applied + timedelta(days=planned_after)) if planned_after is not None else None
+            ),
         )
 
     def _pick(self, history, days_after):
@@ -117,6 +119,38 @@ class AReviewOnlyWhereNothingShows120DaysWereKept(_Orchard):
         self.assertEqual(ground_harvest_reviews(this_season), [])
         self.assertEqual(len(ground_harvest_reviews(earlier)), 1)
 
+    def test_fall_manure_after_this_seasons_last_pick_says_nothing(self):
+        # Review of #495: manure spread after harvest is for the next crop, not this season's dossier.
+        history = self._history(self.walnuts)
+        self._pick(history, -40)
+        self._manure(history)
+        self.assertEqual(ground_harvest_reviews(history), [])
+
+    def test_a_pick_inside_the_recorded_interval_is_a_conflict_not_a_review(self):
+        # Review of #495: 60 days after 90-day manure is short under both readings (`season_conflicts`).
+        history = self._history(self.walnuts)
+        self._manure(history)
+        self._pick(history, 60)
+        self.assertEqual(ground_harvest_reviews(history), [])
+
+    def test_a_blank_interval_is_reviewed_on_a_measured_pick(self):
+        # Review of #495: the measured gap decides; a blank interval used to skip the record.
+        history = self._history(self.walnuts)
+        app = self._manure(history, interval="")
+        self._pick(history, 100)
+        self.assertEqual(
+            [(r.application_id, r.recorded_days, r.first_pick_days) for r in ground_harvest_reviews(history)],
+            [(app.pk, None, 100)],
+        )
+        quiet = self._history(self.walnuts)
+        self._manure(quiet, interval="")
+        self.assertEqual(ground_harvest_reviews(quiet), [])
+
+    def test_a_planned_harvest_before_the_application_is_reviewed_and_said(self):
+        history = self._history(self.walnuts)
+        self._manure(history, planned_after=-5)
+        self.assertEqual([r.planned_days for r in ground_harvest_reviews(history)], [-5])
+
     def test_a_120_day_interval_or_a_crop_not_swept_from_the_ground_says_nothing(self):
         history = self._history(self.walnuts)
         self._manure(history, interval="120")
@@ -156,8 +190,34 @@ class TheDossierNamesBothReadings(_Orchard):
         self.assertNotIn("SHORT:", text)
         self.assertIn("REVIEW: swept from the ground", text)
         self.assertIn("Raw manure interval, crop gathered from the ground", text)
-        self.assertIn("The first pick after it came 100 days later.", text)
+        self.assertIn("The first pick on this season after it came 100 days later.", text)
         self.assertIn("Confirm which reading your certifier applies.", text)
+
+    def test_a_blank_interval_and_a_plan_before_the_application_are_said_plainly(self):
+        history = self._history(self.walnuts)
+        self._manure(history, interval="")
+        self._pick(history, 100)
+        self.assertIn("records no interval on", self._dossier(history))
+        planned = self._history(self.walnuts)
+        self._manure(planned, planned_after=-5)
+        text = self._dossier(planned)
+        self.assertIn("dated before the application", text)
+        self.assertNotIn("-5 days later", text)
+
+    def test_a_failed_check_is_logged_and_the_dossier_still_renders(self):
+        from unittest import mock
+
+        history = self._history(self.walnuts)
+        self._manure(history)
+        self._pick(history, 100)
+        with (
+            mock.patch("history.services.manure_check.ground_harvest_reviews", side_effect=RuntimeError("boom")),
+            self.assertLogs("history.services.audit_export_service", level="ERROR") as logs,
+        ):
+            text = self._dossier(history)
+        self.assertIn("OK: at least 90 days", text)
+        self.assertNotIn("swept from the ground", text)
+        self.assertTrue(any("Ground-harvest manure reviews failed" in line for line in logs.output))
 
     def test_a_pick_at_130_days_prints_no_review(self):
         history = self._history(self.walnuts)

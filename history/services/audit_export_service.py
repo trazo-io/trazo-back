@@ -6042,31 +6042,33 @@ class AuditExportService:
         # A crop gathered from the ground (walnuts, almonds, pecans, hazelnuts): its floor is 90 days, but the
         # shell lies on the orchard floor and a certifier can read that as soil contact under (c)(1)(ii). Raw
         # manure under 120 days that no pick or planned harvest shows was met at 120 is put to the certifier.
-        try:
-            from history.services.manure_check import ground_harvest_reviews
-
-            ground_reviews = ground_harvest_reviews(p)
-        except Exception:  # noqa: BLE001 — linter must not kill the PDF
-            ground_reviews = []
         crop_name = getattr(getattr(p, "crop_type", None), "name", "") or "this crop"
-        for review in ground_reviews:
+        for review in self._ground_harvest_reviews():
             if review.first_pick_days is not None:
-                measured = f"The first pick after it came {review.first_pick_days} days later."
+                measured = f"The first pick on this season after it came {review.first_pick_days} days later."
+            elif review.planned_days is not None and review.planned_days < 0:
+                measured = (
+                    "No pick is recorded yet, and the harvest planned on the record is dated before the application."
+                )
             elif review.planned_days is not None:
                 measured = (
                     f"No pick is recorded yet; the harvest planned on the record is {review.planned_days} days later."
                 )
             else:
                 measured = "No pick is recorded yet and the record states no planned harvest."
+            recorded = (
+                f"is recorded with a {review.recorded_days}-day interval"
+                if review.recorded_days is not None
+                else "records no interval"
+            )
             findings.append(
                 (
                     "Raw manure interval, crop gathered from the ground (§ 205.203(c)(1))",
                     (
-                        f"Raw manure applied {review.applied.isoformat()} is recorded with a "
-                        f"{review.recorded_days}-day interval on {crop_name}, which is shaken to the ground and "
-                        f"swept. § 205.203(c)(1)(iii) sets 90 days where the edible portion does not contact the "
-                        f"soil; certifiers differ on whether a shell lying on the orchard floor is contact under "
-                        f"(c)(1)(ii), 120 days. {measured} Confirm which reading your certifier applies."
+                        f"Raw manure applied {review.applied.isoformat()} {recorded} on {crop_name}, which is shaken "
+                        f"to the ground and swept. § 205.203(c)(1)(iii) sets 90 days where the edible portion does not "
+                        f"contact the soil; certifiers differ on whether a shell lying on the orchard floor is contact "
+                        f"under (c)(1)(ii), 120 days. {measured} Confirm which reading your certifier applies."
                     ),
                 )
             )
@@ -9677,12 +9679,7 @@ class AuditExportService:
             manure_data = [[self._hdr(h) for h in manure_headers]]
             row_warning_indices = []  # 1-based row indices that need red-text styling
             any_mismatch = False
-            try:
-                from history.services.manure_check import ground_harvest_reviews
-
-                ground_review_ids = {r.application_id for r in ground_harvest_reviews(self.production)}
-            except Exception:  # noqa: BLE001
-                ground_review_ids = set()
+            ground_review_ids = {r.application_id for r in self._ground_harvest_reviews()}
             for mev in manure_events:
                 interval_display = mev.get_manure_harvest_interval_display() if mev.manure_harvest_interval else "—"
                 # Earliest safe harvest = application_date + interval days (if both present)
@@ -15108,6 +15105,22 @@ class AuditExportService:
         # "Complete" read as a verdict on the section (recordkeeping review F-04); the length is
         # the fact, and the floor it clears is stated on the brief rows.
         return f"Written — {length:,} characters"
+
+    def _ground_harvest_reviews(self) -> list:
+        """`manure_check.ground_harvest_reviews` for this production, computed once per export: the consistency
+        check and the manure table both read it, and it scans every soil record on the parcel. A failure is logged
+        and reads as no reviews, so the PDF still renders."""
+        if not hasattr(self, "_ground_reviews"):
+            from history.services.manure_check import ground_harvest_reviews
+
+            try:
+                self._ground_reviews = ground_harvest_reviews(self.production)
+            except Exception:  # noqa: BLE001: the dossier must render; the failure is logged
+                logger.exception(
+                    "Ground-harvest manure reviews failed for production %s", getattr(self.production, "pk", None)
+                )
+                self._ground_reviews = []
+        return self._ground_reviews
 
     def _manure_interval_rule_for_crop(self) -> dict:
         """The § 205.203(c)(1) floor for this production: at least 120 days when the edible

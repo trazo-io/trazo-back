@@ -174,52 +174,79 @@ def parcel_conflicts(parcel_id, *, application=None, pick=None) -> list[ManureCo
 
 @dataclass(frozen=True)
 class GroundHarvestReview:
-    """A raw manure application under 120 days on a crop gathered from the ground, that nothing shows was
-    met at 120: the first pick after it came sooner, or no pick is recorded and the planned harvest is sooner
-    or not stated."""
+    """Raw manure on a crop gathered from the ground that nothing shows was 120 days from this season's harvest:
+    the first pick after it came at least the recorded interval (a pick inside it is a `ManureConflict`) but under
+    120 days, or no pick is recorded yet and the planned harvest is under 120 days, before the application, or not
+    stated."""
 
     application_id: int
     applied: date
-    recorded_days: int
-    #: Days from the application to the first pick on this production after it, or None when none is recorded.
+    #: The interval on the record, or None when it is blank (then only a measured pick raises the review).
+    recorded_days: int | None
+    #: Days from the application to the first pick on this season after it, or None when none is recorded.
     first_pick_days: int | None
-    #: Days from the application to the planned harvest on the manure record, or None when not stated.
+    #: Days from the application to the planned harvest on the record (negative when dated before it), or None.
     planned_days: int | None
 
 
+def _as_day(value) -> date | None:
+    """`phi_check._day`, plus an ISO string from a row written outside the ORM; anything else is None."""
+    value = _day(value)
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return None
+    return value if isinstance(value, date) else None
+
+
 def ground_harvest_reviews(history) -> list[GroundHarvestReview]:
-    """Raw manure on this production's parcel recorded under 120 days, when its crop is gathered from the
-    ground (`manure_interval.gathered_from_ground`), unless the first pick after it, or the planned harvest
-    when no pick is recorded, came 120 days or more later. Picks inside the interval are `season_conflicts`.
+    """Raw manure under 120 days before this season's harvest of a crop gathered from the ground
+    (`manure_interval.gathered_from_ground`), for the certifier to read under (c)(1)(ii) or (iii).
+
+    Read against this season's picks (same block rule as `parcel_conflicts`):
+      * a record stating 120 days or more says nothing;
+      * the first pick after the application decides when there is one: 120 days or more says nothing, under
+        the interval is already a `ManureConflict` (short under both readings), in between is a review;
+      * with no pick after it, manure from another season, or spread after this season's last pick (fall
+        manure for the next crop), says nothing; this season's own record is reviewed unless its planned
+        harvest is 120 days or more later. A blank interval with nothing measured is left to its own finding.
     """
     from history.models import ProductionEvent
     from history.services.manure_interval import SOIL_CONTACT_MINIMUM_DAYS, gathered_from_ground, interval_days
 
-    if history is None or not gathered_from_ground(getattr(history, "crop_type", None)):
+    crop = getattr(history, "crop_type", None) if history is not None else None
+    if not gathered_from_ground(crop):
         return []
-    picks = list(ProductionEvent.objects.filter(history=history, type__in=PICK_TYPES).order_by("date", "pk"))
+    picks = []
+    for pick in ProductionEvent.objects.filter(history=history, type__in=PICK_TYPES).only("date", "block_id"):
+        day = _as_day(pick.date)
+        if day is not None:
+            picks.append((day, pick.block_id))
     out = []
     for app in _raw_applications(history.parcel_id):
+        applied = _as_day(app.manure_application_date)
+        if applied is None:
+            continue
         recorded = interval_days(getattr(app, "manure_harvest_interval", None))
-        if recorded is None or recorded >= SOIL_CONTACT_MINIMUM_DAYS:
+        if recorded is not None and recorded >= SOIL_CONTACT_MINIMUM_DAYS:
             continue
-        applied = app.manure_application_date
-        after = [
-            (_day(p.date) - applied).days
-            for p in picks
-            if _day(p.date) is not None and _day(p.date) >= applied and not _blocks_differ(app.block_id, p.block_id)
-        ]
-        first_pick_days = min(after) if after else None
-        if first_pick_days is None and app.history_id != history.pk:
-            # With no pick to measure against, manure spread under another season says nothing about this one.
+        after = sorted(
+            (day - applied).days for day, block in picks if day >= applied and not _blocks_differ(app.block_id, block)
+        )
+        if after:
+            first = after[0]
+            if first >= SOIL_CONTACT_MINIMUM_DAYS or first < interval_for(app, crop):
+                continue
+            out.append(GroundHarvestReview(app.pk, applied, recorded, first, None))
             continue
-        planned = getattr(app, "manure_harvest_date_planned", None)
-        planned = planned.date() if hasattr(planned, "date") else planned
-        planned_days = (planned - applied).days if isinstance(planned, date) else None
-        shown = first_pick_days if first_pick_days is not None else planned_days
-        if shown is not None and shown >= SOIL_CONTACT_MINIMUM_DAYS:
+        if app.history_id != history.pk or picks or recorded is None:
             continue
-        out.append(GroundHarvestReview(app.pk, applied, recorded, first_pick_days, planned_days))
+        planned = _as_day(getattr(app, "manure_harvest_date_planned", None))
+        planned_days = (planned - applied).days if planned is not None else None
+        if planned_days is not None and planned_days >= SOIL_CONTACT_MINIMUM_DAYS:
+            continue
+        out.append(GroundHarvestReview(app.pk, applied, recorded, None, planned_days))
     return out
 
 
