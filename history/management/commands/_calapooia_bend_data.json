@@ -7813,7 +7813,7 @@
   {
    "#production": 686,
    "_id": 89,
-   "bill_of_lading": "BOL CBF-B25-HFE-01 to -03",
+   "bill_of_lading": "CBF-B25-HFE-01 to -03",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -7852,7 +7852,7 @@
   {
    "#production": 686,
    "_id": 90,
-   "bill_of_lading": "BOL CBF-B25-HFE-04",
+   "bill_of_lading": "CBF-B25-HFE-04",
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -7889,7 +7889,7 @@
   {
    "#production": 688,
    "_id": 91,
-   "bill_of_lading": "BOL CBF-B25-HFW-01 to -04",
+   "bill_of_lading": "CBF-B25-HFW-01 to -04",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -7929,7 +7929,7 @@
   {
    "#production": 688,
    "_id": 92,
-   "bill_of_lading": "BOL CBF-B25-HFW-05",
+   "bill_of_lading": "CBF-B25-HFW-05",
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -7966,7 +7966,7 @@
   {
    "#production": 689,
    "_id": 93,
-   "bill_of_lading": "BOL CBF-B25-RB-01 to -03",
+   "bill_of_lading": "CBF-B25-RB-01 to -03",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8005,7 +8005,7 @@
   {
    "#production": 689,
    "_id": 94,
-   "bill_of_lading": "BOL CBF-B25-RB-04",
+   "bill_of_lading": "CBF-B25-RB-04",
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8042,7 +8042,7 @@
   {
    "#production": 690,
    "_id": 95,
-   "bill_of_lading": "BOL CBF-B25-BGA-01, -02",
+   "bill_of_lading": "CBF-B25-BGA-01, -02",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8080,7 +8080,7 @@
   {
    "#production": 691,
    "_id": 96,
-   "bill_of_lading": "BOL CBF-B25-BGB-01, -02, -03",
+   "bill_of_lading": "CBF-B25-BGB-01, -02, -03",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms van (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8117,7 +8117,7 @@
   {
    "#production": 692,
    "_id": 97,
-   "bill_of_lading": "BOL CBF-B26-HFE-01, -02, -03",
+   "bill_of_lading": "CBF-B26-HFE-01, -02, -03",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8156,7 +8156,7 @@
   {
    "#production": 692,
    "_id": 98,
-   "bill_of_lading": "BOL CBF-B26-HFE-04",
+   "bill_of_lading": "CBF-B26-HFE-04",
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8193,7 +8193,7 @@
   {
    "#production": 693,
    "_id": 99,
-   "bill_of_lading": "BOL CBF-B26-HFW-01 to -04",
+   "bill_of_lading": "CBF-B26-HFW-01 to -04",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8233,7 +8233,7 @@
   {
    "#production": 693,
    "_id": 100,
-   "bill_of_lading": "BOL CBF-B26-HFW-05",
+   "bill_of_lading": "CBF-B26-HFW-05",
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8270,7 +8270,7 @@
   {
    "#production": 694,
    "_id": 101,
-   "bill_of_lading": "BOL CBF-B26-RB-01 to -03",
+   "bill_of_lading": "CBF-B26-RB-01 to -03",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8309,7 +8309,7 @@
   {
    "#production": 694,
    "_id": 102,
-   "bill_of_lading": "BOL CBF-B26-RB-04",
+   "bill_of_lading": "CBF-B26-RB-04",
    "buyer_name": "Willamette Valley Fruit Co., Salem OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -8346,7 +8346,7 @@
   {
    "#production": 687,
    "_id": 103,
-   "bill_of_lading": "BOL CBF-B26-BGA-SP-01, -02, -03",
+   "bill_of_lading": "CBF-B26-BGA-SP-01, -02, -03",
    "buyer_name": "Organically Grown Company (OGC), Portland OR",
    "carrier_name": "Brandt Family Farms reefer (own)",
    "clean_transport_method": "dedicated_organic",
@@ -9009,9 +9009,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9052,9 +9050,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9094,9 +9090,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9137,9 +9131,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 1 male SWD this week — first catch of the season.",
       "performed_by": "Laurel Brandt",
@@ -9163,7 +9155,7 @@
       "observation": "First male SWD in three of six traps with fruit coloring — OSU's threshold is first catch once fruit is susceptible. Spray program starts this week: Entrust on a 7-day interval with Surround ahead of it and a 3-day PHI held before every pick.",
       "performed_by": "Laurel Brandt",
       "pest_species": "Drosophila suzukii",
-      "threshold_rationale": "OSU Extension SWD program: treat at first male catch once fruit begins to color; 7-day interval; rotate MoA.",
+      "threshold_rationale": "OSU Extension SWD program: treat at the first confirmed SWD female once fruit begins to color; 7-day interval; rotate MoA.",
       "type": "TA"
      },
      {
@@ -9197,9 +9189,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 3 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9240,9 +9230,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 6 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9266,9 +9254,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 9 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9309,9 +9295,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 7 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9335,9 +9319,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 4 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -9361,9 +9343,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 2 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11661,9 +11641,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11704,9 +11682,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11746,9 +11722,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11789,9 +11763,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 1 male SWD this week — first catch of the season.",
       "performed_by": "Laurel Brandt",
@@ -11815,7 +11787,7 @@
       "observation": "First male SWD in three of six traps with fruit coloring — OSU's threshold is first catch once fruit is susceptible. Spray program starts this week: Entrust on a 7-day interval with Surround ahead of it and a 3-day PHI held before every pick.",
       "performed_by": "Laurel Brandt",
       "pest_species": "Drosophila suzukii",
-      "threshold_rationale": "OSU Extension SWD program: treat at first male catch once fruit begins to color; 7-day interval; rotate MoA.",
+      "threshold_rationale": "OSU Extension SWD program: treat at the first confirmed SWD female once fruit begins to color; 7-day interval; rotate MoA.",
       "type": "TA"
      },
      {
@@ -11849,9 +11821,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 3 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11892,9 +11862,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 6 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11918,9 +11886,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 9 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11961,9 +11927,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 7 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -11987,9 +11951,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 4 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -12013,9 +11975,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 2 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13664,9 +13624,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13707,9 +13665,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13749,9 +13705,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13792,9 +13746,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 1 male SWD this week — first catch of the season.",
       "performed_by": "Laurel Brandt",
@@ -13818,7 +13770,7 @@
       "observation": "First male SWD in three of six traps with fruit coloring — OSU's threshold is first catch once fruit is susceptible. Spray program starts this week: Entrust on a 7-day interval with Surround ahead of it and a 3-day PHI held before every pick.",
       "performed_by": "Laurel Brandt",
       "pest_species": "Drosophila suzukii",
-      "threshold_rationale": "OSU Extension SWD program: treat at first male catch once fruit begins to color; 7-day interval; rotate MoA.",
+      "threshold_rationale": "OSU Extension SWD program: treat at the first confirmed SWD female once fruit begins to color; 7-day interval; rotate MoA.",
       "type": "TA"
      },
      {
@@ -13852,9 +13804,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 3 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13895,9 +13845,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 6 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13921,9 +13869,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 9 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13964,9 +13910,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 7 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -13990,9 +13934,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 4 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -14016,9 +13958,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six apple-cider-vinegar traps, one per row band, serviced weekly. 2 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -15121,9 +15061,7 @@
       "identification_method": "Yellow sticky cards on margins (6), visual",
       "identified_by": "farmer",
       "ipm_strategy": "Vegetable program, in order: prevention first — a four-year rotation that never repeats a family, a winter cover of rye with vetch and crimson clover on every vegetable parcel, and clean, certified organic seed. Weeds are handled mechanically, not chemically: flame weeding on the stale seedbed before emergence, then finger and torsion weeders at the two-leaf stage with a hand crew behind, then bed-middle sweeps until the canopy closes. Monitoring: a weekly walk with a sweep net, yellow sticky cards on the block edges for carrot rust fly, and roots pulled at ten points to check for tunnelling. Thresholds follow OSU Extension guidance; the cultural controls have held every season and no insecticide, fungicide or herbicide has ever been applied to the vegetable ground on this farm.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Carrot rust fly sticky traps out on the margins; none caught. Aster leafhopper present, low.",
       "performed_by": "Javier Morales",
@@ -15144,9 +15082,7 @@
       "identification_method": "Yellow sticky cards on margins (6), visual",
       "identified_by": "farmer",
       "ipm_strategy": "Vegetable program, in order: prevention first — a four-year rotation that never repeats a family, a winter cover of rye with vetch and crimson clover on every vegetable parcel, and clean, certified organic seed. Weeds are handled mechanically, not chemically: flame weeding on the stale seedbed before emergence, then finger and torsion weeders at the two-leaf stage with a hand crew behind, then bed-middle sweeps until the canopy closes. Monitoring: a weekly walk with a sweep net, yellow sticky cards on the block edges for carrot rust fly, and roots pulled at ten points to check for tunnelling. Thresholds follow OSU Extension guidance; the cultural controls have held every season and no insecticide, fungicide or herbicide has ever been applied to the vegetable ground on this farm.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Rust fly: 2 flies on 6 cards over the week — below the OSU threshold. Leaf blight: none.",
       "performed_by": "Javier Morales",
@@ -17376,9 +17312,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -17438,9 +17372,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 1 male SWD this week — first catch of the season.",
       "performed_by": "Laurel Brandt",
@@ -17554,9 +17486,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 4 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -17597,9 +17527,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 7 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -17623,9 +17551,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 8 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -17666,9 +17592,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 6 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -17692,9 +17616,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 3 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -17718,9 +17640,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 1 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19614,9 +19534,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19657,9 +19575,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19699,9 +19615,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 1 male SWD this week — first catch of the season.",
       "performed_by": "Laurel Brandt",
@@ -19742,9 +19656,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 2 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19768,7 +19680,7 @@
       "observation": "First male SWD in the traps with fruit coloring; OSU threshold. Rotation starts: Entrust / Grandevo on a 7-day interval, Surround ahead, 3-day PHI held before every pick.",
       "performed_by": "Laurel Brandt",
       "pest_species": "Drosophila suzukii",
-      "threshold_rationale": "OSU Extension SWD program: treat at first male catch once fruit colors; 7-day interval; rotate MoA (spinosad / Chromobacterium).",
+      "threshold_rationale": "OSU Extension SWD program: treat at the first confirmed SWD female once fruit colors; 7-day interval; rotate MoA (spinosad / Chromobacterium).",
       "type": "TA"
      },
      {
@@ -19802,9 +19714,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 4 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19845,9 +19755,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 7 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19871,9 +19779,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 8 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19914,9 +19820,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 6 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19940,9 +19844,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 3 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -19966,9 +19868,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 1 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -21121,7 +21021,7 @@
    },
    "_id": 694,
    "confidence_score": 64.0,
-   "description": "Four picks, 114,240 lb off 11.2 acres — 10,200 lb/ac, up on 2025 with no hail this year. Three hand picks fresh to OGC (93,100 lb picked, 89,300 lb packed out), machine pick to WVF (21,140 lb). The 26-28 July heat (104 °F) pushed pick 3 to 04:30 starts and cost an estimated 2-3 percent to sunscald at the line. No buffer rows on the River Block.",
+   "description": "Four picks, 114,240 lb off 11.2 acres — 10,200 lb/ac, up on 2025 with no hail this year. Three hand picks fresh to OGC (93,100 lb picked, 89,562 lb packed out), machine pick to WVF (21,140 lb). The 26-28 July heat (104 °F) pushed pick 3 to 04:30 starts and cost an estimated 2-3 percent to sunscald at the line. No buffer rows on the River Block.",
    "events": {
     "BusinessEvent": [],
     "ChemicalEvent": [
@@ -21716,9 +21616,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -21759,9 +21657,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 0 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -21801,9 +21697,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 1 male SWD this week — first catch of the season.",
       "performed_by": "Laurel Brandt",
@@ -21844,9 +21738,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 2 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -21870,7 +21762,7 @@
       "observation": "First male SWD in the traps with fruit coloring; OSU threshold. Rotation starts: Entrust / Grandevo on a 7-day interval, Surround ahead, 3-day PHI held before every pick.",
       "performed_by": "Laurel Brandt",
       "pest_species": "Drosophila suzukii",
-      "threshold_rationale": "OSU Extension SWD program: treat at first male catch once fruit colors; 7-day interval; rotate MoA (spinosad / Chromobacterium).",
+      "threshold_rationale": "OSU Extension SWD program: treat at the first confirmed SWD female once fruit colors; 7-day interval; rotate MoA (spinosad / Chromobacterium).",
       "type": "TA"
      },
      {
@@ -21904,9 +21796,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 4 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -21947,9 +21837,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 7 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -21973,9 +21861,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 8 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -22016,9 +21902,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 6 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -22042,9 +21926,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 3 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -22068,9 +21950,7 @@
       "identification_method": "ACV bait trap, weekly",
       "identified_by": "farmer",
       "ipm_strategy": "Blueberry program, in order: prevention first — permanent sod row middles and the hedgerow for beneficials, open canopy from dormant pruning, sanitation of drops and pack-line culls after every pick, and pick intervals held to four or five days. Monitoring: six Scentry SWD traps per block from green fruit, read Monday and Thursday, plus a weekly walk of twenty bushes per block with a beat tray. Threshold: the first confirmed SWD female once fruit shows color, because the fly turns a generation in about a week and a per-fly count would be read too late. Only then, materials: Entrust SC and Grandevo WDG in rotation (both OMRI listed), applied at dusk after bee flight, never while hives are on the block; Serenade Opti at bloom only in a wet bloom; Surround WP if a heat event lands at color. Everything applied is on the OSP inputs list.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Six ACV traps serviced weekly. 1 male SWD this week.",
       "performed_by": "Laurel Brandt",
@@ -23115,9 +22995,7 @@
       "identification_method": "Yellow sticky cards on margins (6), visual",
       "identified_by": "farmer",
       "ipm_strategy": "Vegetable program, in order: prevention first — a four-year rotation that never repeats a family, a winter cover of rye with vetch and crimson clover on every vegetable parcel, and clean, certified organic seed. Weeds are handled mechanically, not chemically: flame weeding on the stale seedbed before emergence, then finger and torsion weeders at the two-leaf stage with a hand crew behind, then bed-middle sweeps until the canopy closes. Monitoring: a weekly walk with a sweep net, yellow sticky cards on the block edges for carrot rust fly, and roots pulled at ten points to check for tunnelling. Thresholds follow OSU Extension guidance; the cultural controls have held every season and no insecticide, fungicide or herbicide has ever been applied to the vegetable ground on this farm.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Rust fly sticky cards out on the margins; none caught.",
       "performed_by": "Javier Morales",
@@ -23180,9 +23058,7 @@
       "identification_method": "Yellow sticky cards on margins (6), visual",
       "identified_by": "farmer",
       "ipm_strategy": "Vegetable program, in order: prevention first — a four-year rotation that never repeats a family, a winter cover of rye with vetch and crimson clover on every vegetable parcel, and clean, certified organic seed. Weeds are handled mechanically, not chemically: flame weeding on the stale seedbed before emergence, then finger and torsion weeders at the two-leaf stage with a hand crew behind, then bed-middle sweeps until the canopy closes. Monitoring: a weekly walk with a sweep net, yellow sticky cards on the block edges for carrot rust fly, and roots pulled at ten points to check for tunnelling. Thresholds follow OSU Extension guidance; the cultural controls have held every season and no insecticide, fungicide or herbicide has ever been applied to the vegetable ground on this farm.",
-      "monitoring_count": {
-       "__dec__": "6.00"
-      },
+      "monitoring_count": null,
       "monitoring_unit": "per_trap",
       "observation": "Rust fly 1 on 6 cards; below threshold. Leaf blight none.",
       "performed_by": "Javier Morales",
@@ -23930,9 +23806,9 @@
       "#history": 696,
       "_id": 4996,
       "area_covered": {
-       "__dec__": "11.80"
+       "__dec__": "14.20"
       },
-      "block_id": "UT — all 11.8 ac",
+      "block_id": "UT — all 14.2 ac",
       "cleaned_by": "",
       "cleaning_materials_used": "",
       "cleaning_method": "",
@@ -23940,7 +23816,7 @@
       "date": {
        "__dt__": "2026-04-01T07:00:00+00:00"
       },
-      "description": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Calapooia Starts Co. (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
+      "description": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 14.2 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Calapooia Starts Co. (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
       "equipment_operation_type": "",
       "equipment_type": "",
       "extra_data": {
@@ -23957,7 +23833,7 @@
       "harvest_quality_grade": "",
       "index": 17,
       "name": "Transplanting — Patterson onions, Upper Terrace",
-      "observation": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 11.8 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Calapooia Starts Co. (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
+      "observation": "Patterson F1 storage onions transplanted 1 April on the Upper Terrace, 14.2 ac — the first cash crop on this ground since the 2024 fallow/cover year. Certified organic transplants from Calapooia Starts Co. (lot PAT-26-TRANS-04, grown organically from seed since 15 Jan). Five-row Checchi & Magli, 4 in in-row, ~100,000 plants/ac. Drip laid the same day; watered in that evening.",
       "performed_by": "Javier Morales",
       "plant_spacing": "4 in in-row, 5 lines per 60 in bed (~100,000 plants/ac)",
       "plants_established": 1180000,
@@ -24015,9 +23891,9 @@
       "#history": 696,
       "_id": 4998,
       "area_covered": {
-       "__dec__": "11.80"
+       "__dec__": "14.20"
       },
-      "block_id": "UT — all 11.8 ac",
+      "block_id": "UT — all 14.2 ac",
       "cleaned_by": "",
       "cleaning_materials_used": "",
       "cleaning_method": "",
