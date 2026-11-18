@@ -90,12 +90,14 @@ class NoPublicSequestrationFigureTests(APITestCase):
         self.assertIn("species", out)  # the sanitizer ran and kept an ordinary key
         self.assertNotIn("carbon_sequestration_kg", out)
 
-    def test_the_update_api_no_longer_writes_the_figure(self):
-        """Still shown to the producer when a record carries one; never written again."""
+    def test_the_producer_api_neither_writes_nor_serves_the_figure(self):
+        """Retired (history/retired_columns.py): not written, and no longer shown to the producer."""
         self.client.force_authenticate(user=self.user)
         url = f"{reverse('events-detail', args=[self.open_cover_crop.pk])}?event_type={SOIL_MANAGEMENT_EVENT_TYPE}"
         res = self.client.patch(url, {"carbon_sequestration_potential": "50.0"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.content)
         self.open_cover_crop.refresh_from_db()
         self.assertEqual(self.open_cover_crop.carbon_sequestration_potential, Decimal("1.2"))
-        self.assertEqual(float(self.client.get(url).json()["carbon_sequestration_potential"]), 1.2)
+        served = self.client.get(url).json()
+        self.assertEqual(served["id"], self.open_cover_crop.pk)  # the detail call returned the record
+        self.assertEqual([k for k in _keys(served) if "sequestr" in k.lower()], [])
