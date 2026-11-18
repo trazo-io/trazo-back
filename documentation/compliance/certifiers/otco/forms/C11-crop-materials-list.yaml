@@ -177,49 +177,31 @@ items:
     Nothing requires the upload before filing; the missing label is stated, not refused.'
 - ref: 11.1 Table (full product name)
   asks: 'Full Product Name, including any formulation (ex: "ABC Super Sulfur DF").'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    models:
-    - certifications.PlanMaterialEntry.product_name
-    - certifications.services.plan_materials.PlanMaterial.display
-    prints: modules/materials_application.pdf §A and 01-organic-system-plan.pdf — a bare National List substance
-      prints 'brand and formulation not stated'; an operator row prints its full label name; workbooks/Materials
-      List.xlsx
-  gap: 'Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line (`PlanMaterial.display(stated_absences=True)`,
-    used by the module PDF and the plan snapshot) states a missing cell as missing — ''manufacturer not stated'',
-    ''reason for use not stated'', and for a bare National List substance ''brand and formulation not stated''
-    — instead of omitting it, so a row that needs the cell no longer reads like a row that never did. The Materials
-    List workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names where
-    it is answered. Remaining, as CCOF A (product name): no separate `formulation` field, and a National List
-    attach does not yet require the operator row naming the brand applied. Since 2026-11-16 an operator row
-    that carries only the substance''s own name (a use answered, no brand) still prints ''brand and formulation
-    not stated'', in the plan line and in the C11 table''s product cell.'
-  fix: Same as CCOF A (product name).
+    questions: [materials_application.materials_list_panel]
+    models: [certifications.PlanMaterialEntry.product_name, certifications.services.plan_materials.PlanMaterial.display]
+    prints: "modules/materials_application.pdf §A and 01-organic-system-plan.pdf, the C11 table's product cell; workbooks/Materials List.xlsx; the plan review lists each row missing its brand and formulation, manufacturer, reason for use or in use (materials_rows_incomplete)"
+  # Closed 2026-11-17 by the materials application slice: the plan review lists every row on the plan, other than one
+  # no longer used, that is missing its brand and formulation, its manufacturer, its reason for use or whether it is
+  # in use, so the blank is found before filing (plan_materials.incomplete_rows). Listed, never refused: the create
+  # path takes a name alone by design, and a filing is not blocked over a maker the operator has yet to look up. The
+  # form's own cell is one, product name including formulation, which `product_name` holds; a bare National List
+  # substance is listed for its brand.
 - ref: 11.1 Table (manufacturer)
   asks: 'Full Manufacturer Name (ex: "XYZ Manufacturing, LLC"). The specific brand name and manufacturer must
     be provided; products without a manufacturer name cannot be reviewed and will not be approved for use.'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    models:
-    - certifications.PlanMaterialEntry.manufacturer
-    - certifications.services.plan_materials.PlanMaterial.display
-    prints: modules/materials_application.pdf §A and 01-organic-system-plan.pdf — 'manufacturer not stated'
-      rather than a silent blank; workbooks/Materials List.xlsx (blank counted per row)
-  gap: 'Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line (`PlanMaterial.display(stated_absences=True)`,
-    used by the module PDF and the plan snapshot) states a missing cell as missing — ''manufacturer not stated'',
-    ''reason for use not stated'', and for a bare National List substance ''brand and formulation not stated''
-    — instead of omitting it, so a row that needs the cell no longer reads like a row that never did. The Materials
-    List workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names where
-    it is answered. P1 → P2 because the row OTCO ''cannot review'' now announces itself on the page and in
-    the blank counter. Remaining: nothing requires the maker before submission (see CCOF A (manufacturer) for
-    why not at create time).'
-  fix: Completion gate on `manufacturer` for rows marked in use.
+    questions: [materials_application.materials_list_panel]
+    models: [certifications.PlanMaterialEntry.manufacturer, certifications.services.plan_materials.PlanMaterial.display]
+    prints: "modules/materials_application.pdf §A and 01-organic-system-plan.pdf, 'manufacturer not stated' rather than a silent blank; workbooks/Materials List.xlsx (blank counted per row); the plan review lists each row missing its brand and formulation, manufacturer, reason for use or in use (materials_rows_incomplete)"
+  # Closed 2026-11-17 by the materials application slice: the plan review lists every row on the plan, other than one
+  # no longer used, that is missing its brand and formulation, its manufacturer, its reason for use or whether it is
+  # in use, so the blank is found before filing (plan_materials.incomplete_rows). Listed, never refused: the create
+  # path takes a name alone by design, and a filing is not blocked over a maker the operator has yet to look up. The
+  # form's own cell is one, product name including formulation, which `product_name` holds; a bare National List
+  # substance is listed for its brand.
 - ref: 11.1 Table (third party review agency)
   asks: 'Third Party Review Agency (ex: OMRI, WSDA) — per row, check OMRI / WSDA / OTHER.'
   status: covered

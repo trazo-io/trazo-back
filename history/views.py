@@ -1862,6 +1862,49 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 break
         return Response(products, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=["get"], url_path="plan-materials", permission_classes=[IsAuthenticated])
+    def plan_materials_for_logging(self, request):
+        """The materials on the plan in force, for the input and amendment forms' quick-pick.
+
+        CCOF ORGB41: "Only materials included in your OSP Materials List may be used." The forms took a
+        product name as free text, so a name the list does not hold was caught only after the fact, by the
+        drift detector and the materials list attestation (2026-11-17). The plan is the one the attachments
+        describe (`_current_osp`: active, else the newest). A material no longer used, and one the list must
+        not hold at all, are left out. Offered, never filled in by itself.
+        """
+        from certifications.services.common_osp_workbooks import _current_osp
+        from certifications.services.plan_materials import plan_products
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        establishment_id = request.query_params.get("establishment_id")
+        if not establishment_id:
+            return Response({"error": "establishment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            establishment = Establishment.objects.get(id=establishment_id)
+        except (Establishment.DoesNotExist, ValueError):
+            return Response({"error": "Establishment not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not WorksIn.objects.filter(user=request.user, company=establishment.company, role__in=["CA", "FM"]).exists():
+            return Response({"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        osp = _current_osp(establishment)
+        if osp is None:
+            return Response({"osp_id": None, "osp_status": None, "materials": []}, status=status.HTTP_200_OK)
+        # Once per product name, the operator's answers first: a product the plan holds twice (a prohibited
+        # substance, a lapsed listing) is offered by neither row if either says it must not be (review of #473).
+        materials = [
+            {
+                "name": product["name"],
+                "manufacturer": product["manufacturer"],
+                "category": product["category"],
+                "status": product["status"],
+                "source": product["source"],
+            }
+            for product in plan_products(osp)
+            if not product["excluded"]
+        ]
+        return Response({"osp_id": osp.pk, "osp_status": osp.status, "materials": materials}, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=["get"], url_path="seed-suppliers")
     def seed_suppliers(self, request):
         """Seed suppliers this farm has recorded before, for the planting form's pickers.

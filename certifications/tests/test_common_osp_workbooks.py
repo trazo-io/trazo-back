@@ -372,10 +372,14 @@ class ContentTests(_Base):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][0], "Kocide 3000")
 
-    def test_materials_reason_for_use_maps_from_subtype(self):
+    def test_materials_reason_for_use_is_left_blank_and_the_subtype_is_labelled_in_comments(self):
+        # CCOF ORGB41 §B (2026-11-17): the record's kind printed in the reason column read as the
+        # operator's reason, and the blank was never counted. It is the records' word, in the comments.
         history = self._history()
         ChemicalEvent.objects.create(history=history, type="HE", date=date(2026, 4, 1), commercial_name="Weed Slayer")
-        self.assertEqual(self._data_rows(self._sheet("materials_list"))[0][2], "Weed control")
+        row = self._data_rows(self._sheet("materials_list"))[0]
+        self.assertIsNone(row[2])
+        self.assertIn("Reason for use not stated; the records log it as weed control.", row[5])
 
     def test_every_sheet_carries_provenance_and_the_operator_authorship_reminder(self):
         for key in WORKBOOKS_BY_KEY:
