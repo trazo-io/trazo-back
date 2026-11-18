@@ -6039,6 +6039,37 @@ class AuditExportService:
             )
         except Exception:  # noqa: BLE001 — linter must not kill the PDF
             manure_events_strict = []
+        # A crop gathered from the ground (walnuts, almonds, pecans, hazelnuts): its floor is 90 days, but the
+        # shell lies on the orchard floor and a certifier can read that as soil contact under (c)(1)(ii). Raw
+        # manure under 120 days that no pick or planned harvest shows was met at 120 is put to the certifier.
+        try:
+            from history.services.manure_check import ground_harvest_reviews
+
+            ground_reviews = ground_harvest_reviews(p)
+        except Exception:  # noqa: BLE001 — linter must not kill the PDF
+            ground_reviews = []
+        crop_name = getattr(getattr(p, "crop_type", None), "name", "") or "this crop"
+        for review in ground_reviews:
+            if review.first_pick_days is not None:
+                measured = f"The first pick after it came {review.first_pick_days} days later."
+            elif review.planned_days is not None:
+                measured = (
+                    f"No pick is recorded yet; the harvest planned on the record is {review.planned_days} days later."
+                )
+            else:
+                measured = "No pick is recorded yet and the record states no planned harvest."
+            findings.append(
+                (
+                    "Raw manure interval, crop gathered from the ground (§ 205.203(c)(1))",
+                    (
+                        f"Raw manure applied {review.applied.isoformat()} is recorded with a "
+                        f"{review.recorded_days}-day interval on {crop_name}, which is shaken to the ground and "
+                        f"swept. § 205.203(c)(1)(iii) sets 90 days where the edible portion does not contact the "
+                        f"soil; certifiers differ on whether a shell lying on the orchard floor is contact under "
+                        f"(c)(1)(ii), 120 days. {measured} Confirm which reading your certifier applies."
+                    ),
+                )
+            )
         if manure_events_strict:
             rule = self._manure_interval_rule_for_crop()
             expected_days = rule["days"]  # 90 or 120
@@ -9646,6 +9677,12 @@ class AuditExportService:
             manure_data = [[self._hdr(h) for h in manure_headers]]
             row_warning_indices = []  # 1-based row indices that need red-text styling
             any_mismatch = False
+            try:
+                from history.services.manure_check import ground_harvest_reviews
+
+                ground_review_ids = {r.application_id for r in ground_harvest_reviews(self.production)}
+            except Exception:  # noqa: BLE001
+                ground_review_ids = set()
             for mev in manure_events:
                 interval_display = mev.get_manure_harvest_interval_display() if mev.manure_harvest_interval else "—"
                 # Earliest safe harvest = application_date + interval days (if both present)
@@ -9686,6 +9723,9 @@ class AuditExportService:
                                 rule_check_text = (
                                     f"OK: at least {expected_rule['days']} days per {expected_rule['cite']}"
                                 )
+                                if mev.pk in ground_review_ids:
+                                    # Terse: the column is 1.35in wide. The consistency check says the rest.
+                                    rule_check_text += "; REVIEW: swept from the ground, see the consistency check"
                             else:
                                 rule_check_text = (
                                     f"SHORT: crop requires at least "

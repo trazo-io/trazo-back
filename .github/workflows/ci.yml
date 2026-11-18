@@ -542,6 +542,10 @@ jobs:
       # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
       # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
       #
+      # 2026-11-18: history.tests.test_ground_harvested_nuts joins. Walnuts, almonds, pecans and hazelnuts keep the
+      # 90-day raw manure floor; under 120 days with no pick or planned harvest showing 120 kept, the dossier names
+      # both readings of § 205.203(c)(1) for the certifier. Builds its own farm and seeds the crop types.
+      #
       # 2026-11-18: certifications.tests.test_manure_register_truth joins. G4.1's "none of these are used" (its not
       # applicable or the None option) prints a [REVIEW] line naming soil records of compost, manure, composting or
       # grazing; the fertility listing reads soil amendments; the berry floor follows the crop's class. Builds its own
@@ -1028,6 +1032,7 @@ jobs:
             history.tests.test_wa_spray_retention \
             company.tests.test_applicators \
             history.tests.test_manure_interval_is_a_floor \
+            history.tests.test_ground_harvested_nuts \
             history.tests.test_sales_disclosure_precedence \
             history.tests.test_event_subtype_validation \
             history.tests.test_business_event_validation \

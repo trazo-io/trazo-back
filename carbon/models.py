@@ -85,6 +85,17 @@ class CropType(models.Model):
             "(True = 120 days, False = 90 days). Conservative default is True."
         ),
     )
+    # Tree nuts shaken to the orchard floor and swept up (walnuts, almonds, pecans, hazelnuts). The kernel does
+    # not touch the soil, so the floor stays 90 days ((c)(1)(iii)), but the shell lies on the ground, and
+    # certifiers can read that as soil contact under (c)(1)(ii). Where a raw manure interval under 120 days
+    # meets one of these crops, the dossier names both readings for the certifier; nothing is refused.
+    harvested_from_ground = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether the crop is gathered from the ground at harvest (nuts shaken to the orchard floor and swept). "
+            "A raw manure interval under 120 days on such a crop is printed for the certifier to confirm."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

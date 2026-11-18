@@ -172,6 +172,57 @@ def parcel_conflicts(parcel_id, *, application=None, pick=None) -> list[ManureCo
     return out
 
 
+@dataclass(frozen=True)
+class GroundHarvestReview:
+    """A raw manure application under 120 days on a crop gathered from the ground, that nothing shows was
+    met at 120: the first pick after it came sooner, or no pick is recorded and the planned harvest is sooner
+    or not stated."""
+
+    application_id: int
+    applied: date
+    recorded_days: int
+    #: Days from the application to the first pick on this production after it, or None when none is recorded.
+    first_pick_days: int | None
+    #: Days from the application to the planned harvest on the manure record, or None when not stated.
+    planned_days: int | None
+
+
+def ground_harvest_reviews(history) -> list[GroundHarvestReview]:
+    """Raw manure on this production's parcel recorded under 120 days, when its crop is gathered from the
+    ground (`manure_interval.gathered_from_ground`), unless the first pick after it, or the planned harvest
+    when no pick is recorded, came 120 days or more later. Picks inside the interval are `season_conflicts`.
+    """
+    from history.models import ProductionEvent
+    from history.services.manure_interval import SOIL_CONTACT_MINIMUM_DAYS, gathered_from_ground, interval_days
+
+    if history is None or not gathered_from_ground(getattr(history, "crop_type", None)):
+        return []
+    picks = list(ProductionEvent.objects.filter(history=history, type__in=PICK_TYPES).order_by("date", "pk"))
+    out = []
+    for app in _raw_applications(history.parcel_id):
+        recorded = interval_days(getattr(app, "manure_harvest_interval", None))
+        if recorded is None or recorded >= SOIL_CONTACT_MINIMUM_DAYS:
+            continue
+        applied = app.manure_application_date
+        after = [
+            (_day(p.date) - applied).days
+            for p in picks
+            if _day(p.date) is not None and _day(p.date) >= applied and not _blocks_differ(app.block_id, p.block_id)
+        ]
+        first_pick_days = min(after) if after else None
+        if first_pick_days is None and app.history_id != history.pk:
+            # With no pick to measure against, manure spread under another season says nothing about this one.
+            continue
+        planned = getattr(app, "manure_harvest_date_planned", None)
+        planned = planned.date() if hasattr(planned, "date") else planned
+        planned_days = (planned - applied).days if isinstance(planned, date) else None
+        shown = first_pick_days if first_pick_days is not None else planned_days
+        if shown is not None and shown >= SOIL_CONTACT_MINIMUM_DAYS:
+            continue
+        out.append(GroundHarvestReview(app.pk, applied, recorded, first_pick_days, planned_days))
+    return out
+
+
 def season_conflicts(history) -> list[ManureConflict]:
     """The parcel's conflicts whose pick is on this production (the audit export reads one production)."""
     if history is None:
