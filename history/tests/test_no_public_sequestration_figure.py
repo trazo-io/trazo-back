@@ -11,11 +11,11 @@ that could still write the field.
 """
 
 import json
-from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
 
@@ -62,7 +62,6 @@ class NoPublicSequestrationFigureTests(APITestCase):
             type="CC",
             date=timezone.now(),
             description="Annual ryegrass between rows",
-            carbon_sequestration_potential=Decimal("1.2"),
             extra_data={"species": "Lolium multiflorum", "carbon_sequestration_kg": 9.6},
         )
         # A published season locks its events (423), so the write test uses an open one.
@@ -70,7 +69,7 @@ class NoPublicSequestrationFigureTests(APITestCase):
             name="Oranges 2027", start_date=timezone.now(), parcel=parcel, operator=cls.user
         )
         cls.open_cover_crop = SoilManagementEvent.objects.create(
-            history=cls.open_season, type="CC", date=timezone.now(), carbon_sequestration_potential=Decimal("1.2")
+            history=cls.open_season, type="CC", date=timezone.now()
         )
 
     def test_the_public_payload_names_no_sequestration_anywhere(self):
@@ -96,8 +95,12 @@ class NoPublicSequestrationFigureTests(APITestCase):
         url = f"{reverse('events-detail', args=[self.open_cover_crop.pk])}?event_type={SOIL_MANAGEMENT_EVENT_TYPE}"
         res = self.client.patch(url, {"carbon_sequestration_potential": "50.0"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.content)
-        self.open_cover_crop.refresh_from_db()
-        self.assertEqual(self.open_cover_crop.carbon_sequestration_potential, Decimal("1.2"))
+        with connection.cursor() as cursor:  # the column is still in the table until step 3
+            cursor.execute(
+                'SELECT "carbon_sequestration_potential" FROM "history_soilmanagementevent" WHERE id = %s',
+                [self.open_cover_crop.pk],
+            )
+            self.assertEqual(cursor.fetchone(), (None,))
         served = self.client.get(url).json()
         self.assertEqual(served["id"], self.open_cover_crop.pk)  # the detail call returned the record
         self.assertEqual([k for k in _keys(served) if "sequestr" in k.lower()], [])
