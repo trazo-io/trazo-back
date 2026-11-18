@@ -3,9 +3,11 @@
 Run once after the deploy that stops reading and writing them, and before the deploy that takes
 them out of the model:
 
-    python manage.py clear_retired_soil_columns --report /tmp/soil-retire.json
-    python manage.py clear_retired_soil_columns --report /tmp/soil-retire-apply.json --apply
-    python manage.py clear_retired_soil_columns --report /tmp/soil-retire-check.json   # 0 rows
+    poetry run python manage.py clear_retired_soil_columns --report /tmp/soil-retire.json
+    poetry run python manage.py clear_retired_soil_columns --report /tmp/soil-retire-apply.json --apply
+    poetry run python manage.py clear_retired_soil_columns --report /tmp/soil-retire-check.json   # 0 rows
+
+The DigitalOcean console has no Poetry: there, run the same lines as `python manage.py ...`.
 
 Through `common.services.data_operations`: the applied report lists each cleared value and is
 stored on its `DataOperationLog` row, so `--restore log:<id>` puts them back after the container
