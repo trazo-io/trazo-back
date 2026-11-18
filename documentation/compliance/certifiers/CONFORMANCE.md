@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 806 |
 | Rows that are not questions (instructions, Trazo interpretations) | 57 |
-| Covered | 713 |
-| Partial | 33 |
+| Covered | 717 |
+| Partial | 29 |
 | Not covered | 11 |
 | Out of scope (stated) | 49 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 0 |
-| Minor (P2 / P3) | 44 |
+| Minor (P2 / P3) | 40 |
 
 These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
 
@@ -157,7 +157,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When OTCO requires it:** C1 Crop Activities Checklist — 'I/We grow crops → C4: Fertility Management' (alongside C2, C5, C6, C9, C12). Required of every crop grower; the form opens 'Complete this form for all acreage to be included under certification.'
 
-**18 questions** — Covered 17 · Partial 1
+**18 questions** — Covered 18
 
 | Ref | What OTCO asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
@@ -169,7 +169,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 | 4.3-1 | Manure — Do you apply uncomposted (raw) animal manure? Note: animal manure that is not composted in accordance with § 205.203(c)(2) is considered raw; records must verify the composting process for manure and all materials containing manure. Yes / No (skip to Section 4.4). | Covered | — | `g4_1_compost_manure.materials_applied` · `g4_1_compost_manure.compost_method` | — |
 | 4.3-2 | Is the manure purchased or produced off-farm? No (skip to question 3) / Yes. If yes, provide a product label or supplier statement verifying the manure is not treated with any prohibited substance. Documentation attached. | Covered | — | `g4_1_compost_manure.raw_manure_source` · `g4_1_compost_manure.raw_manure_supplier_statement` · `g4_1_compost_manure.raw_manure_supplier_statement_upload` | — |
 | 4.3-3 | Is the manure applied to crops intended for human consumption? Yes / No (skip to question 5). | Covered | — | `g4_1_compost_manure.raw_manure_interval_rule` | — |
-| 4.3-4 | How is uncomposted manure applied (check all that apply)? Incorporated at least 120 days before harvest of crops with edible portions that contact soil / Incorporated at least 90 days before harvest of crops with edible portions that do not contact soil / Manure is processed or pelleted (heated to 160 °F or 150 °F for one hour with a maximum moisture of 12%). | Partial | P2 | `g4_1_compost_manure.raw_manure_interval_rule` · `g4_1_compost_manure.raw_manure_timing_detail` · `g4_1_compost_manure.materials_applied` | Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies. **Fix:** Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree. |
+| 4.3-4 | How is uncomposted manure applied (check all that apply)? Incorporated at least 120 days before harvest of crops with edible portions that contact soil / Incorporated at least 90 days before harvest of crops with edible portions that do not contact soil / Manure is processed or pelleted (heated to 160 °F or 150 °F for one hour with a maximum moisture of 12%). | Covered | — | `g4_1_compost_manure.raw_manure_interval_rule` · `g4_1_compost_manure.raw_manure_timing_detail` · `g4_1_compost_manure.materials_applied` | — |
 | 4.3-5 | How do you ensure that manure applications do not contaminate water sources? | Covered | — | `g4_1_compost_manure.raw_manure_water_risk` | — |
 | 4.4 (not applicable) | N/A, No compost use (skip to section 4.5) | Covered | — | `g4_1_compost_manure.materials_applied` | — |
 | 4.4-1 | Check all that apply, and provide additional information as noted: I produce compost (and/or tea), this compost does not contain / does contain manure; I purchase compost (and/or tea), provide product information in Section C11, this compost does not contain / does contain manure. | Covered | — | `g4_1_compost_manure.materials_applied` · `g4_1_compost_manure.compost_contains_manure` · `g4_1_compost_manure.compost_tea_made_on_farm` · `g4_1_compost_manure.vermicompost_made_on_farm` · `g4_0_rotation_soil.fertility_inputs_listed` | — |
@@ -340,7 +340,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When WSDA requires it:** Crop Producer Organic System Plan (AGR 2121) — filed once by every crop producer applicant; WSDA runs a LIVING plan, so a renewing operation updates the sections that changed rather than re-filing the whole OSP (the March 1 deadline is the renewal application and fee)
 
-**22 questions** — Covered 21 · Partial 1
+**22 questions** — Covered 22
 
 | Ref | What WSDA asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
@@ -364,7 +364,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 | 12 | Do you apply vermicompost that is made on-farm and that contains manure or other animal materials to crops intended for human consumption and is applied less than 90 or 120 days prior to harvest? Yes / No. | Covered | — | `g4_1_compost_manure.vermicompost_applied_inside_interval` | — |
 | 12a | If yes, how do you ensure the duration of vermicomposting is sufficient to produce a finished product that does not contribute to contamination of crops, soil, or water? Include a description of the records you maintain. | Covered | — | `g4_1_compost_manure.vermicompost_conditions_met` · `g4_1_compost_manure.vermicompost_moisture` · `g4_1_compost_manure.compost_logs_kept` | — |
 | 13 | Do you use raw, aged, liquid, or digested animal manure on crops intended for human consumption? Yes / No. | Covered | — | `g4_1_compost_manure.materials_applied` | — |
-| 13a | If yes, when is the product applied? More than 90 days prior to harvest of crops where the harvestable portion does not contact the soil / More than 120 days prior to harvest where it does. | Partial | P2 | `g4_1_compost_manure.raw_manure_interval_rule` · `g4_1_compost_manure.raw_manure_timing_detail` | Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies. **Fix:** Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree. |
+| 13a | If yes, when is the product applied? More than 90 days prior to harvest of crops where the harvestable portion does not contact the soil / More than 120 days prior to harvest where it does. | Covered | — | `g4_1_compost_manure.raw_manure_interval_rule` · `g4_1_compost_manure.raw_manure_timing_detail` | — |
 | 14 | Optional space for additional information. | Covered (optional on the form) | — | `g4_1_compost_manure.soil_fertility_additional_notes` | — |
 
 ### E Biodiversity Conservation
@@ -1325,17 +1325,17 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When CCOF requires it:** Item 5 — use compost, manure, or similar
 
-**8 questions** — Covered 6 · Partial 2
+**8 questions** — Covered 8
 
 | Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| A1 | Are all of the following materials you use in organic production listed on your Grower Materials Application (OSP Materials List): compost, compost tea, vermicompost, processed (heat-treated) manure, raw (uncomposted) manure? Yes / Not applicable, none of these are used (stop, form complete). | Partial | P2 | `g4_0_rotation_soil.fertility_inputs_listed` · `materials_application.fertilizers_listed` | No G4.1 question names this obligation for compost/manure specifically; the nearest attestations are G4.0's `fertility_inputs_listed` and the Materials Application's `fertilizers_listed`, whose prefill basis reads only `ChemicalEvent` FE rows and never the `SoilManagementEvent` OM/CO amendments that are exactly what this question is about. G4.1 also carries two independent N/A paths (the module-level not-applicable and the `materials_applied.none` exclusive option) for the same fact. **Fix:** Extend `materials_category_evidence` to include `bundle.soils("OM","CO")` amendment product names; drop one of the two N/A paths. |
+| A1 | Are all of the following materials you use in organic production listed on your Grower Materials Application (OSP Materials List): compost, compost tea, vermicompost, processed (heat-treated) manure, raw (uncomposted) manure? Yes / Not applicable, none of these are used (stop, form complete). | Covered | — | `g4_0_rotation_soil.fertility_inputs_listed` · `materials_application.fertilizers_listed` · `g4_1_compost_manure.materials_applied` | — |
 | A2 | Indicate which of the following you PRODUCE at your organic operation (mark all that apply): Compost / Compost tea / Vermicompost / Not applicable, do not produce any of these (skip to section B). | Covered | — | `g4_1_compost_manure.materials_applied` · `g4_1_compost_manure.compost_tea_made_on_farm` · `g4_1_compost_manure.vermicompost_made_on_farm` | — |
 | A2a | List all feedstocks/ingredients in the compost, vermicompost and/or compost tea you produce. If you produce more than one, provide separate ingredient lists for each. | Covered | — | `g4_1_compost_manure.compost_feedstocks` · `g4_1_compost_manure.compost_feedstocks_detail` | — |
 | A2b | If you produce compost containing manure (and/or compost tea made from it), which production method do you use? Not applicable / windrow — reaches 131-170°F for at least 15 days, turned at least 5 times / in-vessel or static aerated pile — reaches 131-170°F for at least 3 days (maintain compost production records) / my compost does not meet either requirement, so it is considered 'raw manure' (complete section B). | Covered | — | `g4_1_compost_manure.compost_method` · `g4_1_compost_manure.compost_contains_manure` · `g4_1_compost_manure.compost_initial_cn_ratio` · `g4_1_compost_manure.compost_temp_and_days` · `g4_1_compost_manure.compost_turnings` · `g4_1_compost_manure.compost_temp_logs_kept` | — |
 | A2c | If you produce vermicompost containing manure, are the following conditions met: aerobic conditions and 70-90% moisture maintained during production; composting duration sufficient to produce a finished product that does not contribute to contamination by plant nutrients, pathogens, heavy metals or prohibited-substance residues? Not applicable / Yes, maintain vermicompost production records and any test results / my vermicompost does not meet these requirements, so it is considered 'raw manure' (complete section B). | Covered | — | `g4_1_compost_manure.vermicompost_conditions_met` · `g4_1_compost_manure.vermicompost_moisture` | — |
 | B1 | Do you apply raw animal manure (including any compost, compost tea, or vermicompost containing manure that does not meet the section A production requirements), and/or do you have planned grazing of animals in your organic crop production areas? No (stop, form complete) / Yes, raw animal manure is applied / Yes, my operation uses planned grazing of animals in organic crop production areas. | Covered | — | `g4_1_compost_manure.materials_applied` | — |
-| B2 | How do you meet the following restriction on the use of raw manure, either applied or from planned grazing? Mark all that apply. Used for crops that are not for human consumption / incorporated at least 120 days before harvest of crops whose edible portions contact soil or soil particles / incorporated at least 90 days before harvest of crops whose edible portions do not contact soil or soil particles. | Partial | P2 | `g4_1_compost_manure.raw_manure_interval_rule` · `g4_1_compost_manure.raw_manure_timing_detail` | Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies. **Fix:** Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree. |
+| B2 | How do you meet the following restriction on the use of raw manure, either applied or from planned grazing? Mark all that apply. Used for crops that are not for human consumption / incorporated at least 120 days before harvest of crops whose edible portions contact soil or soil particles / incorporated at least 90 days before harvest of crops whose edible portions do not contact soil or soil particles. | Covered | — | `g4_1_compost_manure.raw_manure_interval_rule` · `g4_1_compost_manure.raw_manure_timing_detail` | — |
 | B3 | How do you ensure that manure does not contaminate wells, rivers or streams, lakes or ponds? | Covered | — | `g4_1_compost_manure.raw_manure_water_risk` | — |
 
 ### G6.2 Storage

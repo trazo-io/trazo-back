@@ -542,6 +542,11 @@ jobs:
       # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
       # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
       #
+      # 2026-11-18: certifications.tests.test_manure_register_truth joins. G4.1's "none of these are used" (its not
+      # applicable or the None option) prints a [REVIEW] line naming soil records of compost, manure, composting or
+      # grazing; the fertility listing reads soil amendments; the berry floor follows the crop's class. Builds its own
+      # farm and seeds the crop types; reads only this repo's registers.
+      #
       # 2026-11-18: certifications.tests.test_record_keeping_leftovers joins. The records attestation also requires
       # storage records, invoices and bills of lading when the plan stores, sells as organic or ships other than by
       # buyer pickup (CCOF G8.0 A1); G8.0, G6.0, G5.0 and the Parcel Application ask the leftovers of CCOF G8.0 B1, C1,
@@ -1138,6 +1143,7 @@ jobs:
             certifications.tests.test_pest_weed_soil \
             certifications.tests.test_post_harvest_leftovers \
             certifications.tests.test_record_keeping_leftovers \
+            certifications.tests.test_manure_register_truth \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

@@ -173,14 +173,15 @@ items:
   - ref: 13a
     asks: If yes, when is the product applied? More than 90 days prior to harvest of crops where the harvestable
       portion does not contact the soil / More than 120 days prior to harvest where it does.
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g4_1_compost_manure.raw_manure_interval_rule, g4_1_compost_manure.raw_manure_timing_detail]
       prints: "modules/G4_1.pdf §B; narrative § 205.203(c)(1)"
-    gap: "Several rules can now be stated at once (a checkbox group since 2026.11.02). Still open: the packet's crop classifier reads `CropType.has_soil_contact`, which is True for blueberries, caneberries, kiwi and hops, so the record validation allows only a 120-day interval for them and the packet cites § 205.203(c)(1)(ii) where (iii) applies."
-    fix: "Set `has_soil_contact=False` for the elevated berry, cane, kiwi and hop crop types (seeder plus data migration), so write validation, the export classifier and the interval checks agree."
     # Re-read 2026-11-02 after review of back #254: the crop classifier fix was withdrawn.
+    # Closed 2026-11-18 by the manure register slice: stale since back PR 452 (seeder plus carbon 0056), which states
+    # the class per crop: blueberries and hops take the 90-day floor and cite § 205.203(c)(1)(iii), strawberries keep
+    # 120 and (ii). Caneberries and kiwi are not seeded crops; a crop with no stated class takes 120, which satisfies
+    # both paragraphs. The operator's own statement of the rules met prints as answered.
   - ref: '14'
     asks: Optional space for additional information.
     optional: true
