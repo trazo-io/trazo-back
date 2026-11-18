@@ -179,7 +179,7 @@ class PlanMaterialEntrySerializer(serializers.ModelSerializer):
         wsda = attrs.get("wsda_material", getattr(self.instance, "wsda_material", None))
         listing_fills_the_box = (
             basis == PlanMaterialEntry.BASIS_OMRI and omri is not None and not omri.delisted_on
-        ) or (basis == PlanMaterialEntry.BASIS_WSDA and wsda is not None)
+        ) or (basis == PlanMaterialEntry.BASIS_WSDA and wsda is not None and not wsda.delisted_on)
         if listing_fills_the_box and ((other_agency or "").strip() or (other_ref or "").strip()):
             raise serializers.ValidationError(
                 {
@@ -1192,6 +1192,8 @@ class _ApprovedWSDAInline(serializers.Serializer):
     manufacturer = serializers.CharField(required=False, allow_null=True)
     category = serializers.CharField(required=False, allow_null=True)
     is_cdfa_oim_registered = serializers.BooleanField(required=False)
+    # As on the OMRI inline: the panel marks a listing WSDA has dropped instead of rendering it current.
+    delisted_on = serializers.DateField(required=False, allow_null=True)
 
     def get_wsda_id(self, obj):
         raw = obj.get("wsda_id") if isinstance(obj, dict) else getattr(obj, "wsda_id", None)

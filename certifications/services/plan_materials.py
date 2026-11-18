@@ -129,10 +129,10 @@ class PlanMaterial:
     @property
     def review_position(self) -> str:
         """Which box of OTCO C11's review-agency cell this row's own record fills: "omri", "wsda" or
-        "other". A lapsed OMRI listing is no longer OMRI's review."""
+        "other". A lapsed OMRI or WSDA listing is no longer that program's review."""
         if self.source == "OMRI" and not self.delisted_on:
             return "omri"
-        if self.source == "WSDA":
+        if self.source == "WSDA" and not self.delisted_on:
             return "wsda"
         return "other"
 
@@ -149,8 +149,10 @@ class PlanMaterial:
         elif self.condition:
             notes.append(f"[REVIEW] restricted use: {self.condition}")
         if self.delisted_on:
+            # The row's own catalog: a WSDA row no longer on WSDA's list since 2026-11-18 (OV-MT-C04).
+            program = "WSDA" if self.source == "WSDA" else "OMRI"
             notes.append(
-                f"[REVIEW] no longer on the OMRI list as of {self.delisted_on}; "
+                f"[REVIEW] no longer on the {program} list as of {self.delisted_on}; "
                 "confirm the product's status with your certifier"
             )
         return notes
@@ -296,7 +298,7 @@ def _fold_into_entry(entry, catalog_rows: list, linked_conditions: Optional[dict
             listing_ref = row.listing_ref
         if row.source in ("National List", NONSYNTHETIC_SOURCE) and _norm(entry.product_name) == _norm(row.name):
             brand_unstated = True
-        # A lapse travels with the listing it belongs to. OMRI rows do not reach here (a
+        # A lapse travels with the listing it belongs to. OMRI and WSDA rows do not reach here (a
         # delisted one is held back from the fold above), but promoting `source` and
         # `identifier` without this would make any future folding source assert a listing its
         # own registry had withdrawn.
@@ -450,14 +452,18 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # certifier can look up and will not find. `str(mat)` is deliberately NOT the
         # name fallback here — WSDAMaterial.__str__ embeds that same identifier.
         name = getattr(mat, "brand_name", "") or ""
+        delisted = getattr(mat, "delisted_on", None)
         row = PlanMaterial(
             name=name,
             source="WSDA",
             identifier=wsda_identifier_label(getattr(mat, "wsda_id", "")),
             manufacturer=getattr(mat, "manufacturer", "") or "",
             source_id=mat.pk,
+            delisted_on=delisted.isoformat() if delisted else "",
         )
-        if not _fold(row, entry_names, folded, entry_by_link):
+        # A listing WSDA dropped is never folded away, for the OMRI reason above: folding would print
+        # "WSDA Product #<n>" on the merged row and drop the line saying WSDA no longer lists it.
+        if row.delisted_on or not _fold(row, entry_names, folded, entry_by_link):
             wsda.append(row)
 
     # Operator-authored rows — the fourth source, and the one CCOF's own prompt asks for
@@ -657,6 +663,8 @@ def c11_review_cell(row: PlanMaterial) -> list[str]:
         lines.append("nonsynthetic, no National List entry")
     elif row.source == "OMRI":
         lines.append(f"OMRI listing lapsed as of {row.delisted_on}")
+    elif row.source == "WSDA":
+        lines.append(f"WSDA listing lapsed as of {row.delisted_on}")
     elif row.identifier:
         lines.append(row.identifier)
     return lines

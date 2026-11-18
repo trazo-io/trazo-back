@@ -920,6 +920,10 @@ jobs:
       # of them read files through parents[1] or parents[2], all inside this repository, never the
       # sibling. tests.test_photo_integration_flow joins with its fixture fixed: it created a
       # Production with no name, which django-auditlog cannot print.
+      # 2026-11-18: certifications.tests.test_wsda_listing_lapse (new, 17 tests) pins the WSDA half of
+      # OV-MT-C04: seed_wsda_materials marks a product a later edition drops (with the OMRI seeder's
+      # guards), and the buyer-page claim, plan list, drift detector, lookup and dossier read it. No
+      # sibling repo.
       # THE SHARD COMES IN THROUGH THE ENVIRONMENT, NOT `${{ }}` IN THE SCRIPT (2026-11-17). GitHub
       # turns any string holding an expression into one expression, capped at 21,000 characters.
       # This script reached 20,612 with the list as it stood on main, so a few more modules would
@@ -1151,6 +1155,7 @@ jobs:
             certifications.tests.test_drift_detector_phase1 \
             certifications.tests.test_drift_listing_with_plan_substance \
             certifications.tests.test_omri_listing_lapse \
+            certifications.tests.test_wsda_listing_lapse \
             certifications.tests.test_restricted_materials \
             history.tests.test_national_list_conditions_row \
             history.tests.test_lab_analysis_and_micronutrients \
