@@ -395,11 +395,22 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         harvest arithmetic use 14.2; a season note "89,300 lb packed out" over pick records that sum
         to 89,562; "BOL BOL CBF-..." (the value carried the label); "Pressure 6.00/trap" on 58 trap
         rows, which was the trap count, while the catch sat in the trap detail; and a threshold the
-        strategy called "the first confirmed SWD female" while the rationale said "first male catch".
+        rationale said "first male catch" while the strategy and the plan said "the first confirmed
+        SWD female".
         """
         text = json.dumps(self.data, ensure_ascii=False)
-        for stale in ("11.8 ac", "89,300 lb packed out", "first male catch", "first confirmed SWD female"):
+        for stale in ("11.8 ac", "89,300 lb packed out", "first male catch"):
             self.assertNotIn(stale, text, stale)
+        # The plan's threshold is the records' threshold (review of back #499: rewording the 98
+        # strategy rows split them from the plan's G5 answers, which say "first confirmed female").
+        self.assertNotIn("SWD trap catch", text)
+        # A record that says 14.2 ac also stores 14.2 ac.
+        for season in self.data["seasons"]:
+            for rows in season["events"].values():
+                for r in rows:
+                    if "14.2 ac" in json.dumps(r, ensure_ascii=False) and r.get("area_covered") is not None:
+                        area = r["area_covered"]
+                        self.assertEqual(area.get("__dec__") if isinstance(area, dict) else area, "14.20", r["_id"])
         sales_bols = [
             r.get("bill_of_lading") or ""
             for s in self.data["seasons"]
@@ -408,13 +419,16 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         ] + [r.get("bill_of_lading") or "" for r in self.data["sales_records"]]
         self.assertTrue(any(sales_bols), "no bill of lading read")
         self.assertFalse([b for b in sales_bols if b.startswith("BOL ")])
-        traps = [
-            r for s in self.data["seasons"] for r in s["events"].get("PestManagementEvent", []) if r.get("type") == "TM"
-        ]
-        self.assertGreater(len(traps), 50, "no trap row read")
+        pests = [r for s in self.data["seasons"] for r in s["events"].get("PestManagementEvent", [])]
+        self.assertGreater(len([r for r in pests if r.get("type") == "TM"]), 50, "no trap row read")
+        # Any pest row, not only TM: four carrot rows with no subtype carried the same "6/trap".
         self.assertFalse(
-            [r["_id"] for r in traps if (r.get("monitoring_count") or {}).get("__dec__") == "6.00"],
-            "a trap row stores the trap count as its pressure",
+            [
+                r["_id"]
+                for r in pests
+                if r.get("monitoring_unit") == "per_trap" and (r.get("monitoring_count") or {}).get("__dec__") == "6.00"
+            ],
+            "a pest row stores the trap count as its pressure",
         )
 
     def test_every_national_list_link_says_how_it_was_set(self):
