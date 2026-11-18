@@ -327,6 +327,36 @@ def _pest_monitoring_frequency(bundle, question):
     }
 
 
+def _pest_species_evidence(bundle, question):
+    """G5.0 pests_diseases_of_concern (textarea): the organisms the pest records name, as the operator wrote them.
+
+    OTCO C5 5.1-1 asks the pests and diseases that threaten the crops. The scouting and control records already name
+    what was found (`PestManagementEvent.pest_species`); the plan states it as the operator's own list, so this is a
+    starting draft the operator edits, never the answer (2026-11-18). The names are kept as written, distinct by
+    their lowercase form, first written first, a record's semicolon-separated names each its own; none is otherwise
+    parsed or matched.
+    """
+    named = [e for e in bundle.pest if (getattr(e, "pest_species", "") or "").strip()]
+    if not named:
+        return None
+    seen, names = set(), []
+    for e in sorted(named, key=lambda e: (e.date is None, e.date)):
+        # A record may name several, separated by semicolons ("Aphids; Drosophila suzukii"): each is a name.
+        for part in e.pest_species.split(";"):
+            name = " ".join(part.split())
+            if name and name.lower() not in seen:
+                seen.add(name.lower())
+                names.append(name)
+    shown = names[:12]
+    n = len(named)
+    return {
+        "value": "; ".join(shown),
+        "basis": f"named on {n} pest record{'s' if n != 1 else ''}"
+        + (f"; the first {len(shown)} of {len(names)} names" if len(names) > len(shown) else ""),
+        "count": n,
+    }
+
+
 def _storage_location_evidence(bundle, question):
     """G6.2 storage_locations (checkbox_group) — from where harvests were actually stored.
 
@@ -735,6 +765,7 @@ PREFILL_RESOLVERS = {
     "pest_monitoring_scope": _pest_monitoring_scope,
     "pest_monitoring_frequency": _pest_monitoring_frequency,
     "storage_location_evidence": _storage_location_evidence,
+    "pest_species_evidence": _pest_species_evidence,
     # The National List materials allowed only under a condition (restricted_materials).
     "deficiency_materials_evidence": lambda bundle, q: _restricted().deficiency_materials_evidence(bundle, q),
     "calcium_chloride_evidence": lambda bundle, q: _restricted().calcium_chloride_evidence(bundle, q),

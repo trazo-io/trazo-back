@@ -24,3 +24,25 @@ questions:
     CCOF's G5.0 (ORGB42) does not ask about copper. CCOF reads copper products off the Grower Materials Application (ORGB41), where the operator states how each product's restriction is met. Asked by WSDA AGR 2121 H5/H5a; superset for a CCOF plan, added 2026-11-05 (restricted-materials slice).
   g5_0_pest.copper_accumulation_other: >-
     CCOF's G5.0 (ORGB42) does not ask about copper. CCOF reads copper products off the Grower Materials Application (ORGB41), where the operator states how each product's restriction is met. Asked by WSDA AGR 2121 H5/H5a; superset for a CCOF plan, added 2026-11-05 (restricted-materials slice).
+  g5_0_pest.pests_diseases_of_concern: >-
+    The pests and diseases the operation faces, named (OTCO C5 5.1-1). CCOF's G5.0 (ORGB42) asks practices
+    by pest type, not a named list; superset for a CCOF plan.
+  g5_0_pest.pest_taxa_managed: >-
+    The kinds of crop pest managed (WSDA AGR 2121 G 3). CCOF's G5.0 groups practices under Insects &
+    invertebrates and Vertebrate pests columns and asks no kinds; superset.
+  g5_0_pest.pest_taxa_other: >-
+    The other kinds of `pest_taxa_managed`, unmapped with their parent.
+  g5_0_pest.pest_prevention_records: >-
+    Records kept of preventive pest management (WSDA AGR 2121 G 5). CCOF's G5.0 asks the practices, and its
+    G8.0 asks records generally; it asks no description of these.
+  g5_0_pest.weed_prevention_records: >-
+    Records kept of preventive weed management (WSDA AGR 2121 F 6); same reason as
+    `pest_prevention_records`.
+  g5_0_pest.weed_management_additional_notes: >-
+    WSDA AGR 2121 F 7's optional space for the weed section. CCOF's G5.0 has no section of its own for
+    weeds.
+  g5_0_pest.plastic_mulch_material: >-
+    What the plastic mulch is made of, against section 205.601(b)(2) (WSDA AGR 2121 F 4). CCOF's G5.0 §A
+    asks plastic mulch as a practice, not its material; superset.
+  g5_0_pest.plastic_mulch_perennial_condition: >-
+    Plastic mulch in a perennial planting (WSDA AGR 2121 F 5a). CCOF's G5.0 does not ask it.

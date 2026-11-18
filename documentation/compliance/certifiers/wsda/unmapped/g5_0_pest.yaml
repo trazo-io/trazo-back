@@ -39,3 +39,9 @@ questions:
     How often crop residue is burned. Asked by CCOF G5.0 C2 and OTCO C5 5.2-1; WSDA AGR 2121 F to H do not ask about burning.
   g5_0_pest.input_use_triggers: >-
     When pest materials are turned to (prevention insufficient, economic threshold). Asked by CCOF G5.0 B2 and OTCO C5 5.1-4; WSDA AGR 2121 G and H ask which materials are used, not the trigger.
+  g5_0_pest.pests_diseases_of_concern: >-
+    The pests and diseases faced, named (OTCO C5 5.1-1). WSDA AGR 2121 G 3 asks their kinds
+    (pest_taxa_managed), not their names.
+  g5_0_pest.burn_target_detail: >-
+    The disease suppressed or seed germinated by burning (CCOF G5.0 C3, OTCO C5 5.2-2). WSDA AGR 2121 does
+    not ask about burning crop residue.

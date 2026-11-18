@@ -76,6 +76,48 @@ G5_0_PEST = Module(
                 ),
             ),
             questions=(
+                # 2026.12.19: the pests the operation faces, as OTCO C5 5.1-1 asks them, named; and the kinds of crop
+                # pest it manages, as WSDA AGR 2121 G 3 asks them. Optional, so finished plans stay finished.
+                Question(
+                    key="pests_diseases_of_concern",
+                    kind="textarea",
+                    required=False,
+                    prefill=Prefill(source="pest_species_evidence"),
+                    label=text(
+                        "Which pests and diseases threaten your crops, or could?",
+                        "¿Qué plagas y enfermedades amenazan tus cultivos, o podrían hacerlo?",
+                    ),
+                    coaching=text(
+                        "Name them as you would to your inspector: codling moth, fire blight, gophers.",
+                        "Nómbralas como lo harías ante tu inspector: palomilla de la manzana, tizón de fuego, tuzas.",
+                    ),
+                    nop_cite="§ 205.206",
+                    compiles_to=CompileRule(template="Pests and diseases of concern: {answer}"),
+                ),
+                Question(
+                    key="pest_taxa_managed",
+                    kind="checkbox_group",
+                    required=False,
+                    label=text("Which crop pests do you manage?", "¿Qué plagas de cultivo manejas?"),
+                    nop_cite="§ 205.206(b)",
+                    compiles_to=CompileRule(template="Crop pests managed: {answer}."),
+                    options=(
+                        Option("insects", text("Insects", "Insectos")),
+                        Option("rodents", text("Rodents", "Roedores")),
+                        Option("birds", text("Birds", "Aves")),
+                        Option("nematodes", text("Nematodes", "Nematodos")),
+                        Option("mites", text("Mites", "Ácaros")),
+                        Option("slugs", text("Slugs", "Babosas")),
+                        Option("other", text("Other (name below)", "Otras (indícalas abajo)")),
+                    ),
+                ),
+                Question(
+                    key="pest_taxa_other",
+                    kind="text",
+                    label=text("Name the other crop pests", "Indica las otras plagas de cultivo"),
+                    visible_when=(Condition("pest_taxa_managed", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other crop pests managed: {answer}"),
+                ),
                 # 2026.11.22: the practices by the pest they target. CCOF G5.0 §A asks 23 practices x four pest types
                 # (Weeds / Insects & invertebrates / Diseases & nematodes / Vertebrate pests); WSDA asks them in three
                 # sections (AGR 2121 F 3 weeds, G 4 pests, H 3 diseases). One list per type answers each column and
@@ -643,6 +685,31 @@ G5_0_PEST = Module(
                     visible_when=(Condition("burn_reason", "includes", "other"),),
                     compiles_to=CompileRule(template="Other stated reason for burning crop residue: {answer}"),
                 ),
+                Question(
+                    key="burn_target_detail",
+                    kind="text",
+                    required=False,
+                    label=text(
+                        "Name the disease suppressed or the seed germinated",
+                        "Indica la enfermedad que se suprime o la semilla que se hace germinar",
+                    ),
+                    nop_cite="§ 205.203(e)(3)",
+                    visible_when=(
+                        Condition("burn_reason", "includes_any", ["disease_suppression", "seed_germination"]),
+                    ),
+                    compiles_to=CompileRule(template="Disease suppressed or seed germinated by burning: {answer}"),
+                ),
+                Question(
+                    key="pest_prevention_records",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Describe the records you keep of your preventive pest management.",
+                        "Describe los registros que llevas de tu manejo preventivo de plagas.",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(template="Records kept of preventive pest management: {answer}"),
+                ),
             ),
         ),
         ModulePage(
@@ -742,6 +809,88 @@ G5_0_PEST = Module(
                     nop_cite="§ 205.206(c)(6)",
                     visible_when=(Condition("plastic_mulch_used", "truthy"),),
                     compiles_to=CompileRule(template="Plastic or synthetic mulch removal at season end: {answer}."),
+                ),
+                Question(
+                    key="plastic_mulch_material",
+                    kind="radio",
+                    required=False,
+                    label=text("What is the plastic mulch made of?", "¿De qué está hecho el acolchado plástico?"),
+                    coaching=text(
+                        "§ 205.601(b)(2) allows plastic mulch and covers that are petroleum-based other than PVC, and "
+                        "biodegradable biobased mulch film as § 205.2 defines it.",
+                        "El § 205.601(b)(2) permite el acolchado y las cubiertas plásticas a base de petróleo que no "
+                        "sean de PVC, y la película de acolchado biodegradable de base biológica según la define el "
+                        "§ 205.2.",
+                    ),
+                    nop_cite="§ 205.601(b)(2)",
+                    visible_when=(Condition("plastic_mulch_used", "truthy"),),
+                    compiles_to=CompileRule(template="Plastic mulch material: {answer}."),
+                    options=(
+                        Option(
+                            "non_pvc_plastic",
+                            text(
+                                "Petroleum-based plastic, not PVC",
+                                "Plástico a base de petróleo, que no es PVC",
+                            ),
+                        ),
+                        Option(
+                            "biobased_film",
+                            text(
+                                "Biodegradable biobased mulch film",
+                                "Película de acolchado biodegradable de base biológica",
+                            ),
+                        ),
+                        Option(
+                            "pvc",
+                            text("Polyvinyl chloride (PVC)", "Policloruro de vinilo (PVC)"),
+                            review="The plan says the plastic mulch is PVC; § 205.601(b)(2)(ii) allows petroleum-based "
+                            "plastic mulch other than polyvinyl chloride.",
+                        ),
+                        Option(
+                            "not_known",
+                            text("Not known yet", "Aún no se sabe"),
+                            review="The plastic mulch's material is not yet known; § 205.601(b)(2)(ii) allows "
+                            "petroleum-based plastic mulch other than polyvinyl chloride.",
+                        ),
+                    ),
+                ),
+                Question(
+                    key="plastic_mulch_perennial_condition",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "If you use it in a perennial planting, how do you make sure the plastic stays in good enough "
+                        "condition that it does not break down into the soil?",
+                        "Si lo usas en una plantación perenne, ¿cómo te aseguras de que el plástico se mantenga en "
+                        "condiciones suficientes para que no se descomponga en el suelo?",
+                    ),
+                    nop_cite="§ 205.206(c)(6)",
+                    visible_when=(Condition("plastic_mulch_used", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Plastic mulch in a perennial planting is kept from breaking down into the soil: "
+                        "{answer}"
+                    ),
+                ),
+                Question(
+                    key="weed_prevention_records",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Describe the records you keep of your preventive weed management.",
+                        "Describe los registros que llevas de tu manejo preventivo de malezas.",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(template="Records kept of preventive weed management: {answer}"),
+                ),
+                Question(
+                    key="weed_management_additional_notes",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Anything else about your weed management (optional)",
+                        "Cualquier otra información sobre tu manejo de malezas (opcional)",
+                    ),
+                    compiles_to=CompileRule(template="Additional weed management information: {answer}"),
                 ),
             ),
         ),

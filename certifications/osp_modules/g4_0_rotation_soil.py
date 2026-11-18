@@ -163,6 +163,37 @@ G4_0_ROTATION_SOIL = Module(
                                 "Plan de rotación para perennes de ciclo corto",
                             ),
                         ),
+                        # OTCO C4 4.2-2 names these (2026.12.19).
+                        Option(
+                            "native_vegetation",
+                            text("Native grasses or natural vegetation", "Pastos nativos o vegetación natural"),
+                        ),
+                        Option(
+                            "native_mixtures",
+                            text(
+                                "Diverse mixtures of native trees, shrubs, grasses and forbs",
+                                "Mezclas diversas de árboles, arbustos, pastos y hierbas nativos",
+                            ),
+                        ),
+                        Option(
+                            "fencerow_plants",
+                            text(
+                                "Non-invasive plants allowed in fencerows, ditches and the understory",
+                                "Plantas no invasoras permitidas en cercos, zanjas y el sotobosque",
+                            ),
+                        ),
+                        Option("windbreaks", text("Windbreaks", "Cortavientos")),
+                        Option(
+                            "native_replacement",
+                            text(
+                                "Weedy areas replaced with native plants",
+                                "Áreas con maleza reemplazadas por plantas nativas",
+                            ),
+                        ),
+                        Option(
+                            "flowers_to_seed",
+                            text("Flowers allowed to go to seed", "Flores que se dejan semillar"),
+                        ),
                         Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
                 ),
@@ -172,6 +203,40 @@ G4_0_ROTATION_SOIL = Module(
                     label=text("Describe the other practice", "Describe la otra práctica"),
                     visible_when=(Condition("in_lieu_practices", "includes", "other"),),
                     compiles_to=CompileRule(template="Additional diversity practice: {answer}."),
+                ),
+                # CCOF G4.0 A1b asks a description, of perennial AND container systems; A1c invites a site-specific
+                # explanation. Optional, so finished plans stay finished (2026.12.19).
+                Question(
+                    key="in_lieu_description",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Describe the practices you use in lieu of rotation in your perennial or container crops.",
+                        "Describe las prácticas que usas en lugar de la rotación en tus cultivos perennes o en "
+                        "contenedor.",
+                    ),
+                    coaching=text(
+                        "Ground cover, cover cropping, alley cropping, intercropping, hedgerows, and any rotation "
+                        "plan for short-term perennials.",
+                        "Cobertura del suelo, cultivos de cobertura, cultivo en callejones, intercultivo, cercos vivos "
+                        "y cualquier plan de rotación para perennes de ciclo corto.",
+                    ),
+                    nop_cite="§ 205.205",
+                    visible_when=(Condition("system_type", "includes_any", ["perennial", "container"]),),
+                    compiles_to=CompileRule(template="Practices in lieu of rotation, as described: {answer}"),
+                ),
+                Question(
+                    key="rotation_site_specific_notes",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Anything site-specific about how your practices maintain soil organic matter, manage pests "
+                        "and nutrients, and control erosion (optional)",
+                        "Cualquier aspecto propio de tu sitio sobre cómo tus prácticas mantienen la materia orgánica "
+                        "del suelo, manejan plagas y nutrientes y controlan la erosión (opcional)",
+                    ),
+                    nop_cite="§ 205.205",
+                    compiles_to=CompileRule(template="Site-specific explanation: {answer}"),
                 ),
             ),
         ),
@@ -702,14 +767,37 @@ G4_0_ROTATION_SOIL = Module(
                             text("No-till or permanent cover", "Labranza cero o cobertura permanente"),
                         ),
                         Option("cover_cropping", text("Cover cropping", "Cultivos de cobertura")),
-                        Option("contour", text("Contour farming or terraces", "Cultivo en contorno o terrazas")),
+                        # Retired 2026-11-18: CCOF G4.0 C1 and OTCO C4 4.1-2 list contour farming and terraces apart,
+                        # and this merged them. Kept so a plan answered with it prints what the operator chose.
+                        Option(
+                            "contour",
+                            text("Contour farming or terraces", "Cultivo en contorno o terrazas"),
+                            retired=True,
+                        ),
+                        Option("contour_farming", text("Contour farming", "Cultivo en contorno")),
+                        Option("terraces", text("Terraces", "Terrazas")),
                         Option(
                             "conservation_tillage",
                             text("Conservation (minimum) tillage", "Labranza de conservación (mínima)"),
                         ),
                         Option("micro_irrigation", text("Micro-irrigation management", "Manejo de microirrigación")),
                         Option("windbreaks", text("Windbreaks", "Cortavientos")),
+                        Option(
+                            "minimize_bare_ground",
+                            text(
+                                "Minimizing bare ground through crop rotation",
+                                "Minimizar el suelo desnudo mediante la rotación de cultivos",
+                            ),
+                        ),
+                        Option("other", text("Other (describe below)", "Otra (describe abajo)")),
                     ),
+                ),
+                Question(
+                    key="erosion_other",
+                    kind="text",
+                    label=text("Describe the other erosion practice", "Describe la otra práctica contra la erosión"),
+                    visible_when=(Condition("erosion_practices", "includes", "other"),),
+                    compiles_to=CompileRule(template="Other erosion practice: {answer}"),
                 ),
             ),
         ),
