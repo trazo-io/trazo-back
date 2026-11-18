@@ -361,6 +361,11 @@ def verify_input(request):
                 if matched_wsda and matched_wsda.list_effective_date
                 else None
             ),
+            # The edition date of the first WSDA list Trazo loaded that no longer carried the product, or
+            # None while it is listed (OV-MT-C04, WSDA half; mirrors omri_product_delisted_on).
+            "wsda_material_delisted_on": (
+                matched_wsda.delisted_on.isoformat() if matched_wsda and matched_wsda.delisted_on else None
+            ),
             "wsda_candidates": [
                 {
                     "pk": m.pk,
@@ -369,6 +374,7 @@ def verify_input(request):
                     "manufacturer": m.manufacturer,
                     "category": m.category,
                     "annotation": m.annotation,
+                    "delisted_on": m.delisted_on.isoformat() if m.delisted_on else None,
                 }
                 for m in wsda_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
             ],

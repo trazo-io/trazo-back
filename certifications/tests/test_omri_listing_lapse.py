@@ -175,7 +175,7 @@ class DossierTests(_Orchard):
         self._spray(DROPPED + datetime.timedelta(days=5), omri_product=self.dropped)
         txt = self._table_text()
         self.assertIn("tst-1001 (OMRI listing lapsed 2026-09-26, on or before this application)", txt)
-        self.assertIn("[REVIEW] OMRI listing lapsed:", txt)
+        self.assertIn("[REVIEW] OMRI or WSDA listing lapsed:", txt)
         self.assertIn("1 input(s) were applied on or after", txt)
 
     def test_a_record_from_before_the_drop_prints_as_it_always_did(self):

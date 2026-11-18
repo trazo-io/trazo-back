@@ -38,6 +38,9 @@ class _Event:
         # claim only while OMRI still lists the product. A real event always resolves it.
         self.omri_product = SimpleNamespace(delisted_on=None) if omri else None
         self.wsda_material_id = wsda
+        # The same for WSDA since 2026-11-18 (OV-MT-C04): a WSDA FK earns its claim only while WSDA
+        # still lists the product, read off the related row.
+        self.wsda_material = SimpleNamespace(delisted_on=None) if wsda else None
         self.national_list_substance = None
         self.organic_approved = basis
         self.restricted_use_pesticide = False

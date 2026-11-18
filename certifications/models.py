@@ -1557,6 +1557,17 @@ class WSDAMaterial(models.Model):
         null=True,
         help_text="Edition date printed on the WSDA list this row was synced from",
     )
+    delisted_on = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Edition date of the first WSDA list Trazo loaded that no longer carried this product. "
+            "NULL means it was on the most recently seeded edition. A value here does NOT mean the "
+            "product is prohibited, only that WSDA no longer lists it, so Trazo may not state a WSDA "
+            "listing for it (overall review 2026-11, OV-MT-C04; mirrors OMRIProduct.delisted_on)."
+        ),
+    )
     source_url = models.URLField(
         max_length=500,
         blank=True,
@@ -2950,7 +2961,8 @@ class PlanMaterialEntry(models.Model):
             product = self.omri_product if self.omri_product_id else None
             return "omri" if product is not None and not product.delisted_on else "other"
         if self.listing_basis == self.BASIS_WSDA:
-            return "wsda" if self.wsda_material_id else "other"
+            material = self.wsda_material if self.wsda_material_id else None
+            return "wsda" if material is not None and not material.delisted_on else "other"
         return "other"
 
     @property
