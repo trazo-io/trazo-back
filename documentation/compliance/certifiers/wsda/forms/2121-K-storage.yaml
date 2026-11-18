@@ -84,11 +84,10 @@ items:
     prints: modules/G6_2.pdf §A (the records named, each with the count of matching records logged in Trazo)
 - ref: '4'
   asks: Optional space for additional information.
-  status: not_covered
-  severity: P3
+  status: covered
   optional: true
   trazo:
-    prints: —
-  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
-    wants to say here has a place; the agent does not require it.
-  fix: Add an optional additional-notes textarea to the storage module.
+    questions: [g6_2_storage.storage_additional_notes]
+    prints: "modules/G6_2.pdf §B"
+  # Closed 2026-11-18 by the post-harvest slice: an optional notes field for the section, as the form's own optional
+  # space.

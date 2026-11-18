@@ -39,3 +39,26 @@ questions:
   g6_4_handling.water_treated_onsite: "WSDA L 14 and CCOF G6.1 B3a ask about water treated on site (UV, filtration, softening, pH). OTCO C7 7.5-1b asks how non-municipal water is shown potable, which is registered there; on-site treatment is not one of its questions."
   g6_4_handling.treated_water_meets_sdwa: "WSDA L 14 and CCOF G6.1 B3a ask about water treated on site (UV, filtration, softening, pH). OTCO C7 7.5-1b asks how non-municipal water is shown potable, which is registered there; on-site treatment is not one of its questions."
   g6_4_handling.water_system_management: "WSDA L 14 and CCOF G6.1 B3a ask about water treated on site (UV, filtration, softening, pH). OTCO C7 7.5-1b asks how non-municipal water is shown potable, which is registered there; on-site treatment is not one of its questions."
+  g6_4_handling.chlorine_rinse_monitoring: >-
+    How the chlorine rinse is checked (WSDA AGR 2121 L 15a). OTCO's C7 asks wash water additives and the
+    final rinse, not how the rinse is monitored.
+  g6_4_handling.cleaning_differs_by_status: >-
+    Whether cleaning differs before non-certified crops on shared equipment (WSDA AGR 2121 L 6a). OTCO's C7
+    asks commingling controls, not the cleaning chemistry by status.
+  g6_4_handling.cleaning_differences_detail: >-
+    The differences of `cleaning_differs_by_status`, unmapped with its parent.
+  g6_4_handling.handling_records_linkage: >-
+    How cleaning and purge records link to production records (WSDA AGR 2121 L 7). OTCO's C7 asks the
+    records kept, not their link to production records.
+  g6_4_handling.purge_procedure_upload: >-
+    Equipment purge procedures and purge amounts (WSDA AGR 2121 L 4). OTCO's C7 does not ask for them.
+  g6_4_handling.handling_additional_notes: >-
+    WSDA AGR 2121 L 18's optional space for the post-harvest section.
+  g6_4_handling.facility_pest_pointer: >-
+    A pointer to G9.0 printed for CCOF G6.4 A4; OTCO asks facility pest management on C7 7.8, which G9.0
+    answers directly.
+  g6_4_handling.packaging_pointer: >-
+    A pointer to G6.1's packaging answer printed for CCOF G6.4 C1; OTCO asks packaging on C7 7.9, which G6.1
+    answers directly.
+  g6_4_handling.products_list_upload: >-
+    CCOF G6.4 A2's 'or attach a list' of the products handled; OTCO's C7 does not ask for one.

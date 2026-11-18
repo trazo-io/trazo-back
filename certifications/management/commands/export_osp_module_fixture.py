@@ -201,6 +201,9 @@ GOLDEN_ANSWER_CASES = {
     # Who harvests / who transports became checkbox groups (2026.10.25): the gates moved from `eq` /
     # `one_of` to `includes` / `includes_any`, which the TS twin must evaluate the same way.
     "g6_1_harvest_transport": {
+        # 2026.12.20: the safeguard documentation opens for containers not all stamped organic.
+        "some_unstamped": {"harvest_containers_stamped_organic": "some"},
+        "all_stamped": {"harvest_containers_stamped_organic": "all"},
         "unanswered": {},
         "own_crew_only": {"who_harvests": ["own_crew"], "who_transports": ["own_vehicles"]},
         "own_crew_and_custom": {"who_harvests": ["own_crew", "custom_harvester"]},
@@ -221,6 +224,21 @@ GOLDEN_ANSWER_CASES = {
         },
     },
     "g6_4_handling": {
+        # 2026.12.20: cleaning differences for shared equipment; the purge upload for purging; the rinse check for a
+        # chlorine rinse at or below the SDWA limit.
+        "shared_and_differs": {
+            "handling_activities": ["packing"],
+            "shares_handling_area_or_equipment": True,
+            "cleaning_differs_by_status": "differs",
+        },
+        "purging": {"handling_activities": ["packing"], "food_contact_cleaning_methods": ["purging"]},
+        "chlorine_rinse_checked": {
+            "handling_activities": ["packing"],
+            "uses_water": True,
+            "wash_water_additives_added": True,
+            "wash_water_chlorine_added": True,
+            "wash_water_chlorine_final_rinse": "chlorine_at_or_below_sdwa",
+        },
         # 2026.11.21: the input types and recording hang on applying inputs; their "other" also on "other".
         "inputs_other": {
             "handling_activities": ["packing"],

@@ -104,3 +104,8 @@ questions:
     Whether the crop stops at a hydrocooler, cold storage or consolidation point before the buyer. OTCO asks about off-site processing in C7 §7.10, registered against handled_by_another_operation.
   g6_1_harvest_transport.packaging_contamination_safeguards: "WSDA L 17's packaging safeguards (new only, stamped organic, cleaned, cardboard unexposed, wood lined). OTCO C7 asks packaging proof and reuse (7.9-2 to 7.9-6), each registered there, not this checklist."
   g6_1_harvest_transport.packaging_contamination_safeguards_other: "WSDA L 17's packaging safeguards (new only, stamped organic, cleaned, cardboard unexposed, wood lined). OTCO C7 asks packaging proof and reuse (7.9-2 to 7.9-6), each registered there, not this checklist."
+  g6_1_harvest_transport.container_safeguard_documentation: >-
+    The documentation behind safeguards for harvest containers not stamped organic (WSDA AGR 2121 J 7b).
+    OTCO's C7 does not ask whether containers are stamped organic.
+  g6_1_harvest_transport.harvest_additional_notes: >-
+    WSDA AGR 2121 J 14's optional space for the harvest section.
