@@ -2757,6 +2757,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
             for line in na_contradictions(osp):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+        if module.key == "g4_1_compost_manure":
+            # "None of these are used" (CCOF G4.1 A1) set against the soil records that name compost or manure.
+            from certifications.services.compost_manure_review import none_used_lines
+
+            for line in none_used_lines(osp, "not_applicable"):
+                story.append(Paragraph(_escape(line), styles["meta"]))
     else:
         pairs = visible_questions(module, answers)
         # Where the "nothing answered" line goes, so it leads the questions it summarises instead of
@@ -2975,6 +2981,11 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 from certifications.services.seed_stock_review import answer_lines
 
                 for line in answer_lines(osp, module.key, question.key, value, evidence_bundles):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g4_1_compost_manure" and question.key == "materials_applied" and value == ["none"]:
+                from certifications.services.compost_manure_review import none_used_lines
+
+                for line in none_used_lines(osp, "none"):
                     story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g8_0_record_keeping":
                 from certifications.services.international_trade_review import answer_lines as trade_lines
