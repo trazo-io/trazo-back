@@ -379,35 +379,6 @@
    "verification_source": "",
    "verification_source_url": "",
    "verification_status": "self_reported"
-  },
-  {
-   "#establishment": 166,
-   "_id": 165,
-   "certification_number": "ROP-0517",
-   "certification_scope": "crops",
-   "certification_type": "real_organic_project",
-   "certified_items": [
-    "Blueberries",
-    "Carrots",
-    "Onions",
-    "Spinach"
-   ],
-   "certifier_name": "Real Organic Project",
-   "created_at": {
-    "__dt__": "2026-08-21T04:48:50.022499+00:00"
-   },
-   "effective_date": {
-    "__d__": "2020-07-01"
-   },
-   "expiry_date": {
-    "__d__": "2027-06-30"
-   },
-   "notes": "Add-on label to USDA Organic; requires soil-grown crops. Inspected August 2025. Certificate copy on file.",
-   "updated_at": {
-    "__dt__": "2026-08-21T04:48:50.022508+00:00"
-   },
-   "verification_source": "",
-   "verification_status": "self_reported"
   }
  ],
  "company": {
@@ -429,7 +400,7 @@
   "contact_phone": "(541) 555-0142",
   "crops_grown": "[\"Blueberries\",\"Carrots\",\"Onions\",\"Spinach\"]",
   "custom_message": "Thanks for scanning. We have grown certified organic fruit and vegetables on this ground since 2006, all of it in real soil. Every pick and every input is recorded here as we do it.",
-  "description": "Family-run organic farm on the Calapooia River in Linn County, Oregon, certified organic by Oregon Tilth since 2006 and Real Organic Project certified since 2020. Forty acres of soil-grown blueberries (Duke, Draper, Liberty) on sawdust-mulched raised beds, and fifty acres of rotation ground in carrots, onions and spinach with winter cover crops. Everything goes to wholesale: fresh fruit and vegetables through Organically Grown Company in Portland, process-grade berries to Willamette Valley Fruit in Salem.",
+  "description": "Family-run organic farm on the Calapooia River in Linn County, Oregon, certified organic by Oregon Tilth since 2006. Forty acres of soil-grown blueberries (Duke, Draper, Liberty) on sawdust-mulched raised beds, and fifty acres of rotation ground in carrots, onions and spinach with winter cover crops. Everything goes to wholesale: fresh fruit and vegetables through Organically Grown Company in Portland, process-grade berries to Willamette Valley Fruit in Salem.",
   "establishment_type": "crop_farm",
   "farming_method": "organic",
   "fraud_prevention_plan_document": "",
@@ -13022,24 +12993,7 @@
    "_id": 689,
    "description": "Four picks, 112,000 lb off 11.2 acres — 10,000 lb/ac despite the 14 June hail (about six percent marked, went process). Three hand picks fresh to OGC (91,000 lb picked, 87,542 lb packed out), machine pick to WVF (21,000 lb). Three Entrust. ROP inspection on the block 12 August.",
    "events": {
-    "BusinessEvent": [
-     {
-      "#history": 689,
-      "_id": 432,
-      "business_type": "compliance",
-      "certificate_number": "ROP-0517",
-      "certification_type": "real_organic",
-      "date": {
-       "__dt__": "2025-08-12T10:00:00+00:00"
-      },
-      "description": "Real Organic Project inspection",
-      "observation": "ROP add-on inspection: soil-grown confirmed on all blocks, no hydroponic or container production, pasture not applicable. Certificate renewed to June 2027.",
-      "performed_by": "Laurel Brandt",
-      "type": "CM",
-      "verification_status": "verified",
-      "verified_certifier_name": "Real Organic Project"
-     }
-    ],
+    "BusinessEvent": [],
     "ChemicalEvent": [
      {
       "#history": 689,
@@ -20979,33 +20933,9 @@
    },
    "_id": 694,
    "confidence_score": 64.0,
-   "description": "Four picks, 114,240 lb off 11.2 acres — 10,200 lb/ac, up on 2025 with no hail this year. Three hand picks fresh to OGC (93,100 lb picked, 89,300 lb packed out), machine pick to WVF (21,140 lb). The 26-28 July heat (104 °F) pushed pick 3 to 04:30 starts and cost an estimated 2-3 percent to sunscald at the line. Real Organic Project inspection on this block 12 August. No buffer rows on the River Block.",
+   "description": "Four picks, 114,240 lb off 11.2 acres — 10,200 lb/ac, up on 2025 with no hail this year. Three hand picks fresh to OGC (93,100 lb picked, 89,300 lb packed out), machine pick to WVF (21,140 lb). The 26-28 July heat (104 °F) pushed pick 3 to 04:30 starts and cost an estimated 2-3 percent to sunscald at the line. No buffer rows on the River Block.",
    "events": {
-    "BusinessEvent": [
-     {
-      "#history": 694,
-      "_id": 436,
-      "business_type": "sustainability_audit",
-      "certificate_number": "ROP-0517",
-      "certification_type": "real_organic",
-      "date": {
-       "__dt__": "2026-08-12T09:00:00+00:00"
-      },
-      "description": "Annual Real Organic Project add-on inspection, 12 August: soil-grown verification on all six parcels (no container or hydroponic production anywhere on this farm), grazing/livestock questions n/a, review of the sawdust and compost program, hedgerow and buffer walk. Renewed for 2026-27 under ROP-0517. ROP sits on top of the USDA Organic certificate from Oregon Tilth — it is not a substitute for it.",
-      "extra_data": {
-       "transparency_benefit": "",
-       "trust_impact": ""
-      },
-      "index": 62,
-      "name": "Real Organic Project inspection — River Block and Home Field",
-      "observation": "Annual Real Organic Project add-on inspection, 12 August: soil-grown verification on all six parcels (no container or hydroponic production anywhere on this farm), grazing/livestock questions n/a, review of the sawdust and compost program, hedgerow and buffer walk. Renewed for 2026-27 under ROP-0517. ROP sits on top of the USDA Organic certificate from Oregon Tilth — it is not a substitute for it.",
-      "performed_by": "Laurel Brandt",
-      "sustainability_practice": "soil_health",
-      "type": "CM",
-      "verification_status": "verified",
-      "verified_certifier_name": "Real Organic Project — inspector Marta Klein"
-     }
-    ],
+    "BusinessEvent": [],
     "ChemicalEvent": [
      {
       "#history": 694,

@@ -3,7 +3,7 @@
 Why this exists
 ---------------
 Calapooia Bend is the deepest dataset Trazo has: 6 parcels over 86.9 acres, 12 seasons across
-two crop years, 512 events, closed seasons AND open ones. It is the farm the certifier-packet
+two crop years, 510 events, closed seasons AND open ones. It is the farm the certifier-packet
 work was validated against (dossier flags 29 -> 19), and the only one whose records were
 produced by working the product the way a grower does rather than by inventing rows.
 

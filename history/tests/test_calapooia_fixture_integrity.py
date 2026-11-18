@@ -102,7 +102,9 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         # 513 since run 7 (2026-10-04): compost turns 4 and 5 recorded as their own dated event.
         # 512 since 2026-10-31: Home Field West's second 2026 sawdust top-dress, a day after the first
         # from another mill, was a duplicate (packet page review).
-        self.assertEqual(events, 512, "the fixture no longer holds the farm it was extracted from")
+        # 510 since 2026-11-18: the two Real Organic Project inspection records are dropped with the
+        # certificate (VID-15; `test_no_certificate_is_issued_by_a_real_programme_...`).
+        self.assertEqual(events, 510, "the fixture no longer holds the farm it was extracted from")
         self.assertEqual(len(self.data["osps"]), 3)
 
     def test_every_top_level_key_maps_to_a_real_field(self):
@@ -180,7 +182,7 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
                     checked += 1
                     if not serializer.is_valid():
                         problems.append(f"{model_name} {row.get('date')}: {dict(serializer.errors)}")
-        self.assertEqual(checked, 512, "not every event row was checked")
+        self.assertEqual(checked, 510, "not every event row was checked")
         self.assertEqual(
             problems[:10],
             [],
@@ -316,6 +318,23 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         cleaned = json.dumps(_substitute(self.data, enabled=True))
         for real in ("Oregon Tilth", "OTCO", "Organically Grown Company", "Willamette Valley Fruit"):
             self.assertNotIn(real, cleaned, f"{real!r} survives the substitution")
+
+    def test_no_certificate_is_issued_by_a_real_programme_the_substitution_cannot_rename(self):
+        """Recordkeeping checklist run 2026-11-16, VID-15: the substitution renamed the Real Organic
+        Project's certifier to "Living Soil Standard", but the row kept
+        `certification_type="real_organic_project"`, which every surface displays as "Real Organic
+        Project", a certificate number in its "ROP-" form, and an add-on inspection by a named
+        inspector. A type and a number are not names, so no string substitution reaches them.
+        Oscar's call (2026-11-18): drop it. The specimen holds one certificate, USDA Organic, from
+        the invented certifier the substitution produces.
+        """
+        self.assertEqual({c["certification_type"] for c in self.data["certifications"]}, {"usda_organic"})
+        business = [e for s in self.data["seasons"] for e in s["events"].get("BusinessEvent", [])]
+        self.assertTrue(business, "no business record read")
+        self.assertEqual({e.get("certification_type") for e in business} - {"", None, "organic_usda"}, set())
+        text = json.dumps(self.data)
+        for real in ("Real Organic", "ROP-"):
+            self.assertNotIn(real, text, f"{real!r} is back in the specimen")
 
 
 def _strings(value):
