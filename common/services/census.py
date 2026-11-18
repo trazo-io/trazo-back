@@ -590,11 +590,14 @@ def _retiring_columns() -> Dict[str, Dict[str, Any]]:
     if no row held anything but that value before (see `compare`).
     """
     from carbon.retired_columns import RETIRED_CARBON_ENTRY_COLUMNS
+    from history.retired_columns import RETIRED_SOIL_EVENT_COLUMNS
 
     return {
         "carbon.CarbonEntry": RETIRED_CARBON_ENTRY_COLUMNS,
         # The foreign key to CarbonReport, retiring with it (carbon 0052, then its step 2).
         "carbon.CarbonAuditLog": {"report_id": None},
+        # The modelled sequestration figure (history/retired_columns.py, 2026-11-18).
+        "history.SoilManagementEvent": RETIRED_SOIL_EVENT_COLUMNS,
     }
 
 

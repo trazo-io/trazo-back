@@ -629,9 +629,6 @@ class TimelineService:
                 # Soil science fields
                 "soil_ph": TimelineService._safe_get_numeric(event, "soil_ph"),
                 "organic_matter_percentage": TimelineService._safe_get_numeric(event, "organic_matter_percentage"),
-                "carbon_sequestration_potential": TimelineService._safe_get_numeric(
-                    event, "carbon_sequestration_potential"
-                ),
                 "soil_texture": escape(getattr(event, "soil_texture", "") or ""),
                 # Additional transparency fields
                 "production_efficiency": escape(getattr(event, "production_efficiency", "") or ""),

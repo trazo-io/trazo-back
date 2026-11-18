@@ -6805,7 +6805,6 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "test_results",
             # §E-2 — lab analysis (LA)
             "sample_matrix",
-            "carbon_sequestration_potential",
             "observation",
             "private_note",
             "extra_data",
@@ -6871,10 +6870,9 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "reviewer_name",
             "review_date",
         ]
-        # `carbon_sequestration_potential` is still SHOWN to the producer (records that already
-        # carry one) but no longer written: no form ever had the input, and the figure is the
-        # soil-carbon term the methodology excludes (2026-11-13).
-        read_only_fields = ["id", "carbon_sequestration_potential"]
+        # `carbon_sequestration_potential` is retired (history/retired_columns.py): no form ever had
+        # the input, and the figure is the soil-carbon term the methodology excludes.
+        read_only_fields = ["id"]
 
     def to_internal_value(self, data):
         """
@@ -7023,7 +7021,6 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             "organic_matter_percentage",
             "area_covered",
             "fuel_consumed",
-            "carbon_sequestration_potential",
             "amendment_amount_numeric",
             "compost_peak_temp_f",
             "compost_initial_cn_ratio",
@@ -7240,7 +7237,6 @@ class SoilManagementEventSerializer(EventSerializer):
             "test_results",
             # §E-2 — lab analysis (LA)
             "sample_matrix",
-            "carbon_sequestration_potential",
             "observation",
             "private_note",
             "extra_data",

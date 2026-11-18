@@ -18,6 +18,7 @@ from django.db import transaction
 
 from history.constants import EVENT_TYPE_TO_MODEL
 from history.models import EventAmendment
+from history.retired_columns import RETIRED_SOIL_EVENT_COLUMNS
 
 # Fields no amendment may touch, whatever the event type.
 #
@@ -68,6 +69,10 @@ def amendable_fields(event_model):
         if field.auto_created or not field.editable:
             continue
         if field.name in PROTECTED_FIELDS:
+            continue
+        # A retired column is being dropped (history/retired_columns.py): a correction must not
+        # write a value back into it.
+        if field.name in RETIRED_SOIL_EVENT_COLUMNS:
             continue
         if field.get_internal_type() in UNCORRECTABLE_INTERNAL_TYPES:
             continue

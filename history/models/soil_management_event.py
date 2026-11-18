@@ -158,6 +158,7 @@ class SoilManagementEvent(CommonEvent):
         null=True,
         help_text="Material submitted to the lab (LA subtype): soil, leaf, petiole, hull, compost or water.",
     )
+    # RETIRED (history/retired_columns.py): nothing reads or writes it; leaving in three deploys.
     carbon_sequestration_potential = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     # The farmer's own words, kept apart from `description`. `description` is NOT NULL and is
     # written by the 328+ AI templates as well as by hand, so it cannot be quoted to shoppers as
