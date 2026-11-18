@@ -437,7 +437,14 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             .get(pk=current.id)
         )
 
-        return Response(HistorySerializer(current_history, context={"request": request}).data)
+        data = dict(HistorySerializer(current_history, context={"request": request}).data)
+        # The picks inside a raw-manure interval or a recorded PHI, so the timeline row says so after the
+        # save toast has closed (VID-03, recordkeeping checklist run 2026-11-16). This endpoint only: the
+        # serializer also feeds other readers, and this is the grower's own view of the season.
+        from history.services.manure_check import flagged_picks
+
+        data["harvest_interval_picks"] = flagged_picks(current_history)
+        return Response(data)
 
     def perform_destroy(self, instance):
         """Refuse to delete a parcel that still carries a production inside retention.

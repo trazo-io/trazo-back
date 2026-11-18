@@ -11,6 +11,8 @@ Pinned here:
   * only a recorded PHI above zero is compared; a pick on another block does not count when both
     records name one; a buffer-row pick counts; another production's pick does not;
   * the save response carries `phi_conflicts` for a spray or a pick, and no key for anything else;
+  * the record's detail carries the same, read on every open, and the parcel timeline names the
+    flagged picks (VID-03, recordkeeping checklist run 2026-11-16: the toast was the only place);
   * the season's readiness row says REVIEW with the first conflict, PASS when sprays with a PHI have
     none, NA when no spray has one.
 """
@@ -18,9 +20,10 @@ Pinned here:
 from datetime import datetime, timedelta
 
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, Production, ProductionEvent
@@ -144,6 +147,45 @@ class SaveResponseTests(_Farm):
         res = self._post(1, type="TP", date=self._at(7, 12).isoformat(), description="Load", transportation_distance=10)
         self.assertEqual(res.status_code, 201, res.data)
         self.assertNotIn("phi_conflicts", res.data)
+
+
+class DetailAndTimelineTests(_Farm):
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _detail(self, record, event_type):
+        res = self.client.get(reverse("events-detail", args=[record.pk]), {"event_type": event_type})
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        return res.json()
+
+    def test_the_picks_and_the_sprays_detail_both_name_the_pair(self):
+        spray = self._spray(10, 3)
+        pick = self._pick(12)
+        for record, event_type in ((pick, 1), (spray, 2)):
+            with self.subTest(record=type(record).__name__):
+                self.assertEqual(
+                    [
+                        (c["application_id"], c["pick_id"], c["days"], c["phi_days"])
+                        for c in self._detail(record, event_type)["phi_conflicts"]
+                    ],
+                    [(spray.pk, pick.pk, 2, "3")],
+                )
+
+    def test_the_timeline_names_the_pick(self):
+        from product.views import ParcelViewSet
+
+        self._spray(10, 3)
+        inside = self._pick(12)
+        self._pick(20)
+        request = APIRequestFactory().get("/")
+        force_authenticate(request, user=self.user)
+        res = ParcelViewSet.as_view({"get": "current_production"})(
+            request, pk=self.parcel.pk, company_pk=self.company.pk
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["harvest_interval_picks"], {"manure": [], "phi": [inside.pk]})
 
 
 class ReadinessRowTests(_Farm):

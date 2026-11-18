@@ -125,8 +125,8 @@ def season_conflicts(history, *, application=None, pick=None) -> list[PhiConflic
 
 
 def conflicts_for_saved(event) -> list[dict] | None:
-    """The PHI conflicts a just-saved record takes part in, for the save response; None for a record
-    that is neither a spray nor a pick, so the response carries no key for it."""
+    """The PHI conflicts a record takes part in, for the save response and the record's detail; None
+    for a record that is neither a spray nor a pick, so the response carries no key for it."""
     from history.models import ChemicalEvent, ProductionEvent
 
     history = getattr(event, "history", None)
