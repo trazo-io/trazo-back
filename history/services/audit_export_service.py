@@ -6982,6 +6982,7 @@ class AuditExportService:
             )
 
             restricted_hits = 0
+            lapsed_hits = 0
             for ev in events:
                 omri = getattr(ev, "omri_product", None)
                 # Phase 5 slice 1: the dossier cites a confirmed classification only. A legacy one or
@@ -6995,6 +6996,18 @@ class AuditExportService:
                 unconfirmed_nl, unconfirmed_note = unconfirmed_national_list(ev) if nl is None else (None, "")
 
                 omri_display = omri.omri_id if omri else None
+                # Overall review 2026-11, OV-MT-C04: a record applied on or after the date OMRI's list
+                # stopped carrying the product printed here as an ordinary OMRI listing. The test is
+                # the application day, so a record from before the drop prints as it always did.
+                from certifications.services.listing_lapse import omri_listing_lapsed_by
+
+                lapsed_on = omri_listing_lapsed_by(omri, ev.date) if omri else None
+                if lapsed_on is not None:
+                    omri_display = (
+                        f"{omri.omri_id or 'OMRI'} (OMRI listing lapsed {lapsed_on.isoformat()}, "
+                        "on or before this application)"
+                    )
+                    lapsed_hits += 1
                 if nl:
                     nl_display = (
                         f"{nl.substance_name} ({nl.citation})"
@@ -7106,6 +7119,18 @@ class AuditExportService:
                         "with a USE RESTRICTION, shown beside the substance above. The listing does not "
                         "forbid the material outright — it allows it only for the stated use. Confirm "
                         "the recorded purpose matches the annotation.",
+                        self._warning_style(),
+                    )
+                )
+
+            if lapsed_hits > 0:
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW] OMRI listing lapsed:</b> {lapsed_hits} input(s) were applied on or after "
+                        "the date OMRI's published list stopped carrying the product, shown beside the OMRI ID "
+                        "above. A lapsed listing does not make the material prohibited; the certifier decides "
+                        "whether its use was allowed.",
                         self._warning_style(),
                     )
                 )
