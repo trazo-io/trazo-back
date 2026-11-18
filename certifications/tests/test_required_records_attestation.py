@@ -61,6 +61,10 @@ class _Plan(TestCase):
             ("g6_1_harvest_transport", "who_harvests"): ["own_crew"],
             ("g4_1_compost_manure", "materials_applied"): ["purchased_compost"],
             ("g6_2_storage", "storage_shared_with_nonorganic"): False,
+            # 2026-11-18, CCOF G8.0 A1: storage named (storage records), not sold as organic, a buyer picks up.
+            ("g6_2_storage", "storage_locations"): ["on_farm_cold"],
+            ("g8_0_record_keeping", "sells_as_organic"): False,
+            ("g6_1_harvest_transport", "who_transports"): ["buyer_pickup"],
             ("g6_5_sales_soe", "sales_soe_supplier_verification"): "no",
             ("g3_0_seeds", "seeds_used"): ["organic_untreated"],
             # Since 2026.11.25 commercial availability also applies to non-organic planting stock, so
@@ -105,14 +109,14 @@ class MissingRequiredRecordsTests(_Plan):
 
     def test_an_unanswered_deciding_question_keeps_it_unresolved_and_blocks(self):
         self._applies_inputs_and_harvests(leave_unanswered=("g6_2_storage", "storage_shared_with_nonorganic"))
-        confirm(self.osp, ["harvest_records", "input_material_application"], user=None)
+        confirm(self.osp, ["harvest_records", "input_material_application", "storage_records"], user=None)
         states = {r.key: r.state for r in required_records(self.osp)}
         self.assertEqual(states.get("clean_out_records"), UNRESOLVED)
         self.assertIn(ATTESTATION, self._blocked())
 
     def test_every_required_record_confirmed_is_accepted(self):
         self._applies_inputs_and_harvests()
-        confirm(self.osp, ["harvest_records", "input_material_application"], user=None)
+        confirm(self.osp, ["harvest_records", "input_material_application", "storage_records"], user=None)
         self.assertEqual(self._blocked(), {})
 
     def test_a_question_hidden_by_an_answered_trigger_requires_nothing(self):

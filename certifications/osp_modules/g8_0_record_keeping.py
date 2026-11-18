@@ -265,6 +265,17 @@ G8_0_RECORD_KEEPING = Module(
                     visible_when=(Condition("records_maintained_as", "includes", "other"),),
                     compiles_to=CompileRule(template="Records are also kept as: {answer}."),
                 ),
+                # WSDA AGR 2121 O 9 (2026.12.21).
+                Question(
+                    key="records_additional_notes",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Anything else about your record keeping (optional)",
+                        "Cualquier otra información sobre tu mantenimiento de registros (opcional)",
+                    ),
+                    compiles_to=CompileRule(template="Additional record keeping information: {answer}"),
+                ),
             ),
         ),
         ModulePage(
@@ -487,9 +498,14 @@ G8_0_RECORD_KEEPING = Module(
                     key="audit_trail_exhibit",
                     kind="upload",
                     required=False,
+                    # CCOF G8.0 B1 asks for the operation's own sample with the linking elements and the organic
+                    # status highlighted; document 05 is Trazo's generated trace beside it (2026.12.21).
                     label=text(
-                        "Sample audit trail exhibit",
-                        "Ejemplo de rastro de auditoría",
+                        "Attach your own sample audit trail, if you have one: copies of an invoice, bill of lading or "
+                        "bin ticket with the linking elements and the organic status highlighted",
+                        "Adjunta tu propio ejemplo de rastro de auditoría, si lo tienes: copias de una factura, "
+                        "conocimiento de embarque o boleta de recepción con los elementos de enlace y el estado "
+                        "orgánico resaltados",
                     ),
                     coaching=text(
                         "Your renewal packet already carries a generated exhibit — document 05, "

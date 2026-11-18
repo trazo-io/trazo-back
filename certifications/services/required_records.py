@@ -101,6 +101,33 @@ TRIGGERS: dict[str, tuple[Trigger, ...]] = {
             "the sales section says supplier organic status is verified",
         ),
     ),
+    # CCOF G8.0 A1 lists storage, sales and transport records among the activities' records (2026-11-18).
+    "storage_records": (
+        Trigger(
+            "g6_2_storage",
+            "storage_locations",
+            lambda v: bool(v),
+            "the storage section names where crops are stored",
+        ),
+    ),
+    "invoices": (
+        Trigger(
+            "g8_0_record_keeping",
+            "sells_as_organic",
+            lambda v: v is True,
+            "the record keeping section says crops are sold as organic",
+        ),
+    ),
+    "bill_of_lading": (
+        Trigger(
+            "g6_1_harvest_transport",
+            "who_transports",
+            # A buyer who picks up at the farm carries its own shipping papers; anyone else moving the crop
+            # for the operation ships it under a bill of lading the operation keeps.
+            lambda v: bool(set(v if isinstance(v, (list, tuple)) else [v]) - {None, "", "buyer_pickup"}),
+            "the transport section names who moves the crop other than a buyer picking up",
+        ),
+    ),
     "seed_search_commercial_availability": (
         Trigger(
             "g3_0_seeds",

@@ -192,6 +192,14 @@ OSP_EVIDENCE_MAP: dict = {
             "statement, and the documents themselves are not stored in Trazo."
         ),
     ),
+    "disease_prevention_records": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Same as pest_prevention_records, for the preventive disease management records.",
+    ),
+    "records_additional_notes": EvidenceEntry(
+        OUT_OF_SCOPE,
+        note="Free notes on record keeping (WSDA AGR 2121 O 9); matched for the word record, it asserts none.",
+    ),
     "pest_prevention_records": EvidenceEntry(
         NOT_EVIDENCED,
         note=(

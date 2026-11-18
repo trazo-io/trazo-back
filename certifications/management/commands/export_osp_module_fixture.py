@@ -252,6 +252,9 @@ GOLDEN_ANSWER_CASES = {
         },
     },
     "g6_0_production": {
+        # 2026.12.21: the identical-product follow-up opens for bought-in non-organic product only.
+        "bought_in_nonorganic": {"split_operation": True, "nonorganic_product_source": ["bought_in_nonorganic"]},
+        "buffer_only_nonorganic": {"split_operation": True, "nonorganic_product_source": ["buffer_zone_crop"]},
         "unanswered": {},
         "split": {"split_operation": True},
         "not_split": {"split_operation": False},
