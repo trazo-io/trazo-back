@@ -51,6 +51,12 @@ def get_vision_service():
     return vision_api_service
 
 
+# First bytes of executable formats: PE ("MZ"), ELF, and Mach-O in both byte orders.
+_EXECUTABLE_MAGIC = (b"MZ", b"\x7fELF", b"\xfe\xed\xfa", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe")
+# Script text an image has no reason to carry, lower-case.
+_SCRIPT_MARKERS = (b"<?php", b"<script", b"javascript:")
+
+
 class PhotoEvidenceService:
     """
     Service for handling photo evidence uploads with MVP-aligned security and validation.
@@ -656,23 +662,19 @@ class PhotoEvidenceService:
             True if suspicious content detected
         """
         try:
-            # Check for executable signatures
-            suspicious_signatures = [
-                b"\x4d\x5a",  # PE executable
-                b"\x7f\x45\x4c\x46",  # ELF executable
-                b"\xfe\xed\xfa",  # Mach-O executable
-                b"<?php",  # PHP code
-                b"<script",  # JavaScript
-                b"javascript:",  # JavaScript URL
-            ]
+            # An executable is identified by its first bytes, matched exactly. Until 2026-11-18 these were
+            # searched anywhere in the first KB after lower-casing, so the two-byte PE signature "MZ" matched
+            # any "mz", "Mz", "mZ" or "MZ" inside the image data: of 600 random-noise images per format it refused
+            # 5.8% of JPEGs, 5.0% of PNGs and 1.8% of WebPs (and failed the WebP test in CI about as often).
+            if file_data.startswith(_EXECUTABLE_MAGIC):
+                logger.warning("Suspicious content detected in uploaded file")
+                return True
 
-            # Check first 1KB of file
+            # Script text is text: searched in the first 1KB, case-insensitively.
             check_data = file_data[:1024].lower()
-
-            for sig in suspicious_signatures:
-                if sig.lower() in check_data:
-                    logger.warning("Suspicious content detected in uploaded file")
-                    return True
+            if any(marker in check_data for marker in _SCRIPT_MARKERS):
+                logger.warning("Suspicious content detected in uploaded file")
+                return True
 
             return False
 

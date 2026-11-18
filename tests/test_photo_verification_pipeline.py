@@ -576,6 +576,41 @@ class TestFullValidationPipeline(TestCase):
 # ---------------------------------------------------------------------------
 
 
+def _jpeg_with_comment(text: bytes) -> bytes:
+    """A valid JPEG carrying `text` in a COM segment right after the start-of-image marker (inside the first KB)."""
+    jpeg = _make_jpeg()
+    segment = b"\xff\xfe" + (len(text) + 2).to_bytes(2, "big") + text
+    return jpeg[:2] + segment + jpeg[2:]
+
+
+class TestSuspiciousContentScan(TestCase):
+    """The executable check reads the first bytes only; the script check reads the first KB in any case.
+
+    Until 2026-11-18 the two-byte PE signature "MZ" was searched anywhere in the lower-cased first KB, so an image
+    whose data held "mz" in any case was refused as suspicious; `test_valid_webp_passes` (random noise) failed in CI
+    on that roughly one run in fifty.
+    """
+
+    def setUp(self):
+        self.service = photo_evidence_service
+
+    def test_an_image_whose_data_holds_mz_in_any_case_passes(self):
+        data = _jpeg_with_comment(b"Mz orchard MZ block mz row mZ")
+        self.assertFalse(self.service._has_suspicious_content(data))
+        result = self.service.validate_photo(data, "orchard.jpg")
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_an_executable_header_is_refused(self):
+        for header in (b"MZ\x90\x00", b"\x7fELF\x02\x01", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe"):
+            self.assertTrue(self.service._has_suspicious_content(header + b"\x00" * 2000), header)
+
+    def test_script_text_in_the_first_kb_is_refused_in_any_case(self):
+        for text in (b"<SCRIPT>alert(1)</SCRIPT>", b"<?PHP echo 1; ?>", b"JavaScript:void(0)"):
+            data = _jpeg_with_comment(text)
+            self.assertTrue(self.service._has_suspicious_content(data), text)
+            self.assertFalse(self.service.validate_photo(data, "orchard.jpg")["valid"], text)
+
+
 class TestGalleryImageSerializer(TestCase):
     """Tests that the serializer exposes thumbnail URLs."""
 
