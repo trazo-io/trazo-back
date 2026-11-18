@@ -185,8 +185,9 @@ def season_conflicts(history) -> list[ManureConflict]:
 
 
 def conflicts_for_saved(event) -> list[dict] | None:
-    """The raw-manure conflicts a just-saved record takes part in, for the save response; None for a
-    record that is neither a pick nor a soil record with a manure date, so the response carries no key."""
+    """The raw-manure conflicts a record takes part in, for the save response and the record's detail;
+    None for a record that is neither a pick nor a soil record with a manure date, so the response carries
+    no key."""
     from history.models import ProductionEvent, SoilManagementEvent
 
     history = getattr(event, "history", None)
@@ -199,3 +200,14 @@ def conflicts_for_saved(event) -> list[dict] | None:
     else:
         return None
     return [c.as_dict() for c in found]
+
+
+def flagged_picks(history) -> dict[str, list[int]]:
+    """The season's picks inside a raw-manure interval or a recorded PHI, by kind, for the rows of the
+    parcel timeline. Picks, not pairs: a pick inside two applications' intervals is one row."""
+    from history.services import phi_check
+
+    return {
+        "manure": sorted({c.pick_id for c in season_conflicts(history)}),
+        "phi": sorted({c.pick_id for c in phi_check.season_conflicts(history)}),
+    }

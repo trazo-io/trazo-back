@@ -3762,10 +3762,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
     @classmethod
     def _with_detail_context(cls, data, instance):
         """What the record's detail says beside its own fields: its application group, its tank,
-        and the Vision verdict on its photos."""
+        the Vision verdict on its photos, and the picks it takes part in that came sooner than an
+        interval."""
         data = cls._with_application_group(data, instance)
         data = cls._with_tank_mix(data, instance)
-        return cls._with_photo_content_flag(data, instance)
+        data = cls._with_photo_content_flag(data, instance)
+        return cls._with_harvest_intervals(data, instance)
 
     @staticmethod
     def _with_photo_content_flag(data, instance):
@@ -3792,6 +3794,25 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             return data
         data = dict(data)
         data["photo_content_flag"] = flag
+        return data
+
+    @staticmethod
+    def _with_harvest_intervals(data, instance):
+        """The pick-against-interval conflicts this record takes part in, on its detail.
+
+        The save response already carries them (`_attach_manure_conflicts`, `_attach_phi_conflicts`),
+        but the app showed them only in a toast, so once it closed nothing on the pick said it came
+        40 days after raw manure (recordkeeping checklist run 2026-11-16, VID-03). Read on every open
+        and never stored, so correcting a date clears it. Same keys and same absence rule as the save
+        response: a record that is neither a pick, a spray nor a manure record carries neither key.
+        """
+        from .services import manure_check, phi_check
+
+        data = dict(data)
+        for key, check in (("manure_conflicts", manure_check), ("phi_conflicts", phi_check)):
+            found = check.conflicts_for_saved(instance)
+            if found is not None:
+                data[key] = found
         return data
 
     @staticmethod

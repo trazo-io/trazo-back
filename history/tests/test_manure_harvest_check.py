@@ -15,6 +15,9 @@ Pinned here:
     when both name one, does not;
   * the save response carries `manure_conflicts` for a pick or a manure record, and no key otherwise;
     the record saves either way;
+  * the record's detail carries the same, read on every open, so the pick keeps saying it after the
+    save toast has closed and a corrected date clears it; the parcel timeline names the flagged picks
+    (VID-03, recordkeeping checklist run 2026-11-16);
   * the season's readiness row says REVIEW with the first conflict as data.
 """
 
@@ -22,9 +25,10 @@ from datetime import date, datetime
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from carbon.models import CropType
 from company.models import Company, Establishment
@@ -267,6 +271,75 @@ class SaveResponseTests(_Farm):
         )
         self.assertEqual(res.status_code, 201, res.data)
         self.assertNotIn("manure_conflicts", res.data)
+
+
+class DetailAndTimelineTests(_Farm):
+    """VID-03: the save toast was the only place a pick inside the interval was named. Once it closed,
+    the pick's detail and its timeline row said nothing."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _detail(self, record, event_type):
+        res = self.client.get(reverse("events-detail", args=[record.pk]), {"event_type": event_type})
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        return res.json()
+
+    def _timeline(self):
+        from product.views import ParcelViewSet
+
+        request = APIRequestFactory().get("/")
+        force_authenticate(request, user=self.user)
+        res = ParcelViewSet.as_view({"get": "current_production"})(
+            request, pk=self.parcel.pk, company_pk=self.company.pk
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["id"], self.season.id)
+        return res.data
+
+    def test_the_picks_detail_names_the_application_and_the_applications_detail_names_the_pick(self):
+        manure = self._manure(date(2026, 4, 1))
+        pick = self._pick(date(2026, 6, 20))
+        for record, event_type in ((pick, 1), (manure, 5)):
+            with self.subTest(record=type(record).__name__):
+                self.assertEqual(
+                    [
+                        (c["application_id"], c["pick_id"], c["applied"], c["picked"], c["days"], c["interval_days"])
+                        for c in self._detail(record, event_type)["manure_conflicts"]
+                    ],
+                    [(manure.pk, pick.pk, "2026-04-01", "2026-06-20", 80, 90)],
+                )
+
+    def test_a_corrected_date_clears_it_because_nothing_is_stored(self):
+        self._manure(date(2026, 4, 1))
+        pick = self._pick(date(2026, 6, 20))
+        self.assertEqual(len(self._detail(pick, 1)["manure_conflicts"]), 1)
+        pick.date = timezone.make_aware(datetime(2026, 7, 1, 9))  # day 91 of a 90-day interval
+        pick.save(update_fields=["date"])
+        self.assertEqual(self._detail(pick, 1)["manure_conflicts"], [])
+        self.assertEqual(self._timeline()["harvest_interval_picks"]["manure"], [])
+
+    def test_a_record_that_is_neither_a_pick_nor_manure_carries_no_key(self):
+        self._manure(date(2026, 4, 1))
+        pruning = ProductionEvent.objects.create(
+            history=self.season,
+            description="prune",
+            date=timezone.make_aware(datetime(2026, 6, 20, 9)),
+            type="PR",
+        )
+        detail = self._detail(pruning, 1)
+        self.assertNotIn("manure_conflicts", detail)
+        self.assertNotIn("phi_conflicts", detail)
+
+    def test_the_timeline_names_each_flagged_pick_once(self):
+        # Two applications, one pick inside both: one row to flag, not two.
+        self._manure(date(2026, 4, 1))
+        self._manure(date(2026, 4, 15))
+        inside = self._pick(date(2026, 6, 20))
+        self._pick(date(2026, 8, 1))  # outside both
+        self.assertEqual(self._timeline()["harvest_interval_picks"], {"manure": [inside.pk], "phi": []})
 
 
 class ReadinessRowTests(_Farm):
