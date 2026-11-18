@@ -546,12 +546,42 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             return None
         return _event_ca_dpr_permit_status(event)
 
-    def _approved_issue_reason(cdfa, dpr):
+    def _wsda_listing_still_covers():
+        """True when a WSDA listing the plan approves still speaks for this record: the one attached
+        to it, or the WSDA row its name matches exactly. An OMRI lapse is then not a gap."""
+        if getattr(event, "wsda_material_id", None) in approved_wsda_ids:
+            return True
+        name = (event.commercial_name or "").strip()
+        if not name:
+            return False
+        _o, r_wsda, _n, _p = _exact_catalog_hits(name)
+        return r_wsda is not None and r_wsda.id in approved_wsda_ids
+
+    def _approved_issue_reason(cdfa, dpr, product=None):
         """Build the OSP-approved-but-flagged reason.
-        Returns (prose, issue_codes, issue_params); prose is None when clean."""
+        Returns (prose, issue_codes, issue_params); prose is None when clean.
+
+        `product` is the listing the approval rests on. When it is an OMRI product whose listing had
+        lapsed by the day of this application, that is an issue (overall review 2026-11, OV-MT-C04):
+        the plan approved an OMRI-listed product and the record applied it after OMRI stopped listing
+        it. A record from before the drop is untouched, and so is one a current WSDA approval covers."""
         parts = []
         codes = []
         params: Dict[str, Any] = {}
+        if isinstance(product, OMRIProduct):
+            from certifications.services.listing_lapse import application_day, omri_listing_lapsed_by
+
+            lapsed = omri_listing_lapsed_by(product, event.date)
+            if lapsed is not None and not _wsda_listing_still_covers():
+                applied = application_day(event.date)
+                parts.append(
+                    f"OMRI's published list stopped carrying this product as of {lapsed.isoformat()}, and "
+                    f"this application is dated {applied.isoformat()}. A lapsed listing does not make the "
+                    "material prohibited; the certifier decides whether its use was allowed"
+                )
+                codes.append("omri_listing_lapsed")
+                params["omriDelistedOn"] = lapsed.isoformat()
+                params["appliedOn"] = applied.isoformat()
         if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
             # NOT "registration is missing". Trazo holds a 17-row slice of the CDFA
             # Registered OIM Products list; a product absent from it is unchecked, not
@@ -643,7 +673,9 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(product)
         dpr = _dpr_sub(label, product)
-        issue_prose, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+        # The lapse is read on the APPROVAL, not on the product the CDFA check reads: a record rescued
+        # by a National List substance the plan lists does not rest on its OMRI listing.
+        issue_prose, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr, approved_obj)
         if issue_prose:
             return _build_drift_warning(
                 osp=osp,
@@ -713,7 +745,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             cdfa_ts = _now_iso()
             cdfa = _ca_sub(resolved)
             dpr = _dpr_sub(label, resolved)
-            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr, resolved)
             if issue_reason:
                 return _build_drift_warning(
                     osp=osp,
@@ -775,7 +807,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             cdfa_ts = _now_iso()
             cdfa = _ca_sub(resolved)
             dpr = _dpr_sub(label, resolved)
-            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+            issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr, resolved)
             if issue_reason:
                 return _build_drift_warning(
                     osp=osp,
@@ -927,7 +959,7 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
         cdfa_ts = _now_iso()
         cdfa = _ca_sub(approved_obj)
         dpr = _dpr_sub(name, approved_obj)
-        issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr)
+        issue_reason, issue_codes, issue_params = _approved_issue_reason(cdfa, dpr, approved_obj)
         if issue_reason:
             return _build_drift_warning(
                 osp=osp,
@@ -1107,7 +1139,9 @@ def _identity_answer(event, source, osp, label, ca_sub, dpr_sub, approved_issue_
         )
     cdfa = ca_sub(obj) if obj is not None and decision.target_kind != MID.TARGET_PLAN_ENTRY else None
     dpr = dpr_sub(label, obj)
-    issue_reason, issue_codes, issue_params = approved_issue_reason(cdfa, dpr)
+    # The identified product is the approval, so an OMRI listing that lapsed by this application is
+    # read here as on every other approved path (review of back #472).
+    issue_reason, issue_codes, issue_params = approved_issue_reason(cdfa, dpr, obj)
     if issue_reason:
         return True, _build_drift_warning(
             osp=osp,
@@ -1473,7 +1507,7 @@ def _classify_soil_event(event, osp) -> Optional[Dict[str, Any]]:
             national_list_verified_at=nl_ts,
         )
 
-    def _soil_issue_reason(cdfa, _dpr):
+    def _soil_issue_reason(cdfa, _dpr, _product=None):
         # The same CDFA rule the approved branch above applies to a soil amendment.
         if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
             return (

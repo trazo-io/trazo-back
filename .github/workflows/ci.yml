@@ -900,6 +900,9 @@ jobs:
       # WSDA's own annotation per product: the seed CSV and migration 0086 agree, NONE is never "no
       # restrictions", the annotation prints in the restrictions column and under the packet's row,
       # and a reworded edition puts a statement back to review. No sibling repo.
+      # 2026-11-17: certifications.tests.test_omri_listing_lapse (new, 11 tests, about 22 s, mostly
+      # TransactionTestCase) pins OV-MT-C04: an OMRI listing is read as of the application date in
+      # the drift detector, the lookup payload and the dossier's input table. No sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -1117,6 +1120,7 @@ jobs:
             certifications.tests.test_drift_detector \
             certifications.tests.test_drift_detector_phase1 \
             certifications.tests.test_drift_listing_with_plan_substance \
+            certifications.tests.test_omri_listing_lapse \
             certifications.tests.test_drift_cross_registry_rescue \
             certifications.tests.test_restricted_materials \
             history.tests.test_national_list_conditions_row \

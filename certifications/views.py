@@ -262,6 +262,12 @@ def verify_input(request):
             "omri_product_pk": matched_omri.pk if matched_omri else None,
             "omri_product_id": matched_omri.omri_id if matched_omri else None,
             "omri_product_name": matched_omri.product_name if matched_omri else None,
+            # The edition date of the first OMRI list Trazo loaded that no longer carried the product,
+            # or None while it is listed (overall review 2026-11, OV-MT-C04). The lookup offered a
+            # dropped product as an ordinary OMRI listing; the client now says when OMRI dropped it.
+            "omri_product_delisted_on": (
+                matched_omri.delisted_on.isoformat() if matched_omri and matched_omri.delisted_on else None
+            ),
             # Every row the query matched, best first. One entry (or none) means the answer
             # is unambiguous; more means the UI must let the grower pick rather than offering
             # a one-tap attach on a guess.
@@ -278,6 +284,7 @@ def verify_input(request):
                     # this surface to OMRI's Deputy Director as showing "the listing and its
                     # date", which was true of the database and not of the UI.
                     "list_edition_date": o.list_edition_date.isoformat() if o.list_edition_date else None,
+                    "delisted_on": o.delisted_on.isoformat() if o.delisted_on else None,
                 }
                 for o in omri_candidates[:_OMRI_CANDIDATE_DISPLAY_LIMIT]
             ],
