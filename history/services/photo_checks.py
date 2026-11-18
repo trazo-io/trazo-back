@@ -1,9 +1,9 @@
 """Photo checks on one record: the Vision content verdict and GPS presence.
 
 Moved out of `PublicHistorySerializer` (2026-11-17) so the record detail can carry the verdict
-to the FARMER (`EventViewSet._with_photo_content_flag`). Until then only the public serializer
-computed `photo_content_flag`, and it withholds the field from shoppers, so the "this photo
-looks like a stock image" warning in the activity sheet never rendered for anyone.
+too (`EventViewSet._with_photo_content_flag`). Until then only that serializer computed
+`photo_content_flag`: members saw it on the Production Profile's season payload, but the parcel
+timeline and the Activities feed, which open the activity sheet most, never carried it.
 
 The logic is unchanged from the serializer method it came from.
 """

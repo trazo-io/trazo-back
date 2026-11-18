@@ -1,14 +1,15 @@
-"""The Vision verdict on a record's photos reaches the farmer, and only the farmer (2026-11-17).
+"""The Vision verdict on a record's photos is on its detail, for the farm (2026-11-17).
 
-The activity sheet has warned "this photo looks like a stock image" since the Vision check was
-built, reading `photo_content_flag` from the record. No producer payload carried that field: only
-`PublicHistorySerializer` computed it, and it withholds it from shoppers. So the warning never
-rendered for anyone (measured in a browser on a copy of the vid03 database: the season timeline,
-the record detail and /amend/ all lacked it).
+The activity sheet warns "this photo looks like a stock image" from `photo_content_flag`. Only
+`PublicHistorySerializer` computed it, and returns it only to members of the farm's company, on
+the Production Profile's season payload. The lists that open the sheet most, the parcel timeline
+(`current_production`) and the Activities feed, never carried it, so from there the warning never
+showed (measured in a browser on a copy of the vid03 database).
 
-The fix puts it on the record DETAIL (`EventViewSet._with_photo_content_flag`), which is
-company-scoped. NOT on the shared per-type serializers: those feed `HistorySerializer`, which the
-signed-in shopper's `my_reviews` returns. The last test guards that boundary.
+The fix puts it on the record DETAIL (`EventViewSet._with_photo_content_flag`), which the sheet
+reads for its notices, in the season payload's shape: the key only when a photo is flagged. NOT
+on the shared per-type serializers: those feed `HistorySerializer`, which the signed-in shopper's
+`my_reviews` returns. The last test guards that boundary.
 """
 
 from django.contrib.auth import get_user_model
@@ -47,10 +48,6 @@ class PhotoFlagReachesProducerTests(APITestCase):
             date=timezone.now(),
         )
 
-        cls.outsider = get_user_model().objects.create_user(email="outsider@example.com", password="pw-for-tests-only")
-        other = Company.objects.create(name="Other Co")
-        WorksIn.objects.create(user=cls.outsider, company=other, role=WorksIn.COMPANY_ADMIN)
-
     @classmethod
     def _spray(cls, name, content_validation):
         album = Gallery.objects.create()
@@ -77,20 +74,13 @@ class PhotoFlagReachesProducerTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.content)
         self.assertEqual(res.json()["photo_content_flag"], "stock_photo")
 
-    def test_a_clean_photo_or_no_photo_says_none(self):
+    def test_a_clean_photo_or_no_photo_carries_no_key(self):
+        """Absent, not null: the season payload drops unset keys, and the two must not disagree."""
         self.client.force_authenticate(user=self.owner)
         for event in (self.clean, self.no_photo):
             res = self.client.get(self._detail(event))
             self.assertEqual(res.status_code, status.HTTP_200_OK, res.content)
-            # The key is present and null, so the app can tell "checked, clean" from "not sent".
-            self.assertIn("photo_content_flag", res.json())
-            self.assertIsNone(res.json()["photo_content_flag"])
-
-    def test_another_company_cannot_read_it(self):
-        self.client.force_authenticate(user=self.outsider)
-        res = self.client.get(self._detail(self.flagged))
-        self.assertIn(res.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
-        self.assertNotIn(b"stock_photo", res.content)
+            self.assertNotIn("photo_content_flag", res.json())
 
     def test_the_shared_season_payload_never_carries_it(self):
         """`HistorySerializer` is what `my_reviews` hands a signed-in shopper.

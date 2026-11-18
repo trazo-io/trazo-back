@@ -3769,22 +3769,29 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
 
     @staticmethod
     def _with_photo_content_flag(data, instance):
-        """The Vision verdict on this record's photos, for the farmer who logged them.
+        """The Vision verdict on this record's photos, for the farm that logged them.
 
-        `not_agricultural` / `ai_generated` / `stock_photo`, or None when every photo is clean or
-        there is none. The activity sheet warns with it ("this photo looks like a stock image;
-        a certifier does not count it as evidence").
+        `not_agricultural` / `ai_generated` / `stock_photo`; the key is ABSENT when every photo is
+        clean or there is none, the same shape as the season payload, whose events drop unset keys
+        (`_drop_unset`). The activity sheet warns with it ("this photo looks like a stock image").
+
+        Why the detail: the sheet reads the record's detail for its notices (group, tank mix, now
+        this), and the lists that open it most, the parcel timeline (`current_production`) and the
+        Activities feed, never carried the field. Only the Production Profile's season payload did
+        (`PublicHistorySerializer`, member branch), so the warning showed there and nowhere else.
 
         DETAIL ONLY, on purpose. It is moderation state about the farmer, so it never goes on the
         shared per-type event serializers: those also feed `HistorySerializer`, which the signed-in
-        shopper's `my_reviews` response returns, and `PublicHistorySerializer` withholds the same
-        field from the anonymous payload for the same reason. This route is company-scoped.
-        Until 2026-11-17 no producer payload carried it, so the sheet's warning never rendered.
+        shopper's `my_reviews` response returns, and `PublicHistorySerializer` withholds it from
+        non-members for the same reason. This route is company-scoped (`_scope_to_caller`).
         """
         from .services.photo_checks import analyze_event_photos
 
+        flag = analyze_event_photos(instance)["content_flag"]
+        if not flag:
+            return data
         data = dict(data)
-        data["photo_content_flag"] = analyze_event_photos(instance)["content_flag"]
+        data["photo_content_flag"] = flag
         return data
 
     @staticmethod
