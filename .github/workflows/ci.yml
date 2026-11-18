@@ -1438,6 +1438,7 @@ jobs:
             common.tests.test_database_optimizer \
             common.tests.test_models \
             common.tests.test_pdf_text \
+            common.tests.test_presigned_upload_limits \
             common.tests.test_us_states \
             company.tests.test_certifier_readiness \
             company.tests.test_certifier_readiness_actionable \

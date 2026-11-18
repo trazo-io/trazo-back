@@ -429,16 +429,15 @@ ROUTE_TENANCY = {
     # ---------------------------------------------------------------------------------------------
     "common.views.get_presigned_read_url": Route(CATALOG, "signs public-prefix media keys only"),
     "common.views.get_presigned_read_urls_batch": Route(CATALOG, "signs public-prefix media keys only"),
-    "common.views.get_presigned_url": Route(USER, "uuid key under media/; no overwrite"),
-    "common.views.get_upload_urls": Route(
-        COMPANY,
-        "uuid key, no overwrite",
-        finding="entity_type/entity_id go into the key unchecked: objects can be planted under "
-        "another company's prefix; whether any reader trusts the prefix is unconfirmed",
+    "common.views.get_presigned_url": Route(
+        USER,
+        "uuid key under media/establishments/; image types only, size signed as Content-Length, "
+        "10 MB at most (OV-SEC-C12, 2026-11-18; get_upload_urls, which took the prefix from the "
+        "request, was removed)",
     ),
     "common.views.global_search": Route(COMPANY, "company_id__in the caller's companies"),
     "common.views.health_check": Route(ANONYMOUS, "liveness probe"),
-    "common.views.local_file_upload": Route(DEAD, "dev-only upload still routed in production"),
+    "common.views.local_file_upload": Route(DEAD, "dev-only upload; 404 whenever storage is S3 (OV-SEC-C12)"),
     "education.views.FarmerQuestionAnswerViewSet": Route(CATALOG, "FAQ rows; mark_helpful bumps a global counter"),
     # ---------------------------------------------------------------------------------------------
     # users
@@ -561,7 +560,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 46
+UNPROVEN_CEILING = 45
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 15
+OPEN_FINDINGS_CEILING = 14

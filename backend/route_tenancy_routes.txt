@@ -643,7 +643,6 @@ api/support/^tickets/sla_metrics\.(?P<format>[a-z0-9]+)/?$	support.views.Support
 api/support/^tickets\.(?P<format>[a-z0-9]+)/?$	support.views.SupportTicketViewSet	IsAuthenticated	get=list,post=create
 api/transparency/<uuid:production_public_id>/	history.transparency_views.production_transparency_detail	AllowAny	-
 api/transparency/<uuid:production_public_id>/verify-blockchain/	history.transparency_views.verify_blockchain	AllowAny	-
-api/upload-urls/	common.views.get_upload_urls	IsAuthenticated	-
 health/	health.views.health_check	NON-DRF	-
 ready/	health.views.readiness_check	NON-DRF	-
 test/	backend.urls.simple_test	NON-DRF	-
