@@ -51,10 +51,12 @@ def get_vision_service():
     return vision_api_service
 
 
-# First bytes of executable formats: PE ("MZ"), ELF, and Mach-O in both byte orders.
-_EXECUTABLE_MAGIC = (b"MZ", b"\x7fELF", b"\xfe\xed\xfa", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe")
 # Script text an image has no reason to carry, lower-case.
 _SCRIPT_MARKERS = (b"<?php", b"<script", b"javascript:")
+
+
+class PhotoProcessingError(Exception):
+    """The image could not be re-encoded, so it must not be stored."""
 
 
 class PhotoEvidenceService:
@@ -337,8 +339,12 @@ class PhotoEvidenceService:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_filename = f"carbon_{carbon_entry_id}_{timestamp}_{unique_id}{file_ext}"
 
-            # Process image for optimization
-            processed_data = self._process_image(file_data, file_ext)
+            # Process image for optimization. Only re-encoded pixels are stored.
+            try:
+                processed_data = self._process_image(file_data, file_ext)
+            except PhotoProcessingError:
+                result["errors"].append("The photo could not be processed, so it was not stored. Try another photo.")
+                return result
 
             # Store file
             file_path = os.path.join(self.storage_path, safe_filename)
@@ -581,6 +587,10 @@ class PhotoEvidenceService:
 
             # Save optimized version to BytesIO (PIL save without exif= strips EXIF by default)
             output = io.BytesIO()
+            # EXIF, XMP and PNG or WebP text are not carried by these saves, but Pillow writes a JPEG's comment
+            # segment back from `info` (measured on Pillow 12.3, 2026-11-18): a comment can hold anything, so it
+            # goes too and only the pixels are stored.
+            image.info.pop("comment", None)
 
             # HEIC/HEIF always converted to JPEG for broad compatibility
             if file_ext.lower() in [".heic", ".heif"]:
@@ -598,9 +608,10 @@ class PhotoEvidenceService:
             return output.getvalue()
 
         except Exception as e:
+            # Never fall back to the original bytes: they keep the EXIF this step strips (GPS, device) and
+            # anything else the file carries beside its pixels. Until 2026-11-18 a failed re-encode stored them.
             logger.error(f"Image processing error: {e}")
-            # Return original data if processing fails
-            return file_data
+            raise PhotoProcessingError(str(e)) from e
 
     def generate_thumbnails(self, file_data: bytes, base_s3_key: str) -> Dict[str, str]:
         """
@@ -662,20 +673,17 @@ class PhotoEvidenceService:
             True if suspicious content detected
         """
         try:
-            # An executable is identified by its first bytes, matched exactly. Until 2026-11-18 these were
-            # searched anywhere in the first KB after lower-casing, so the two-byte PE signature "MZ" matched
-            # any "mz", "Mz", "mZ" or "MZ" inside the image data: of 600 random-noise images per format it refused
-            # 5.8% of JPEGs, 5.0% of PNGs and 1.8% of WebPs (and failed the WebP test in CI about as often).
-            if file_data.startswith(_EXECUTABLE_MAGIC):
-                logger.warning("Suspicious content detected in uploaded file")
-                return True
-
-            # Script text is text: searched in the first 1KB, case-insensitively.
+            # Executables are not searched for here. validate_photo refuses any file whose first bytes are not an
+            # allowed image's (`_detect_mime_from_magic_bytes`), which is where PE, ELF and Mach-O headers have to
+            # be to run, and only the re-encoded pixels are stored (`_process_image`), which drops anything else a
+            # file carries. Until 2026-11-18 the executable signatures were searched anywhere in the lower-cased
+            # first KB, so the two-byte PE header "MZ" matched any "mz", "Mz", "mZ" or "MZ" inside image data: of
+            # 600 random-noise images per format it refused 5.8% of JPEGs, 5.0% of PNGs and 1.8% of WebPs.
             check_data = file_data[:1024].lower()
-            if any(marker in check_data for marker in _SCRIPT_MARKERS):
-                logger.warning("Suspicious content detected in uploaded file")
-                return True
-
+            for marker in _SCRIPT_MARKERS:
+                if marker in check_data:
+                    logger.warning("Suspicious content in uploaded file: %r in the first KB", marker)
+                    return True
             return False
 
         except Exception:
