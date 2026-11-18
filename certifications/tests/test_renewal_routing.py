@@ -102,6 +102,11 @@ class EachAgentGetsItsOwnFormsTests(_Farm):
         application = next(f for f in renewal_routing(osp)[1] if f.title == "Annual Renewal Application")
         self.assertEqual(application.rows, ())
         self.assertIn("by March 1", application.reason)
+        # OV-PK-W02: no copy has been read, so the packet cannot say what it asks or that it answers it.
+        reason = " ".join(application.reason.split())
+        self.assertIn("so this packet does not answer it: the operation fills in the copy WSDA sent", reason)
+        self.assertIn("If it asks what changed this year", reason)
+        self.assertNotIn("The year's changes it asks for are on", reason)
 
 
 class AgentSentFormTests(_Farm):

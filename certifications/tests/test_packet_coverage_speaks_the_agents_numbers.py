@@ -273,12 +273,27 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
                 self.assertNotIn("NOPB", text)
                 self.assertNotIn("ORGB", text)
                 self.assertNotIn("Forms Trazo does not generate", text)
+                # OV-PK-F05: the files below are named G2_0.pdf and the like, so the page says whose
+                # codes those are rather than leaving the reviewer to read them as its own.
+                self.assertIn(f"are the Common OSP's section codes, not {agent}'s form numbers", text)
                 OrganicSystemPlan.objects.filter(establishment=self.est).delete()
 
     def test_a_plan_naming_no_agent_reads_no_agents_numbering_either(self):
         text = self._coverage_text("")
         self.assertIn("No certifying agent is named on this operation's records", text)
+        self.assertIn("are the Common OSP's section codes, not the agent's form numbers", text)
         self.assertNotIn("CCOF", text)
+
+    def test_the_codes_the_page_names_are_the_ones_on_the_files(self):
+        """OV-PK-F05. The codes the page quotes come from the same modules the ZIP names its files by."""
+        from certifications.osp_modules import MODULES_BY_KEY
+        from certifications.services.packet_coverage import _module_location, _packet_module_keys
+
+        text = self._coverage_text("Organic Certifiers, Inc.")
+        coded = [MODULES_BY_KEY[k] for k in _packet_module_keys() if k in MODULES_BY_KEY and MODULES_BY_KEY[k].code]
+        self.assertGreaterEqual(len(coded), 2)
+        self.assertIn(f"({coded[0].code}, {coded[1].code} and so on)", text)
+        self.assertIn(coded[0].code.replace(".", "_"), _module_location(coded[0].key))
 
 
 class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
