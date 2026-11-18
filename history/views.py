@@ -3753,11 +3753,46 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 serializer_class = UpdateGeneralEventSerializer
 
             serializer = serializer_class(instance)
-            return Response(self._with_tank_mix(self._with_application_group(serializer.data, instance), instance))
+            return Response(self._with_detail_context(serializer.data, instance))
 
         # Default behavior
         serializer = self.get_serializer(instance)
-        return Response(self._with_tank_mix(self._with_application_group(serializer.data, instance), instance))
+        return Response(self._with_detail_context(serializer.data, instance))
+
+    @classmethod
+    def _with_detail_context(cls, data, instance):
+        """What the record's detail says beside its own fields: its application group, its tank,
+        and the Vision verdict on its photos."""
+        data = cls._with_application_group(data, instance)
+        data = cls._with_tank_mix(data, instance)
+        return cls._with_photo_content_flag(data, instance)
+
+    @staticmethod
+    def _with_photo_content_flag(data, instance):
+        """The Vision verdict on this record's photos, for the farm that logged them.
+
+        `not_agricultural` / `ai_generated` / `stock_photo`; the key is ABSENT when every photo is
+        clean or there is none, the same shape as the season payload, whose events drop unset keys
+        (`_drop_unset`). The activity sheet warns with it ("this photo looks like a stock image").
+
+        Why the detail: the sheet reads the record's detail for its notices (group, tank mix, now
+        this), and the lists that open it most, the parcel timeline (`current_production`) and the
+        Activities feed, never carried the field. Only the Production Profile's season payload did
+        (`PublicHistorySerializer`, member branch), so the warning showed there and nowhere else.
+
+        DETAIL ONLY, on purpose. It is moderation state about the farmer, so it never goes on the
+        shared per-type event serializers: those also feed `HistorySerializer`, which the signed-in
+        shopper's `my_reviews` response returns, and `PublicHistorySerializer` withholds it from
+        non-members for the same reason. This route is company-scoped (`_scope_to_caller`).
+        """
+        from .services.photo_checks import analyze_event_photos
+
+        flag = analyze_event_photos(instance)["content_flag"]
+        if not flag:
+            return data
+        data = dict(data)
+        data["photo_content_flag"] = flag
+        return data
 
     @staticmethod
     def _with_tank_mix(data, instance):

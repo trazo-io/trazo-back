@@ -922,6 +922,9 @@ jobs:
       # have made the whole workflow file invalid ("workflow file issue", no job runs at all), which
       # is what the first push of back #475 did at 28,505. With no expression in it, the script has
       # no such cap.
+      # 2026-11-17: history.tests.test_photo_flag_reaches_producer (new, 3 tests) pins the Vision
+      # photo verdict on the record detail (absent when clean, like the season payload) and never on
+      # HistorySerializer's events (what a signed-in shopper's my_reviews returns). No sibling repo.
       - name: Claim-safety and compliance suites
         env:
           SHARD: ${{ matrix.shard }}
@@ -1000,6 +1003,7 @@ jobs:
             history.tests.test_models \
             history.tests.test_event_tenancy \
             history.tests.test_event_detail_requires_type \
+            history.tests.test_photo_flag_reaches_producer \
             history.tests.test_equipment_event_create_closed \
             history.tests.test_season_plan_not_records.StartProductionWritesNoRecords \
             history.tests.test_season_plan_not_records.APlanItemCarriesNoValues \
