@@ -15,6 +15,7 @@ Run:  poetry run pytest tests/test_photo_verification_pipeline.py -v
 """
 
 import io
+from unittest import mock
 
 from django.test import TestCase
 
@@ -574,6 +575,102 @@ class TestFullValidationPipeline(TestCase):
 # ---------------------------------------------------------------------------
 # Serializer: Thumbnail fields exposed
 # ---------------------------------------------------------------------------
+
+
+def _jpeg_with_comment(text: bytes, after: bytes = b"") -> bytes:
+    """A valid JPEG carrying `text` in a COM segment right after the start-of-image marker (inside the first KB),
+    and `after` in a second COM segment placed after `text`."""
+    jpeg = _make_jpeg()
+
+    def com(payload: bytes) -> bytes:
+        return b"\xff\xfe" + (len(payload) + 2).to_bytes(2, "big") + payload
+
+    return jpeg[:2] + com(text) + (com(after) if after else b"") + jpeg[2:]
+
+
+def _noise_image_holding_mz(fmt: str) -> bytes:
+    """A seeded random-noise image whose first KB holds "mz" in some case: the shape that failed CI.
+
+    Searches seeds rather than pinning one, so an encoder upgrade cannot make the fixture stop holding "mz" and the
+    test pass over nothing."""
+    import random
+
+    for seed in range(400):
+        img = Image.frombytes("RGB", (320, 240), random.Random(seed).randbytes(320 * 240 * 3))
+        buf = io.BytesIO()
+        img.save(buf, format=fmt, **({} if fmt == "PNG" else {"quality": 85}))
+        data = buf.getvalue()
+        if b"mz" in data[:1024].lower():
+            return data
+    raise AssertionError(f"no {fmt} noise image in 400 seeds holds 'mz' in its first KB")
+
+
+class TestSuspiciousContentScan(TestCase):
+    """What the upload refuses, read on the public path (`validate_photo`, `process_and_store_photo`).
+
+    Until 2026-11-18 the scan searched executable signatures anywhere in the lower-cased first KB, so an image whose
+    data held "mz" in any case was refused; `test_valid_webp_passes` (random noise) failed in CI on that roughly one
+    run in fifty. Executables are refused by the magic-byte gate instead, and only re-encoded pixels are stored.
+    """
+
+    def setUp(self):
+        self.service = photo_evidence_service
+
+    def test_noise_images_holding_mz_pass(self):
+        for fmt, name in (("JPEG", "noise.jpg"), ("PNG", "noise.png"), ("WEBP", "noise.webp")):
+            result = self.service.validate_photo(_noise_image_holding_mz(fmt), name)
+            self.assertTrue(result["valid"], (fmt, result["errors"]))
+
+    def test_an_image_whose_data_holds_mz_in_any_case_passes(self):
+        result = self.service.validate_photo(_jpeg_with_comment(b"Mz orchard MZ block mz row mZ"), "orchard.jpg")
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_executable_headers_are_refused_at_the_magic_byte_gate(self):
+        headers = (
+            b"MZ\x90\x00",  # PE
+            b"\x7fELF\x02\x01",  # ELF
+            b"\xfe\xed\xfa\xcf",  # Mach-O, big-endian
+            b"\xcf\xfa\xed\xfe",  # Mach-O, little-endian
+            b"\xca\xfe\xba\xbe",  # Mach-O universal
+        )
+        for header in headers:
+            result = self.service.validate_photo(header + b"\x00" * 4000, "orchard.jpg")
+            self.assertFalse(result["valid"], header)
+            self.assertTrue(any("does not match an allowed image type" in e for e in result["errors"]), header)
+
+    def test_script_text_in_the_first_kb_is_refused_in_any_case(self):
+        for text in (b"<SCRIPT>alert(1)</SCRIPT>", b"<?PHP echo 1; ?>", b"JavaScript:void(0)"):
+            result = self.service.validate_photo(_jpeg_with_comment(text), "orchard.jpg")
+            self.assertFalse(result["valid"], text)
+            self.assertIn("File contains suspicious content and cannot be uploaded", result["errors"], text)
+
+    def test_only_reencoded_pixels_are_stored(self):
+        # An executable header inside the image, and script text past the first KB that the scan does not read,
+        # each in a JPEG comment segment, which Pillow would otherwise write back on save.
+        payload = b"MZ\x90\x00" + b"PE\x00\x00" + b"x" * 1200
+        data = _jpeg_with_comment(payload, after=b"<script>alert(1)</script>")
+        self.assertIn(b"<script>", data)
+        self.assertTrue(self.service.validate_photo(data, "orchard.jpg")["valid"])
+        with mock.patch("carbon.services.photo_evidence_service.default_storage") as storage:
+            storage.save.return_value = "evidence/stored.jpg"
+            storage.url.return_value = "/media/evidence/stored.jpg"
+            result = self.service.process_and_store_photo(data, "orchard.jpg", carbon_entry_id=1, user_id=1)
+        self.assertTrue(result["success"], result["errors"])
+        stored = storage.save.call_args[0][1].read()
+        self.assertTrue(stored.startswith(b"\xff\xd8\xff"))
+        self.assertNotIn(b"PE\x00\x00", stored)
+        self.assertNotIn(b"<script>", stored)
+
+    def test_a_photo_that_cannot_be_reencoded_is_not_stored(self):
+        data = _make_jpeg()
+        with (
+            mock.patch("carbon.services.photo_evidence_service.default_storage") as storage,
+            mock.patch.object(Image.Image, "save", side_effect=OSError("encoder failed")),
+        ):
+            result = self.service.process_and_store_photo(data, "orchard.jpg", carbon_entry_id=1, user_id=1)
+        self.assertFalse(result["success"])
+        self.assertIn("The photo could not be processed, so it was not stored. Try another photo.", result["errors"])
+        storage.save.assert_not_called()
 
 
 class TestGalleryImageSerializer(TestCase):
