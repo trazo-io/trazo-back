@@ -110,3 +110,7 @@ questions:
     How organic product is kept from non-organic material and prohibited substances through production and
     handling. Asked by OTCO C9 9.4-3; WSDA asks the separation and the storage of prohibited materials in
     their own sections.
+  g6_0_production.bought_in_identical_to_organic: >-
+    Whether bought-in non-organic product is the same crop as an organic one the operation sells (CCOF G8.0
+    C1, its fourth box). WSDA asks parallel production of crops the operation grows, not of product it buys
+    in.

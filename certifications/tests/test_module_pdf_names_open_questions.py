@@ -108,7 +108,10 @@ class ModulePdfNamesOpenQuestionsTests(_Plan):
         )
         g8 = _text(packet.read("modules/G8_0.pdf"))
         self.assertIn("Generated in this packet as 05-audit-trail-exhibit.pdf", g8)
-        self.assertNotIn("Sample audit trail exhibit No file attached", g8)
+        # The label changed in 2026.12.21 (CCOF G8.0 B1); read what follows it so the check cannot go vacuous.
+        label_end = "with the linking elements and the organic status highlighted"
+        self.assertIn(label_end, g8)
+        self.assertFalse(g8.split(label_end, 1)[1].lstrip().startswith("No file attached"), g8)
 
     def test_a_module_pdf_downloaded_alone_says_nothing_about_files(self):
         # Outside a packet build nothing is shipped, so no file can be said to be missing.

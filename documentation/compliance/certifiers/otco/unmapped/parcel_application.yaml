@@ -104,3 +104,10 @@ questions:
     Asked by CCOF ORGB49 §G for containers on impermeable flooring. C2 has no container statement.
   parcel_application.container_statement: >-
     The signed copy of CCOF ORGB49 §G's container statement. C2 asks for none.
+  parcel_application.prior_certificate_number: >-
+    The previous grower's certificate number for a transferred site (WSDA AGR 2264 ref 6a). C2 2.1-7b asks
+    the certified operation's name and agency only, and routes an OTCO-certified parcel to the Land Transfer
+    Form.
+  parcel_application.prior_certificate_issue_date: >-
+    The previous grower's certificate issue date (WSDA AGR 2264 ref 6a); same reason as
+    `prior_certificate_number`.

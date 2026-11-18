@@ -542,6 +542,11 @@ jobs:
       # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
       # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
       #
+      # 2026-11-18: certifications.tests.test_record_keeping_leftovers joins. The records attestation also requires
+      # storage records, invoices and bills of lading when the plan stores, sells as organic or ships other than by
+      # buyer pickup (CCOF G8.0 A1); G8.0, G6.0, G5.0 and the Parcel Application ask the leftovers of CCOF G8.0 B1, C1,
+      # WSDA AGR 2121 H 4, O 9 and AGR 2264 6a. Builds its own farm; reads only this repo's registers.
+      #
       # 2026-11-18: certifications.tests.test_post_harvest_leftovers joins. G6.4, G6.1 and G6.2 ask the post-harvest,
       # harvest and storage leftovers (WSDA AGR 2121 J, K, L; CCOF G6.4 A2, A4, C1), and G6.4 prints where facility pest
       # materials and packaging are answered. Builds its own farm.
@@ -1131,6 +1136,7 @@ jobs:
             certifications.tests.test_direct_marketing \
             certifications.tests.test_pest_weed_soil \
             certifications.tests.test_post_harvest_leftovers \
+            certifications.tests.test_record_keeping_leftovers \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

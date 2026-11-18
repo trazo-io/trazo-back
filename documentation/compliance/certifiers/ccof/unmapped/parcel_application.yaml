@@ -58,3 +58,9 @@ questions:
   parcel_application.operation_export_answer: >-
     Prints the operation's G8.0 export answer on the parcel page for WSDA AGR 2264 ref 9, which asks it
     per site.
+  parcel_application.prior_certificate_number: >-
+    The previous grower's certificate number for a transferred site (WSDA AGR 2264 ref 6a). CCOF's Parcel
+    Application F2 asks whether the parcel is currently certified and by whom, not the certificate number.
+  parcel_application.prior_certificate_issue_date: >-
+    The previous grower's certificate issue date (WSDA AGR 2264 ref 6a); same reason as
+    `prior_certificate_number`.

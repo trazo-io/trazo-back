@@ -59,3 +59,6 @@ questions:
     and lists them on the materials list, not their material.
   g5_0_pest.plastic_mulch_perennial_condition: >-
     Plastic mulch in a perennial planting (WSDA AGR 2121 F 5a). Not asked on C5.
+  g5_0_pest.disease_prevention_records: >-
+    Records kept of preventive disease management (WSDA AGR 2121 H 4). C5 asks nothing about records of any
+    kind; recordkeeping is OTCO's separate C12, which asks no description of these.

@@ -411,7 +411,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   (L 7), takes the equipment purge procedures (L 4), the product list (CCOF G6.4 A2) and notes (L 18), and points to
 #   G9.0 and G6.1 for facility pest materials and packaging (CCOF G6.4 A4, C1). G6.1 asks the documentation behind
 #   unstamped containers (J 7b) and notes (J 14); G6.2 notes (K 4). All optional.
-CONTENT_VERSION = "2026.12.20"
+# 2026.12.21: record keeping leftovers. G8.0's records attestation also requires storage records, invoices and bills of
+#   lading when the plan stores, sells as organic or ships other than by buyer pickup (CCOF G8.0 A1); the audit trail
+#   upload asks for the operator's own marked-up sample (B1); G6.0 asks whether bought-in non-organic product is the same
+#   as an organic one sold (C1); G5.0 the disease prevention records (WSDA AGR 2121 H 4); G8.0 notes (O 9); the Parcel
+#   Application the number and issue date of a certificate another operation held (AGR 2264 6a). Optional.
+CONTENT_VERSION = "2026.12.21"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

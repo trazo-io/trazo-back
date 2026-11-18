@@ -928,6 +928,29 @@ PARCEL_APPLICATION = Module(
                     required=False,
                     visible_when=(Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),),
                 ),
+                # WSDA AGR 2264 6a: the certificate number and issue date of the certificate another operation held
+                # (2026.12.21). Asked only when the certificate names another operation; this operation's own
+                # certificate prints from its record of certificate.
+                Question(
+                    key="prior_certificate_number",
+                    kind="text",
+                    label=text("Certificate number on that certificate", "Número de certificado en ese certificado"),
+                    required=False,
+                    visible_when=(
+                        Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),
+                        Condition(question="certified_operation_name", op="truthy"),
+                    ),
+                ),
+                Question(
+                    key="prior_certificate_issue_date",
+                    kind="date",
+                    label=text("Issue date on that certificate", "Fecha de emisión en ese certificado"),
+                    required=False,
+                    visible_when=(
+                        Condition(question="currently_certified", op="one_of", value=["yes", "previously"]),
+                        Condition(question="certified_operation_name", op="truthy"),
+                    ),
+                ),
                 Question(
                     # WSDA AGR 2264 ref 6b: the whole previously or currently certified site, or a portion
                     # of it ("Ensure the attached map clearly illustrates the specific area of the site you

@@ -30,3 +30,7 @@ questions:
     Written agreements with neighbors, attached (CCOF G6.0 A2). OTCO C9 9.3-1 asks for the plan to mitigate drift, never for the agreements as attachments.
   g6_0_production.roadside_agreement_upload: >-
     A written agreement with the roadside manager, attached (CCOF G6.0 A2). OTCO C9 9.3-1 asks for the plan to mitigate drift, never for the agreements as attachments.
+  g6_0_production.bought_in_identical_to_organic: >-
+    Whether bought-in non-organic product is the same crop as an organic one the operation sells (CCOF G8.0
+    C1, its fourth box). OTCO C9 asks only whether the operation GROWS a visually identical crop both ways
+    (`parallel_production`); C12 12.4-1 and O1 A-2 ask the split and its source, not identity.

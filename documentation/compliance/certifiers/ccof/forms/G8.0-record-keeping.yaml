@@ -15,14 +15,11 @@ form:
 items:
   - ref: "A1"
     asks: "Based on the activities described in your OSP, does your operation maintain all records needed to verify compliance, keep them at least 5 years, and make them available during inspections? The form then lists, by activity, the record types an organic crop operation is expected to keep."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g8_0_record_keeping.s11_records, g8_0_record_keeping.records_retention_attestation]
       models: ["certifications.services.common_osp_records (Common OSP § 11 registry, 38 record types)"]
       prints: "modules/G8_0.pdf §A — the confirmed record types with their evidence, then the attestation"
-    gap: "Since 2026-10-01 (OSP alignment audit T17-F1) the statement reads 'all the records your plan's activities require', and its gate refuses Yes while any record type the plan's own answers require is not confirmed: input-material application (materials used), pest management (pest inputs applied), harvest records (who harvests), compost production (compost made), clean-out records (storage shared with non-organic), supplier verification and seed commercial-availability search. A record the operator states is not kept is named as missing, never accepted; an undecided requirement blocks too; a Yes given before this prints with a [REVIEW] naming what is missing and counts as unanswered. What remains: those seven triggers are not every activity CCOF's list covers (storage, sales and transport records have no trigger yet), so the statement can still be Yes with one of those unconfirmed."
-    fix: "Add triggers for the remaining activities CCOF lists (storage, sales, transport), each reading one answer in the plan."
     # CLOSED 2026-08-27. The attestation completed over an EMPTY § 11 list: the registry is an
     # `info` embed and `info` is skipped by completion validation, so a module a certifier opens
     # first was a signature over nothing. Now declarative — the question carries
@@ -31,18 +28,23 @@ items:
     # reaches storage, and the compiler reads storage), at completion, in the reported module
     # status, and with a [REVIEW] qualifier in the PDF for plans attested before the gate existed.
     # Guards: certifications/tests/test_attestation_over_empty_list.py
+    # Closed 2026-11-18 by the record keeping leftovers slice: three more triggers in required_records.py, each
+    # reading one answer: storage records when the storage section names where crops are stored
+    # (g6_2_storage.storage_locations), invoices when the record keeping section says crops are sold as organic
+    # (sells_as_organic), and bills of lading when the transport section names who moves the crop other than a buyer
+    # picking up (g6_1_harvest_transport.who_transports). The attestation is refused while any of them is unconfirmed,
+    # as for the first seven.
 
   - ref: "B1"
     asks: "Attach a sample audit trail showing how you plan to meet the audit trail requirements: highlight the linking elements showing how documents connect in sequence; show how you identify the organic status of the crop/product on each type of document; for nonretail containers moving through the supply chain, indicate where the lot number, shipping identification, or other unique identification appears. If you are new to organic production, provide an example of the audit trail records you plan to maintain."
-    status: partial
-    severity: P3
+    status: covered
     trazo:
       questions: [g8_0_record_keeping.audit_trail_exhibit, g7_0_labeling.invoices_identify_lot]
-      prints: "05-audit-trail-exhibit.pdf — Part B: one finished, sold lot walked lot ID → harvest (date, quantity, block, storage) → storage location → sales (invoice, BOL, buyer, organic status on invoice, label claim), the lot ID set apart on its own line; the modules/G8_0.pdf §B lot-numbering answer sits beside it"
-    gap: >-
-      Closed 2026-09-09: the generator the G8.0 coaching promised now exists and its output ships in every packet as document 05, chosen mechanically (the most recently finished season with a live sale) and compiled only from dated records — a missing lot ID or storage location is stated as missing. What remains: the exhibit is a text trace, not the marked-up copies of the operation's own paper (invoice, BOL, bin ticket) CCOF's word 'sample' evokes, and an operation with no finished sold season yet ships a stated absence instead of a trail.
-    fix: >-
-      Ask for the operator's marked-up sample as the `audit_trail_exhibit` upload; since 2026-10-01 a file uploaded for it rides in the packet under attachments/g8_0_record_keeping/audit_trail_exhibit/.
+      prints: "05-audit-trail-exhibit.pdf — Part B: one finished, sold lot walked lot ID → harvest (date, quantity, block, storage) → storage location → sales (invoice, BOL, buyer, organic status on invoice, label claim), the lot ID set apart on its own line; the modules/G8_0.pdf §B lot-numbering answer sits beside it; the operator's own marked-up copies ride in the packet under attachments/g8_0_record_keeping/audit_trail_exhibit/"
+    # Closed 2026-11-18 by the record keeping leftovers slice: the audit_trail_exhibit upload now asks in CCOF's words
+    # for the operator's own sample (copies of an invoice, bill of lading or bin ticket with the linking elements and
+    # the organic status highlighted), beside the generated text trace, which still states a missing season as missing
+    # for an operation new to organic. The upload is a supplement and answers no required question.
 
   - ref: "B2"
     asks: "Describe the lot numbering used to link to your audit trail and track organic crops/products once they leave your operation: not applicable, no lot numbering used; or my operation assigns lot numbers — describe the system as a Code / Signifies table (example: Lot Number 23123O10 — Code 23 / 123 / O / 10, Signifies Year 2023 / Julian harvest date / Organic / Parcel ID)."
@@ -57,13 +59,13 @@ items:
 
   - ref: "C1"
     asks: "A split operation is one that produces or handles both organic and nonorganic products. Mark all that apply: grow both organic and nonorganic crops; grow identical crops organically and nonorganically; sell organic and nonorganic crops/products, including any sourced from other operations; sell identical organic and nonorganic crops/products, including any sourced from other operations; none of the above — skip to section D."
-    status: partial
-    severity: P3
+    status: covered
     trazo:
-      questions: [g6_0_production.split_operation, g6_0_production.nonorganic_product_source, g6_0_production.nonorganic_product_source_other, g6_0_production.parallel_production, g6_5_sales_soe.sales_soe_supplier_verification]
+      questions: [g6_0_production.split_operation, g6_0_production.nonorganic_product_source, g6_0_production.nonorganic_product_source_other, g6_0_production.bought_in_identical_to_organic, g6_0_production.parallel_production, g6_5_sales_soe.sales_soe_supplier_verification]
       prints: "modules/G6_0.pdf §A"
-    gap: "Since 2026-11-06 three of CCOF's four boxes read straight off the plan: grow both (`split_operation` with its source: buffer-zone crop, parcels not certified, land in transition), grow identical (`parallel_production`), and sell both including sourced (`nonorganic_product_source` = bought in and resold). The fourth, sell IDENTICAL organic and non-organic including sourced, is asked only for what the operation grows; whether a bought-in non-organic product is identical to an organic one it sells is not asked. The earlier note that a buffer-row-only farm was pushed into a false Yes was wrong: § 205.2 defines a split operation as one that 'produces or handles both organic and nonorganic agricultural products', which a farm selling buffer crop as non-organic does."
-    fix: "Add a follow-up to the bought-in option: is any bought-in non-organic product the same crop as an organic one the operation sells."
+    # Closed 2026-11-18 by the record keeping leftovers slice: CCOF's fourth box is asked:
+    # bought_in_identical_to_organic, shown when bought-in non-organic product is a source, asks whether any of it is
+    # the same crop as an organic one the operation sells.
 
   - ref: C2
     asks: How do your input records distinguish between materials used on organic and nonorganic crops?

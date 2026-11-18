@@ -710,6 +710,18 @@ G5_0_PEST = Module(
                     nop_cite="§ 205.103",
                     compiles_to=CompileRule(template="Records kept of preventive pest management: {answer}"),
                 ),
+                # WSDA AGR 2121 H 4 (2026.12.21).
+                Question(
+                    key="disease_prevention_records",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Describe the records you keep of your preventive disease management.",
+                        "Describe los registros que llevas de tu manejo preventivo de enfermedades.",
+                    ),
+                    nop_cite="§ 205.103",
+                    compiles_to=CompileRule(template="Records kept of preventive disease management: {answer}"),
+                ),
             ),
         ),
         ModulePage(

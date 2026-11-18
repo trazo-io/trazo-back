@@ -46,3 +46,6 @@ questions:
     asks plastic mulch as a practice, not its material; superset.
   g5_0_pest.plastic_mulch_perennial_condition: >-
     Plastic mulch in a perennial planting (WSDA AGR 2121 F 5a). CCOF's G5.0 does not ask it.
+  g5_0_pest.disease_prevention_records: >-
+    Records kept of preventive disease management (WSDA AGR 2121 H 4); same reason as
+    `pest_prevention_records`.

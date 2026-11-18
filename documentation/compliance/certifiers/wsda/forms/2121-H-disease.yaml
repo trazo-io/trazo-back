@@ -45,10 +45,12 @@ items:
 
   - ref: "4"
     asks: "Describe the records you maintain regarding your preventative disease management practices."
-    status: not_covered
-    severity: P2
-    gap: "Same gap as F6/G5: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records. `monitoring_records` is not cited here on that axis — see F6."
-    fix: "Add `disease_prevention_records` [textarea]."
+    status: covered
+    trazo:
+      questions: [g5_0_pest.disease_prevention_records]
+      prints: "modules/G5_0.pdf §A"
+    # Closed 2026-11-18 by the record keeping leftovers slice: disease_prevention_records asks the records kept of the
+    # preventive disease practices themselves, apart from monitoring results.
   - ref: '5'
     asks: Do you apply copper sulfate or fixed coppers for plant disease control? Yes / No.
     status: covered

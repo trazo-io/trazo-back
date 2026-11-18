@@ -39,7 +39,8 @@ ATTESTATION = "records_retention_attestation"
 
 def _answer_activities(osp):
     """Answer every question that decides a required record type (`required_records.TRIGGERS`), so
-    the only requirement left is harvest records: this plan names who harvests, and nothing else.
+    the only requirements left are harvest and storage records: this plan names who harvests and where
+    crops are stored, and nothing else (storage since 2026-11-18, CCOF G8.0 A1).
 
     Since 2026-10-01 (OSP alignment audit T17-F1) one confirmed record no longer opens the gate on
     its own: every record type the plan's answers require must be confirmed, and an unanswered
@@ -56,7 +57,9 @@ def _answer_activities(osp):
     answer("g5_0_pest", applies_pest_weed_disease_inputs=False)
     answer("g6_1_harvest_transport", who_harvests=["own_crew"])
     answer("g4_1_compost_manure", materials_applied=["purchased_compost"])
-    answer("g6_2_storage", storage_shared_with_nonorganic=False)
+    answer("g6_2_storage", storage_shared_with_nonorganic=False, storage_locations=["on_farm_cold"])
+    answer("g8_0_record_keeping", sells_as_organic=False)
+    answer("g6_1_harvest_transport", who_transports=["buyer_pickup"])
     answer("g6_5_sales_soe", sales_soe_supplier_verification="no")
     # Planting stock too: since 2026.11.25 non-organic stock also opens commercial availability.
     answer("g3_0_seeds", seeds_used=["organic_untreated"], planting_stock_used=["organic"])
@@ -80,7 +83,7 @@ class AttestationGateRuleTests(TestCase):
         """Was "one confirmation unblocks it". A single confirmed record now opens the gate only
         when it is the one record the plan's answers require (audit T17-F1)."""
         _answer_activities(self.osp)
-        confirm(self.osp, ["harvest_records"], user=None)
+        confirm(self.osp, ["harvest_records", "storage_records"], user=None)
         self.osp.refresh_from_db()
         self.assertEqual(blocked_attestations(self.module, {ATTESTATION: True}, self.osp), {})
 
@@ -157,7 +160,7 @@ class AttestationGateAPITests(TestCase):
 
     def test_the_same_answer_is_accepted_once_the_required_records_are_confirmed(self):
         _answer_activities(self.osp)
-        confirm(self.osp, ["harvest_records", "planting_records"], user=self.user)
+        confirm(self.osp, ["harvest_records", "planting_records", "storage_records"], user=self.user)
         response = self._put({"answers": {ATTESTATION: True}})
         self.assertEqual(response.status_code, 200, response.data)
 

@@ -127,33 +127,13 @@ items:
   asks: If yes, provide the certification agency, certification no., operation name, site no., site name and
     certificate issue date, attach a copy of the previous grower's certificate, and have the previous manager
     complete and sign a Previous Land Use Declaration (AGR 2262).
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - parcel_application.prior_certifier_name
-    - parcel_application.certified_operation_name
-    - parcel_application.prior_certificate_site_number
-    - parcel_application.certificate_card
-    - parcel_application.certified_branch
-    - parcel_application.certificate_reference
-    - parcel_application.continuity_reference
+    questions: [parcel_application.prior_certifier_name, parcel_application.certified_operation_name, parcel_application.prior_certificate_site_number, parcel_application.prior_certificate_number, parcel_application.prior_certificate_issue_date, parcel_application.certificate_card, parcel_application.certified_branch, parcel_application.certificate_reference, parcel_application.continuity_reference]
     models:
     - certifications.models.Certification
     - certifications.services.parcel_land_history.certificate_line
-    prints: parcels/parcel-application-<name>.pdf §F — the certificate-of-record line when the site is stated
-      currently certified; certifier, certified operation name and the certificate's site number as answered
-  gap: 'Closed 2026-09-09 (fix/parcel-page-land-history): `currently_certified` is asked as the certifiers
-    ask it (no ''by another certifier''), is part of completion (`certification_status`), and gates a certificate-of-record
-    line on the parcel''s own page — number, issuing agent, effective and expiry dates from ONE record (`certificate_line`,
-    built on `operation_certificate`), never assembled field by field. Printing the record replaced the suggest→confirm
-    prefill this row asked for: a record printed beside the operator''s own answer is stronger evidence than
-    the same value typed back, and § 205.201(a) authorship is untouched because the operator still answers
-    the question. WSDA''s site number and the certified operation''s name now have fields (`prior_certificate_site_number`,
-    `certified_operation_name`). Remaining, and why this stays partial: for a site transferred from a PREVIOUS
-    grower, that grower''s certificate number and issue date are not captured — the certificate of record is
-    this operation''s — and the copy of the previous grower''s certificate plus the signed AGR 2262 are the
-    operator''s own paper attachments.'
+    prints: "parcels/parcel-application-<name>.pdf §F — the certificate-of-record line when the site is stated currently certified; certifier, certified operation name, site number, the certificate number and its issue date as answered"
   note: >-
     2026-10-01 (OSP alignment audit T21-F1): the parcel page follows WSDA's own route. An existing
     certified site of this operation prints that 2264 is filed for initial applications, new sites and
@@ -161,8 +141,9 @@ items:
     the previous grower's certificate copy (uploaded per parcel, shipped under parcels/certificates/, or
     referenced separately, or missing) and the AGR 2262 signed by the previous manager (a signed affidavit
     under parcels/affidavits/, or missing). Availability only; WSDA decides acceptance.
-  fix: Add `prior_certificate_number` and `prior_certificate_issue_date`, visible when `certified_operation_name`
-    names another operation; the certificate copy stays an attachment.
+  # Closed 2026-11-18 by the record keeping leftovers slice: prior_certificate_number and
+  # prior_certificate_issue_date, shown once the certified operation's name is answered, capture the previous grower's
+  # certificate number and issue date; the certificate copy and the signed AGR 2262 stay attachments.
 - ref: 6b
   asks: 'If currently or previously certified: are you applying for the entire area of the previously
     or currently certified site, or only a portion (the attached map must clearly illustrate the specific

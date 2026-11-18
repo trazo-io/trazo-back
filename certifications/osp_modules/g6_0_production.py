@@ -166,6 +166,28 @@ G6_0_PRODUCTION = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # CCOF G8.0 C1's fourth box, for bought-in product: sell IDENTICAL organic and non-organic, including
+                # sourced (2026.12.21).
+                Question(
+                    key="bought_in_identical_to_organic",
+                    kind="boolean",
+                    required=False,
+                    label=text(
+                        "Is any of the non-organic product you buy in the same crop or product as an organic one you "
+                        "sell?",
+                        "¿Algo del producto no orgánico que compras es el mismo cultivo o producto que uno orgánico "
+                        "que vendes?",
+                    ),
+                    nop_cite="§ 205.2",
+                    visible_when=(
+                        Condition(question="split_operation", op="truthy"),
+                        Condition(question="nonorganic_product_source", op="includes", value="bought_in_nonorganic"),
+                    ),
+                    compiles_to=CompileRule(
+                        template="Bought-in non-organic product identical to an organic one sold: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 Question(
                     key="split_operation_separation",
                     kind="textarea",
