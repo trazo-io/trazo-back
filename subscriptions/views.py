@@ -12,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 import requests
 import stripe
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -121,8 +121,16 @@ def _may_manage_billing_for(user, company):
     return WorksIn.objects.filter(user=user, company=company, role=WorksIn.COMPANY_ADMIN).exists()
 
 
-class SubscriptionViewSet(viewsets.ModelViewSet):
-    """API endpoint for managing subscriptions"""
+class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """API endpoint for managing subscriptions.
+
+    Read, plus the named actions below. Until 2026-11-18 this was a ModelViewSet, so a Company
+    Admin could PUT or PATCH their own row: `status` and the period fields were writable and
+    entitlement is computed from `status`, so a past-due company could mark itself active, or
+    DELETE the row outright (overall review 2026-11, OV-SEC-C07). Every legitimate change goes
+    through an action that validates it (`cancel`, `reactivate`, `change_plan`, `add_addon`) or
+    through Stripe's webhook; the app never called the generic writes.
+    """
 
     serializer_class = SubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -143,7 +151,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             "change_plan",
             "add_addon",
         ]
-        if self.action in write_actions or self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action in write_actions:
             return [permissions.IsAuthenticated(), IsCompanyAdminForSubscription()]
         return super().get_permissions()
 

@@ -1372,6 +1372,8 @@ jobs:
             subscriptions.tests.test_seeded_lineup \
             subscriptions.tests.test_storage_accounting \
             subscriptions.tests.test_subscription_events \
+            subscriptions.tests.test_subscription_rows_not_writable \
+            support.tests.test_ticket_staff_fields \
             users.tests.test_onboarding_email_claims \
             users.tests.test_invitation_sole_admin \
             carbon.tests.test_amendment_nitrogen_n2o \
