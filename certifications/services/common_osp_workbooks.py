@@ -710,10 +710,13 @@ def _material_comments(row, osp=None):
     review = getattr(plan, "agent_review", "") if plan is not None else ""
     # Neither USDA box fits a material no longer used, so the comment says it (2026-11-04).
     stopped = "No longer used." if getattr(plan, "status", "") == "discontinued" else ""
+    kind = _material_kind_words(row) if not _material_reason(row) else None
+    unstated = f"Reason for use not stated; the records log it as {kind[0].lower()}{kind[1:]}." if kind else ""
     parts = [
         p
         for p in (
             stopped,
+            unstated,
             f"{review[0].upper()}{review[1:]}." if review else "",
             _material_listing_note(row),
             getattr(row, "identity", ""),
@@ -1236,7 +1239,7 @@ def _agr_2196_purpose(row):
     """The operator's section on the materials list as AGR 2196's purpose word, else the reason the
     records imply. "Other" says nothing a reviewer can use, so it falls through."""
     category = getattr(row.plan, "category", "") if row.plan is not None else ""
-    return _AGR_2196_PURPOSE.get(category) or _material_reason(row)
+    return _AGR_2196_PURPOSE.get(category) or _material_reason(row) or _material_kind_words(row)
 
 
 def _agr_2196_restrictions(row, est):
@@ -1337,14 +1340,20 @@ def _material_manufacturer(row):
 
 
 def _material_reason(row):
-    """Why the material is used.
+    """Why the material is used, in the operator's own words, else None.
 
-    The operator's own words win. CCOF and WSDA both ask for a per-row reason and
-    `PlanMaterialEntry.reason_for_use` is where the operator writes it; the event subtype is a
-    fallback that says what KIND of product it is, which is a weaker answer to the same question.
+    CCOF and WSDA both ask for a per-row reason and `PlanMaterialEntry.reason_for_use` is where the
+    operator writes it. Until 2026-11-17 a row with none printed the record's kind ("Pest control") in
+    the reason column, where it read as the operator's answer and the blank was never counted
+    (CCOF ORGB41 §B). The kind now goes to the comments, labelled as the records' (`_material_kind_words`).
     """
-    if row.plan is not None and _blank(getattr(row.plan, "reason", None)):
-        return _blank(row.plan.reason)
+    if row.plan is not None:
+        return _blank(getattr(row.plan, "reason", None))
+    return None
+
+
+def _material_kind_words(row):
+    """What KIND of product the records log it as ("Pest control"): never a reason, a hint for one."""
     if row.kind == "amendment":
         return _amendment_words(getattr(row.event, "amendment_type", None)) or "Soil amendment"
     if row.kind == "chemical":
