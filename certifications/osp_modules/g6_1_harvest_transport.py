@@ -1143,6 +1143,23 @@ G6_1_HARVEST_TRANSPORT = Module(
                 ),
                 # WSDA AGR 2121 §J8 (§ 205.272(b)(2)): a tree fruit grower receiving non-dedicated
                 # wooden bins from a packer or processor.
+                # WSDA AGR 2121 J 7b: the documentation behind each safeguard, not only behind cleaning (2026.12.20).
+                Question(
+                    key="container_safeguard_documentation",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Describe the documentation that shows containers not stamped organic do not pose a risk of "
+                        "contamination.",
+                        "Describe la documentación que muestra que los contenedores sin sello orgánico no representan "
+                        "un riesgo de contaminación.",
+                    ),
+                    nop_cite="§ 205.272(b)",
+                    visible_when=(Condition("harvest_containers_stamped_organic", "one_of", ["some", "none"]),),
+                    compiles_to=CompileRule(
+                        template="Documentation that unstamped harvest containers pose no contamination risk: {answer}"
+                    ),
+                ),
                 Question(
                     key="receives_nondedicated_wood_bins",
                     kind="boolean",
@@ -1681,6 +1698,17 @@ G6_1_HARVEST_TRANSPORT = Module(
                     compiles_to=CompileRule(
                         template="Records provided by the uncertified operation handling this crop: {answer}"
                     ),
+                ),
+                # WSDA AGR 2121 J 14 (2026.12.20).
+                Question(
+                    key="harvest_additional_notes",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Anything else about your harvest and transport (optional)",
+                        "Cualquier otra información sobre tu cosecha y transporte (opcional)",
+                    ),
+                    compiles_to=CompileRule(template="Additional harvest information: {answer}"),
                 ),
             ),
         ),

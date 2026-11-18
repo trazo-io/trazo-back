@@ -542,6 +542,10 @@ jobs:
       # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
       # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
       #
+      # 2026-11-18: certifications.tests.test_post_harvest_leftovers joins. G6.4, G6.1 and G6.2 ask the post-harvest,
+      # harvest and storage leftovers (WSDA AGR 2121 J, K, L; CCOF G6.4 A2, A4, C1), and G6.4 prints where facility pest
+      # materials and packaging are answered. Builds its own farm.
+      #
       # 2026-11-18: certifications.tests.test_pest_weed_soil joins. G5.0 and G4.0 ask the pests faced, the kinds
       # managed, the burn target, the plastic mulch's material and perennial condition, the preventive records, and
       # the practices in lieu of rotation and erosion as CCOF, OTCO and WSDA list them. Builds its own farm.
@@ -1118,6 +1122,7 @@ jobs:
             certifications.tests.test_materials_application_rows \
             certifications.tests.test_direct_marketing \
             certifications.tests.test_pest_weed_soil \
+            certifications.tests.test_post_harvest_leftovers \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

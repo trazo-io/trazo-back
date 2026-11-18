@@ -45,16 +45,12 @@ items:
   # Closed 2026-11-07, with OTCO C7 7.1.
 - ref: A2
   asks: List, or attach a list of, all organic products handled here.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    questions:
-    - g6_4_handling.products_handled
-    prints: modules/G6_4.pdf §B (products_handled)
-  gap: One flat text field ("which crops and product forms are handled here") with no "or attach a list"
-    alternative for a high-SKU operation; functionally answered by the pilot ("fresh blueberries in 12×1pt
-    clamshell...") but would not scale to many SKUs.
-  fix: Add an optional list-upload alternative alongside the text field.
+    questions: [g6_4_handling.products_handled, g6_4_handling.products_list_upload]
+    prints: "modules/G6_4.pdf §B; the attached list rides in the packet"
+  # Closed 2026-11-18 by the post-harvest slice: products_list_upload takes the operator's own list beside the
+  # products_handled text, a supplement and never a substitute (an upload answers no required question).
 - ref: A3
   asks: Attach a complete written description or a schematic flow chart of where and how the product is
     received, processed, packaged, and stored. Identify ALL equipment, processes, pest control practices
@@ -73,16 +69,13 @@ items:
 - ref: A4
   asks: List any materials used for facility pest control at this post harvest handling location on your Grower
     Materials Application. None used.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g9_0_facility_pest.material_tier
-    prints: modules/G9_0.pdf §C (material_tier) — not on G6.4
-  gap: Answered once, on the Facility Pest Management module (`material_tier`), which prints in modules/G9_0.pdf.
-    Nothing on G6.4's own pages points there, the same discoverability gap as G6.2 B3-B9.
-  fix: Add a cross-reference on G6.4 to Facility Pest Management, or a packet heading on G9.0 naming the G6.4
-    question it answers.
+    questions: [g6_4_handling.facility_pest_pointer, g9_0_facility_pest.material_tier]
+    prints: "modules/G6_4.pdf §B, a line naming where G9.0 asks it and how far G9.0 is answered; modules/G9_0.pdf"
+  # Closed 2026-11-18 by the post-harvest slice: G6.4 now carries a line saying facility pest control materials are
+  # asked in Facility Pest Management (G9.0), with G9.0's state (answered, not applicable, or open), so a reviewer of
+  # CCOF's self-contained form finds it.
 - ref: B1
   asks: Do you use any equipment sanitizers, or any no-rinse equipment cleaners/detergents, on organic food
     contact surfaces? Neither one is used, skip to question B2 / Yes, list materials on your Grower Materials
@@ -156,15 +149,9 @@ items:
 - ref: C1
   asks: Are all packaging materials, including reused packaging, free of prohibited materials (e.g. fungicides,
     preservatives, fumigants)? Contact packaging manufacturer if you are unsure. Yes. Not applicable, no packaging.
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    questions:
-    - g6_1_harvest_transport.packaging_free_of_prohibited
-    - g6_1_harvest_transport.packaging_prohibited_detail
-    prints: modules/G6_1.pdf §B (packaging_free_of_prohibited) — not printed on G6.4
-  gap: Answered on G6.1 §B (packaging_free_of_prohibited), not re-asked on G6.4 itself — consistent with Trazo's
-    "ask once" design — but G6.4 carries no cross-reference pointing a reviewer of this self-contained CCOF
-    form to where the answer lives.
-  fix: 'Coaching note on G6.4 §C: "See G6.1 — Packaging free of prohibited substances." Same discoverability
-    class as the G9.0 finding on G6.2.'
+    questions: [g6_1_harvest_transport.packaging_free_of_prohibited, g6_1_harvest_transport.packaging_prohibited_detail, g6_4_handling.packaging_pointer]
+    prints: "modules/G6_4.pdf §C, a line naming G6.1 and printing G6.1's answer; modules/G6_1.pdf §B"
+  # Closed 2026-11-18 by the post-harvest slice: G6.4 now carries a line naming where packaging free of prohibited
+  # substances is asked (G6.1 §B) and prints G6.1's own answer there.

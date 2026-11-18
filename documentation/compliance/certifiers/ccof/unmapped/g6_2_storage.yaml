@@ -22,3 +22,5 @@ questions:
     forms do not ask it.
   g6_2_storage.inventory_frequency_other: >-
     The other frequency of `inventory_frequency`; same reason.
+  g6_2_storage.storage_additional_notes: >-
+    WSDA AGR 2121 K 4's optional space for the storage section.

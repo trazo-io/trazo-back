@@ -64,3 +64,11 @@ questions:
   g6_4_handling.facility_docs: >-
     A site map, process flow chart or handling SOPs, attached. Same reason as `process_flow`: cited on P 1
     until P 1 got its own SOP question and upload.
+  g6_4_handling.facility_pest_pointer: >-
+    A pointer to G9.0 printed for CCOF G6.4 A4; WSDA asks facility pest management in AGR 2121 §M, which
+    G9.0 answers directly.
+  g6_4_handling.packaging_pointer: >-
+    A pointer to G6.1's packaging answer printed for CCOF G6.4 C1; WSDA asks packaging in AGR 2121 §L 16-17,
+    answered directly.
+  g6_4_handling.products_list_upload: >-
+    CCOF G6.4 A2's 'or attach a list' of the products handled; WSDA AGR 2121 §L does not ask for one.

@@ -480,6 +480,31 @@ G6_4_HANDLING = Module(
                     nop_cite="§ 205.270",
                     compiles_to=CompileRule(template="Crops and product forms handled on-farm: {answer}."),
                 ),
+                # CCOF G6.4 A2: "list, or attach a list of" the products. A supplement to products_handled, never a
+                # substitute: an upload answers no required question (2026.12.20).
+                Question(
+                    key="products_list_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "You can also attach your own list of the organic products handled here.",
+                        "También puedes adjuntar tu propia lista de los productos orgánicos que se manejan aquí.",
+                    ),
+                ),
+                # CCOF G6.4 A4: facility pest control materials are asked once, in G9.0; the PDF says where and how far
+                # G9.0 is answered (2026.12.20).
+                Question(
+                    key="facility_pest_pointer",
+                    kind="info",
+                    required=False,
+                    embed="facility_pest_pointer",
+                    label=text(
+                        "Materials used for facility pest control at this location are answered in Facility Pest "
+                        "Management (G9.0) and listed on the materials list.",
+                        "Los materiales usados para el control de plagas de instalaciones en este lugar se responden en "
+                        "Manejo de plagas en instalaciones (G9.0) y se listan en la lista de materiales.",
+                    ),
+                ),
                 Question(
                     key="own_products_only",
                     kind="radio",
@@ -698,6 +723,20 @@ G6_4_HANDLING = Module(
                         template="Other food-contact cleaning method: {answer}.",
                         section_key="commingling_barriers",
                     ),
+                ),
+                # WSDA AGR 2121 L 4: "equipment purge amounts and procedures attached" (2026.12.20).
+                Question(
+                    key="purge_procedure_upload",
+                    kind="upload",
+                    required=False,
+                    label=text(
+                        "Attach your equipment purge procedures, with how you set purge amounts for the equipment's "
+                        "capacity.",
+                        "Adjunta tus procedimientos de purga del equipo, con cómo defines las cantidades de purga según "
+                        "la capacidad del equipo.",
+                    ),
+                    visible_when=(Condition("food_contact_cleaning_methods", "includes", "purging"),),
+                    nop_cite="§ 205.272(a)",
                 ),
                 Question(
                     key="uses_equipment_sanitizer_or_cleaner",
@@ -1319,6 +1358,26 @@ G6_4_HANDLING = Module(
                 ),
                 # OTCO C7 7.4-1 and WSDA AGR 2121 L 6: the yes/no the separation list below answered only by
                 # implication (2026.11.30).
+                # WSDA AGR 2121 L 15a (2026.12.20).
+                Question(
+                    key="chlorine_rinse_monitoring",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do you check that the rinse brings chlorine on the crop to or below the Safe Drinking Water "
+                        "Act limit? Say the test, where in the process you test, how often, and how the results are "
+                        "recorded.",
+                        "¿Cómo verificas que el enjuague deja el cloro en el cultivo en o por debajo del límite de la Ley "
+                        "de Agua Potable Segura? Indica la prueba, en qué punto del proceso la haces, con qué frecuencia "
+                        "y cómo registras los resultados.",
+                    ),
+                    nop_cite="§ 205.605(b)",
+                    visible_when=(Condition("wash_water_chlorine_final_rinse", "eq", "chlorine_at_or_below_sdwa"),),
+                    compiles_to=CompileRule(
+                        template="How the rinse is checked for chlorine at or below the SDWA limit: {answer}",
+                        section_key="commingling_barriers",
+                    ),
+                ),
                 Question(
                     key="shares_handling_area_or_equipment",
                     kind="boolean",
@@ -1332,6 +1391,47 @@ G6_4_HANDLING = Module(
                     nop_cite="§ 205.272(a)",
                     compiles_to=CompileRule(
                         template="Handling area or equipment shared by organic and non-organic crops: {answer}.",
+                        section_key="commingling_barriers",
+                    ),
+                ),
+                # WSDA AGR 2121 L 6a (2026.12.20).
+                Question(
+                    key="cleaning_differs_by_status",
+                    kind="radio",
+                    required=False,
+                    label=text(
+                        "Do the cleaning or purging materials and procedures differ before handling non-certified crops?",
+                        "¿Difieren los materiales y procedimientos de limpieza o purga antes de manejar cultivos no "
+                        "certificados?",
+                    ),
+                    nop_cite="§ 205.272(a)",
+                    visible_when=(Condition("shares_handling_area_or_equipment", "truthy"),),
+                    compiles_to=CompileRule(
+                        template="Cleaning before non-certified crops: {answer}.", section_key="commingling_barriers"
+                    ),
+                    options=(
+                        Option(
+                            "same",
+                            text(
+                                "The same cleaning materials and procedures are used regardless of organic status",
+                                "Se usan los mismos materiales y procedimientos de limpieza sin importar el estado "
+                                "orgánico",
+                            ),
+                        ),
+                        Option("differs", text("They differ (describe below)", "Difieren (describe abajo)")),
+                    ),
+                ),
+                Question(
+                    key="cleaning_differences_detail",
+                    kind="textarea",
+                    label=text(
+                        "Describe the differences in chemicals or procedures used before handling non-certified crops.",
+                        "Describe las diferencias en químicos o procedimientos usados antes de manejar cultivos no "
+                        "certificados.",
+                    ),
+                    visible_when=(Condition("cleaning_differs_by_status", "eq", "differs"),),
+                    compiles_to=CompileRule(
+                        template="Differences in cleaning before non-certified crops: {answer}",
                         section_key="commingling_barriers",
                     ),
                 ),
@@ -1549,6 +1649,20 @@ G6_4_HANDLING = Module(
                         section_key="commingling_barriers",
                     ),
                 ),
+                # CCOF G6.4 C1: packaging free of prohibited substances is asked once, in G6.1; the PDF says where
+                # and prints that answer (2026.12.20).
+                Question(
+                    key="packaging_pointer",
+                    kind="info",
+                    required=False,
+                    embed="packaging_pointer",
+                    label=text(
+                        "Whether all packaging, reused packaging included, is free of prohibited substances is answered "
+                        "in Harvest & Transport (G6.1).",
+                        "Si todo el empaque, incluido el reutilizado, está libre de sustancias prohibidas se responde en "
+                        "Cosecha y transporte (G6.1).",
+                    ),
+                ),
             ),
         ),
         ModulePage(
@@ -1611,6 +1725,22 @@ G6_4_HANDLING = Module(
                         ),
                     ),
                 ),
+                # WSDA AGR 2121 L 7, the second half (2026.12.20).
+                Question(
+                    key="handling_records_linkage",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "How do the cleaning and purge records tie back to the production or lot records they cover?",
+                        "¿Cómo se vinculan los registros de limpieza y purga con los registros de producción o de lote "
+                        "que cubren?",
+                    ),
+                    nop_cite="§ 205.103(b)(2)",
+                    compiles_to=CompileRule(
+                        template="How the cleaning and purge records link to production records: {answer}",
+                        section_key="recordkeeping_description",
+                    ),
+                ),
                 Question(
                     key="facility_docs",
                     kind="upload",
@@ -1631,6 +1761,17 @@ G6_4_HANDLING = Module(
                         "del proceso responden cada uno la solicitud de diagrama o descripción.",
                     ),
                     nop_cite="§ 205.103",
+                ),
+                # WSDA AGR 2121 L 18 (2026.12.20).
+                Question(
+                    key="handling_additional_notes",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Anything else about your post-harvest handling (optional)",
+                        "Cualquier otra información sobre tu manejo poscosecha (opcional)",
+                    ),
+                    compiles_to=CompileRule(template="Additional post-harvest handling information: {answer}"),
                 ),
             ),
         ),

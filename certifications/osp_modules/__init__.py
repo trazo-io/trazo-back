@@ -406,7 +406,12 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   preventive pest and weed management (G 5, F 6), with notes (F 7). G4.0 adds OTCO C4 4.2-2's practices in lieu of
 #   rotation, a description for perennial or container crops and site-specific notes (CCOF G4.0 A1b, A1c), and splits
 #   contour farming from terraces, with bare ground and other (CCOF C1, OTCO 4.1-2); the merged option is retired.
-CONTENT_VERSION = "2026.12.19"
+# 2026.12.20: post-harvest, storage and harvest leftovers. G6.4 asks how cleaning differs before non-certified crops (WSDA
+#   AGR 2121 L 6a), how the chlorine rinse is checked (L 15a), how cleaning and purge records link to production records
+#   (L 7), takes the equipment purge procedures (L 4), the product list (CCOF G6.4 A2) and notes (L 18), and points to
+#   G9.0 and G6.1 for facility pest materials and packaging (CCOF G6.4 A4, C1). G6.1 asks the documentation behind
+#   unstamped containers (J 7b) and notes (J 14); G6.2 notes (K 4). All optional.
+CONTENT_VERSION = "2026.12.20"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

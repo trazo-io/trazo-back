@@ -85,19 +85,12 @@ items:
     air / Manual washing / Purging of equipment / Sanitizing / Scraping / Soap and water / Sweeping /
     Vacuuming / Steam cleaning / Other. (Purge: submit documentation on procedures and how purge quantities
     are adequate.)'
-  status: partial
-  severity: P3
+  status: covered
   trazo:
-    questions:
-    - g6_4_handling.uses_water
-    - g6_4_handling.water_source_sanitizer
-    - g6_4_handling.food_contact_cleaning_methods
-    - g6_4_handling.food_contact_cleaning_methods_other
-    prints: modules/G6_4.pdf §C (food_contact_cleaning_methods with its other text)
-  gap: 'The method checklist is WSDA''s own ten options plus an exclusive ''no cleaning step'', asked of every
-    handler since 2026-09-12. What remains is the parenthetical: a purge is described in the process flow rather
-    than attached as its own procedure document with the purge quantities.'
-  fix: A purge-procedure upload beside `facility_docs`, carried through the packet's attachment loop.
+    questions: [g6_4_handling.uses_water, g6_4_handling.water_source_sanitizer, g6_4_handling.food_contact_cleaning_methods, g6_4_handling.food_contact_cleaning_methods_other, g6_4_handling.purge_procedure_upload]
+    prints: "modules/G6_4.pdf §C; the purge procedures ride in the packet"
+  # Closed 2026-11-18 by the post-harvest slice: purge_procedure_upload, shown when purging is a cleaning method,
+  # takes the purge procedures and how purge amounts are set for the equipment's capacity.
 - ref: '5'
   asks: Do you use any residual sanitizers (e.g. quaternary ammonium) on surfaces or equipment that come in
     direct contact with organic products?
@@ -150,29 +143,21 @@ items:
   asks: 'If yes, describe the differences in chemicals or procedures used to clean or purge equipment
     prior to handling non-certified crops. (N/A option: the same cleaning materials and procedures are
     used regardless of organic status.)'
-  status: not_covered
-  severity: P2
+  status: covered
   trazo:
-    prints: —
-  gap: Companion detail to item 6 — no field exists distinguishing cleaning chemistry/procedure by organic
-    status.
-  fix: textarea visible when item 6's boolean is true, with an explicit 'same procedure regardless of
-    status' shortcut option.
+    questions: [g6_4_handling.shares_handling_area_or_equipment, g6_4_handling.cleaning_differs_by_status, g6_4_handling.cleaning_differences_detail]
+    prints: "modules/G6_4.pdf §C"
+  # Closed 2026-11-18 by the post-harvest slice: for shared equipment, cleaning_differs_by_status offers the form's
+  # 'same materials and procedures regardless of organic status' or 'they differ', with the differences described.
 - ref: '7'
   asks: Identify the records used to document equipment is cleaned or purged prior to organic handling
     and how these records link or correlate to production records.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    prints: modules/G6_4.pdf §D (handling_records)
-    questions:
-    - g6_4_handling.handling_records
-  gap: handling_records lists which record TYPES are kept (run logs, cleanout logs, drying-temp logs,
-    packout tickets, treatment records), which answers the first half of item 7, but nothing asks how
-    those records link or correlate back to production records — the traceability half of the question
-    is uncaptured.
-  fix: Add a `handling_records_linkage` [textarea] describing how handling records tie back to the production/lot
-    record they document.
+    questions: [g6_4_handling.handling_records, g6_4_handling.handling_records_linkage]
+    prints: "modules/G6_4.pdf §D"
+  # Closed 2026-11-18 by the post-harvest slice: handling_records_linkage asks the second half, how the cleaning and
+  # purge records link to the production or lot records.
 - ref: '8'
   asks: Does your business apply any inputs directly to any crops after harvest? Consider all inputs applied
     to certified or non-certified crops.
@@ -289,17 +274,12 @@ items:
     crop below Safe Drinking Water Act (SDWA) standards of 4 ppm Cl2 or 0.8 ppm ClO2? Include what tests
     you use, where in the process you test the rinse, how often you conduct tests, and how you document
     results. (N/A option: chlorine is never used above SDWA levels.)'
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g6_4_handling.wash_water_chlorine_final_rinse
-    - g6_4_handling.wash_water_chlorine_final_rinse_other
-    prints: modules/G6_4.pdf §C (wash_water_chlorine_final_rinse)
-  gap: The final-rinse radio states the practice at the last point of product contact (water only / chlorine
-    at or below the SDWA limit, checked with a test / other) since 2026-09-12. WSDA asks HOW the rinse step is
-    monitored — the test, its frequency, where readings go — which only the 'other' text can carry in prose.
-  fix: A `chlorine_rinse_monitoring` [textarea] visible when the radio is chlorine_at_or_below_sdwa.
+    questions: [g6_4_handling.wash_water_chlorine_final_rinse, g6_4_handling.wash_water_chlorine_final_rinse_other, g6_4_handling.chlorine_rinse_monitoring]
+    prints: "modules/G6_4.pdf §C"
+  # Closed 2026-11-18 by the post-harvest slice: chlorine_rinse_monitoring, shown for a chlorine rinse at or below the
+  # SDWA limit, asks the test, where, how often and how results are recorded.
 - ref: '16'
   asks: 'What material are packages or containers made of? Check all that apply: Plastic / Metal / Cloth
     / Wood / Cardboard / Other.'
@@ -327,11 +307,10 @@ items:
   note: "Closed 2026-11-09 (content 2026.11.28)."
 - ref: '18'
   asks: Optional space for additional information.
-  status: not_covered
-  severity: P3
+  status: covered
   optional: true
   trazo:
-    prints: —
-  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
-    wants to say here has a place; WSDA does not require it.
-  fix: Add an optional additional-notes textarea to the post-harvest handling module.
+    questions: [g6_4_handling.handling_additional_notes]
+    prints: "modules/G6_4.pdf §D"
+  # Closed 2026-11-18 by the post-harvest slice: an optional notes field for the section, as the form's own optional
+  # space.

@@ -24,3 +24,5 @@ questions:
     Lot identity through storage. It stood in for organic status on OTCO C12 12.2-5a until that row got
     its own question, `g8_0_record_keeping.records_identify_organic_status`, on 2026-11-15; no other OTCO
     row asks lot identity in storage.
+  g6_2_storage.storage_additional_notes: >-
+    WSDA AGR 2121 K 4's optional space for the storage section.
