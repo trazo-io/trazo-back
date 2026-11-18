@@ -7754,18 +7754,21 @@ class AuditExportService:
                 wt_data = [[self._hdr(h) for h in ["Date", "Laboratory", "Results", "Block"]]]
                 # One row per TEST, not per irrigation record: a test copied onto three records
                 # ("Log this again" carries it) printed three identical rows (recordkeeping
-                # checklist run 2026-11-16, VID-12). Same date, lab and results is one test; the
-                # blocks it was recorded against are listed together.
+                # checklist run 2026-11-16, VID-12). Same water source, date, lab and results is
+                # one test (a well and a canal sampled the same day stay two rows); the blocks it
+                # was recorded against are listed together, a record with no block as "not
+                # stated" so it does not vanish from the row.
                 tests: dict = {}
                 for ev in water_test_events:
                     key = (
+                        (ev.water_source or "").strip(),
                         ev.water_test_date,
                         (ev.water_test_lab or "").strip(),
                         repr(ev.water_test_results),
                     )
                     _first, blocks = tests.setdefault(key, (ev, []))
-                    block = (ev.block_id or "").strip()
-                    if block and block not in blocks:
+                    block = (ev.block_id or "").strip() or "not stated"
+                    if block not in blocks:
                         blocks.append(block)
                 for ev, blocks in tests.values():
                     results = ev.water_test_results if isinstance(ev.water_test_results, list) else []
@@ -7788,7 +7791,7 @@ class AuditExportService:
                             self._cell(_fmt_date(ev.water_test_date) if ev.water_test_date else None),
                             self._cell(ev.water_test_lab),
                             self._cell("; ".join(parts) or None),
-                            self._cell(", ".join(blocks) or None),
+                            self._cell(None if blocks == ["not stated"] else ", ".join(blocks)),
                         ]
                     )
                 wt_table = Table(wt_data, colWidths=[0.8 * inch, 1.6 * inch, 3.6 * inch, 0.6 * inch], repeatRows=1)
@@ -9497,7 +9500,7 @@ class AuditExportService:
                         self._cell(SOIL_TYPE_LABELS.get(ev.type, _val(ev.type))),
                         self._cell(depth_disp),
                         # The label, not the stored slug: the table printed "silt_loam" (VID-12).
-                        self._cell(ev.get_soil_texture_display() if ev.soil_texture else None),
+                        self._cell(_choice_label(ev, "soil_texture") if ev.soil_texture else None),
                     ]
                 )
             cond_widths = [0.85 * inch, 1.3 * inch, 1.3 * inch, 1.8 * inch]

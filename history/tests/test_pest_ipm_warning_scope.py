@@ -35,7 +35,7 @@ def _text(elements):
     return " ".join(out)
 
 
-class PestIpmWarningScopeTests(TestCase):
+class _PestFixture(TestCase):
     def setUp(self):
         company = Company.objects.create(name="IPM Co")
         est = Establishment.objects.create(name="IPM Farm", company=company)
@@ -75,6 +75,8 @@ class PestIpmWarningScopeTests(TestCase):
     def _pest_text(self):
         return _text(AuditExportService(self.history, certification_type="organic")._build_pest_section())
 
+
+class PestIpmWarningScopeTests(_PestFixture):
     def test_monitoring_records_alone_raise_no_warning(self):
         for code in ("SC", "TM", "PI", "TA"):
             self._add(code)
@@ -92,7 +94,7 @@ class PestIpmWarningScopeTests(TestCase):
         self.assertNotIn("missing IPM strategy", self._pest_text())
 
 
-class LongStrategyPrintedOnceTests(PestIpmWarningScopeTests):
+class LongStrategyPrintedOnceTests(_PestFixture):
     """VID-12 (recordkeeping checklist run 2026-11-16): the ~800-character IPM programme sat in the
     IPM Strategy cell of every scouting and trap row and was most of a 449-page dossier. A long
     strategy recorded word for word on several records is printed once below the table, with the
