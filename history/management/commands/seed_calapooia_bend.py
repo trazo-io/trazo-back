@@ -589,6 +589,16 @@ class Command(BaseCommand):
             )
         return obj
 
+    def _resolve_omri(self, ref):
+        OMRI = apps.get_model("certifications", "OMRIProduct")
+        obj = OMRI.objects.filter(product_name=ref["product_name"]).first()
+        if obj is None:
+            raise CommandError(
+                f"OMRIProduct {ref['product_name']!r} missing: an application names a listing the fixture's "
+                "approved_input_rows does not create."
+            )
+        return obj
+
     def _resolve_substance(self, ref):
         NLS = apps.get_model("certifications", "NationalListSubstance")
         obj = NLS.objects.filter(substance_name=ref["substance_name"]).first()
@@ -771,6 +781,12 @@ class Command(BaseCommand):
                     kwargs = dict(history=history, created_by=owner, **fields)
                     if "@national_list_substance" in row:
                         kwargs["national_list_substance"] = self._resolve_substance(row["@national_list_substance"])
+                    if "@omri_product" in row:
+                        # The listing the grower attached when logging the application, the row the
+                        # plan names (created in `_osp_graph`). Without it every application of an
+                        # OMRI product printed "OMRI Listed, grower-selected, no listing on file"
+                        # beside a plan citing the OMRI number (VID-11, 2026-11-16).
+                        kwargs["omri_product"] = self._resolve_omri(row["@omri_product"])
                     obj = self._stamp(Model.objects.create(**kwargs), row)
                     created[(model_name, row["_id"])] = obj
                     if "#equipment_cleaning_event" in row:

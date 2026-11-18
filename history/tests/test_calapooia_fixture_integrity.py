@@ -319,6 +319,62 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         for real in ("Oregon Tilth", "OTCO", "Organically Grown Company", "Willamette Valley Fruit"):
             self.assertNotIn(real, cleaned, f"{real!r} survives the substitution")
 
+    def _applications(self):
+        for season in self.data["seasons"]:
+            for model in ("ChemicalEvent", "SoilManagementEvent"):
+                yield from season["events"].get(model, [])
+
+    def _plan_basis(self):
+        """Product name -> the listing basis the plan files it under, and the OMRI row it names."""
+        return {
+            e["product_name"]: (e.get("listing_basis"), (e.get("@omri_product") or None))
+            for e in self.data["plan_material_entries"]
+        }
+
+    def test_an_application_carries_the_omri_listing_its_plan_names(self):
+        """VID-11 (recordkeeping checklist run 2026-11-16): the dossier's plan pages cited the
+        OMRI number of Neptune's Harvest and five other products, while every application row said
+        "OMRI Listed, grower-selected, no listing on file". The row was right about the record: the
+        seeded applications never carried the listing a grower attaches when logging one. They do
+        now, the row the plan names, matched by the fixture's exact product name."""
+        plan = self._plan_basis()
+        omri = set(self.data["approved_input_rows"]["OMRIProduct"])
+        checked = 0
+        for row in self._applications():
+            name = row.get("commercial_name")
+            if name in omri and row.get("organic_approved") == "omri_listed":
+                checked += 1
+                self.assertEqual((row.get("@omri_product") or {}).get("product_name"), name, name)
+                self.assertEqual(plan[name][0], "omri", name)
+        self.assertGreater(checked, 50, "no OMRI application read")
+
+    def test_no_application_claims_a_listing_its_plan_says_it_does_not_have(self):
+        """Rex Lime Sulfur, Rexius compost and Tiger 90CR sulfur sit on the plan as a National List
+        substance or an unlisted material, and their applications said "OMRI Listed" with no
+        listing anywhere. On the record they are now what the approved plan makes them: reviewed
+        and approved by the certifier."""
+        plan = self._plan_basis()
+        read = 0
+        for row in self._applications():
+            name = row.get("commercial_name") or row.get("amendment_product_name") or ""
+            basis = row.get("organic_approved") or row.get("amendment_organic_approved")
+            entry = next((v for k, v in plan.items() if name and (name == k or name.startswith(k))), None)
+            if entry is None or not basis:
+                continue
+            read += 1
+            if entry[0] in ("national_list", "none_unlisted"):
+                self.assertNotEqual(basis, "omri_listed", name)
+        self.assertGreater(read, 50, "no planned application read")
+
+    def test_every_national_list_link_says_how_it_was_set(self):
+        """A National List link with no basis prints "recorded before Trazo kept how it was matched;
+        not verified": a false history for records written in 2026 (the seeder writes rows directly,
+        never through the form that records the basis)."""
+        linked = [r for r in self._applications() if "@national_list_substance" in r]
+        self.assertTrue(linked, "no National List link read")
+        for row in linked:
+            self.assertEqual(row.get("national_list_basis"), "operator", row.get("commercial_name"))
+
     def test_no_certificate_is_issued_by_a_real_programme_the_substitution_cannot_rename(self):
         """Recordkeeping checklist run 2026-11-16, VID-15: the substitution renamed the Real Organic
         Project's certifier to "Living Soil Standard", but the row kept
