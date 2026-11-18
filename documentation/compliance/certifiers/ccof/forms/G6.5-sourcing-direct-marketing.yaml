@@ -19,24 +19,15 @@ items:
       AND/OR sell organic products directly to consumers — a pure grow-and-wholesale operation need not file
       this form at all, and the form itself supports terminal "No"/"N/A, stop, this form is complete" answers
       at A1 and B1.
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g6_5_sales_soe.sales_soe_channels
-      - g6_5_sales_soe.sales_soe_supplier_verification
-      - g6_5_sales_soe.sales_soe_lot_linkage
-      - g6_5_sales_soe.sales_soe_upload
-      prints: modules/G6_5.pdf §A
-    gap: g6_5_sales_soe has allows_not_applicable=False and three required questions (sales_soe_channels, sales_soe_supplier_verification,
-      sales_soe_lot_linkage) with no module-level escape. CCOF's own trigger means a pure-wholesale, grow-only
-      farm need not file G6.5 at all. But two of the three required questions (sales channels; sale-to-lot linkage)
-      encode universal §205.103(b)(2) traceability facts that apply regardless of sales channel, so a blanket
-      module-level N/A would discard real value.
-    fix: 'A targeted fix rather than one N/A checkbox: keep sales_soe_channels and sales_soe_lot_linkage required
-      as baseline traceability facts that always apply; gate only the supplier-verification-adjacent content
-      on an actual sourcing/direct-marketing answer; reframe the module''s self-description so it reads as "baseline
-      traceability, always" plus "sourcing/direct-marketing, if applicable."'
+      questions: [g6_5_sales_soe.sales_soe_channels, g6_5_sales_soe.sales_soe_supplier_verification, g6_5_sales_soe.direct_sales, g6_5_sales_soe.sales_soe_lot_linkage, g6_5_sales_soe.sales_soe_upload]
+      prints: "modules/G6_5.pdf §A (sourcing) and §B (direct sales)"
+    # Closed 2026-11-17 by the direct marketing slice: the two facts CCOF files G6.5 on are each asked: whether the
+    # operation buys or resells another's organic product (sales_soe_supplier_verification, which gates the supplier
+    # verification questions) and, new, whether it sells directly to consumers (direct_sales). Sales channels and
+    # sale-to-lot linkage stay asked of everyone as baseline traceability (section 205.103(b)(2)), as the register's
+    # own fix said.
 
   - ref: "A1"
     asks: 'Do you source organic crops/products from other operations? No, skip to B. Yes — complete a table or attach a list: Crop/Product Category / Crop/Product Detail (if any) / Supplier. If any suppliers are uncertified (e.g. brokers/distributors), list both the uncertified supplier and the certified operation they source from in the Supplier column, and attach an Exempt Handler Affidavit (EHA) completed by the uncertified supplier.'
@@ -81,49 +72,44 @@ items:
   - ref: B1
     asks: 'Describe all direct marketing venues below or attach a list. Include CSAs, farm stands, Farmers''
       Markets, U-Pick, and online sales. Not applicable, no sales directly to consumers: stop, this form is complete.'
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g6_5_sales_soe.sales_soe_channels
-      prints: modules/G6_5.pdf §A (sales_soe_channels)
-    gap: '`sales_soe_channels` is free text: an operation can name its direct venues there, but nothing asks
-      for them as a list and nothing records the ''no direct sales'' answer that ends this form.'
-    fix: Add a structured direct-sales question to g6_5_sales_soe (no direct sales / venues) and the venue rows
-      behind it.
+      questions: [g6_5_sales_soe.direct_sales, g6_5_sales_soe.direct_sales_venues, g6_5_sales_soe.direct_sales_venue_list_upload]
+      prints: "modules/G6_5.pdf §B; a No is CCOF's 'not applicable, no sales directly to consumers'"
+    # Closed 2026-11-17 by the direct marketing slice: direct_sales is CCOF's yes or not applicable, and
+    # direct_sales_venues lists the venues in the form's kinds (farmers' markets, CSA, farm stand, u-pick, online,
+    # other); an operator's own list can be attached as well.
   - ref: B1a
     asks: 'Farmers'' Markets — not applicable, no sales at farmers'' markets. Table: Name of market and/or Farmers''
       Market organization / Market Address / Day(s) / Do you sell non-organic products at this market?'
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: Applies to an operation that sells direct to consumers. `sales_soe_channels` is free text, so nothing
-      structured says whether direct sales happen, and the venue and signage questions have no home.
-    fix: Add a structured direct-sales question to g6_5_sales_soe and the venue and signage questions behind
-      it.
+      questions: [g6_5_sales_soe.direct_sales_venues, g6_5_sales_soe.farmers_markets_detail]
+      prints: "modules/G6_5.pdf §B"
+    # Closed 2026-11-17 by the direct marketing slice: shown when farmers' markets are among the venues, one market
+    # per line in the form's columns: the market or its organization, its address, the days, and whether non-organic
+    # products are sold there. Not ticking farmers' markets is the form's 'not applicable, no sales at farmers'
+    # markets'.
   - ref: B1b
     asks: 'Other direct marketing venues (CSA, farm stand, u-pick, online/website sales, etc.) — not applicable,
       none of these. Table: Type / Address or Website (for online sales) / Do you sell non-organic products at
       this venue?'
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: Applies to an operation that sells direct to consumers. `sales_soe_channels` is free text, so nothing
-      structured says whether direct sales happen, and the venue and signage questions have no home.
-    fix: Add a structured direct-sales question to g6_5_sales_soe and the venue and signage questions behind
-      it.
+      questions: [g6_5_sales_soe.direct_sales_venues, g6_5_sales_soe.other_venues_detail]
+      prints: "modules/G6_5.pdf §B"
+    # Closed 2026-11-17 by the direct marketing slice: shown for CSA, farm stand, u-pick, online or other venues, one
+    # per line in the form's columns: type, address or website, and whether non-organic products are sold there.
   - ref: C1
     asks: How do you differentiate organic and non-organic products to consumers? Not applicable, I only sell
       certified organic products. Twist ties/stickers/rubber bands; newsletter/delivery list (attach sample);
       description on website (attach sample); clear "organic" and "nonorganic" signage (attach photo); separate
       sales areas for organic and nonorganic (describe).
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: Applies to an operation that sells direct to consumers. `sales_soe_channels` is free text, so nothing
-      structured says whether direct sales happen, and the venue and signage questions have no home.
-    fix: Add a structured direct-sales question to g6_5_sales_soe and the venue and signage questions behind
-      it.
+      questions: [g6_5_sales_soe.direct_sales_nonorganic, g6_5_sales_soe.direct_sales_differentiation, g6_5_sales_soe.direct_sales_separate_areas_detail, g6_5_sales_soe.direct_sales_differentiation_other, g6_5_sales_soe.direct_sales_samples_upload]
+      prints: "modules/G6_5.pdf §C, with a [REVIEW] line for a sample or photo option chosen with nothing attached"
+    # Closed 2026-11-17 by the direct marketing slice: 'only certified organic products' is the form's not applicable;
+    # otherwise the form's five ways, plus other, with the separate sales areas described. The newsletter, website and
+    # signage options name the samples upload (Option.requires_upload), so one chosen with no file prints a [REVIEW]
+    # line.

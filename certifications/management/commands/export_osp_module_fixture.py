@@ -304,6 +304,18 @@ GOLDEN_ANSWER_CASES = {
         "no_nonretail_containers": {"nonretail_container_types": ["none"]},
         "no_identifier": {"container_lot_identifier_types": ["no_identifier"]},
     },
+    "g6_5_sales_soe": {
+        # Direct marketing (2026.12.18): venues open their lists; signage only when non-organic is sold too.
+        "no_direct_sales": {"direct_sales": "no"},
+        "markets_and_stand": {
+            "direct_sales": "yes",
+            "direct_sales_venues": ["farmers_market", "farm_stand"],
+            "direct_sales_nonorganic": "also_nonorganic",
+            "direct_sales_differentiation": ["separate_areas", "other"],
+        },
+        "only_organic": {"direct_sales": "yes", "direct_sales_nonorganic": "only_organic"},
+        "stale_venues_after_no": {"direct_sales": "no", "direct_sales_venues": ["online"]},
+    },
     "g8_0_record_keeping": {
         "unanswered": {},
         "own_lot_system": {"lot_numbering": "own_system"},
