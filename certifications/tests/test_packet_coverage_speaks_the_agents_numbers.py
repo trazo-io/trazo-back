@@ -285,15 +285,21 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
         self.assertNotIn("CCOF", text)
 
     def test_the_codes_the_page_names_are_the_ones_on_the_files(self):
-        """OV-PK-F05. The codes the page quotes come from the same modules the ZIP names its files by."""
+        """OV-PK-F05. The page quotes each code as the heading writes it and as the file name below
+        writes it (review of PR 485: a file name has "_" for ".", so "G2.0" alone matched no file)."""
         from certifications.osp_modules import MODULES_BY_KEY
         from certifications.services.packet_coverage import _module_location, _packet_module_keys
 
         text = self._coverage_text("Organic Certifiers, Inc.")
         coded = [MODULES_BY_KEY[k] for k in _packet_module_keys() if k in MODULES_BY_KEY and MODULES_BY_KEY[k].code]
         self.assertGreaterEqual(len(coded), 2)
-        self.assertIn(f"({coded[0].code}, {coded[1].code} and so on)", text)
-        self.assertIn(coded[0].code.replace(".", "_"), _module_location(coded[0].key))
+        a, b = coded[0], coded[1]
+        stem_a, stem_b = a.code.replace(".", "_"), b.code.replace(".", "_")
+        self.assertIn(f"({a.code}, {b.code} and so on), written {stem_a}, {stem_b} in the file names below", text)
+        # Each quoted file spelling is a file the same page lists.
+        for module, stem in ((a, stem_a), (b, stem_b)):
+            self.assertEqual(_module_location(module.key), f"modules/{stem}.pdf")
+            self.assertIn(f"modules/{stem}.pdf", text)
 
 
 class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):
