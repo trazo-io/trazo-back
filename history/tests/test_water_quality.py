@@ -81,6 +81,39 @@ class WaterQualityExportTests(TestCase):
         self.assertIn("Nitrate", text)
         self.assertNotIn("[REVIEW]", text)
 
+    def test_one_test_copied_onto_several_records_prints_once_with_its_blocks(self):
+        """VID-12 (recordkeeping checklist run 2026-11-16): one water test carried onto three
+        irrigation records printed three identical rows."""
+        test = dict(
+            water_test_date=timezone.now().date(),
+            water_test_lab="BlueWater Labs",
+            water_test_results=[{"parameter": "Nitrate", "value": "2.1", "unit": "mg/L", "result": "Pass"}],
+        )
+        self._ir(block_id="Block N", **test)
+        self._ir(block_id="Block S", **test)
+        self._ir(block_id="Block N", **test)
+        text = self._text()
+        self.assertEqual(text.count("BlueWater Labs"), 1, text)
+        self.assertIn("Block N, Block S", text)
+        self.assertNotIn("Block N, Block S, Block N", text)
+        # A record of the same test with no block stays visible in the row.
+        self._ir(**test)
+        self.assertIn("Block N, Block S, not stated", self._text())
+        # A second, different test is still its own row.
+        self._ir(block_id="Block S", **{**test, "water_test_lab": "Cascade Water Lab"})
+        text = self._text()
+        self.assertEqual((text.count("BlueWater Labs"), text.count("Cascade Water Lab")), (1, 1))
+
+    def test_two_sources_sampled_the_same_day_at_the_same_lab_stay_two_tests(self):
+        test = dict(
+            water_test_date=timezone.now().date(),
+            water_test_lab="BlueWater Labs",
+            water_test_results=[{"parameter": "E. coli", "value": "<1", "unit": "MPN", "result": "Pass"}],
+        )
+        self._ir(block_id="Block N", water_source="well_groundwater", **test)
+        self._ir(block_id="Block S", water_source="irrigation_canal", **test)
+        self.assertEqual(self._text().count("BlueWater Labs"), 2)
+
     def test_irrigation_without_water_test_fires_review(self):
         """The REVIEW still fires — but it must NOT be labelled 7 CFR 205.272.
 

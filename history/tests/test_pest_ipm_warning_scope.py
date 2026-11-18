@@ -35,7 +35,7 @@ def _text(elements):
     return " ".join(out)
 
 
-class PestIpmWarningScopeTests(TestCase):
+class _PestFixture(TestCase):
     def setUp(self):
         company = Company.objects.create(name="IPM Co")
         est = Establishment.objects.create(name="IPM Farm", company=company)
@@ -75,6 +75,8 @@ class PestIpmWarningScopeTests(TestCase):
     def _pest_text(self):
         return _text(AuditExportService(self.history, certification_type="organic")._build_pest_section())
 
+
+class PestIpmWarningScopeTests(_PestFixture):
     def test_monitoring_records_alone_raise_no_warning(self):
         for code in ("SC", "TM", "PI", "TA"):
             self._add(code)
@@ -90,3 +92,43 @@ class PestIpmWarningScopeTests(TestCase):
     def test_an_intervention_with_a_strategy_raises_no_warning(self):
         self._add("CU", ipm_strategy="Mummy nut removal by hand poling before bloom")
         self.assertNotIn("missing IPM strategy", self._pest_text())
+
+
+class LongStrategyPrintedOnceTests(_PestFixture):
+    """VID-12 (recordkeeping checklist run 2026-11-16): the ~800-character IPM programme sat in the
+    IPM Strategy cell of every scouting and trap row and was most of a 449-page dossier. A long
+    strategy recorded word for word on several records is printed once below the table, with the
+    number of records that hold it, and each row refers to it."""
+
+    PROGRAMME = (
+        "Blueberry program, in order: prevention first, permanent sod alleys and clean cultivation "
+        "under the bushes, pruning for airflow, sanitation of dropped fruit; monitoring with six traps "
+        "per block and weekly fruit checks; treatment only at threshold, rotating modes of action. "
+    ) * 2
+
+    def test_a_long_repeated_strategy_is_printed_once_and_referred_to(self):
+        for _ in range(3):
+            self._add("TM", ipm_strategy=self.PROGRAMME)
+        self._add("SC", ipm_strategy="Weekly walk of 20 bushes per block")
+        text = self._pest_text()
+        self.assertEqual(text.count(self.PROGRAMME.strip()), 1, "the programme printed more than once")
+        self.assertEqual(text.count("Strategy A (full text below this table)"), 3)
+        self.assertIn("IPM strategy A</b>, as recorded on 3 of these records", text)
+        # A short strategy stays in its row.
+        self.assertIn("Weekly walk of 20 bushes per block", text)
+
+    def test_a_long_strategy_on_one_record_stays_in_its_row(self):
+        self._add("TM", ipm_strategy=self.PROGRAMME)
+        text = self._pest_text()
+        self.assertNotIn("Strategy A", text)
+        self.assertIn(self.PROGRAMME.strip()[:80], text)
+
+    def test_the_label_and_reference_helpers(self):
+        from history.services.audit_export_service import _repeated_long_texts, _strategy_cell
+
+        long_a, long_b = "a" * 250, "b" * 250
+        refs = _repeated_long_texts([long_a, "short", long_b, long_a, long_b, long_b, None])
+        self.assertEqual(refs, {long_a: ("A", 2), long_b: ("B", 3)})
+        self.assertEqual(_strategy_cell(long_b, refs), "Strategy B (full text below this table)")
+        self.assertEqual(_strategy_cell("short", refs), "short")
+        self.assertIsNone(_strategy_cell("", refs))
