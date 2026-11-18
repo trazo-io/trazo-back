@@ -663,8 +663,9 @@ class TestSuspiciousContentScan(TestCase):
 
     def test_a_photo_that_cannot_be_reencoded_is_not_stored(self):
         data = _make_jpeg()
-        with mock.patch("carbon.services.photo_evidence_service.default_storage") as storage, mock.patch.object(
-            Image.Image, "save", side_effect=OSError("encoder failed")
+        with (
+            mock.patch("carbon.services.photo_evidence_service.default_storage") as storage,
+            mock.patch.object(Image.Image, "save", side_effect=OSError("encoder failed")),
         ):
             result = self.service.process_and_store_photo(data, "orchard.jpg", carbon_entry_id=1, user_id=1)
         self.assertFalse(result["success"])
