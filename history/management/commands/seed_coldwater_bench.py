@@ -512,9 +512,18 @@ class Command(BaseCommand):
                     raise CommandError(f"{source} identifier {ident!r} for {label} is not in {filename}.")
                 obj = model.objects.filter(**{id_field: ident}).first()
                 if obj is None:
-                    row = published[ident]
+                    row = dict(published[ident])
+                    if source == "wsda" and "annotation" in row:
+                        # WSDA prints NONE where a product has no annotation; stored as "" like the seeder
+                        # stores it, never as the text "NONE" (which would print as an annotation).
+                        from certifications.management.commands.seed_wsda_materials import _parse_annotation
+
+                        row["annotation"] = _parse_annotation(row["annotation"])
                     fields = {f.name for f in model._meta.fields}
-                    obj = model.objects.create(**{k: v for k, v in row.items() if k in fields and v != ""})
+                    values = {k: v for k, v in row.items() if k in fields and v not in (None, "")}
+                    if row.get("annotation") == "":
+                        values["annotation"] = ""
+                    obj = model.objects.create(**values)
                 out[label] = obj
         return out
 
@@ -534,6 +543,10 @@ class Command(BaseCommand):
                 "location_same_as_operation": "yes",
                 # Steel posts and conduit carry the trellis wires; no treated wood on any block.
                 "treated_lumber_noncontact_present": False,
+                # Blocks 1 to 4 had sprays or amendments in 2026, so the statement is answered No; Block 5's
+                # answer below stays Yes (no input since it was bought). Unanswered, every block printed the
+                # statement followed by "Not answered", which an outside reader takes as a claim.
+                "no_inputs_within_tenure": False,
             }
             if block["key"] in ("B1", "B2", "B4"):
                 answers.update(
