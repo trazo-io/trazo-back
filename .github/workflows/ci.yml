@@ -898,6 +898,9 @@ jobs:
       # 2026-11-17: certifications.tests.test_omri_listing_lapse (new, 11 tests, about 22 s, mostly
       # TransactionTestCase) pins OV-MT-C04: an OMRI listing is read as of the application date in
       # the drift detector, the lookup payload and the dossier's input table. No sibling repo.
+      # 2026-11-17: history.tests.test_photo_flag_reaches_producer (new, 4 tests) pins the Vision
+      # photo verdict on the record detail for the farm, refused to another company, and never on
+      # HistorySerializer's events (what a signed-in shopper's my_reviews returns). No sibling repo.
       - name: Claim-safety and compliance suites
         run: |
           poetry run python manage.py test \
@@ -974,6 +977,7 @@ jobs:
             history.tests.test_models \
             history.tests.test_event_tenancy \
             history.tests.test_event_detail_requires_type \
+            history.tests.test_photo_flag_reaches_producer \
             history.tests.test_equipment_event_create_closed \
             history.tests.test_season_plan_not_records.StartProductionWritesNoRecords \
             history.tests.test_season_plan_not_records.APlanItemCarriesNoValues \

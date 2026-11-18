@@ -5005,53 +5005,10 @@ class PublicHistorySerializer(serializers.ModelSerializer):
         return None
 
     def _analyze_event_photos(self, event):
-        """
-        Single-pass analysis of all photos on an event.
-        Returns a dict with GPS, content flags, and image count.
-        Avoids N+1 queries by iterating images only once (uses prefetch_related from view).
-        """
-        result = {
-            "has_gps_data": False,
-            "all_flagged": True,  # Assume flagged until we find a clean photo
-            "content_flag": None,  # Worst flag found (for farmer warning)
-            "image_count": 0,
-        }
-        flagged_values = ("not_agricultural", "ai_generated", "stock_photo")
+        """Single-pass analysis of all photos on an event (history.services.photo_checks)."""
+        from history.services.photo_checks import analyze_event_photos
 
-        if not hasattr(event, "album") or not event.album:
-            return result
-
-        try:
-            for image in event.album.images.all():
-                result["image_count"] += 1
-                ed = getattr(image, "extra_data", None)
-                is_dict = isinstance(ed, dict) if ed else False
-
-                # GPS check
-                if is_dict and (ed.get("gps_latitude") or ed.get("latitude")):
-                    result["has_gps_data"] = True
-
-                # Content validation check
-                if is_dict:
-                    flag = ed.get("content_validation", "")
-                    if flag in flagged_values:
-                        # Track worst flag for farmer warning
-                        if result["content_flag"] is None:
-                            result["content_flag"] = flag
-                    else:
-                        # At least one photo is NOT flagged
-                        result["all_flagged"] = False
-                else:
-                    # No extra_data = assume legitimate (demo data, legacy uploads)
-                    result["all_flagged"] = False
-        except Exception:
-            result["all_flagged"] = False
-
-        # If no images were found, nothing is flagged
-        if result["image_count"] == 0:
-            result["all_flagged"] = False
-
-        return result
+        return analyze_event_photos(event)
 
     def _get_verification_level_for_event(self, event, has_photos=False, blockchain_verified=False):
         """What this event's record contains, for the PUBLIC payload.

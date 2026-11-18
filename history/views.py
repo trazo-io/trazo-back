@@ -3710,11 +3710,39 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 serializer_class = UpdateGeneralEventSerializer
 
             serializer = serializer_class(instance)
-            return Response(self._with_tank_mix(self._with_application_group(serializer.data, instance), instance))
+            return Response(self._with_detail_context(serializer.data, instance))
 
         # Default behavior
         serializer = self.get_serializer(instance)
-        return Response(self._with_tank_mix(self._with_application_group(serializer.data, instance), instance))
+        return Response(self._with_detail_context(serializer.data, instance))
+
+    @classmethod
+    def _with_detail_context(cls, data, instance):
+        """What the record's detail says beside its own fields: its application group, its tank,
+        and the Vision verdict on its photos."""
+        data = cls._with_application_group(data, instance)
+        data = cls._with_tank_mix(data, instance)
+        return cls._with_photo_content_flag(data, instance)
+
+    @staticmethod
+    def _with_photo_content_flag(data, instance):
+        """The Vision verdict on this record's photos, for the farmer who logged them.
+
+        `not_agricultural` / `ai_generated` / `stock_photo`, or None when every photo is clean or
+        there is none. The activity sheet warns with it ("this photo looks like a stock image;
+        a certifier does not count it as evidence").
+
+        DETAIL ONLY, on purpose. It is moderation state about the farmer, so it never goes on the
+        shared per-type event serializers: those also feed `HistorySerializer`, which the signed-in
+        shopper's `my_reviews` response returns, and `PublicHistorySerializer` withholds the same
+        field from the anonymous payload for the same reason. This route is company-scoped.
+        Until 2026-11-17 no producer payload carried it, so the sheet's warning never rendered.
+        """
+        from .services.photo_checks import analyze_event_photos
+
+        data = dict(data)
+        data["photo_content_flag"] = analyze_event_photos(instance)["content_flag"]
+        return data
 
     @staticmethod
     def _with_tank_mix(data, instance):
