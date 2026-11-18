@@ -510,6 +510,16 @@ class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
             plan = self_serve_plans().get(id=plan_id)
             is_downgrade = subscription.plan and self._is_downgrade(subscription.plan, plan)
 
+            # A paid plan is bought through checkout. With no Stripe subscription there is nothing
+            # to modify or invoice, and until 2026-11-18 the branch below then simply wrote the new
+            # plan: a Starter Company Admin could POST {"plan_id": <Compliance>} and get paid
+            # features for nothing (independent review of PR 494, beside OV-SEC-C07).
+            if not subscription.stripe_subscription_id and plan.price > 0:
+                return Response(
+                    {"error": "A paid plan starts at checkout.", "code": "checkout_required"},
+                    status=status.HTTP_402_PAYMENT_REQUIRED,
+                )
+
             if subscription.stripe_subscription_id:
                 stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
                 item_id = stripe_sub["items"]["data"][0]["id"]

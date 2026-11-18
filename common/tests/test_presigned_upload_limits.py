@@ -40,9 +40,24 @@ class _Base(TestCase):
         # The quota is its own module's subject (`subscriptions.tests.test_storage_accounting`);
         # here it only has to be handed the size the signature binds.
         self.quota = mock.patch("common.views.check_storage_quota", return_value=(True, None))
+        # Every set of parameters the view signs, so a test can read the signed Content-Length
+        # itself and not only the header names (review of PR 494).
+        self.signed = []
+
+        def _recording_client():
+            client = _offline_s3_client()
+            sign = client.generate_presigned_url
+
+            def _record(operation, Params=None, **kwargs):
+                self.signed.append(dict(Params or {}))
+                return sign(operation, Params=Params, **kwargs)
+
+            client.generate_presigned_url = _record
+            return client
+
         patches = (
             mock.patch("common.views.using_s3_storage", return_value=True),
-            mock.patch("common.views.SecureAWSClient.get_s3_client", side_effect=_offline_s3_client),
+            mock.patch("common.views.SecureAWSClient.get_s3_client", side_effect=_recording_client),
         )
         self.quota_check = self.quota.start()
         self.addCleanup(self.quota.stop)
@@ -64,6 +79,16 @@ class ASignedUploadIsBoundedTests(_Base):
         query = parse_qs(urlparse(response.data["presigned_url"]).query)
         self.assertEqual(query["X-Amz-SignedHeaders"], ["content-length;content-type;host"])
         self.assertEqual(self.quota_check.call_args.args[1], 524288)
+        # The signed length is the stated size, not a ceiling or a constant.
+        self.assertEqual(self.signed[-1]["ContentLength"], 524288)
+        self.assertEqual(self.signed[-1]["ContentType"], "image/jpeg")
+        self._ask(fileSize=1234567)
+        self.assertEqual(self.signed[-1]["ContentLength"], 1234567)
+
+    def test_a_malformed_body_is_a_400_not_a_500(self):
+        for body in ({"fileType": ["image/jpeg"]}, {"fileType": 7}, {"folder": ["establishments"]}, {"filename": 9}):
+            with self.subTest(body=body):
+                self.assertEqual(self._ask(**body).status_code, 400)
 
     def test_script_bearing_types_are_refused(self):
         for file_type in ("text/html", "image/svg+xml", "application/javascript", "application/octet-stream"):

@@ -93,3 +93,56 @@ class AnOutsiderCannotReadAnotherCompanysSubscriptionTests(_Base):
         self.assertEqual(client.post(f"{self.url}cancel/", {}, format="json").status_code, 404)
         self.sub.refresh_from_db()
         self.assertFalse(self.sub.cancel_at_period_end)
+
+
+class AChangeOfPlanIsNotAFreeUpgradeTests(TestCase):
+    """Independent review of PR 494. With no Stripe subscription (every Starter row, which
+    `start_trial` creates locally), `change_plan` wrote the new plan straight onto the row: a Starter
+    Company Admin could POST the Compliance plan's id and get paid features for nothing. A paid plan
+    now starts at checkout; a move to a free plan still works without Stripe."""
+
+    def setUp(self):
+        self.starter = _starter()
+        self.compliance = _plan("compliance-yearly", 249)
+        self.company = Company.objects.create(name="Blue Oak Orchards")
+        self.admin = User.objects.create_user(email="admin@blueoak.example", password="pw-for-test-only")
+        WorksIn.objects.create(user=self.admin, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+
+    def _subscribe(self, plan, **extra):
+        return Subscription.objects.create(company=self.company, plan=plan, status="active", **extra)
+
+    def _change(self, sub, plan):
+        return self.client.post(
+            f"/api/subscriptions/subscriptions/{sub.id}/change_plan/", {"plan_id": plan.id}, format="json"
+        )
+
+    def test_a_starter_company_cannot_change_itself_onto_a_paid_plan(self):
+        sub = self._subscribe(self.starter)
+        response = self._change(sub, self.compliance)
+        self.assertEqual(response.status_code, 402, response.content)
+        self.assertEqual(response.data["code"], "checkout_required")
+        sub.refresh_from_db()
+        self.assertEqual(sub.plan, self.starter)
+        self.assertIsNone(sub.pending_plan)
+        self.company.refresh_from_db()
+        self.assertFalse(self.company.has_feature("compliance_exports"))
+
+    def test_a_move_to_the_free_plan_still_works_without_stripe(self):
+        sub = self._subscribe(self.compliance)
+        response = self._change(sub, self.starter)
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_a_stripe_backed_upgrade_still_goes_through_stripe(self):
+        from unittest import mock
+
+        operation = _plan("operation-yearly", 1200, max_establishments=-1)
+        sub = self._subscribe(self.compliance, stripe_subscription_id="sub_test_123")
+        with mock.patch("subscriptions.views.stripe") as fake_stripe:
+            fake_stripe.Subscription.retrieve.return_value = {"items": {"data": [{"id": "si_1"}]}}
+            response = self._change(sub, operation)
+        self.assertEqual(response.status_code, 200, response.content)
+        fake_stripe.Subscription.modify.assert_called_once()
+        sub.refresh_from_db()
+        self.assertEqual(sub.plan, operation)

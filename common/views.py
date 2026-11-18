@@ -85,14 +85,24 @@ def get_presigned_url(request):
     Content-Length, so S3 refuses a body of any other length. The sibling `get_upload_urls`, which
     put a client-chosen prefix into the key and had no caller in the app, is gone.
     """
-    filename = request.data.get("filename")
+
+    # A list or number in the body is a malformed request, not a server error.
+    not_text = [
+        name
+        for name in ("filename", "fileType", "folder")
+        if request.data.get(name) not in (None, "") and not isinstance(request.data.get(name), str)
+    ]
+    if not_text:
+        return Response({"error": f"{', '.join(not_text)} must be text"}, status=400)
+
+    filename = (request.data.get("filename") or "").strip()
     file_type = (request.data.get("fileType") or "").strip().lower()
-    folder = request.data.get("folder") or "establishments"
+    folder = (request.data.get("folder") or "").strip() or "establishments"
 
     if not filename or not file_type:
         return Response({"error": "Filename and fileType are required"}, status=400)
 
-    heic_by_name = str(filename).lower().endswith(_HEIC_SUFFIXES)
+    heic_by_name = filename.lower().endswith(_HEIC_SUFFIXES)
     if file_type not in _UPLOAD_IMAGE_TYPES and not (file_type == "application/octet-stream" and heic_by_name):
         return Response({"error": "Only JPG, PNG, GIF, WEBP and HEIC images can be uploaded"}, status=400)
     if folder not in _UPLOAD_FOLDERS:
