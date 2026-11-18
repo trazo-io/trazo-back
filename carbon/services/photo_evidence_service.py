@@ -663,7 +663,9 @@ class PhotoEvidenceService:
             executable_signatures = (
                 b"\x4d\x5a",  # PE executable ("MZ")
                 b"\x7f\x45\x4c\x46",  # ELF executable
-                b"\xfe\xed\xfa",  # Mach-O executable
+                b"\xfe\xed\xfa",  # Mach-O executable, big-endian
+                b"\xce\xfa\xed\xfe",  # Mach-O 32-bit, little-endian
+                b"\xcf\xfa\xed\xfe",  # Mach-O 64-bit, little-endian
             )
             if file_data.startswith(executable_signatures):
                 logger.warning("Suspicious content detected in uploaded file")

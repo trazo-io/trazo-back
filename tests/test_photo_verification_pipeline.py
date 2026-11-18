@@ -596,7 +596,7 @@ class TestSuspiciousContentScan(TestCase):
         self.assertTrue(result["valid"], result["errors"])
 
     def test_a_file_that_starts_with_an_executable_signature_is_refused(self):
-        for signature in (b"MZ", b"\x7fELF", b"\xfe\xed\xfa\xce"):
+        for signature in (b"MZ", b"\x7fELF", b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"):
             with self.subTest(signature=signature):
                 self.assertTrue(self.service._has_suspicious_content(signature + b"\x00" * 2000))
 
