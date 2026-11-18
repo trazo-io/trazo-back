@@ -410,7 +410,7 @@
   "latitude": 44.5402,
   "longitude": -123.1089,
   "name": "Calapooia Bend Farm",
-  "soil_types": "[\"Winter cover crops (cereal rye, vetch, crimson clover)\",\"Purchased OMRI compost (Rexius)\",\"Douglas-fir sawdust mulch on blueberry beds\",\"Permanent grass alleys\",\"Hedgerows and riparian buffer\"]",
+  "soil_types": "[\"Winter cover crops (cereal rye, vetch, crimson clover)\",\"Purchased Rexius compost (no third-party listing)\",\"Douglas-fir sawdust mulch on blueberry beds\",\"Permanent grass alleys\",\"Hedgerows and riparian buffer\"]",
   "split_operation_plan": "Buffer rows only. The outside row (row 1) on the west edge of Home Field West, and on the north part of the west edge of Home Field East, sits against a conventional grass-seed neighbor, so under 7 CFR 205.202(c) its fruit cannot be sold as organic. Those rows are staked orange and marked on the block map, picked last on their own day into red-tagged lugs that touch nothing else, kept out of the organic cooler and pack line, and sold to Willamette Valley Fruit as conventional process fruit on a separate bill of lading under a lot code beginning CBF-CONV, with its own weigh ticket and sales record. No other non-organic product exists on the operation and no prohibited material is stored on the farm.",
   "state": "OR",
   "total_acreage": 138.6,
@@ -5222,7 +5222,7 @@
    "_id": 298,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — river-bottom ground south of River Block",
    "agricultural_details": {
-    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated in spring; purchased OMRI compost 4 t/ac; flame weeding before carrot emergence and mechanical cultivation after; spring chisel only, no fall tillage; annual soil test; riparian buffer left in native vegetation; hedgerow on the road side.",
+    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated in spring; purchased Rexius compost (no third-party listing) 4 t/ac; flame weeding before carrot emergence and mechanical cultivation after; spring chisel only, no fall tillage; annual soil test; riparian buffer left in native vegetation; hedgerow on the road side.",
     "transparency_ready": false
    },
    "apn": "12S03W14-00400",
@@ -5612,7 +5612,7 @@
    "_id": 301,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — river-bottom ground south of Bottom Ground A",
    "agricultural_details": {
-    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated; purchased OMRI compost 4 t/ac; flame weeding and mechanical cultivation; spring chisel only; annual soil test; riparian buffer untouched.",
+    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated; purchased Rexius compost (no third-party listing) 4 t/ac; flame weeding and mechanical cultivation; spring chisel only; annual soil test; riparian buffer untouched.",
     "transparency_ready": false
    },
    "apn": "12S03W14-00401",
@@ -5740,7 +5740,7 @@
    "_id": 302,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — terrace north of the blueberry blocks, adjoining Hartwell on the north",
    "agricultural_details": {
-    "sustainability_practices": "Winter cover crop every year plus a full fallow-cover year in 2024; purchased OMRI compost; flame weeding and cultivation; 40 ft mowed grass buffer on the north; native hedgerow planted 2024; bird and bat boxes on the hedgerow posts; annual soil test.",
+    "sustainability_practices": "Winter cover crop every year plus a full fallow-cover year in 2024; purchased Rexius compost (no third-party listing); flame weeding and cultivation; 40 ft mowed grass buffer on the north; native hedgerow planted 2024; bird and bat boxes on the hedgerow posts; annual soil test.",
     "transparency_ready": false
    },
    "apn": "12S03W11-00100",
@@ -8455,8 +8455,9 @@
        "active_ingredient": "Calcium polysulfide"
       },
       "manufacturer": "OR-Cal Inc.",
+      "national_list_basis": "operator",
       "observation": "Dormant lime sulfur at 10 gal/ac in 100 gal water, before bud swell, for mummy berry. Calm, 46 °F, dry for 24 h after.",
-      "organic_approved": "omri_listed",
+      "organic_approved": "certifier_approved",
       "performed_by": "Javier Morales",
       "phi_days": {
        "__dec__": "0.0"
@@ -8483,6 +8484,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2711,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -8525,6 +8529,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2712,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -8573,6 +8580,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2713,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -8621,6 +8631,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2714,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -8630,14 +8643,14 @@
       },
       "chemical_lot_number": "NH-25-880",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-15T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 1 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -8663,6 +8676,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2715,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -8672,14 +8688,14 @@
       },
       "chemical_lot_number": "NH-25-881",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-29T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 2 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -8705,6 +8721,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2716,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -8714,14 +8733,14 @@
       },
       "chemical_lot_number": "NH-25-882",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-06-12T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 3 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -8747,6 +8766,9 @@
      },
      {
       "#history": 686,
+      "@omri_product": {
+       "product_name": "NovaSource Surround WP Agricultural Crop Protectant"
+      },
       "_id": 2718,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -8798,6 +8820,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2719,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -8817,6 +8842,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 1 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -8848,6 +8874,9 @@
       "#history": 686,
       "@national_list_substance": {
        "substance_name": "Spinosad"
+      },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
       },
       "_id": 2717,
       "application_county": "",
@@ -8903,6 +8932,7 @@
       "mtrs_range": "",
       "mtrs_section": "",
       "mtrs_township": "",
+      "national_list_basis": "operator",
       "nitrogen_source": "",
       "observation": "Second Entrust of the season, 5 oz/ac at dawn after the Monday trap count put a male SWD in three of six traps. Seven days after the first; rotated with Surround to hold the season inside the label limit. Picked through the block the day before; PHI is 3 days and the next pick is the 12th.",
       "operator_id": "",
@@ -10152,7 +10182,7 @@
       "amendment_amount_unit": "lbs",
       "amendment_lot_number": "TS-25-0208",
       "amendment_manufacturer": "Tiger-Sul Products",
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Tiger 90CR elemental sulfur (90% S, degradable pastille)",
       "amendment_quantity_purchased": {
        "__dec__": "4000.00"
@@ -10345,6 +10375,9 @@
     "ChemicalEvent": [
      {
       "#history": 687,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2778,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -10386,6 +10419,9 @@
      },
      {
       "#history": 687,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2779,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -10395,13 +10431,13 @@
       },
       "chemical_lot_number": "NH-26-760",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-04-20T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gal/ac through the drip tape, one side-dress.",
@@ -10919,7 +10955,7 @@
       "amendment_nitrogen_percentage": {
        "__dec__": "1.10"
       },
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Rexius Organic Compost",
       "amendment_quantity_purchased": {
        "__dec__": "76.00"
@@ -10944,7 +10980,7 @@
        "__dt__": "2026-02-26T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost 4 t/ac. Analysis on file.",
+      "observation": "Rexius compost 4 t/ac. Analysis on file.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -11050,8 +11086,9 @@
        "active_ingredient": "Calcium polysulfide"
       },
       "manufacturer": "OR-Cal Inc.",
+      "national_list_basis": "operator",
       "observation": "Dormant lime sulfur at 10 gal/ac in 100 gal water, before bud swell, for mummy berry. Calm, 46 °F, dry for 24 h after.",
-      "organic_approved": "omri_listed",
+      "organic_approved": "certifier_approved",
       "performed_by": "Javier Morales",
       "phi_days": {
        "__dec__": "0.0"
@@ -11078,6 +11115,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2721,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -11120,6 +11160,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2722,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -11168,6 +11211,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2723,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -11216,6 +11262,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2724,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -11225,14 +11274,14 @@
       },
       "chemical_lot_number": "NH-25-880",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-16T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 1 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -11258,6 +11307,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2725,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -11267,14 +11319,14 @@
       },
       "chemical_lot_number": "NH-25-881",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-30T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 2 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -11300,6 +11352,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2726,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -11309,14 +11364,14 @@
       },
       "chemical_lot_number": "NH-25-882",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-06-13T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 3 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -11342,6 +11397,9 @@
      },
      {
       "#history": 688,
+      "@omri_product": {
+       "product_name": "NovaSource Surround WP Agricultural Crop Protectant"
+      },
       "_id": 2727,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -11393,6 +11451,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2728,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -11412,6 +11473,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 1 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -11444,6 +11506,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2729,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -11463,6 +11528,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 2 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -11495,6 +11561,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2730,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -11514,6 +11583,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 3 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -12842,7 +12912,7 @@
       "amendment_amount_unit": "lbs",
       "amendment_lot_number": "TS-25-0208",
       "amendment_manufacturer": "Tiger-Sul Products",
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Tiger 90CR elemental sulfur (90% S, degradable pastille)",
       "amendment_quantity_purchased": {
        "__dec__": "4000.00"
@@ -13019,8 +13089,9 @@
        "active_ingredient": "Calcium polysulfide"
       },
       "manufacturer": "OR-Cal Inc.",
+      "national_list_basis": "operator",
       "observation": "Dormant lime sulfur at 10 gal/ac in 100 gal water, before bud swell, for mummy berry. Calm, 46 °F, dry for 24 h after.",
-      "organic_approved": "omri_listed",
+      "organic_approved": "certifier_approved",
       "performed_by": "Javier Morales",
       "phi_days": {
        "__dec__": "0.0"
@@ -13047,6 +13118,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2732,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -13089,6 +13163,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2733,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -13137,6 +13214,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2735,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -13146,14 +13226,14 @@
       },
       "chemical_lot_number": "NH-25-880",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-17T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 1 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -13179,6 +13259,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2734,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -13227,6 +13310,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2736,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -13236,14 +13322,14 @@
       },
       "chemical_lot_number": "NH-25-881",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-31T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 2 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -13269,6 +13355,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2737,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -13278,14 +13367,14 @@
       },
       "chemical_lot_number": "NH-25-882",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-06-14T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "epa_registration_number": "",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gallons per acre through the drip, injection 3 of three, run on a 4-hour set. Filters back-flushed after.",
@@ -13311,6 +13400,9 @@
      },
      {
       "#history": 689,
+      "@omri_product": {
+       "product_name": "NovaSource Surround WP Agricultural Crop Protectant"
+      },
       "_id": 2738,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -13362,6 +13454,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2739,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -13381,6 +13476,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 1 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -13413,6 +13509,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2740,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -13432,6 +13531,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 2 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -13464,6 +13564,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2741,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -13483,6 +13586,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 3 of the season at 5 oz/ac, dawn, airblast at 100 gal/ac. Seven-day interval from the last; 3-day PHI held before the next pick. Season total kept inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -14675,7 +14779,7 @@
       "amendment_amount_unit": "lbs",
       "amendment_lot_number": "TS-25-0208",
       "amendment_manufacturer": "Tiger-Sul Products",
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Tiger 90CR elemental sulfur (90% S, degradable pastille)",
       "amendment_quantity_purchased": {
        "__dec__": "4000.00"
@@ -14872,6 +14976,9 @@
     "ChemicalEvent": [
      {
       "#history": 690,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2742,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -14913,6 +15020,9 @@
      },
      {
       "#history": 690,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2743,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -14922,13 +15032,13 @@
       },
       "chemical_lot_number": "NH-25-901",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-06-05T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gallons per acre through the drip tape, side-dress 1 of two.",
@@ -14954,6 +15064,9 @@
      },
      {
       "#history": 690,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2744,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -14963,13 +15076,13 @@
       },
       "chemical_lot_number": "NH-25-902",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-07-01T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gallons per acre through the drip tape, side-dress 2 of two.",
@@ -15554,7 +15667,7 @@
       "amendment_nitrogen_percentage": {
        "__dec__": "1.10"
       },
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Rexius Organic Compost",
       "amendment_quantity_purchased": {
        "__dec__": "76.00"
@@ -15579,7 +15692,7 @@
        "__dt__": "2025-03-27T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost, 4 t/ac broadcast before the last disk pass. Analysis on file: 1.1% N, C:N 18, 131-160 °F for 15 days, five turnings — PFRP documented by the supplier.",
+      "observation": "Rexius compost, 4 t/ac broadcast before the last disk pass. Analysis on file: 1.1% N, C:N 18, 131-160 °F for 15 days, five turnings — PFRP documented by the supplier.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -15700,6 +15813,9 @@
     "ChemicalEvent": [
      {
       "#history": 691,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2745,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -15741,6 +15857,9 @@
      },
      {
       "#history": 691,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2746,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -15750,13 +15869,13 @@
       },
       "chemical_lot_number": "NH-25-901",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-05-20T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gallons per acre through the drip tape, side-dress 1 of two; stopped at bulbing.",
@@ -15782,6 +15901,9 @@
      },
      {
       "#history": 691,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2747,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -15791,13 +15913,13 @@
       },
       "chemical_lot_number": "NH-25-902",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2025-06-17T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gallons per acre through the drip tape, side-dress 2 of two; stopped at bulbing.",
@@ -16215,7 +16337,7 @@
       "amendment_nitrogen_percentage": {
        "__dec__": "1.10"
       },
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Rexius Organic Compost",
       "amendment_quantity_purchased": {
        "__dec__": "66.00"
@@ -16240,7 +16362,7 @@
        "__dt__": "2025-03-20T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost at 4 t/ac before the last pass. Analysis on file (same lot as Bottom Ground A).",
+      "observation": "Rexius compost at 4 t/ac before the last pass. Analysis on file (same lot as Bottom Ground A).",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -16476,8 +16598,9 @@
        "active_ingredient": "Calcium polysulfide"
       },
       "manufacturer": "OR-Cal Inc.",
+      "national_list_basis": "operator",
       "observation": "Dormant lime sulfur 10 gal/ac before bud swell. Calm, 44 °F.",
-      "organic_approved": "omri_listed",
+      "organic_approved": "certifier_approved",
       "performed_by": "Javier Morales",
       "phi_days": {
        "__dec__": "0.0"
@@ -16504,6 +16627,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2786,
       "application_county": "",
       "application_purpose": "soil_fertility",
@@ -16584,6 +16710,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2787,
       "application_county": "",
       "application_purpose": "disease_management",
@@ -16665,6 +16794,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2749,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -16713,6 +16845,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2750,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -16722,13 +16857,13 @@
       },
       "chemical_lot_number": "NH-26-770",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-14T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 1 of three.",
@@ -16754,6 +16889,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2751,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -16763,13 +16901,13 @@
       },
       "chemical_lot_number": "NH-26-771",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-28T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 2 of three.",
@@ -16795,6 +16933,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2752,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -16804,13 +16945,13 @@
       },
       "chemical_lot_number": "NH-26-772",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-06-11T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 3 of three.",
@@ -16836,6 +16977,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "NovaSource Surround WP Agricultural Crop Protectant"
+      },
       "_id": 2753,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -16887,6 +17031,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2754,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -16906,6 +17053,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 1 of the season at 5 oz/ac, dawn, airblast. Rotated with Grandevo; 3-day PHI held. Season total inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -16935,6 +17083,9 @@
      },
      {
       "#history": 692,
+      "@omri_product": {
+       "product_name": "Grandevo"
+      },
       "_id": 2788,
       "application_county": "",
       "application_purpose": "pest_management",
@@ -17022,6 +17173,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2755,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -17041,6 +17195,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 2 of the season at 5 oz/ac, dawn, airblast. Rotated with Grandevo; 3-day PHI held. Season total inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -18596,7 +18751,7 @@
       "amendment_amount_unit": "lbs",
       "amendment_lot_number": "TS-2601-0934",
       "amendment_manufacturer": "Tiger-Sul Products",
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Tiger 90CR elemental sulfur (90% S, degradable pastille)",
       "amendment_purchase_date": {
        "__d__": "2026-03-02"
@@ -18892,8 +19047,9 @@
        "active_ingredient": "Calcium polysulfide"
       },
       "manufacturer": "OR-Cal Inc.",
+      "national_list_basis": "operator",
       "observation": "Dormant lime sulfur 10 gal/ac before bud swell. Calm, 44 °F.",
-      "organic_approved": "omri_listed",
+      "organic_approved": "certifier_approved",
       "performed_by": "Javier Morales",
       "phi_days": {
        "__dec__": "0.0"
@@ -18920,6 +19076,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2757,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -18961,6 +19120,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2758,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -19009,6 +19171,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2759,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -19057,6 +19222,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2760,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -19066,13 +19234,13 @@
       },
       "chemical_lot_number": "NH-26-770",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-15T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 1 of three.",
@@ -19098,6 +19266,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2761,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -19107,13 +19278,13 @@
       },
       "chemical_lot_number": "NH-26-771",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-29T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 2 of three.",
@@ -19139,6 +19310,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2762,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -19148,13 +19322,13 @@
       },
       "chemical_lot_number": "NH-26-772",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-06-12T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 3 of three.",
@@ -19180,6 +19354,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "NovaSource Surround WP Agricultural Crop Protectant"
+      },
       "_id": 2763,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -19231,6 +19408,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2764,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -19250,6 +19430,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 1 of the season at 5 oz/ac, dawn, airblast. Rotated with Grandevo; 3-day PHI held. Season total inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -19279,6 +19460,9 @@
      },
      {
       "#history": 693,
+      "@omri_product": {
+       "product_name": "Grandevo"
+      },
       "_id": 2766,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -19330,6 +19514,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2765,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -19349,6 +19536,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 2 of the season at 5 oz/ac, at dusk after the day's pick, airblast. Rotated with Grandevo; 3-day PHI held. Season total inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -20698,7 +20886,7 @@
       "amendment_amount_unit": "lbs",
       "amendment_lot_number": "TS-26-0207",
       "amendment_manufacturer": "Tiger-Sul Products",
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Tiger 90CR elemental sulfur (90% S, degradable pastille)",
       "amendment_quantity_purchased": {
        "__dec__": "4000.00"
@@ -20961,8 +21149,9 @@
        "active_ingredient": "Calcium polysulfide"
       },
       "manufacturer": "OR-Cal Inc.",
+      "national_list_basis": "operator",
       "observation": "Dormant lime sulfur 10 gal/ac before bud swell. Calm, 44 °F.",
-      "organic_approved": "omri_listed",
+      "organic_approved": "certifier_approved",
       "performed_by": "Javier Morales",
       "phi_days": {
        "__dec__": "0.0"
@@ -20989,6 +21178,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2768,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -21030,6 +21222,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2769,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -21078,6 +21273,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2771,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -21087,13 +21285,13 @@
       },
       "chemical_lot_number": "NH-26-770",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-16T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 1 of three.",
@@ -21119,6 +21317,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Bayer Serenade Opti A Wettable Powder Biofungicide"
+      },
       "_id": 2770,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -21167,6 +21368,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2772,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -21176,13 +21380,13 @@
       },
       "chemical_lot_number": "NH-26-771",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-30T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 2 of three.",
@@ -21208,6 +21412,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2773,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -21217,13 +21424,13 @@
       },
       "chemical_lot_number": "NH-26-772",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-06-13T09:00:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Three gal/ac through the drip, injection 3 of three.",
@@ -21249,6 +21456,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "NovaSource Surround WP Agricultural Crop Protectant"
+      },
       "_id": 2774,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -21300,6 +21510,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2775,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -21319,6 +21532,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 1 of the season at 5 oz/ac, dawn, airblast. Rotated with Grandevo; 3-day PHI held. Season total inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -21348,6 +21562,9 @@
      },
      {
       "#history": 694,
+      "@omri_product": {
+       "product_name": "Grandevo"
+      },
       "_id": 2777,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -21399,6 +21616,9 @@
       "@national_list_substance": {
        "substance_name": "Spinosad"
       },
+      "@omri_product": {
+       "product_name": "Entrust SC Naturalyte Insect Control"
+      },
       "_id": 2776,
       "applicator_name": "Javier Morales",
       "applied_scope": "all",
@@ -21418,6 +21638,7 @@
        "active_ingredient": "Spinosad"
       },
       "manufacturer": "Dow Agrosciences, LLC",
+      "national_list_basis": "operator",
       "observation": "Entrust 2 of the season at 5 oz/ac, dawn, airblast. Rotated with Grandevo; 3-day PHI held. Season total inside the label limit.",
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
@@ -22578,7 +22799,7 @@
       "amendment_amount_unit": "lbs",
       "amendment_lot_number": "TS-26-0207",
       "amendment_manufacturer": "Tiger-Sul Products",
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Tiger 90CR elemental sulfur (90% S, degradable pastille)",
       "amendment_quantity_purchased": {
        "__dec__": "4000.00"
@@ -22749,6 +22970,9 @@
     "ChemicalEvent": [
      {
       "#history": 695,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2780,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -22790,6 +23014,9 @@
      },
      {
       "#history": 695,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2781,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -22799,13 +23026,13 @@
       },
       "chemical_lot_number": "NH-26-801",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-06-03T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gal/ac through the drip tape, side-dress 1 of two.",
@@ -22831,6 +23058,9 @@
      },
      {
       "#history": 695,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2782,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -22840,13 +23070,13 @@
       },
       "chemical_lot_number": "NH-26-802",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-06-30T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gal/ac through the drip tape, side-dress 2 of two.",
@@ -23360,7 +23590,7 @@
       "amendment_nitrogen_percentage": {
        "__dec__": "1.10"
       },
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Rexius Organic Compost",
       "amendment_quantity_purchased": {
        "__dec__": "66.00"
@@ -23385,7 +23615,7 @@
        "__dt__": "2026-03-26T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost 4 t/ac.",
+      "observation": "Rexius compost 4 t/ac.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -23511,6 +23741,9 @@
     "ChemicalEvent": [
      {
       "#history": 696,
+      "@omri_product": {
+       "product_name": "Down to Earth All Natural Fertilizers Feather Meal 12-0-0"
+      },
       "_id": 2783,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -23552,6 +23785,9 @@
      },
      {
       "#history": 696,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2784,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -23561,13 +23797,13 @@
       },
       "chemical_lot_number": "NH-26-801",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-05-19T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gal/ac through the tape, side-dress 1 of two; stopped at bulbing.",
@@ -23593,6 +23829,9 @@
      },
      {
       "#history": 696,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2785,
       "applicator_name": "Tom Brandt",
       "applied_scope": "all",
@@ -23602,13 +23841,13 @@
       },
       "chemical_lot_number": "NH-26-802",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-06-16T08:30:00+00:00"
       },
       "description": "Neptune's Harvest Organic Fish Fertilizer 2-4-1 application",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish (2-3-1)"
+       "active_ingredient": "Hydrolyzed fish (2-4-1)"
       },
       "manufacturer": "Ocean Crest Seafoods",
       "observation": "Four gal/ac through the tape, side-dress 2 of two; stopped at bulbing.",
@@ -24011,7 +24250,7 @@
       "amendment_nitrogen_percentage": {
        "__dec__": "1.10"
       },
-      "amendment_organic_approved": "omri_listed",
+      "amendment_organic_approved": "certifier_approved",
       "amendment_product_name": "Rexius Organic Compost",
       "amendment_quantity_purchased": {
        "__dec__": "58.00"
@@ -24036,7 +24275,7 @@
        "__dt__": "2026-03-19T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost 4 t/ac.",
+      "observation": "Rexius compost 4 t/ac.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -24357,6 +24596,9 @@
     "ChemicalEvent": [
      {
       "#history": 698,
+      "@omri_product": {
+       "product_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1"
+      },
       "_id": 2789,
       "application_purpose": "soil_fertility",
       "applicator_name": "Javier Morales",
@@ -24368,13 +24610,13 @@
       "block_id": "BGA — all 18.6 ac",
       "chemical_lot_number": "NH-2606-441",
       "commercial_name": "Neptune's Harvest Organic Fish Fertilizer 2-4-1",
-      "concentration": "2-3-1",
+      "concentration": "2-4-1",
       "date": {
        "__dt__": "2026-07-16T06:00:00+00:00"
       },
       "description": "Fish emulsion through the drip at root sizing, 3 gal/ac in two fertigations a fortnight apart (this is the first). OMRI listed, EPA-exempt fertilizer. The cover-crop N carries the crop early; this tops it up when the canopy is closing.",
       "extra_data": {
-       "active_ingredient": "Hydrolyzed fish, 2-3-1"
+       "active_ingredient": "Hydrolyzed fish, 2-4-1"
       },
       "is_fertigation": true,
       "manufacturer": "Ocean Crest Seafoods",
@@ -24386,7 +24628,7 @@
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
       "phosphorus_percentage": {
-       "__dec__": "3.00"
+       "__dec__": "4.00"
       },
       "potassium_percentage": {
        "__dec__": "1.00"
