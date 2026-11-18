@@ -273,12 +273,33 @@ class ThePageSaysWhoseNumbersItSpeaksTests(_AgentFarm):
                 self.assertNotIn("NOPB", text)
                 self.assertNotIn("ORGB", text)
                 self.assertNotIn("Forms Trazo does not generate", text)
+                # OV-PK-F05: the files below are named G2_0.pdf and the like, so the page says whose
+                # codes those are rather than leaving the reviewer to read them as its own.
+                self.assertIn(f"are the Common OSP's section codes, not {agent}'s form numbers", text)
                 OrganicSystemPlan.objects.filter(establishment=self.est).delete()
 
     def test_a_plan_naming_no_agent_reads_no_agents_numbering_either(self):
         text = self._coverage_text("")
         self.assertIn("No certifying agent is named on this operation's records", text)
+        self.assertIn("are the Common OSP's section codes, not the agent's form numbers", text)
         self.assertNotIn("CCOF", text)
+
+    def test_the_codes_the_page_names_are_the_ones_on_the_files(self):
+        """OV-PK-F05. The page quotes each code as the heading writes it and as the file name below
+        writes it (review of PR 485: a file name has "_" for ".", so "G2.0" alone matched no file)."""
+        from certifications.osp_modules import MODULES_BY_KEY
+        from certifications.services.packet_coverage import _module_location, _packet_module_keys
+
+        text = self._coverage_text("Organic Certifiers, Inc.")
+        coded = [MODULES_BY_KEY[k] for k in _packet_module_keys() if k in MODULES_BY_KEY and MODULES_BY_KEY[k].code]
+        self.assertGreaterEqual(len(coded), 2)
+        a, b = coded[0], coded[1]
+        stem_a, stem_b = a.code.replace(".", "_"), b.code.replace(".", "_")
+        self.assertIn(f"({a.code}, {b.code} and so on), written {stem_a}, {stem_b} in the file names below", text)
+        # Each quoted file spelling is a file the same page lists.
+        for module, stem in ((a, stem_a), (b, stem_b)):
+            self.assertEqual(_module_location(module.key), f"modules/{stem}.pdf")
+            self.assertIn(f"modules/{stem}.pdf", text)
 
 
 class RenewalApplicationIsAnsweredByPacketDocumentsTests(_AgentFarm):

@@ -6077,13 +6077,29 @@ def _coverage_fallback_documents(story, styles, stated_agent, parcel_names) -> N
     tell the reviewer "only the numbering differs", and repeat CCOF's own scope reasons ("file the
     affidavit with CCOF directly"). The first claim was never checked (OCI's annual update has its
     own identity, scope, sales and declaration workflow) and the second sent the operation to the
-    wrong agent. With no register for the agent, the page borrows no agent's numbering at all.
+    wrong agent. With no register for the agent, the page maps no document to any agent's forms.
+
+    The module documents still carry the Common OSP section codes (G4.1 and the rest) in their
+    headings, footers and file names, and until 2026-11-18 this page listed those files without a
+    word on the codes, while the app told the grower the packet "borrows no agent's form numbers"
+    (overall review 2026-11, OV-PK-F05). The page now says whose codes they are.
     """
     from certifications.osp_modules import MODULES_BY_KEY
     from certifications.osp_modules.parcel_application import PARCEL_APPLICATION
-    from certifications.services.packet_coverage import _module_location, _packet_module_keys
+    from certifications.services.packet_coverage import _module_location, _packet_module_keys, module_file_stem
 
     agent = stated_agent.strip()
+    modules = dict(MODULES_BY_KEY)
+    modules[PARCEL_APPLICATION.key] = PARCEL_APPLICATION
+    # A file name writes the code with "_" for "." (G2_0.pdf), so the page quotes both spellings,
+    # and only from modules whose file is named by their code.
+    coded = [
+        modules[key]
+        for key in _packet_module_keys()
+        if key in modules
+        and modules[key].code
+        and module_file_stem(modules[key]) == modules[key].code.replace(".", "_")
+    ][:2]
     story.append(Paragraph("Documents in this packet", styles["header"]))
     story.append(
         Paragraph(
@@ -6098,8 +6114,19 @@ def _coverage_fallback_documents(story, styles, stated_agent, parcel_names) -> N
             styles["meta"],
         )
     )
-    modules = dict(MODULES_BY_KEY)
-    modules[PARCEL_APPLICATION.key] = PARCEL_APPLICATION
+    if coded:
+        whose = f"{agent}'s" if agent else "the agent's"
+        headings = ", ".join(m.code for m in coded)
+        files = ", ".join(module_file_stem(m) for m in coded)
+        story.append(
+            Paragraph(
+                _escape(
+                    f"The codes in each document's heading ({headings} and so on), written {files} in the file "
+                    f"names below, are the Common OSP's section codes, not {whose} form numbers."
+                ),
+                styles["meta"],
+            )
+        )
     for key in _packet_module_keys():
         location = _module_location(key)
         module = modules.get(key)
