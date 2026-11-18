@@ -78,7 +78,7 @@ items:
       prints: "modules/G6_5.pdf §B; a No is CCOF's 'not applicable, no sales directly to consumers'"
     # Closed 2026-11-17 by the direct marketing slice: direct_sales is CCOF's yes or not applicable, and
     # direct_sales_venues lists the venues in the form's kinds (farmers' markets, CSA, farm stand, u-pick, online,
-    # other); the list can be attached instead.
+    # other); an operator's own list can be attached as well.
   - ref: B1a
     asks: 'Farmers'' Markets — not applicable, no sales at farmers'' markets. Table: Name of market and/or Farmers''
       Market organization / Market Address / Day(s) / Do you sell non-organic products at this market?'

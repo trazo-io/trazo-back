@@ -2044,9 +2044,12 @@ G6_5_SALES_SOE = Module(
                     key="direct_sales_venue_list_upload",
                     kind="upload",
                     required=False,
+                    # A supplement to the two lists, never a substitute: an upload does not answer a required
+                    # question (UNVALIDATED_KINDS), so "or attach" would leave the module incomplete for good
+                    # (review of app #422).
                     label=text(
-                        "Or attach your list of direct marketing venues.",
-                        "O adjunta tu lista de lugares de venta directa.",
+                        "You can also attach your own list of direct marketing venues.",
+                        "También puedes adjuntar tu propia lista de lugares de venta directa.",
                     ),
                     visible_when=(Condition("direct_sales", "eq", "yes"),),
                 ),

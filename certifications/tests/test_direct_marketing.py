@@ -65,6 +65,13 @@ class TheQuestionsOpenAsTheFormAsksThem(SimpleTestCase):
     def test_a_plan_finished_before_these_questions_stays_finished(self):
         self.assertEqual(missing_required(G65, BASE), [])
 
+    def test_the_venue_list_upload_is_offered_as_a_supplement_never_a_substitute(self):
+        # Review of app #422: an upload never answers a required question, so "or attach" would strand the module.
+        upload = next(q for page in G65.pages for q in page.questions if q.key == "direct_sales_venue_list_upload")
+        self.assertTrue(upload.label["en"].startswith("You can also attach"), upload.label["en"])
+        missing = set(missing_required(G65, {**BASE, "direct_sales": "yes", "direct_sales_venues": ["farm_stand"]}))
+        self.assertIn("other_venues_detail", missing)
+
     def test_a_direct_seller_is_asked_its_venues_and_whether_non_organic_is_sold(self):
         missing = set(missing_required(G65, {**BASE, "direct_sales": "yes"}))
         self.assertEqual(missing, {"direct_sales_venues", "direct_sales_nonorganic"})
