@@ -59,13 +59,13 @@ items:
 
   - ref: "4.1-2"
     asks: "Indicate practices in use to protect the soil and minimize erosion: N/A, no erosion (will be verified at inspection) / Conservation (minimum) tillage / Contour farming / Leveling / Cover crop or winter cover / Micro-irrigation / Terraces / Strip cropping / Permanent ground cover / Windbreaks / Other."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g4_0_rotation_soil.erosion_practices]
-      prints: "modules/G4_0.pdf §D; narrative § 205.201(a)(1)"
-    gap: "Reuses CCOF G4.0 C: terraces are merged into `contour` ('Contour farming or terraces') where OTCO lists them separately, and there is no `other`. OTCO's N/A IS answerable — `erosion_practices` carries an exclusive `no_erosion` option ('Not applicable — no erosion risk on these parcels'), which is what OTCO's 'N/A; No erosion' box says; the CCOF C row's statement that this N/A cannot be expressed describes the module before that option existed."
-    fix: "Add `terraces` and `other` + free text to `erosion_practices` — CCOF C's fix minus the N/A option, which already exists (flip that half of the CCOF row)."
+      questions: [g4_0_rotation_soil.erosion_practices, g4_0_rotation_soil.erosion_other]
+      prints: "modules/G4_0.pdf §D"
+    # Closed 2026-11-18 by the pest, weed and soil slice: erosion_practices lists contour farming and terraces apart,
+    # as the form does, with minimizing bare ground and other (erosion_other). The merged 'contour farming or
+    # terraces' option is retired: a plan answered with it prints it as given, and one holding only it is asked again.
 
   - ref: "4.2-1"
     asks: "Crop Rotation — Describe your crop rotation plan."
@@ -78,13 +78,13 @@ items:
 
   - ref: "4.2-2"
     asks: "For perennial cropping systems (e.g., orchard, grove, bog, pasture) select all biodiversity practices used in lieu of rotation: Native grasses or natural vegetation / Diverse mixtures of native trees, shrubs, grasses, forbs / Hedgerows / Allow non-invasive plants in fencerows, ditches, understory / Windbreaks / Replace weedy areas with native plants / Insectary plants / Cover crops / Intercropping or alley cropping / Allow flowers to go to seed / Other."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
       questions: [g4_0_rotation_soil.in_lieu_practices, g4_0_rotation_soil.in_lieu_other]
-      prints: "modules/G4_0.pdf §A; narrative § 205.205"
-    gap: "Reuses CCOF G4.0 A1b's verdict on the same field, restated for OTCO's shape. OTCO asks a checklist, not a description, so CCOF's 'checkbox list where CCOF asks for a description' critique does not apply here; and OTCO scopes the question to perennial systems, so the container-only gating gap does not either. What remains is vocabulary: Trazo's six options (ground cover, cover crops, alley cropping, hedgerows/insectary plantings, short-term rotation, other) reach four of OTCO's ten named practices; native grasses, diverse native mixtures, non-invasive plants in fencerows, windbreaks, replacing weedy areas with natives and letting flowers go to seed are reachable only through `other` — several exist as options on G4.2's habitat battery, which OTCO does not cross-reference from here."
-    fix: "Add `native_vegetation`, `native_mixtures`, `windbreaks`, `fencerow_understory_plants` and `flowers_to_seed` to `in_lieu_practices`; keep `other`."
+      prints: "modules/G4_0.pdf §A"
+    # Closed 2026-11-18 by the pest, weed and soil slice: in_lieu_practices adds the practices OTCO names that it did
+    # not: native grasses or natural vegetation, diverse native mixtures, non-invasive plants in fencerows, ditches
+    # and understory, windbreaks, weedy areas replaced with native plants, and flowers allowed to go to seed.
 
   - ref: "4.3-1"
     asks: "Manure — Do you apply uncomposted (raw) animal manure? Note: animal manure that is not composted in accordance with § 205.203(c)(2) is considered raw; records must verify the composting process for manure and all materials containing manure. Yes / No (skip to Section 4.4)."

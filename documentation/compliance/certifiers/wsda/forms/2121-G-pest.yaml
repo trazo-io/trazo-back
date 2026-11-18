@@ -32,10 +32,12 @@ items:
 
   - ref: "3"
     asks: "Which crop pests do you manage? (Insects / Rodents / Birds / Nematodes / Mites / Slugs / Other.)"
-    status: not_covered
-    severity: P2
-    gap: "No field asks which pest taxa the operation actually manages. CCOF's G5.0 matrix does not ask this either — it only offers generic 'Insects & invertebrates' and 'Vertebrate pests' columns, never enumerating species or taxa — so this is a genuinely fresh WSDA-specific ask with no CCOF row to reuse. Without it, `prevention_practices`'s vertebrate-specific options (`vertebrate_exclusion`, `raptor_habitat`, `vertebrate_trapping`) print with no stated target: rodents, birds, or both."
-    fix: "Add `pest_taxa_managed` [checkbox_group] {insects, rodents, birds, nematodes, mites, slugs, other}."
+    status: covered
+    trazo:
+      questions: [g5_0_pest.pest_taxa_managed, g5_0_pest.pest_taxa_other]
+      prints: "modules/G5_0.pdf §A"
+    # Closed 2026-11-18 by the pest, weed and soil slice: pest_taxa_managed asks the form's kinds of crop pest, with
+    # other.
 
   - ref: "4"
     asks: "Which preventative pest control strategies do you implement on your operation? (Crop rotation / Insect or rodent traps / Structures for wildlife / Beneficial habitat / Resistant varieties / Mating disruption / Timing of planting / Release of beneficials / Trap crops / Companion planting / Physical barriers / Physical removal / Other.)"
@@ -54,7 +56,9 @@ items:
 
   - ref: "5"
     asks: "Describe the records you maintain regarding your preventative pest management efforts."
-    status: not_covered
-    severity: P2
-    gap: "Same gap as F6: no field captures what records document the preventative practices themselves, as distinct from monitoring-result records. `monitoring_records` is not cited here on that axis — see F6."
-    fix: "Add `pest_prevention_records` [textarea]."
+    status: covered
+    trazo:
+      questions: [g5_0_pest.pest_prevention_records]
+      prints: "modules/G5_0.pdf §A"
+    # Closed 2026-11-18 by the pest, weed and soil slice: pest_prevention_records, the records kept of preventive pest
+    # management.

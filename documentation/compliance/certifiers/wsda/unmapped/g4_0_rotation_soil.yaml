@@ -1,0 +1,8 @@
+# Trazo questions in g4_0_rotation_soil that WSDA's AGR 2121 §E does not ask (2026-11-18).
+# §E asks rotation, fertility and the practices as checklists; CCOF G4.0 asks the two descriptions below.
+questions:
+  g4_0_rotation_soil.in_lieu_description: >-
+    CCOF G4.0 A1b's description of the practices in lieu of rotation. WSDA AGR 2121 §E asks biodiversity
+    practices as a checklist.
+  g4_0_rotation_soil.rotation_site_specific_notes: >-
+    CCOF G4.0 A1c's site-specific explanation. Not asked in WSDA AGR 2121 §E.

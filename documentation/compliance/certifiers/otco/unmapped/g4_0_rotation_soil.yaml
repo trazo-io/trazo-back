@@ -40,3 +40,8 @@ questions:
   g4_0_rotation_soil.applies_fertilizers: >-
     Whether fertilizer or other nutrients are applied, as a yes or no. Asked by WSDA AGR 2121 E 11 ahead
     of its nutrient water-quality list; OTCO reads the fertility components instead.
+  g4_0_rotation_soil.in_lieu_description: >-
+    CCOF G4.0 A1b's description of the practices in lieu of rotation. OTCO's C4 4.2-2 asks the same
+    practices as a checklist (in_lieu_practices), not a description.
+  g4_0_rotation_soil.rotation_site_specific_notes: >-
+    CCOF G4.0 A1c's site-specific explanation. Not asked on C4.

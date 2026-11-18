@@ -63,16 +63,13 @@ items:
     # and stale seed bed. The untyped weed list is retired: shown only to a plan that answered it.
   - ref: '4'
     asks: Do you use plastic mulch or silage tarps for weed control in an annual cropping system? Yes / No.
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions:
-      - g5_0_pest.plastic_mulch_used
-      prints: modules/G5_0.pdf §B
-    gap: Use and season-end removal are captured. Missing is the § 205.601(b)(2)(ii)-(iii) non-PVC material condition
-      CCOF's own G5.0 §A register row already flags as absent from these same two fields.
-    fix: 'Same fix already proposed on the CCOF side: add `plastic_mulch_non_pvc` [radio] {confirmed_non_pvc,
-      biobased_film, unknown}, visible when `plastic_mulch_used`.'
+      questions: [g5_0_pest.plastic_mulch_used, g5_0_pest.plastic_mulch_material]
+      prints: "modules/G5_0.pdf §B, with a [REVIEW] line for PVC or a material not yet known"
+    # Closed 2026-11-18 by the pest, weed and soil slice: plastic_mulch_material asks what the plastic is made of
+    # against section 205.601(b)(2): petroleum-based other than PVC, biodegradable biobased mulch film, PVC, or not
+    # known yet; the last two print a [REVIEW] line.
   - ref: 4a
     asks: If yes, describe how you ensure it is removed from the field at the end of the growing or harvest season.
     status: covered
@@ -92,29 +89,28 @@ items:
   - ref: 5a
     asks: If yes, describe how you ensure the plastic remains in sufficient condition that prevents decomposition
       into the soil.
-    status: not_covered
-    severity: P2
+    status: covered
     trazo:
-      prints: —
-    gap: '`plastic_mulch_removal` is framed around season-end removal in an annual system (''describe how the
-      plastic or synthetic mulch is removed at season end''); it does not ask WSDA''s actual perennial-system
-      question — how the operation ensures the plastic stays intact enough to avoid decomposing into the soil
-      over a multi-year planting. A perennial-crop operator answering this field today is describing the wrong
-      practice.'
-    fix: Add `plastic_mulch_perennial_condition` [textarea], visible when the operation's cropping system includes
-      `perennial` (per `g4_0_rotation_soil.system_type`), separate from the annual-system removal question.
+      questions: [g5_0_pest.plastic_mulch_used, g5_0_pest.plastic_mulch_perennial_condition]
+      prints: "modules/G5_0.pdf §B"
+    # Closed 2026-11-18 by the pest, weed and soil slice: plastic_mulch_perennial_condition asks WSDA's perennial
+    # question, how the plastic is kept from breaking down into the soil, apart from season-end removal in an annual
+    # system.
 
   - ref: "6"
     asks: "Describe the records you maintain regarding your preventative weed management strategies."
-    status: not_covered
-    severity: P2
-    gap: "No field captures what records are kept for preventative weed-management practices specifically. `monitoring_records` (§ 205.201(a)(3)) is the nearest existing field and is NOT cited here, on the axis: it asks how MONITORING RESULTS are recorded, not what records document the preventative practices themselves. Those records exist in Trazo as logged events rather than as a described-records answer, which is a different artifact from the narrative WSDA asks for here. (The cross-certifier half of this note — that the field is 'already registered as having no CCOF counterpart' — was removed 2026-09-08 with the same correction made at ref 1; it was never a reason.)"
-    fix: "Add `weed_prevention_records` [textarea] describing what preventative-practice records are kept."
+    status: covered
+    trazo:
+      questions: [g5_0_pest.weed_prevention_records]
+      prints: "modules/G5_0.pdf §B"
+    # Closed 2026-11-18 by the pest, weed and soil slice: weed_prevention_records, the records kept of preventive weed
+    # management.
   - ref: '7'
     asks: Optional space for additional information.
-    status: not_covered
-    severity: P3
+    status: covered
+    trazo:
+      questions: [g5_0_pest.weed_management_additional_notes]
+      prints: "modules/G5_0.pdf §B"
     optional: true
-    gap: No general free-text notes field exists on the pest-management module for information outside the structured
-      questions above — the same class of gap CCOF's G4.2 A9 already names for its own module.
-    fix: Add an optional `weed_management_additional_notes` textarea.
+    # Closed 2026-11-18 by the pest, weed and soil slice: weed_management_additional_notes, optional, as the form's
+    # own space.

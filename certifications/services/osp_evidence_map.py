@@ -181,6 +181,17 @@ OSP_EVIDENCE_MAP: dict = {
         OUT_OF_SCOPE,
         note="Names the kinds of package used for export (retail, wholesale, bulk); it states a practice, not a record.",
     ),
+    "pest_prevention_records": EvidenceEntry(
+        NOT_EVIDENCED,
+        note=(
+            "Describes the records kept of preventive pest management. The practices themselves are logged as events, "
+            "but the description is the operation's own account of what it keeps, not a count of them."
+        ),
+    ),
+    "weed_prevention_records": EvidenceEntry(
+        NOT_EVIDENCED,
+        note="Same as pest_prevention_records, for the preventive weed management records.",
+    ),
     "export_certificate_process": EvidenceEntry(
         NOT_EVIDENCED,
         note="Describes how export certificates are requested and kept; no export certificate is stored in Trazo.",

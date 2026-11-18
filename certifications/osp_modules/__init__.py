@@ -400,7 +400,13 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 # 2026.12.18: direct marketing. G6.5 asks whether the operation sells directly to consumers, where (farmers' markets,
 #   CSA, farm stand, u-pick, online, other), each market and venue in CCOF's columns, whether non-organic products are
 #   sold too and how the two are told apart, with samples (CCOF G6.5 B1, B1a, B1b, C1). Optional at the top.
-CONTENT_VERSION = "2026.12.18"
+# 2026.12.19: pest, weed and soil. G5.0 asks the pests and diseases of concern (OTCO C5 5.1-1, suggested from pest
+#   records), the kinds of crop pest managed (WSDA AGR 2121 G 3), the disease or seed a burn targets (CCOF G5.0 C3, OTCO
+#   5.2-2), the plastic mulch's material and its condition in a perennial planting (WSDA F 4, 5a), and the records of
+#   preventive pest and weed management (G 5, F 6), with notes (F 7). G4.0 adds OTCO C4 4.2-2's practices in lieu of
+#   rotation, a description for perennial or container crops and site-specific notes (CCOF G4.0 A1b, A1c), and splits
+#   contour farming from terraces, with bare ground and other (CCOF C1, OTCO 4.1-2); the merged option is retired.
+CONTENT_VERSION = "2026.12.19"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

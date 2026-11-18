@@ -141,6 +141,12 @@ GOLDEN_ANSWER_CASES = {
     },
     "g4_0_rotation_soil": {
         "unanswered": {},
+        # 2026.12.19: container crops are asked the in-lieu description; the retired merged erosion option alone is
+        # no answer, beside a current one it is.
+        "container_only": {"system_type": ["container"]},
+        "erosion_retired_only": {"erosion_practices": ["contour"]},
+        "erosion_retired_and_terraces": {"erosion_practices": ["contour", "terraces"]},
+        "erosion_other": {"erosion_practices": ["other"]},
         "annual_with_fertilizer": {"system_type": ["annual"], "applies_fertilizers": True},
         "annual_only": {"system_type": ["annual"]},
         "perennial_with_other": {
@@ -170,6 +176,11 @@ GOLDEN_ANSWER_CASES = {
     },
     "g5_0_pest": {
         "unanswered": {},
+        # 2026.12.19: the burn target opens for disease or seed only; the plastic questions for plastic only.
+        "burn_for_disease": {"burns_crop_residue": True, "burn_reason": ["disease_suppression"]},
+        "burn_other_only": {"burns_crop_residue": True, "burn_reason": ["other"]},
+        "plastic_pvc": {"plastic_mulch_used": True, "plastic_mulch_material": "pvc"},
+        "pest_taxa_other": {"pest_taxa_managed": ["insects", "other"]},
         # 2026.11.22: a retired question shows only while it holds an answer; both evaluators must agree.
         "retired_lists_answered": {
             "prevention_practices": ["crop_rotation", "other"],
