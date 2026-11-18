@@ -45,6 +45,7 @@ class TransitionStatusServiceTests(TestCase):
         self.assertTrue(status.is_eligible)
         self.assertEqual(status.findings, [])
         self.assertIn("affidavits", status.note)
+        self.assertEqual(status.to_dict()["note_code"], "none_recorded")
 
     def test_old_prohibited_substance_eligible(self):
         old = date.today() - relativedelta(months=TRANSITION_MONTHS) - timedelta(days=30)
@@ -59,6 +60,7 @@ class TransitionStatusServiceTests(TestCase):
         status = compute_transition_status(self.parcel)
         self.assertTrue(status.is_eligible)
         self.assertEqual(status.last_prohibited_date, old)
+        self.assertEqual(status.to_dict()["note_code"], "elapsed")
 
     def test_recent_prohibited_substance_not_eligible(self):
         recent = date.today() - timedelta(days=400)
@@ -78,6 +80,8 @@ class TransitionStatusServiceTests(TestCase):
             recent + relativedelta(months=TRANSITION_MONTHS),
         )
         self.assertGreater(status.days_remaining, 0)
+        # The screen words the note in the reader's language from this code (VID-06/VID-07).
+        self.assertEqual(status.to_dict()["note_code"], "in_transition")
 
     def test_chemical_event_classified_organic_does_not_trigger(self):
         history = self._new_history()

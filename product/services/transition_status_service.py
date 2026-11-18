@@ -64,6 +64,11 @@ class TransitionStatus:
     #: Inputs recorded with a basis "not yet confirmed" (R8-08). Named, never a block.
     unconfirmed: List[ProhibitedFinding] = field(default_factory=list)
     note: str = ""
+    #: What `note` says, as a stable code for a screen that words it in the reader's language
+    #: (the parcel page printed this English sentence on a Spanish page, VID-07/VID-06,
+    #: recordkeeping checklist run 2026-11-16): none_recorded | elapsed | in_transition. The
+    #: unclassified and unconfirmed clauses are the two lists already in the payload.
+    note_code: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -103,6 +108,7 @@ class TransitionStatus:
                 for f in self.unconfirmed
             ],
             "note": self.note,
+            "note_code": self.note_code,
         }
 
 
@@ -280,6 +286,7 @@ def compute_transition_status(parcel) -> TransitionStatus:
                 "may still be required by the certifier per 7 CFR 205.202(b)."
             )
             + unclassified_note,
+            note_code="none_recorded",
         )
 
     last_prohibited = findings[0].date_observed
@@ -311,6 +318,7 @@ def compute_transition_status(parcel) -> TransitionStatus:
             else f"{days_remaining} day(s) remaining in 36-month transition (7 CFR 205.202)."
         )
         + unclassified_note,
+        note_code="elapsed" if is_eligible else "in_transition",
     )
 
 
