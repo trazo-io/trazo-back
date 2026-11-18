@@ -172,16 +172,21 @@ def get_invitation_details(request, invitation_code):
                 {"error": "This invitation has expired or cannot be accepted"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        return Response(
-            {
-                "invitation_code": invitation.invitation_code,
-                "company_name": invitation.company.name,
-                "role": invitation.get_role_display(),
-                "inviter_name": f"{invitation.inviter.first_name} {invitation.inviter.last_name}",
-                "expires_at": invitation.expires_at,
-                "invitation_message": invitation.invitation_message,
-            }
-        )
+        payload = {
+            "invitation_code": invitation.invitation_code,
+            "company_name": invitation.company.name,
+            "role": invitation.get_role_display(),
+            "inviter_name": f"{invitation.inviter.first_name} {invitation.inviter.last_name}",
+            "expires_at": invitation.expires_at,
+            "invitation_message": invitation.invitation_message,
+        }
+        # The invitee's own memberships, and only to the invitee: which companies accepting moves them
+        # out of, and where they are the sole Company Admin, so the page can say so before they accept
+        # (OV-SEC-C11). Anyone else reading this public endpoint gets nothing about the account.
+        user = request.user
+        if getattr(user, "is_authenticated", False) and user.email.lower() == invitation.email.lower():
+            payload["transfer"] = invitation.transfer_effect(user)
+        return Response(payload)
 
     except Exception as e:
         logger.error(f"Error getting invitation details: {str(e)}")
@@ -229,6 +234,18 @@ def accept_invitation(request, invitation_code):
                         "error": "This invitation is for a different email address. Please log in with the correct account or sign up with the invited email."
                     },
                     status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Refused before anything changes, with the reason the page shows (OV-SEC-C11). `accept()`
+            # refuses the same case for the sign-up and sign-in paths, which leave the invitation pending.
+            sole_admin_of = invitation.transfer_effect(request.user)["sole_admin_of"]
+            if sole_admin_of:
+                from users.models_invitation import SoleAdminTransferError
+
+                refused = SoleAdminTransferError(sole_admin_of)
+                return Response(
+                    {"error": str(refused), "code": "sole_company_admin", "companies": refused.companies},
+                    status=status.HTTP_409_CONFLICT,
                 )
 
             with transaction.atomic():
