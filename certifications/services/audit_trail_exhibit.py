@@ -456,6 +456,50 @@ def _count_of(count: int, noun: str) -> str:
     return f"{count} {noun}" + ("" if count == 1 else "s")
 
 
+#: What a stated balance says, as a stable code. `balance_statement` words each one for the
+#: exhibit and the dossier; the trace screen prints the same reading in the reader's language
+#: (recordkeeping checklist run 2026-11-16, VID-10). Before, the screen printed the four figures alone, so a
+#: packed crop's pack-out gap read as product unaccounted for while the exhibit, from the same
+#: numbers, said sales matched the pack-out.
+BALANCE_READINGS = (
+    "balanced",
+    "balanced_packed",
+    "packout_below_harvest",
+    "packed_not_sold",
+    "sales_exceed_packout",
+    "open_unsold",
+    "unaccounted",
+    "sales_exceed_harvest",
+)
+
+
+def balance_reading(balance, *, season_open: bool = False) -> tuple[str, Optional[Decimal]]:
+    """What the organic lot's balance says, as one of `BALANCE_READINGS`, and the quantity it
+    names (None when it names none). ("", None) when no balance is stated.
+
+    The ONE decision behind every place the balance is put into words, so the exhibit, the dossier
+    and the trace screen cannot read the same figures two ways.
+    """
+    if balance is None or balance.difference is None:
+        return "", None
+    diff = balance.difference
+    packed = balance.packed_out
+    if packed is not None and diff == 0:
+        return "balanced_packed", None
+    if packed is not None and diff > 0:
+        unsold = packed - balance.sold
+        if unsold == 0:
+            return "packout_below_harvest", balance.harvested - packed
+        if unsold > 0:
+            return "packed_not_sold", unsold
+        return "sales_exceed_packout", -unsold
+    if diff == 0:
+        return "balanced", None
+    if diff > 0:
+        return ("open_unsold" if season_open else "unaccounted"), diff
+    return "sales_exceed_harvest", -diff
+
+
 def balance_statement(balance, *, season_open: bool = False, as_at: str = "") -> tuple[str, bool]:
     """The organic lot's harvested minus sold as one sentence, and whether it is a [REVIEW].
 
@@ -463,9 +507,11 @@ def balance_statement(balance, *, season_open: bool = False, as_at: str = "") ->
     dossier's Output Reconciliation), so the two cannot give an inspector different figures for
     one season (overall review 2026-11, OV-FJ-C24). The sentence carries no "[REVIEW]" marker; the
     caller prints it its own way. A balance that cannot be computed returns its reason, and the
-    caller says who states it.
+    caller says who states it. Which sentence is decided by `balance_reading`, which the trace
+    screen reads too.
     """
-    if balance is None or balance.difference is None:
+    reading, quantity = balance_reading(balance, season_open=season_open)
+    if not reading:
         reason = balance.not_computed if balance is not None else "no harvest or sale is on record"
         return f"Balance not computed: {reason}.", False
     line = (
@@ -477,57 +523,53 @@ def balance_statement(balance, *, season_open: bool = False, as_at: str = "") ->
             f", of which {fmt_total(balance.sold_not_organic, balance.unit)} on "
             f"{_count_of(balance.sold_not_organic_count, 'invoice')} that do not identify it as organic"
         )
-    diff = balance.difference
     packed = balance.packed_out
-    if packed is not None and diff == 0:
+    qty = fmt_total(quantity, balance.unit) if quantity is not None else ""
+    if reading == "balanced_packed":
         # Balanced AND packed: the fresh pack-out and the processing fruit are separate sales of
         # the same delivery, and the pack-out is the number a reviewer reads first.
         line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}, the rest sold on the "
         return line + "same settlement \u00b7 harvest and sales balance.", False
-    if packed is not None and diff > 0:
+    if reading in ("packout_below_harvest", "packed_not_sold", "sales_exceed_packout"):
         # A packed crop: the handler's pack-out is on every harvest record, so the gap between
         # harvest and sale is stated from the records, not handed back to the operator.
-        shrink = balance.harvested - packed
-        unsold = packed - balance.sold
         line += f" \u00b7 packed out by the handler {fmt_total(packed, balance.unit)}."
-        if unsold == 0:
+        if reading == "packout_below_harvest":
             # 2026-09-30 (audit T22): no cull or loss record exists anywhere in the data model; the
             # pack-out figure shows a difference, not its cause. State the record, name no cause.
             return (
-                line + f" Sales match the pack-out. The handler's pack-out records {fmt_total(shrink, balance.unit)} "
-                "less than was harvested.",
+                line + f" Sales match the pack-out. The handler's pack-out records {qty} less than was harvested.",
                 False,
             )
-        if unsold > 0:
+        if reading == "packed_not_sold":
             return (
-                line + f" {fmt_total(unsold, balance.unit)} of the packed-out crop is not accounted for by a sale of "
+                line + f" {qty} of the packed-out crop is not accounted for by a sale of "
                 "this lot. State whether it is in storage or was sold under another record.",
                 False,
             )
         return (
-            line + f" Sales exceed the handler's pack-out by {fmt_total(-unsold, balance.unit)}. "
+            line + f" Sales exceed the handler's pack-out by {qty}. "
             "A pack-out figure is missing, or a sale is filed against the wrong lot.",
             True,
         )
-    if diff == 0:
+    if reading == "balanced":
         return line + " \u00b7 harvest and sales balance.", False
-    if diff > 0:
-        if season_open:
-            # An open season is still being picked and sold: the difference is what no sale
-            # recorded so far accounts for, not something to explain yet.
-            when = f", as at {as_at}" if as_at else ""
-            return (
-                line + f" \u00b7 {fmt_total(diff, balance.unit)} harvested is on no sale recorded so far "
-                f"(the season is open{when}).",
-                False,
-            )
+    if reading == "open_unsold":
+        # An open season is still being picked and sold: the difference is what no sale
+        # recorded so far accounts for, not something to explain yet.
+        when = f", as at {as_at}" if as_at else ""
         return (
-            line + f" \u00b7 {fmt_total(diff, balance.unit)} harvested is on no sale, pack-out or loss record in "
+            line + f" \u00b7 {qty} harvested is on no sale recorded so far (the season is open{when}).",
+            False,
+        )
+    if reading == "unaccounted":
+        return (
+            line + f" \u00b7 {qty} harvested is on no sale, pack-out or loss record in "
             "Trazo for this lot. State where it went.",
             False,
         )
     return (
-        line + f" \u00b7 sales exceed the recorded harvest by {fmt_total(-diff, balance.unit)}. "
+        line + f" \u00b7 sales exceed the recorded harvest by {qty}. "
         "A harvest record is missing, or a sale is filed against the wrong lot.",
         True,
     )

@@ -678,3 +678,80 @@ class PreHarvestIntervalTests(_TraceBase):
         spray = self._spray(season, day=2, phi=14, month=8)
         row = self._rows(sale)[spray.pk]
         self.assertEqual((row["days_to_pick"], row["inside_phi"]), (None, False))
+
+
+class BalanceReadingTests(_TraceBase):
+    """The trace screen states what the balance says, decided where the exhibit's sentence is.
+
+    Recordkeeping checklist run 2026-11-16, VID-10: River Block blueberries printed "Harvested
+    minus sold: 3,538 lb" and stopped there. Sales matched the handler's pack-out and the 3,538 lb
+    was the gap between harvest and pack-out, which the exhibit said from the same numbers; the
+    screen left it reading as product unaccounted for.
+    """
+
+    def _packed_pick(self, season, qty, returned, **kw):
+        pick = self._pick(season, **kw)
+        ProductionEvent.objects.filter(pk=pick.pk).update(
+            yield_quantity=qty, quantity_returned_from_handler=returned, handler_return_unit="lb"
+        )
+        pick.refresh_from_db()
+        return pick
+
+    def test_sales_matching_a_pack_out_below_the_harvest_say_so(self):
+        season = self._season()
+        picks = [
+            self._packed_pick(season, 13400, 12900, lot_code="A", day=1),
+            self._packed_pick(season, 10000, 9800, lot_code="B", day=2),
+        ]
+        sale = self._sale(season, picks=picks, quantity=22700)
+        balance = self._trace(sale.pk).json()["balance"]
+        self.assertEqual(
+            (balance["packed_out"], balance["sold"], balance["difference"]), ("22,700 lb", "22,700 lb", "700 lb")
+        )
+        self.assertEqual((balance["reading"], balance["reading_quantity"]), ("packout_below_harvest", "700 lb"))
+
+    def test_the_screen_and_the_exhibit_read_the_same_figures_the_same_way(self):
+        from certifications.services.audit_trail_exhibit import _lot_balance, balance_statement
+
+        season = self._season()
+        picks = [self._packed_pick(season, 13400, 12900)]
+        sale = self._sale(season, picks=picks, quantity=12900)
+        balance = trace_sale(sale).as_dict()["balance"]
+        text, review = balance_statement(_lot_balance(picks, [sale]))
+        self.assertEqual(balance["reading"], "packout_below_harvest")
+        self.assertIn("Sales match the pack-out. The handler's pack-out records 500 lb less than was harvested.", text)
+        self.assertFalse(review)
+
+    def test_each_reading_the_screen_gets(self):
+        cases = [
+            # (pick qty, returned from handler, sold, season finished) -> reading, quantity
+            ((13400, None, 13400, True), ("balanced", "")),
+            ((13400, None, 13000, True), ("unaccounted", "400 lb")),
+            ((13400, None, 13000, False), ("open_unsold", "400 lb")),
+            ((13400, None, 13900, True), ("sales_exceed_harvest", "500 lb")),
+            ((13400, 12900, 12500, True), ("packed_not_sold", "400 lb")),
+            ((13400, 12900, 13000, True), ("sales_exceed_packout", "100 lb")),
+            ((13400, 12900, 13400, True), ("balanced_packed", "")),
+        ]
+        for i, ((qty, returned, sold, finished), expected) in enumerate(cases):
+            with self.subTest(case=expected[0]):
+                season = self._season(lot_id=f"L-{i}", name=f"season {i}")
+                if not finished:
+                    Production.objects.filter(pk=season.pk).update(finish_date=None)
+                    season.refresh_from_db()
+                pick = (
+                    self._packed_pick(season, qty, returned, lot_code=f"P-{i}")
+                    if returned is not None
+                    else self._pick(season, lot_code=f"P-{i}", qty=qty)
+                )
+                sale = self._sale(season, picks=[pick], quantity=sold, invoice_number=f"INV-{i}")
+                balance = trace_sale(sale).as_dict()["balance"]
+                self.assertEqual((balance["reading"], balance["reading_quantity"]), expected)
+
+    def test_a_balance_that_cannot_be_summed_has_no_reading(self):
+        season = self._season()
+        pick = self._pick(season)
+        sale = self._sale(season, picks=[pick], quantity_unit="bins")
+        balance = trace_sale(sale).as_dict()["balance"]
+        self.assertTrue(balance["not_computed"])
+        self.assertEqual((balance["reading"], balance["reading_quantity"]), ("", ""))

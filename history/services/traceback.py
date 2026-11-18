@@ -37,7 +37,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Optional
 
-from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, fmt_total
+from certifications.services.audit_trail_exhibit import _fmt_qty, _lot_balance, balance_reading, fmt_total
 from history.services import supplier_certificates
 from history.services.record_receipts import RECEIPT_KIND, receipt_files
 from history.services.supplier_certificates import purchase_date_of
@@ -584,6 +584,11 @@ def _balance_row(season) -> dict:
     all_harvests = list(ProductionEvent.objects.filter(history=season, type=ProductionEvent.HARVESTING))
     balance = _lot_balance(all_harvests, list(SalesRecord.objects.live().filter(production=season)))
     diff = balance.difference
+    season_open = season.finish_date is None
+    # What the figures say, decided where the exhibit's sentence is (`balance_reading`), so the
+    # screen cannot read them another way. The four figures alone left a packed crop's pack-out
+    # gap reading as product unaccounted for (recordkeeping checklist run 2026-11-16, VID-10).
+    reading, reading_quantity = balance_reading(balance, season_open=season_open)
     return dict(
         harvested=fmt_total(balance.harvested, balance.unit) if balance.harvested is not None else "",
         sold=fmt_total(balance.sold, balance.unit) if balance.sold is not None else "",
@@ -610,7 +615,9 @@ def _balance_row(season) -> dict:
         # Sales are recorded while the season is still being picked. Until it is finished these
         # are the picks and sales on file so far, and "harvested minus sold" is product not yet
         # sold as much as anything missing, so the screen says the season is open.
-        season_open=season.finish_date is None,
+        season_open=season_open,
+        reading=reading,
+        reading_quantity=fmt_total(reading_quantity, balance.unit) if reading_quantity is not None else "",
     )
 
 
