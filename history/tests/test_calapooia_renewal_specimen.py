@@ -36,6 +36,7 @@ from rest_framework.test import APIClient
 from certifications.models import OrganicSystemPlan, OSPAnnualUpdate
 from certifications.services.osp_module_pdf import generate_osp_packet
 from certifications.services.required_records import NOT_CONFIRMED, required_records
+from users.constants import PRODUCER
 from users.models import User
 
 OWNER = "calapooia-s6@test.com"
@@ -57,7 +58,12 @@ class _Seeded(TestCase):
         call_command("seed_national_list", stdout=quiet)
         call_command("create_plans", stdout=quiet)
         cls.owner = User.objects.create_user(
-            email=OWNER, password="unused-Pw-2026", first_name="Seed", last_name="Runner"
+            email=OWNER,
+            password="unused-Pw-2026",
+            first_name="Seed",
+            last_name="Runner",
+            # The seeder refuses an owner who could not sign in to the app (VID-15).
+            user_type=PRODUCER,
         )
         _seed()
 

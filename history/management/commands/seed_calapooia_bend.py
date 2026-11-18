@@ -202,6 +202,15 @@ class Command(BaseCommand):
         owner = User.objects.filter(email=options["owner_email"]).first()
         if owner is None:
             raise CommandError(f"No user with email {options['owner_email']!r}.")
+        # The app subdomain admits only producers (and superusers). A consumer account owned the
+        # farm and could not sign in to see it (recordkeeping checklist run 2026-11-16, VID-15).
+        from users.constants import PRODUCER
+
+        if owner.user_type != PRODUCER and not owner.is_superuser:
+            raise CommandError(
+                f"{options['owner_email']!r} is not a producer account (user_type {owner.user_type}), so it "
+                "could not sign in to the app to see this farm. Use a producer account."
+            )
 
         est_name = data["establishment"]["name"]
         existing = Establishment.objects.filter(name=est_name)

@@ -26,12 +26,13 @@ source — DOCUMENTED 15 = 15, GAP 2 = 2, with the single remaining difference b
 rehearsal's own audit trail, which must not be reproduced.
 """
 
+import io
 import json
 import re
 from pathlib import Path
 
 from django.apps import apps
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 # The loader's own type-marker decoder. Imported rather than reimplemented: a guard that
 # decodes differently from the seeder is testing a document nobody loads.
@@ -388,6 +389,34 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
             if p is not None:
                 self.assertEqual(p, {"__dec__": "4.00"}, row.get("_id"))
 
+    def test_the_specimen_records_agree_with_each_other(self):
+        """VID-15 (recordkeeping checklist run 2026-11-16): the specimen printed facts its own records
+        contradicted. Upper Terrace onions "11.8 ac" on a 14.2 ac parcel whose every soil record and
+        harvest arithmetic use 14.2; a season note "89,300 lb packed out" over pick records that sum
+        to 89,562; "BOL BOL CBF-..." (the value carried the label); "Pressure 6.00/trap" on 58 trap
+        rows, which was the trap count, while the catch sat in the trap detail; and a threshold the
+        strategy called "the first confirmed SWD female" while the rationale said "first male catch".
+        """
+        text = json.dumps(self.data, ensure_ascii=False)
+        for stale in ("11.8 ac", "89,300 lb packed out", "first male catch", "first confirmed SWD female"):
+            self.assertNotIn(stale, text, stale)
+        sales_bols = [
+            r.get("bill_of_lading") or ""
+            for s in self.data["seasons"]
+            for model in ("ProductionEvent",)
+            for r in s["events"].get(model, [])
+        ] + [r.get("bill_of_lading") or "" for r in self.data["sales_records"]]
+        self.assertTrue(any(sales_bols), "no bill of lading read")
+        self.assertFalse([b for b in sales_bols if b.startswith("BOL ")])
+        traps = [
+            r for s in self.data["seasons"] for r in s["events"].get("PestManagementEvent", []) if r.get("type") == "TM"
+        ]
+        self.assertGreater(len(traps), 50, "no trap row read")
+        self.assertFalse(
+            [r["_id"] for r in traps if (r.get("monitoring_count") or {}).get("__dec__") == "6.00"],
+            "a trap row stores the trap count as its pressure",
+        )
+
     def test_every_national_list_link_says_how_it_was_set(self):
         """A National List link with no basis prints "recorded before Trazo kept how it was matched;
         not verified": a false history for records written in 2026 (the seeder writes rows directly,
@@ -725,3 +754,20 @@ class CalapooiaGeographyAndSeasonTests(SimpleTestCase):
                         checked += 1
                         self.assertGreaterEqual(when, start, (season["name"], model, e.get("_id")))
         self.assertGreater(checked, 0)
+
+
+class SeederOwnerTests(TestCase):
+    """VID-15: `--owner-email` took a consumer account, which then owned the farm and could not
+    sign in to the app subdomain to see it."""
+
+    def test_a_consumer_account_is_refused_before_anything_is_written(self):
+        from django.core.management import CommandError, call_command
+
+        from company.models import Establishment
+        from users.constants import CONSUMER
+        from users.models import User
+
+        User.objects.create_user(email="shopper@test.com", password="unused-Pw-2026", user_type=CONSUMER)
+        with self.assertRaisesMessage(CommandError, "not a producer account"):
+            call_command("seed_calapooia_bend", owner_email="shopper@test.com", stdout=io.StringIO())
+        self.assertFalse(Establishment.objects.exists())
