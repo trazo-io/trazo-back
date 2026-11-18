@@ -165,6 +165,8 @@ api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/my_reviews\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/my_scans/$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/my_scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/plan-materials/$	history.views.HistoryViewSet	IsAuthenticated	get=plan_materials_for_logging
+api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/plan-materials\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=plan_materials_for_logging
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/pur-export/$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/pur-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
 api/^^companies/(?P<company_pk>[^/.]+)/establishments/(?P<establishment_pk>[^/.]+)/parcels/(?P<parcel_pk>[^/.]+)/productions/recent-inputs/$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs
@@ -346,6 +348,8 @@ api/^productions/my_reviews/$	history.views.HistoryViewSet	IsAuthenticated	get=m
 api/^productions/my_reviews\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_reviews
 api/^productions/my_scans/$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
 api/^productions/my_scans\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=my_scans
+api/^productions/plan-materials/$	history.views.HistoryViewSet	IsAuthenticated	get=plan_materials_for_logging
+api/^productions/plan-materials\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=plan_materials_for_logging
 api/^productions/pur-export/$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
 api/^productions/pur-export\.(?P<format>[a-z0-9]+)/?$	history.views.HistoryViewSet	IsAuthenticated	get=pur_export
 api/^productions/recent-inputs/$	history.views.HistoryViewSet	IsAuthenticated	get=recent_inputs

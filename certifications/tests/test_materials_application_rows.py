@@ -23,8 +23,8 @@ from django.utils import timezone
 
 from rest_framework.test import APIClient
 
-from certifications.models import NationalListSubstance, OrganicSystemPlan, PlanMaterialEntry
-from certifications.services.plan_materials import incomplete_rows, materials_list_rows
+from certifications.models import NationalListSubstance, OMRIProduct, OrganicSystemPlan, PlanMaterialEntry
+from certifications.services.plan_materials import incomplete_rows, materials_list_rows, plan_materials
 from certifications.services.plan_review import plan_review
 from company.models import Company, Establishment
 from history.models import ChemicalEvent, Production
@@ -106,6 +106,15 @@ class TheEditorSaysWhatTheRecordsShow(_Orchard):
         self._log("Entrust SC")
         self.assertEqual(self._row("Entrust SC")["last_logged_on"], date(2026, 5, 4).isoformat())
 
+    def test_the_latest_application_is_offered_not_the_first(self):
+        # Review of back #473: the row's own record is its FIRST application.
+        self.entry("Entrust SC", status="planned")
+        for when in (datetime(2025, 5, 1, 9, 0), datetime(2026, 6, 2, 9, 0)):
+            ChemicalEvent.objects.create(
+                history=self.history, type="PE", date=timezone.make_aware(when), commercial_name="Entrust SC"
+            )
+        self.assertEqual(self._row("Entrust SC")["last_logged_on"], date(2026, 6, 2).isoformat())
+
     def test_a_row_the_records_never_name_has_no_date(self):
         self.entry("Cyd-X", status="planned")
         self.assertEqual(self._row("Cyd-X")["last_logged_on"], "")
@@ -151,3 +160,40 @@ class TheFormsOfferThePlansMaterials(_Orchard):
         self.osp.delete()
         self.client.force_authenticate(self.owner)
         self.assertEqual(self.client.get(self.URL.format(self.est.id)).json()["materials"], [])
+
+
+class AProductIsReadOnceByName(_Orchard):
+    """Review of back #473: `plan_materials` returns a product twice where a catalog row must not fold into the
+    operator's own (a lapsed OMRI listing, a prohibited substance); the twin carries no answers."""
+
+    URL = TheFormsOfferThePlansMaterials.URL
+
+    def _lapsed(self, **fields):
+        product = OMRIProduct.objects.create(
+            omri_id="snc-15985",
+            product_name="SNS PC Insecticide Concentrate",
+            manufacturer="Sierra Natural Science",
+            delisted_on=date(2026, 9, 26),
+        )
+        self.osp.approved_omri_products.add(product)
+        self.entry("SNS PC Insecticide Concentrate", omri_product=product, **fields)
+        self.assertEqual(len([r for r in plan_materials(self.osp) if r.name == product.product_name]), 2)
+
+    def _offered(self):
+        client = APIClient()
+        client.force_authenticate(self.owner)
+        return [m["name"] for m in client.get(self.URL.format(self.est.id)).json()["materials"]]
+
+    def test_a_complete_entry_beside_its_lapsed_listing_is_not_listed_as_incomplete(self):
+        self._lapsed(manufacturer="Sierra Natural Science", reason_for_use="Mites", status="in_use")
+        self.assertEqual(incomplete_rows(self.osp), [])
+
+    def test_a_product_marked_no_longer_used_is_not_offered_by_its_lapsed_listing(self):
+        self._lapsed(status="discontinued")
+        self.assertEqual(self._offered(), [])
+        self.assertEqual(incomplete_rows(self.osp), [])
+
+    def test_a_prohibited_substance_is_not_offered_under_the_operators_own_row(self):
+        self.osp.approved_national_list_substances.add(NationalListSubstance.objects.get(substance_name="Strychnine"))
+        self.entry("Strychnine", manufacturer="X", reason_for_use="Gophers", status="in_use")
+        self.assertEqual(self._offered(), [])

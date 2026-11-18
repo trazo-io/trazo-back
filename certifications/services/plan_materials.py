@@ -742,6 +742,7 @@ def materials_list_rows(osp) -> list[dict]:
         for entry in osp.plan_material_entries.select_related("label_document", "omri_product", "wsda_material")
     }
     labels_asked = labels_asked_for(osp)
+    latest = _latest_logged_dates(osp.establishment)
     rows = []
     for row in _material_rows(osp.establishment, osp=osp):
         in_use, intended = _material_use(row)
@@ -757,7 +758,7 @@ def materials_list_rows(osp) -> list[dict]:
                 "reason_kind": (_material_kind_words(row) or "") if not _material_reason(row) else "",
                 # The latest application the records show, so the editor can offer "in use" for a row
                 # still stated as planned (or not stated). An offer the operator takes, never a write.
-                "last_logged_on": _last_logged_on(row),
+                "last_logged_on": _last_logged_on(row, latest),
                 "status": getattr(plan, "status", "") or "",
                 "in_use": in_use is not None,
                 "intended_for_use": intended is not None,
@@ -797,13 +798,77 @@ def materials_list_rows(osp) -> list[dict]:
     return rows
 
 
-def _last_logged_on(row) -> str:
-    """ISO date of the row's own logged application, "" when the records hold none."""
-    event = getattr(row, "event", None)
-    when = getattr(event, "date", None)
+def _day(when):
     if when is None:
-        return ""
-    return (when.date() if hasattr(when, "date") else when).isoformat()
+        return None
+    return when.date() if hasattr(when, "date") else when
+
+
+def _latest_logged_dates(establishment) -> dict:
+    """{normalized product name: the latest day the records apply it}, input and amendment records, two queries.
+
+    `_material_rows` keeps the FIRST record of each name (a list of products, not of applications), so its
+    `event` is the oldest application, the wrong one to offer "in use" from (review of back #473).
+    """
+    from history.models import ChemicalEvent, SoilManagementEvent
+
+    latest: dict = {}
+    for model, field in ((ChemicalEvent, "commercial_name"), (SoilManagementEvent, "amendment_product_name")):
+        for name, when in model.objects.filter(history__parcel__establishment=establishment).values_list(field, "date"):
+            day = _day(when)
+            key = _norm(name)
+            if key and day and (key not in latest or day > latest[key]):
+                latest[key] = day
+    return latest
+
+
+def _last_logged_on(row, latest: dict) -> str:
+    """ISO date of the latest application the records show for this row, under its own name or one the operator
+    tied to it; "" when the records hold none."""
+    names = [row.name] + [joined[0] for joined in (getattr(row, "also_logged", ()) or ())]
+    days = [latest.get(_norm(name)) for name in names] + [_day(getattr(getattr(row, "event", None), "date", None))]
+    days = [d for d in days if d]
+    return max(days).isoformat() if days else ""
+
+
+def plan_products(osp) -> list[dict]:
+    """The plan's materials once per product name, with what the operator says about each.
+
+    `plan_materials` returns a product twice on purpose where a catalog row must not fold into the operator's own
+    (a prohibited substance, a lapsed OMRI listing: "printing it twice is the lesser failure"). Read row by row,
+    the held-back twin carries no answers, so it looked incomplete beside a complete entry, and it carried no
+    status, so a product the operator stopped using was offered again (review of back #473). Grouped by name:
+    a group holding a prohibited row, or one the operator marks no longer used, is `excluded`; every other cell
+    is the first one stated in the group, the operator's own row first.
+    """
+    from certifications.models import PlanMaterialEntry
+
+    groups: dict = {}
+    for row in plan_materials(osp):
+        key = _norm(row.name)
+        if key:
+            groups.setdefault(key, []).append(row)
+    out = []
+    for rows in groups.values():
+        ordered = sorted(rows, key=lambda r: r.entry_id is None)
+        first = ordered[0]
+
+        def stated(attr):
+            return next((getattr(r, attr) for r in ordered if (getattr(r, attr) or "").strip()), "")
+
+        out.append(
+            {
+                "name": first.name,
+                "source": first.source,
+                "manufacturer": stated("manufacturer"),
+                "reason": stated("reason"),
+                "status": stated("status"),
+                "category": stated("category"),
+                "substance_only": all(r.names_a_substance_only for r in ordered),
+                "excluded": any(r.prohibited or r.status == PlanMaterialEntry.STATUS_DISCONTINUED for r in ordered),
+            }
+        )
+    return out
 
 
 def incomplete_rows(osp) -> list[str]:
@@ -815,23 +880,21 @@ def incomplete_rows(osp) -> list[str]:
     needing an answer is found on the plan review rather than by the reviewer (2026-11-17). A material no
     longer used, or one the list must not hold at all, is left out: neither is asked to be complete.
     """
-    from certifications.models import PlanMaterialEntry
-
     out = []
-    for row in plan_materials(osp):
-        if row.prohibited or row.status == PlanMaterialEntry.STATUS_DISCONTINUED:
+    for product in plan_products(osp):
+        if product["excluded"]:
             continue
         missing = []
-        if row.names_a_substance_only:
+        if product["substance_only"]:
             missing.append("brand and formulation")
-        if not (row.manufacturer or "").strip():
+        if not product["manufacturer"]:
             missing.append("manufacturer")
-        if not (row.reason or "").strip():
+        if not product["reason"]:
             missing.append("reason for use")
-        if not row.status:
+        if not product["status"]:
             missing.append("in use or intended for use")
         if missing:
-            out.append(f"{row.name} ({row.source}): {', '.join(missing)} not stated")
+            out.append(f"{product['name']} ({product['source']}): {', '.join(missing)} not stated")
     return out
 
 

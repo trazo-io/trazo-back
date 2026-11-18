@@ -1873,7 +1873,7 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         not hold at all, are left out. Offered, never filled in by itself.
         """
         from certifications.services.common_osp_workbooks import _current_osp
-        from certifications.services.plan_materials import plan_materials
+        from certifications.services.plan_materials import plan_products
         from company.models import Establishment
         from users.models import WorksIn
 
@@ -1890,24 +1890,19 @@ class HistoryViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         osp = _current_osp(establishment)
         if osp is None:
             return Response({"osp_id": None, "osp_status": None, "materials": []}, status=status.HTTP_200_OK)
-        materials = []
-        seen = set()
-        for row in plan_materials(osp):
-            if row.prohibited or row.status == "discontinued":
-                continue
-            key = " ".join((row.name or "").split()).lower()
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            materials.append(
-                {
-                    "name": row.name,
-                    "manufacturer": row.manufacturer or "",
-                    "category": row.category or "",
-                    "status": row.status or "",
-                    "source": row.source,
-                }
-            )
+        # Once per product name, the operator's answers first: a product the plan holds twice (a prohibited
+        # substance, a lapsed listing) is offered by neither row if either says it must not be (review of #473).
+        materials = [
+            {
+                "name": product["name"],
+                "manufacturer": product["manufacturer"],
+                "category": product["category"],
+                "status": product["status"],
+                "source": product["source"],
+            }
+            for product in plan_products(osp)
+            if not product["excluded"]
+        ]
         return Response({"osp_id": osp.pk, "osp_status": osp.status, "materials": materials}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path="seed-suppliers")
