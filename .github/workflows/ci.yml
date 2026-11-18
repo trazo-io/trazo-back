@@ -95,8 +95,7 @@ jobs:
   # their cap with no test failing, and 165 more passing modules sat outside this list. The list
   # now holds them, across four shards. Three modules that run the full OMRI seed (9,000+ rows)
   # several times per class, about 16 min between them locally, run in their own `catalog` job,
-  # and only on a PR that touches the catalogs: as one class each, they would land whole on one
-  # shard. Branch protection requires the `gate` job, "Backend: all suites passed", not the shard
+  # in two parallel parts: as one class each, they would land whole on one shard. Branch protection requires the `gate` job, "Backend: all suites passed", not the shard
   # names, so the shard count can change without touching the repository settings.
   #
   # Each shard still pays ~90s creating the test database through every migration. Squashing
@@ -917,7 +916,15 @@ jobs:
       # of them read files through parents[1] or parents[2], all inside this repository, never the
       # sibling. tests.test_photo_integration_flow joins with its fixture fixed: it created a
       # Production with no name, which django-auditlog cannot print.
+      # THE SHARD COMES IN THROUGH THE ENVIRONMENT, NOT `${{ }}` IN THE SCRIPT (2026-11-17). GitHub
+      # turns any string holding an expression into one expression, capped at 21,000 characters.
+      # This script reached 20,612 with the list as it stood on main, so a few more modules would
+      # have made the whole workflow file invalid ("workflow file issue", no job runs at all), which
+      # is what the first push of back #475 did at 28,505. With no expression in it, the script has
+      # no such cap.
       - name: Claim-safety and compliance suites
+        env:
+          SHARD: ${{ matrix.shard }}
         run: |
           poetry run python manage.py test \
             backend.tests.test_sharded_runner \
@@ -1135,7 +1142,6 @@ jobs:
             certifications.tests.test_drift_detector_phase1 \
             certifications.tests.test_drift_listing_with_plan_substance \
             certifications.tests.test_omri_listing_lapse \
-            certifications.tests.test_drift_cross_registry_rescue \
             certifications.tests.test_restricted_materials \
             history.tests.test_national_list_conditions_row \
             history.tests.test_lab_analysis_and_micronutrients \
@@ -1479,7 +1485,6 @@ jobs:
             history.tests.test_water_quality \
             history.tests.test_weather_pdf_magnitude \
             history.tests.test_ws4_field_adds \
-            notifications.tests \
             product.tests.test_buffer_zone_roundtrip \
             product.tests.test_current_production_consistency \
             product.tests.test_finalization_validation \
@@ -1498,7 +1503,7 @@ jobs:
             users.tests.test_signup_recovery_paths \
             users.tests.test_verification_code_expiry \
             notifications \
-            --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard ${{ matrix.shard }}
+            --noinput --keepdb --testrunner backend.test_runner.ShardedRunner --shard "$SHARD"
 
       # The published conformance statement is generated from the register. Regenerating here and
       # comparing is what stops it from being hand-edited or left stale after a register change —
@@ -1517,13 +1522,22 @@ jobs:
   # The three modules that run the full OMRI seed, several times per class (2026-11-17). About 16 min
   # between them locally (test_omri_seeder 8.4, test_omri_delisting 5.4, test_registry_identifier_
   # honesty 1.8). In the shards each class lands whole on one shard and would push it past its cap,
-  # so they run here, in parallel with the shards, and only on a PR whose diff touches the catalogs:
-  # their models, data, seeders, matchers and these tests. Any other PR passes this job in seconds.
+  # so they run here, in two parallel parts of about 8 min each, on every PR. A path filter was tried
+  # first and dropped in review: these tests import plan_materials, drift_detector and the
+  # serializers, so any list of "catalog paths" misses something they depend on.
   catalog:
-    name: "Backend: catalog seeder suites"
+    name: "Backend: catalog seeder suites (${{ matrix.part }})"
     if: github.event_name != 'push'
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 35
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: seeder
+            modules: certifications.tests.test_omri_seeder
+          - part: delisting and identifiers
+            modules: certifications.tests.test_omri_delisting certifications.tests.test_registry_identifier_honesty
     services:
       postgres:
         image: postgres:15
@@ -1553,57 +1567,35 @@ jobs:
       REDIS_URL: redis://localhost:6379/1
       CELERY_TASK_ALWAYS_EAGER: 'True'
     steps:
-      # Depth 2: on a pull_request the checkout is the merge commit, and its first parent is the
-      # base branch, so HEAD^1..HEAD is exactly this PR's change.
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-      - name: Does this change touch the input catalogs?
-        id: paths
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if git diff --name-only HEAD^1 HEAD | grep -E -q '^(certifications/(models\.py|data/|management/commands/(seed_|refresh_organic_input_catalogs|build_omri_seed_csv|sync_national_list_ecfr)|services/(omri_verifier|catalog_integrity|registry_identifiers|listing_lapse|national_list_check)\.py|tests/test_(omri_seeder|omri_delisting|registry_identifier_honesty)\.py)|\.github/workflows/ci\.yml|poetry\.lock)'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "No catalog path changed; the catalog seeder suites are not needed for this change."
-          fi
       - uses: actions/setup-python@v5
-        if: steps.paths.outputs.run == 'true'
         with:
           python-version: '3.12'
-      - if: steps.paths.outputs.run == 'true'
-        run: pipx install poetry
-      - if: steps.paths.outputs.run == 'true'
-        run: poetry install --no-interaction
+      - run: pipx install poetry
+      - run: poetry install --no-interaction
       # The same migrated-database cache the shards read (see the comments there).
       - name: Restore the migrated test database
-        if: steps.paths.outputs.run == 'true'
         id: testdb
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/testdb.dump
           key: testdb-pg15-${{ hashFiles('**/migrations/*.py', 'poetry.lock', 'backend/settings/*.py') }}
       - name: Build the migrated test database (cache miss)
-        if: steps.paths.outputs.run == 'true' && steps.testdb.outputs.cache-hit != 'true'
+        if: steps.testdb.outputs.cache-hit != 'true'
         env:
           DATABASE_NAME: test_trazo_ci
         run: |
           docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
           poetry run python manage.py migrate --run-syncdb --noinput
       - name: Load the migrated test database (cache hit)
-        if: steps.paths.outputs.run == 'true' && steps.testdb.outputs.cache-hit == 'true'
+        if: steps.testdb.outputs.cache-hit == 'true'
         run: |
           docker exec ${{ job.services.postgres.id }} createdb -U postgres test_trazo_ci
           docker exec -i ${{ job.services.postgres.id }} pg_restore -U postgres --no-owner --exit-on-error -d test_trazo_ci < "$RUNNER_TEMP/testdb.dump"
       - name: Catalog seeder suites
-        if: steps.paths.outputs.run == 'true'
-        run: |
-          poetry run python manage.py test \
-            certifications.tests.test_omri_seeder \
-            certifications.tests.test_omri_delisting \
-            certifications.tests.test_registry_identifier_honesty \
-            --noinput --keepdb
+        env:
+          MODULES: ${{ matrix.modules }}
+        run: poetry run python manage.py test $MODULES --noinput --keepdb
 
   # The one backend check branch protection requires (2026-11-17). It passes only when every shard
   # and the catalog job passed, so adding or removing a shard never needs a settings change.
