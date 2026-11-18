@@ -543,6 +543,11 @@ jobs:
       # suggest planting stock, never seed; G3.0 and G3.0b's planting stock answers are read against each other;
       # the seed and stock treatment statements are read against the records. Builds its own farm; no sibling repo.
       #
+      # 2026-11-17: certifications.tests.test_materials_application_rows joins. The plan review lists materials
+      # rows missing a cell every agent's form asks (CCOF ORGB41 A/B, OTCO C11, WSDA AGR 2196), the workbook leaves
+      # a reason the operator never gave blank, and the input forms are offered the plan's own materials. Builds
+      # its own farm; no sibling repo.
+      #
       # 2026-11-17: certifications.tests.test_international_trade joins. G8.0 asks WSDA AGR 2121 §Q in full (seed
       # imported for the farm, shipment documents, export packages, Canada and sodium nitrate) and OTCO C8 8.4-4;
       # a No to sodium nitrate the plan's list or the records contradict is printed and listed. Builds its own
@@ -1091,6 +1096,7 @@ jobs:
             certifications.tests.test_ofpp_scope_note \
             certifications.tests.test_seed_stock_cluster \
             certifications.tests.test_international_trade \
+            certifications.tests.test_materials_application_rows \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

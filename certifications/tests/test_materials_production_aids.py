@@ -20,6 +20,7 @@ from rest_framework.test import APIClient
 from certifications.models import NationalListSubstance, OrganicSystemPlan, PlanMaterialEntry
 from certifications.osp_modules import MODULES_BY_KEY
 from certifications.services.common_osp_workbooks import (
+    _material_kind_words,
     _material_listing,
     _material_manufacturer,
     _material_reason,
@@ -98,8 +99,10 @@ class RecordsJoinTheListTests(_Farm):
         self.plant("Rhizobium inoculant XL")
         self.spray(partners=[{"commercial_name": "Nu-Film P", "manufacturer": "Miller Chemical"}])
         rows = self.rows()
-        self.assertEqual(_material_reason(rows["Rhizobium inoculant XL"]), "Seed treatment")
-        self.assertEqual(_material_reason(rows["Nu-Film P"]), "Adjuvant (tank-mix partner)")
+        # The kind the records log each as; a reason is only ever the operator's (2026-11-17).
+        self.assertEqual(_material_kind_words(rows["Rhizobium inoculant XL"]), "Seed treatment")
+        self.assertEqual(_material_kind_words(rows["Nu-Film P"]), "Adjuvant (tank-mix partner)")
+        self.assertIsNone(_material_reason(rows["Nu-Film P"]))
         self.assertEqual(_material_manufacturer(rows["Nu-Film P"]), "Miller Chemical")
         self.assertIsNone(_material_manufacturer(rows["Rhizobium inoculant XL"]))
 

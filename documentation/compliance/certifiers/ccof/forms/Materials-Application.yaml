@@ -40,17 +40,15 @@ items:
   asks: Submit this form with your application for certification.
 - ref: Preamble (list all materials)
   asks: List all materials used or planned for use.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    prints: modules/materials_application.pdf; narrative snapshot (a)(2)
-  gap: Adding a catalog material to the registry is independent of any logged event, so a planned product can
-    be added ahead of use — but nothing records whether a row is planned, in use, or discontinued, and the
-    narrative compiler asserts 'used or planned' identically for every row regardless.
-  fix: Add a `status` field (planned / in use / discontinued) to the registry row; print it; suggest 'in use'
-    from an application dated inside the plan year, with the operator confirming.
+    questions: [materials_application.materials_list_panel]
+    prints: "modules/materials_application.pdf §A and 01-organic-system-plan.pdf, each row with in use, intended for use or no longer used; workbooks/Materials List.xlsx (In use and Intended for use columns)"
+  # Closed 2026-11-17 by the materials application slice: the gap was stale. `PlanMaterialEntry.status` (planned, in
+  # use, no longer used) has been recorded and printed on every row since 2026-11-04, in the module PDF, the narrative
+  # and the workbook. What was left was the suggestion: the editor now offers in use for a row still planned, or not
+  # stated, when the records show it applied, with the date (materials_list_rows last_logged_on); the operator takes
+  # it.
 - ref: Preamble (review all sections)
   asks: Review all sections for applicability to your operation. Complete each one or mark 'Not applicable'
     as appropriate.
@@ -109,66 +107,34 @@ items:
 - ref: Preamble (only listed materials)
   asks: It is your responsibility to verify that all materials are allowed prior to use. Only materials included
     in your OSP Materials List may be used.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    - materials_application.materials_list_complete
-    models:
-    - certifications.services.plan_materials
-    - certifications.services.common_osp_workbooks (Materials List)
-    prints: modules/materials_application.pdf §A; workbooks/Materials List.xlsx; narrative § 205.201(a)(2)
-  gap: 'Since 2026-11-04 the attestation is gated on reconciliation: "Yes" is refused while the records name a
-    product the plan''s list does not hold, by exact name or a current identity decision, and the category
-    statements are gated on their own products. The operator can add their own material as they name it (an
-    operator row), so the gate never demands an attestation they cannot satisfy. Still open, and why this is
-    P2: enforcement stays after the fact. The activity wizard does not offer the plan''s own rows when an
-    application is logged, so a name that matches nothing on the list can still be typed, and is caught only
-    by the drift detector and this gate.'
-  fix: Offer the plan's materials list in the activity wizard's product field when an application is logged.
+    questions: [materials_application.materials_list_panel, materials_application.materials_list_complete]
+    models: [certifications.services.plan_materials, certifications.services.common_osp_workbooks (Materials List)]
+    prints: "modules/materials_application.pdf §A; the input and soil amendment forms offer the plan's materials"
   root_cause: materials-lists-disagree
+  # Closed 2026-11-17 by the materials application slice: the input and soil amendment forms offer the materials on
+  # the plan in force beside the product name (productions/plan-materials, PlanMaterialsQuickPick), scoped to the
+  # record's type, leaving out a material no longer used or one the list must not hold. A tap fills the name and,
+  # while blank, the maker; any name can still be typed, and the attestation gate still refuses a Yes the records
+  # contradict.
 - ref: A
   asks: 'List all fertilizers, compost, manure, gypsum, limestone, micronutrients, or other fertilizers/soil
     amendments planned for use: Full product name (including formulation), Full manufacturer name, Reason for
     use. Or check ''Not applicable, none of these.'''
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    models:
-    - certifications.PlanMaterialEntry.product_name
-    - certifications.PlanMaterialEntry.manufacturer
-    - certifications.PlanMaterialEntry.reason_for_use
-    - certifications.PlanMaterialEntry.listing_basis
-    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
-  gap: 'Column by column: product name: Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the
-    certifier-facing line (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan
-    snapshot) states a missing cell as missing — ''manufacturer not stated'', ''reason for use not stated'',
-    and for a bare National List substance ''brand and formulation not stated'' — instead of omitting it, so
-    a row that needs the cell no longer reads like a row that never did. The Materials List workbook already
-    counts each blank per row (`fix_hint="materials_list"`) and the editor names where it is answered. Remaining:
-    there is no separate `formulation` field — `product_name` carries the formulation only when the operator
-    typed it — and a National List attach does not require the operator row that names the brand actually applied.
-    manufacturer: Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line
-    (`PlanMaterial.display(stated_absences=True)`, used by the module PDF and the plan snapshot) states a missing
-    cell as missing — ''manufacturer not stated'', ''reason for use not stated'', and for a bare National List
-    substance ''brand and formulation not stated'' — instead of omitting it, so a row that needs the cell no
-    longer reads like a row that never did. The Materials List workbook already counts each blank per row (`fix_hint="materials_list"`)
-    and the editor names where it is answered. Remaining: nothing REQUIRES the cell before a row is saved.
-    The ''add my own material'' path posts the name alone and the operator fills the maker in the list panel
-    afterwards, so a hard requirement at create would break the flow the editor is built around. reason for
-    use: `PlanMaterialEntry.reason_for_use` exists (migration 0035) and is what the workbook''s reason column
-    prints when the operator wrote one; catalog-only rows with no entry still fall back to `_material_reason()`''s
-    category word (''Fertilizer'', ''Pest control''), and the reason does not print in the module PDF.'
-  fix: Add a `formulation` field the editor asks for by name; on a National List attach, require the operator
-    row (brand + formulation) alongside the FK. Require `manufacturer` at the point the row is marked in use
-    or the plan is submitted (a completion gate, not a create-time refusal); prompt for brand and maker on
-    a National List attach. Print `reason_for_use` in the module PDF row; prompt for it when a catalog material
-    is attached without an entry.
+    questions: [materials_application.materials_list_panel]
+    models: [certifications.PlanMaterialEntry.product_name, certifications.PlanMaterialEntry.manufacturer, certifications.PlanMaterialEntry.reason_for_use, certifications.PlanMaterialEntry.listing_basis]
+    prints: "modules/materials_application.pdf §A and 01-organic-system-plan.pdf, each missing cell stated; workbooks/Materials List.xlsx (blank counted per row); the plan review lists each row missing its brand and formulation, manufacturer, reason for use or in use (materials_rows_incomplete)"
   note: 'Re-cut 2026-09-30 (OSP alignment audit, T26): the form does not number these; refs follow the printed
     text.'
+  # Closed 2026-11-17 by the materials application slice: the plan review lists every row on the plan, other than one
+  # no longer used, that is missing its brand and formulation, its manufacturer, its reason for use or whether it is
+  # in use, so the blank is found before filing (plan_materials.incomplete_rows). Listed, never refused: the create
+  # path takes a name alone by design, and a filing is not blocked over a maker the operator has yet to look up. The
+  # form's own cell is one, product name including formulation, which `product_name` holds; a bare National List
+  # substance is listed for its brand.
 - ref: B (lead-in)
   kind: instruction
   asks: You may use crop pest control materials only if preventative practices and mechanical/physical controls
@@ -178,30 +144,20 @@ items:
   asks: 'List all insecticides, fungicides, pesticides, herbicides, or other pest, weed, or disease control
     materials: Full product name (including formulation), Full manufacturer name, Reason for Use. Or check
     ''Not applicable, none of these.'''
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - materials_application.materials_list_panel
-    - materials_application.pest_disease_weed_listed
-    models:
-    - certifications.PlanMaterialEntry.product_name
-    - certifications.PlanMaterialEntry.manufacturer
-    - certifications.PlanMaterialEntry.reason_for_use
-    - certifications.PlanMaterialEntry.listing_basis
-    prints: modules/materials_application.pdf §A; narrative § 205.201(a)(2)
-  gap: 'Closed 2026-09-09 (fix/parcel-page-land-history, materials cut): the certifier-facing line (`PlanMaterial.display(stated_absences=True)`,
-    used by the module PDF and the plan snapshot) states a missing cell as missing — ''manufacturer not stated'',
-    ''reason for use not stated'', and for a bare National List substance ''brand and formulation not stated''
-    — instead of omitting it, so a row that needs the cell no longer reads like a row that never did. The Materials
-    List workbook already counts each blank per row (`fix_hint="materials_list"`) and the editor names where
-    it is answered. The module PDF and snapshot no longer substitute a category word for the reason: a catalog-only
-    row prints ''reason for use not stated''. Remaining: the workbook''s fallback still prints the event subtype
-    (''Pest control'') in the reason column, and nothing requires the three cells before submission.'
-  fix: Same completion-gate fix as A (manufacturer); make the workbook's reason fallback read 'reason for use
-    not stated (Pest control)' so the category word is labelled as a fallback.
+    questions: [materials_application.materials_list_panel, materials_application.pest_disease_weed_listed]
+    models: [certifications.PlanMaterialEntry.product_name, certifications.PlanMaterialEntry.manufacturer, certifications.PlanMaterialEntry.reason_for_use, certifications.PlanMaterialEntry.listing_basis]
+    prints: "modules/materials_application.pdf §A and 01-organic-system-plan.pdf, each missing cell stated; workbooks/Materials List.xlsx, a blank reason labelled with the records' kind in Comments; the plan review lists each row missing its brand and formulation, manufacturer, reason for use or in use (materials_rows_incomplete)"
   note: 'Re-cut 2026-09-30 (OSP alignment audit, T26): the form does not number these; refs follow the printed
     text.'
+  # Closed 2026-11-17 by the materials application slice: the plan review lists every row on the plan, other than one
+  # no longer used, that is missing its brand and formulation, its manufacturer, its reason for use or whether it is
+  # in use, so the blank is found before filing (plan_materials.incomplete_rows). Listed, never refused: the create
+  # path takes a name alone by design, and a filing is not blocked over a maker the operator has yet to look up. The
+  # form's own cell is one, product name including formulation, which `product_name` holds; a bare National List
+  # substance is listed for its brand. The workbook no longer prints the record's kind (Pest control) in the reason
+  # column: the cell is blank and counted, and Comments says the reason is not stated and what the records log it as.
 - ref: B (listing evidence)
   kind: interpretation
   asks: '(The evidentiary basis for §B''s category attestations: the operator confirms that every pest, disease

@@ -383,6 +383,8 @@ ROUTE_TENANCY = {
             f"{_SCANS}.test_outsider_cannot_read_another_companys_scans",
             f"{_SCANS}.test_naming_own_company_with_a_foreign_farm_returns_nothing",
             f"{_WA_EXPORT}.test_another_companys_user_is_refused_like_the_pur_export",
+            "certifications.tests.test_materials_application_rows.TheFormsOfferThePlansMaterials."
+            "test_another_company_cannot_read_it",
         ),
         finding="my_reviews returns the full owner HistorySerializer (events, members, operator) for any season "
         "the caller reviewed; reviews are limited to published seasons since #197, so this over-shares "

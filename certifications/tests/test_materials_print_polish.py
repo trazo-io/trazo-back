@@ -72,7 +72,10 @@ class AmendmentWordsTests(TestCase):
             ).active.iter_rows(values_only=True)
         ]
         row = next(r for r in cells if r[0] == "Bone Meal 6-9-0")
-        self.assertEqual(row[2], "Bone meal")
+        # The words, never the code. Since 2026-11-17 they are the records' kind, in Comments: the reason
+        # column holds only a reason the operator gave (CCOF ORGB41 §B).
+        self.assertIsNone(row[2])
+        self.assertIn("the records log it as bone meal.", row[5])
 
 
 class SpecimenSheetWrapTests(TestCase):
