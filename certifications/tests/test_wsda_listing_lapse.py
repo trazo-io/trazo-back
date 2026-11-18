@@ -164,6 +164,58 @@ class PlanListTests(_Orchard):
         self.assertEqual(str(_ApprovedWSDAInline(self.dropped).data["delisted_on"]), "2026-10-02")
 
 
+class ReviewFollowUpTests(_Orchard):
+    """Review of back #478: three readers still took "a WSDA FK" for "a current WSDA listing"."""
+
+    def test_a_dropped_wsda_row_carries_the_label_the_operator_filed(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from certifications.services.plan_materials import plan_materials
+        from documents.models import GeneratedDocument
+
+        label = GeneratedDocument.objects.create(
+            establishment=self.establishment,
+            folder="uploads",
+            source="upload",
+            title="Kelp bag",
+            file=SimpleUploadedFile("kelp.png", b"label-bytes", content_type="image/png"),
+        )
+        PlanMaterialEntry.objects.create(
+            osp=self.osp,
+            product_name="Dropped Kelp 0-0-1",
+            wsda_material=self.dropped,
+            listing_basis=PlanMaterialEntry.BASIS_WSDA,
+            label_document=label,
+        )
+        row = next(r for r in plan_materials(self.osp) if r.source == "WSDA" and r.delisted_on)
+        self.assertTrue(row.needs_label)
+        self.assertEqual(row.label_document_id, label.pk)
+
+    def test_one_input_with_both_listings_lapsed_counts_once(self):
+        from history.services.audit_export_service import AuditExportService
+        from history.tests.test_pdf_field_coverage import flowable_text
+
+        omri = OMRIProduct.objects.create(omri_id="kel-9", product_name="Dropped Kelp 0-0-1", delisted_on=OLD)
+        self._spray(NEW + datetime.timedelta(days=4), wsda_material=self.dropped, omri_product=omri)
+        txt = flowable_text(AuditExportService(self.history, certification_type="organic")._build_chemical_log())
+        self.assertIn("1 input(s) were applied on or after", txt)
+
+    def test_a_dropped_wsda_listing_does_not_hold_the_restricted_use_branch_open(self):
+        from history.services.claim_resolver import resolve_input_status
+
+        ev = self._spray(
+            NEW + datetime.timedelta(days=4),
+            wsda_material=self.dropped,
+            restricted_use_pesticide=True,
+            organic_approved="wsda_listed",
+        )
+        ev = ChemicalEvent.objects.select_related("wsda_material").get(pk=ev.pk)
+        self.assertEqual(resolve_input_status(ev)["status"], "conventional_documented")
+        WSDAMaterial.objects.filter(pk=self.dropped.pk).update(delisted_on=None)
+        ev = ChemicalEvent.objects.select_related("wsda_material").get(pk=ev.pk)
+        self.assertNotEqual(resolve_input_status(ev)["status"], "conventional_documented")
+
+
 class DriftTests(_Orchard):
     def test_an_application_after_the_drop_carries_the_issue(self):
         ev = self._spray(NEW + datetime.timedelta(days=4), wsda_material=self.dropped)

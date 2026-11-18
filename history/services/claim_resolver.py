@@ -309,6 +309,7 @@ def resolve_input_status(chemical_event) -> dict:
         LABEL_INPUT_OMRI_LISTED,
         LABEL_INPUT_WSDA_LISTED,
         _omri_listing_is_current,
+        _wsda_listing_is_current,
         may_claim_input_listing,
     )
 
@@ -322,9 +323,8 @@ def resolve_input_status(chemical_event) -> dict:
     # A WITHDRAWN OMRI listing is not third-party evidence any more, so it must not hold the
     # restricted-use branch open either. Same reading as the label above, which is the point
     # of routing both through `claim_authority`.
-    has_catalog_match = _omri_listing_is_current(chemical_event) or bool(
-        getattr(chemical_event, "wsda_material_id", None)
-    )
+    # The same for WSDA since it can lapse too (2026-11-18, OV-MT-C04; review of back #478).
+    has_catalog_match = _omri_listing_is_current(chemical_event) or _wsda_listing_is_current(chemical_event)
 
     # NOTE (2026-08-02): `restricted_use` is intentionally NOT a public chip status.
     # `restricted_use_pesticide` is stripped from the consumer payload

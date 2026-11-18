@@ -920,7 +920,7 @@ jobs:
       # of them read files through parents[1] or parents[2], all inside this repository, never the
       # sibling. tests.test_photo_integration_flow joins with its fixture fixed: it created a
       # Production with no name, which django-auditlog cannot print.
-      # 2026-11-18: certifications.tests.test_wsda_listing_lapse (new, 17 tests) pins the WSDA half of
+      # 2026-11-18: certifications.tests.test_wsda_listing_lapse (new, 20 tests) pins the WSDA half of
       # OV-MT-C04: seed_wsda_materials marks a product a later edition drops (with the OMRI seeder's
       # guards), and the buyer-page claim, plan list, drift detector, lookup and dossier read it. No
       # sibling repo.

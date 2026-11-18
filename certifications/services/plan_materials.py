@@ -464,7 +464,9 @@ def plan_materials(osp) -> list[PlanMaterial]:
         # A listing WSDA dropped is never folded away, for the OMRI reason above: folding would print
         # "WSDA Product #<n>" on the merged row and drop the line saying WSDA no longer lists it.
         if row.delisted_on or not _fold(row, entry_names, folded, entry_by_link):
-            wsda.append(row)
+            # Its label, as the OMRI loop does: a dropped WSDA row needs one (`needs_label`), and the
+            # operator's entry may hold it (review of back #478).
+            wsda.append(replace(row, label_document_id=_entry_label(row)))
 
     # Operator-authored rows — the fourth source, and the one CCOF's own prompt asks for
     # (compost, manure, gypsum, limestone) that no catalog can supply. Its `listing_statement`

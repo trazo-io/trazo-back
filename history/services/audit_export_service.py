@@ -7007,11 +7007,11 @@ class AuditExportService:
                         f"{omri.omri_id or 'OMRI'} (OMRI listing lapsed {lapsed_on.isoformat()}, "
                         "on or before this application)"
                     )
-                    lapsed_hits += 1
                 # The WSDA half (2026-11-18): the same test on the WSDA listing the record attached.
                 _wsda_row = getattr(ev, "wsda_material", None) if getattr(ev, "wsda_material_id", None) else None
                 wsda_lapsed_on = omri_listing_lapsed_by(_wsda_row, ev.date) if _wsda_row else None
-                if wsda_lapsed_on is not None:
+                # One input counts once, even when both its listings lapsed (review of back #478).
+                if lapsed_on is not None or wsda_lapsed_on is not None:
                     lapsed_hits += 1
                 if nl:
                     nl_display = (
