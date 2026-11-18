@@ -82,7 +82,7 @@ class TestPhotoUploadToEvent(TestCase):
         Expected: Gallery created, GalleryImage stored, event linked.
         """
         # Create a minimal production + event
-        history = Production.objects.create()
+        history = Production.objects.create(name="Photo flow season")
         event = ProductionEvent.objects.create(
             history=history,
             index=0,
@@ -142,7 +142,7 @@ class TestPhotoUploadToEvent(TestCase):
         Chemical events (Tier 1) require 2+ photos for full verification.
         Simulate adding a second photo.
         """
-        history = Production.objects.create()
+        history = Production.objects.create(name="Photo flow season")
         gallery = Gallery.objects.create()
 
         # First photo already exists
@@ -363,7 +363,7 @@ class TestPhotoUploadToEvent(TestCase):
         """
         Events support up to 5 photos. Verify gallery handles multiple images.
         """
-        history = Production.objects.create()
+        history = Production.objects.create(name="Photo flow season")
         gallery = Gallery.objects.create()
 
         for i in range(5):
