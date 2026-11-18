@@ -45,6 +45,7 @@ class TransitionStatusServiceTests(TestCase):
         self.assertTrue(status.is_eligible)
         self.assertEqual(status.findings, [])
         self.assertIn("affidavits", status.note)
+        self.assertEqual(status.to_dict()["note_code"], "none_recorded")
 
     def test_old_prohibited_substance_eligible(self):
         old = date.today() - relativedelta(months=TRANSITION_MONTHS) - timedelta(days=30)
@@ -59,6 +60,7 @@ class TransitionStatusServiceTests(TestCase):
         status = compute_transition_status(self.parcel)
         self.assertTrue(status.is_eligible)
         self.assertEqual(status.last_prohibited_date, old)
+        self.assertEqual(status.to_dict()["note_code"], "elapsed")
 
     def test_recent_prohibited_substance_not_eligible(self):
         recent = date.today() - timedelta(days=400)
@@ -78,6 +80,8 @@ class TransitionStatusServiceTests(TestCase):
             recent + relativedelta(months=TRANSITION_MONTHS),
         )
         self.assertGreater(status.days_remaining, 0)
+        # The screen words the note in the reader's language from this code (VID-06/VID-07).
+        self.assertEqual(status.to_dict()["note_code"], "in_transition")
 
     def test_chemical_event_classified_organic_does_not_trigger(self):
         history = self._new_history()
@@ -111,6 +115,42 @@ class TransitionStatusServiceTests(TestCase):
         self.assertEqual(status.last_prohibited_date, applied.date())
         self.assertEqual(len(status.findings), 1)
         self.assertEqual(status.findings[0].source, "ChemicalEvent")
+
+    def _unclassified_spray(self):
+        ChemicalEvent.objects.create(
+            history=self._new_history(),
+            created_by=self.user,
+            description="Spray with no basis recorded",
+            date=timezone.now() - timedelta(days=60),
+            chemical_subtype="copper_fungicide",
+            commercial_name="Unnamed copper",
+            organic_approved="",
+        )
+
+    def test_unclassified_inputs_and_no_prohibited_record_is_none_recorded(self):
+        """Review of back #498: the app words the note from the code. No prohibited record with
+        unclassified inputs in the window is "none_recorded" (the note says so, then names them),
+        while `is_eligible` is False."""
+        self._unclassified_spray()
+        status = compute_transition_status(self.parcel)
+        self.assertFalse(status.is_eligible)
+        self.assertTrue(status.unclassified)
+        self.assertEqual(status.to_dict()["note_code"], "none_recorded")
+
+    def test_an_elapsed_clock_with_unclassified_inputs_is_elapsed(self):
+        old = date.today() - relativedelta(months=TRANSITION_MONTHS) - timedelta(days=30)
+        ParcelCropHistory.objects.create(
+            parcel=self.parcel,
+            year=old.year,
+            crop_grown="Wheat",
+            production_method="conventional",
+            substances_applied="Glyphosate",
+            date_last_prohibited=old,
+        )
+        self._unclassified_spray()
+        status = compute_transition_status(self.parcel)
+        self.assertFalse(status.is_eligible)
+        self.assertEqual(status.to_dict()["note_code"], "elapsed")
 
     def test_uses_most_recent_prohibited_when_multiple(self):
         old = date.today() - relativedelta(months=TRANSITION_MONTHS) - timedelta(days=100)
