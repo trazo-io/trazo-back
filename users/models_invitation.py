@@ -12,6 +12,21 @@ from company.models import Company, Establishment
 User = get_user_model()
 
 
+class SoleAdminTransferError(ValueError):
+    """Accepting would leave a company with farms and no Company Admin."""
+
+    def __init__(self, companies):
+        self.companies = list(companies)
+        names = ", ".join(self.companies)
+        many = len(self.companies) > 1
+        super().__init__(
+            f"You are the only Company Admin of {names}. Accepting this invitation moves you out of "
+            f"{'them' if many else 'it'}, and {'their' if many else 'its'} records would be left with no one "
+            f"who can manage them. Make another member Company Admin there, or close "
+            f"{'those companies' if many else 'that company'}, then accept this invitation."
+        )
+
+
 class CompanyInvitation(models.Model):
     """
     Model to manage company invitations for users
@@ -98,45 +113,92 @@ class CompanyInvitation(models.Model):
         """Check if invitation can be accepted"""
         return self.status == self.STATUS_PENDING and not self.is_expired()
 
+    def transfer_effect(self, user) -> dict:
+        """What accepting would do to the user's other memberships (overall review 2026-11, OV-SEC-C11).
+
+        Accepting moves the user out of every other company (one company per user). `leaves` names those
+        companies; `sole_admin_of` names the ones where the user is the only Company Admin and the company
+        still holds a farm, which accepting would leave with records and no one who can manage them.
+        A company with no farm is not counted: nothing is stranded there."""
+        from company.models import Establishment
+        from users.models import WorksIn
+
+        others = list(WorksIn.objects.filter(user=user).exclude(company=self.company).select_related("company"))
+        sole = []
+        for membership in others:
+            if membership.role != WorksIn.COMPANY_ADMIN:
+                continue
+            # The pilot setup operator is not an admin who can run the company: `users/team.py` leaves it out
+            # of the same last-admin rule (review of back #481).
+            another_admin = (
+                WorksIn.objects.filter(company=membership.company, role=WorksIn.COMPANY_ADMIN)
+                .exclude(user=user)
+                .exclude(is_setup_operator=True)
+                .exists()
+            )
+            if not another_admin and Establishment.objects.filter(company=membership.company).exists():
+                sole.append(membership.company.name)
+        return {"leaves": [m.company.name for m in others], "sole_admin_of": sole}
+
     def accept(self, user):
         """Accept the invitation and add user to company (handles company transfers)"""
         if not self.can_be_accepted():
             raise ValueError("Invitation cannot be accepted")
 
+        from django.db import transaction
+
         from users.models import WorksIn
 
-        # Handle company transfer: remove user from any existing companies
-        existing_memberships = WorksIn.objects.filter(user=user).exclude(company=self.company)
-        if existing_memberships.exists():
-            # Log company transfer for audit trail
-            import logging
+        with transaction.atomic():
+            # A sole Company Admin of a company with farms cannot transfer out of it by accepting: the
+            # company would keep its records with nobody who can manage them (OV-SEC-C11; reproduced
+            # 2026-11-10, a company left with 0 members). They make another member Company Admin, or close
+            # it, first. The memberships of every company the user is leaving are locked first, in pk order
+            # as `company/views.py` locks them for removals, so two admins leaving one company at once (or
+            # an accept racing a removal) cannot both see the other and both go (review of back #481).
+            leaving_ids = list(
+                WorksIn.objects.filter(user=user).exclude(company=self.company).values_list("company_id", flat=True)
+            )
+            if leaving_ids:
+                list(WorksIn.objects.select_for_update().filter(company_id__in=leaving_ids).order_by("pk"))
+            effect = self.transfer_effect(user)
+            if effect["sole_admin_of"]:
+                raise SoleAdminTransferError(effect["sole_admin_of"])
 
-            logger = logging.getLogger(__name__)
-            old_companies = [membership.company.name for membership in existing_memberships]
-            logger.info(
-                f"Company transfer: User {user.email} moving from {', '.join(old_companies)} to {self.company.name}"
+            # Handle company transfer: remove user from any existing companies
+            existing_memberships = WorksIn.objects.filter(user=user).exclude(company=self.company)
+            if existing_memberships.exists():
+                # Log company transfer for audit trail
+                import logging
+
+                logger = logging.getLogger(__name__)
+                old_companies = [membership.company.name for membership in existing_memberships]
+                logger.info(
+                    f"Company transfer: User {user.email} moving from {', '.join(old_companies)} to {self.company.name}"
+                )
+
+                # Remove existing memberships (company transfer)
+                existing_memberships.delete()
+
+            # Create new WorksIn relationship
+            works_in, created = WorksIn.objects.get_or_create(
+                user=user, company=self.company, defaults={"role": self.role}
             )
 
-            # Remove existing memberships (company transfer)
-            existing_memberships.delete()
+            # If WorksIn already existed, update the role
+            if not created and works_in.role != self.role:
+                works_in.role = self.role
+                works_in.save()
 
-        # Create new WorksIn relationship
-        works_in, created = WorksIn.objects.get_or_create(user=user, company=self.company, defaults={"role": self.role})
+            # Assign establishments to the user
+            if self.establishments.exists():
+                works_in.establishments_in_charge.set(self.establishments.all())
 
-        # If WorksIn already existed, update the role
-        if not created and works_in.role != self.role:
-            works_in.role = self.role
-            works_in.save()
-
-        # Assign establishments to the user
-        if self.establishments.exists():
-            works_in.establishments_in_charge.set(self.establishments.all())
-
-        # Update invitation status
-        self.status = self.STATUS_ACCEPTED
-        self.accepted_at = timezone.now()
-        self.accepted_by = user
-        self.save()
+            # Update invitation status
+            self.status = self.STATUS_ACCEPTED
+            self.accepted_at = timezone.now()
+            self.accepted_by = user
+            self.save()
 
         return works_in
 

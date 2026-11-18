@@ -928,6 +928,10 @@ jobs:
       # of them read files through parents[1] or parents[2], all inside this repository, never the
       # sibling. tests.test_photo_integration_flow joins with its fixture fixed: it created a
       # Production with no name, which django-auditlog cannot print.
+      # 2026-11-18: users.tests.test_invitation_sole_admin (new, 9 tests) pins OV-SEC-C11: accepting an
+      # invitation never leaves a company with farms and no Company Admin, and only the invitee is told
+      # what accepting leaves. No sibling repo. users.tests.test_invitation_flow stays out: 4 of its
+      # 16 tests fail on main for reasons that predate this (invitation creation answers 400).
       # 2026-11-18: certifications.tests.test_wsda_listing_lapse (new, 20 tests) pins the WSDA half of
       # OV-MT-C04: seed_wsda_materials marks a product a later edition drops (with the OMRI seeder's
       # guards), and the buyer-page claim, plan list, drift detector, lookup and dossier read it. No
@@ -1362,6 +1366,7 @@ jobs:
             subscriptions.tests.test_storage_accounting \
             subscriptions.tests.test_subscription_events \
             users.tests.test_onboarding_email_claims \
+            users.tests.test_invitation_sole_admin \
             carbon.tests.test_amendment_nitrogen_n2o \
             carbon.tests.test_anhydrous_ammonia_density_fix \
             carbon.tests.test_business_event_carbon_dispatch \
