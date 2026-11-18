@@ -99,6 +99,23 @@ class TheQuestionsOpenWhereTheFormsAskThem(SimpleTestCase):
         self.assertTrue(upload.label["en"].startswith("You can also attach"), upload.label["en"])
 
 
+class TheGoldenCasesReachTheirGates(SimpleTestCase):
+    """Review of #482 / #430: three golden cases set no `handling_activities`, so G6.4's gated pages stayed hidden
+    and the cases exported the same visible set as an empty answer, testing none of the new gates."""
+
+    def test_each_new_case_shows_the_question_it_is_named_for(self):
+        from certifications.management.commands.export_osp_module_fixture import GOLDEN_ANSWER_CASES
+
+        cases = GOLDEN_ANSWER_CASES
+        for module, case, target in (
+            (G64, "shared_and_differs", "cleaning_differences_detail"),
+            (G64, "purging", "purge_procedure_upload"),
+            (G64, "chlorine_rinse_checked", "chlorine_rinse_monitoring"),
+            (G61, "some_unstamped", "container_safeguard_documentation"),
+        ):
+            self.assertIn(target, _visible(module, cases[module.key][case]), case)
+
+
 class TheHandlingPdfSaysWhereTheOtherAnswersAre(TestCase):
     def setUp(self):
         company = Company.objects.create(name="Medford Pack LLC")

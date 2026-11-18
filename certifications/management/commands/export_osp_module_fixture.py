@@ -226,9 +226,16 @@ GOLDEN_ANSWER_CASES = {
     "g6_4_handling": {
         # 2026.12.20: cleaning differences for shared equipment; the purge upload for purging; the rinse check for a
         # chlorine rinse at or below the SDWA limit.
-        "shared_and_differs": {"shares_handling_area_or_equipment": True, "cleaning_differs_by_status": "differs"},
-        "purging": {"food_contact_cleaning_methods": ["purging"]},
+        "shared_and_differs": {
+            "handling_activities": ["packing"],
+            "shares_handling_area_or_equipment": True,
+            "cleaning_differs_by_status": "differs",
+        },
+        "purging": {"handling_activities": ["packing"], "food_contact_cleaning_methods": ["purging"]},
         "chlorine_rinse_checked": {
+            "handling_activities": ["packing"],
+            "uses_water": True,
+            "wash_water_additives_added": True,
             "wash_water_chlorine_added": True,
             "wash_water_chlorine_final_rinse": "chlorine_at_or_below_sdwa",
         },
