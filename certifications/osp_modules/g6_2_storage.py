@@ -578,6 +578,17 @@ G6_2_STORAGE = Module(
                     visible_when=(Condition("inventory_frequency", "eq", "other"),),
                     compiles_to=CompileRule(template="Inventory frequency, in the operation's words: {answer}."),
                 ),
+                # WSDA AGR 2121 K 4 (2026.12.20).
+                Question(
+                    key="storage_additional_notes",
+                    kind="textarea",
+                    required=False,
+                    label=text(
+                        "Anything else about your storage (optional)",
+                        "Cualquier otra información sobre tu almacenamiento (opcional)",
+                    ),
+                    compiles_to=CompileRule(template="Additional storage information: {answer}"),
+                ),
             ),
         ),
     ),

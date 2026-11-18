@@ -97,17 +97,12 @@ items:
 - ref: 7b
   asks: If no, describe the documentation maintained to verify harvest containers do not pose a risk of
     contamination.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g6_1_harvest_transport.unstamped_container_safeguards
-    - g6_1_harvest_transport.container_cleaning_records
-    prints: modules/G6_1.pdf §B
-  gap: >-
-    The safeguards for containers that are not stamped organic are asked, and the records that show containers are cleaned are asked when cleaning is a safeguard. A container kept safe another way (lined, new only) has no documentation question of its own.
-  fix: >-
-    Ask for the documentation behind each unstamped-container safeguard, not only behind cleaning.
+    questions: [g6_1_harvest_transport.unstamped_container_safeguards, g6_1_harvest_transport.container_cleaning_records, g6_1_harvest_transport.container_safeguard_documentation]
+    prints: "modules/G6_1.pdf §B"
+  # Closed 2026-11-18 by the post-harvest slice: container_safeguard_documentation asks the documentation behind every
+  # safeguard for containers not stamped organic, not only cleaning.
 - ref: '8'
   asks: Are you a tree fruit producer who receives nondedicated wood bins from a handler or processor?
   status: covered
@@ -200,11 +195,10 @@ items:
     boxes.'
 - ref: '14'
   asks: Optional space for additional information.
-  status: not_covered
-  severity: P3
+  status: covered
   optional: true
   trazo:
-    prints: —
-  gap: Optional free space. Trazo has no general notes field on this module, so nothing extra the operator
-    wants to say here has a place; the agent does not require it.
-  fix: Add an optional additional-notes textarea to the harvest module.
+    questions: [g6_1_harvest_transport.harvest_additional_notes]
+    prints: "modules/G6_1.pdf §D"
+  # Closed 2026-11-18 by the post-harvest slice: an optional notes field for the section, as the form's own optional
+  # space.

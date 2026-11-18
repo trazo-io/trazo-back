@@ -48,29 +48,14 @@ items:
 - ref: "5.1-1"
   asks: >-
     List the pests/diseases (or potential pests/diseases) that threaten your crops.
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    where: not in this packet; the operation's audit export, a separate document, lists the species observed on each scouting and control record
-    models:
-    - history.PestManagementEvent.pest_species
-    prints: >-
-      audit dossier (per-event "Species observed" column on scouting, monitoring and control
-      records); no G5.0 question and nothing on modules/G5_0.pdf
-  gap: >-
-    Neither CCOF's G5.0 nor WSDA's §F/§G/§H asks for a named list of the pests and diseases the
-    operation actually faces (WSDA G3 asks for taxa classes — insects, rodents, birds — and is
-    `not_covered` there on that axis), so this is a fresh OTCO ask. The fact is captured, but only
-    per logged event: `PestManagementEvent.pest_species` names the organism observed on each
-    scouting or control record and prints in the audit dossier. There is no plan-level statement,
-    so an operation whose records are thin — a first-year pilot, or a season with no pest events
-    yet — shows nothing, and even a well-logged one gives the reviewer a column of observations to
-    deduplicate rather than the list OTCO asks for.
-  fix: >-
-    Add `pests_diseases_of_concern` [textarea] on page A, ahead of `prevention_practices`, cite
-    § 205.206; suggest the distinct `pest_species` values from logged Pest-Management events as a
-    prefill the operator confirms (suggest→confirm — the plan is the producer's statement under
-    § 205.201(a), not a reading of the log); compile "Pests and diseases of concern: {answer}."
+    questions: [g5_0_pest.pests_diseases_of_concern]
+    models: [history.PestManagementEvent.pest_species]
+    prints: "modules/G5_0.pdf §A"
+  # Closed 2026-11-18 by the pest, weed and soil slice: pests_diseases_of_concern asks the list in the operator's
+  # words, suggested from the organisms the pest records name (pest_species_evidence); a suggestion the operator
+  # edits, never the answer.
 - ref: 5.1-2
   asks: 'Select all preventative practices you use for management of weeds, pests and diseases: Crop rotation
     / Release of beneficial insects / Nutrient management / Sanitation / Planting resistant varieties / Water
@@ -154,20 +139,13 @@ items:
   asks: >-
     Which diseases are to be suppressed and/or which seeds require burning to stimulate
     germination?
-  status: partial
-  severity: P2
+  status: covered
   trazo:
-    questions:
-    - g5_0_pest.burn_reason
-    - g5_0_pest.burn_reason_other
-    prints: modules/G5_0.pdf §A; narrative § 205.203(e)(3)
-  gap: >-
-    Same verdict as CCOF G5.0 C3: `burn_reason` records only the category (disease suppression /
-    seed germination / other); the specific disease or seed is never named unless the operator
-    happened to pick 'other' and use `burn_reason_other`.
-  fix: >-
-    Add `burn_target_detail` [text] ("Name the disease suppressed or the seed germinated"), visible
-    when `burn_reason` includes_any (disease_suppression, seed_germination); cite § 205.203(e)(3).
+    questions: [g5_0_pest.burn_reason, g5_0_pest.burn_reason_other, g5_0_pest.burn_target_detail]
+    prints: "modules/G5_0.pdf §A"
+  # Closed 2026-11-18 by the pest, weed and soil slice: burn_target_detail names the disease suppressed or the seed
+  # germinated, asked when the reason is either of the two section 205.203(e)(3) allows. Optional, so finished plans
+  # stay finished.
 
 - ref: "5.3-1"
   asks: >-

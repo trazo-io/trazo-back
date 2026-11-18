@@ -3276,6 +3276,14 @@
          "crop_observation"
         ]
        },
+       "in_lieu_description": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "In the blueberries, a permanent grass ground cover between the rows, a cover crop sown in the alleys each fall, and the hedgerow along the north edge kept as habitat for beneficial insects."
+       },
+       "rotation_site_specific_notes": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Bottom Ground floods most winters, so it carries a winter cover crop every year and is not left bare between November and March."
+       },
        "in_lieu_practices": {
         "at": "2026-08-21T11:26:36.258504+00:00",
         "value": [
@@ -3569,6 +3577,26 @@
        "monitoring_frequency": {
         "at": "2026-08-21T11:28:46.115771+00:00",
         "value": "weekly"
+       },
+       "pests_diseases_of_concern": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Spotted wing drosophila, aphids, leafrollers and mummy berry (Monilinia) in the blueberries; carrot rust fly, aster leafhopper and Alternaria leaf blight in the carrots; spinach leafminer and downy mildew in the spinach; robins, starlings and cedar waxwings at blueberry harvest."
+       },
+       "pest_taxa_managed": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": ["insects", "birds"]
+       },
+       "pest_prevention_records": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "The prevention work is logged in Trazo against its block on the day it is done: cover crop seedings, cultivation passes and sanitation such as stripping and removing culls. The scouting trips and trap reads sit beside them, so a reviewer sees what each practice was meant to prevent."
+       },
+       "weed_prevention_records": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Cultivation and mowing passes and the cover crop seedings that hold the alleys are logged in Trazo by block and date."
+       },
+       "weed_management_additional_notes": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Nothing beyond the practices above."
        },
        "monitoring_records": {
         "at": "2026-08-21T11:28:46.115771+00:00",
@@ -3940,6 +3968,14 @@
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": true
        },
+       "container_safeguard_documentation": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "The cardboard flats are new, delivered by the box supplier with a delivery slip for each load, and kept wrapped in the packing shed until they are used, so none has been near a prohibited material. The slips are filed with the harvest records."
+       },
+       "harvest_additional_notes": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Nothing beyond the answers above."
+       },
        "who_harvests": {
         "at": "2026-08-21T11:28:46.372061+00:00",
         "value": [
@@ -4000,6 +4036,10 @@
        "storage_pest_control_materials_used": {
         "at": "2026-08-21T11:28:46.441230+00:00",
         "value": false
+       },
+       "storage_additional_notes": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Nothing beyond the answers above."
        },
        "storage_shared_with_nonorganic": {
         "at": "2026-08-21T11:28:46.441230+00:00",
@@ -4166,6 +4206,14 @@
        "noncertified_only_inputs_used": {
         "at": "2026-11-09T09:00:00+00:00",
         "value": false
+       },
+       "handling_records_linkage": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Each run log and cleanout log entry names its date and the lot code the packout tickets carry (CBF-26-HFE and so on), so a cleanout is matched to the lot packed right after it, and that lot to its harvest record in Trazo."
+       },
+       "handling_additional_notes": {
+        "at": "2026-11-18T10:00:00+00:00",
+        "value": "Nothing beyond the answers above."
        },
        "applies_post_harvest_inputs": {
         "at": "2026-11-09T09:00:00+00:00",

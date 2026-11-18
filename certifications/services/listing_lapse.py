@@ -1,4 +1,9 @@
-"""Whether an OMRI listing had lapsed by the day an input was applied (overall review 2026-11, OV-MT-C04).
+"""Whether an OMRI or WSDA listing had lapsed by the day an input was applied (overall review 2026-11,
+OV-MT-C04).
+
+Both catalogs carry `delisted_on` since 2026-11-18: `OMRIProduct` from the start, `WSDAMaterial` since
+migration 0087, set by `seed_wsda_materials` when a later edition no longer carries the product. The
+rule below reads either; the OMRI history follows.
 
 `OMRIProduct.delisted_on` is the edition date of the first OMRI Crop Products List Trazo loaded that no
 longer carried the product. Until this module only the plan's materials list and the buyer-page claim
@@ -30,11 +35,12 @@ def application_day(applied_at) -> Optional[datetime.date]:
     return applied_at
 
 
-def omri_listing_lapsed_by(product, applied_at) -> Optional[datetime.date]:
-    """The edition date OMRI stopped listing `product`, when that was on or before the application day.
+def listing_lapsed_by(product, applied_at) -> Optional[datetime.date]:
+    """The edition date the catalog stopped listing `product` (an OMRIProduct or a WSDAMaterial), when that
+    was on or before the application day.
 
     None when the product is still listed, when the application came before the drop, and when there is
-    no application date to compare (a lookup with no record yet asks `omri_listing_lapsed_on` instead)."""
+    no application date to compare (a lookup with no record yet asks `listing_lapsed_on` instead)."""
     delisted = getattr(product, "delisted_on", None) if product is not None else None
     day = application_day(applied_at)
     if delisted is None or day is None:
@@ -42,6 +48,11 @@ def omri_listing_lapsed_by(product, applied_at) -> Optional[datetime.date]:
     return delisted if day >= delisted else None
 
 
-def omri_listing_lapsed_on(product) -> Optional[datetime.date]:
-    """The edition date OMRI stopped listing `product`, whatever the date; None while it is listed."""
+def listing_lapsed_on(product) -> Optional[datetime.date]:
+    """The edition date the catalog stopped listing `product`, whatever the date; None while it is listed."""
     return getattr(product, "delisted_on", None) if product is not None else None
+
+
+# The names the OMRI slice (back #472) shipped with; the rule is the same for both catalogs.
+omri_listing_lapsed_by = listing_lapsed_by
+omri_listing_lapsed_on = listing_lapsed_on

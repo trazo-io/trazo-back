@@ -31,3 +31,19 @@ questions:
   g6_4_handling.post_harvest_water_test_results: "How water that is not municipal is shown potable, and positive water tests, are OTCO C7 7.5-1b/c asks. CCOF's G6.1 B3a asks only whether water treated on site meets the Safe Drinking Water Act (water_treated_onsite, treated_water_meets_sdwa)."
   g6_4_handling.water_system_management: "WSDA L 14b's description of how a treated water system is managed and monitored. CCOF G6.1 B3a asks only whether the treated water meets the Safe Drinking Water Act."
   g6_4_handling.shares_handling_area_or_equipment: "OTCO C7 7.4-1 and WSDA L 6 ask whether handling areas or equipment are shared by organic and non-organic crops. CCOF G6.4 applies only to an all-organic operation handling its own product, so it never asks; non-organic handling is one of the disqualifiers on its applicability gate (simple_handling_disqualifiers)."
+  g6_4_handling.chlorine_rinse_monitoring: >-
+    How the chlorine rinse is checked (WSDA AGR 2121 L 15a). CCOF's on-farm handling and harvest forms asks
+    wash water additives and the final rinse, not how the rinse is monitored.
+  g6_4_handling.cleaning_differs_by_status: >-
+    Whether cleaning differs before non-certified crops on shared equipment (WSDA AGR 2121 L 6a). CCOF's
+    on-farm handling and harvest forms asks commingling controls, not the cleaning chemistry by status.
+  g6_4_handling.cleaning_differences_detail: >-
+    The differences of `cleaning_differs_by_status`, unmapped with its parent.
+  g6_4_handling.handling_records_linkage: >-
+    How cleaning and purge records link to production records (WSDA AGR 2121 L 7). CCOF's on-farm handling
+    and harvest forms asks the records kept, not their link to production records.
+  g6_4_handling.purge_procedure_upload: >-
+    Equipment purge procedures and purge amounts (WSDA AGR 2121 L 4). CCOF's on-farm handling and harvest
+    forms does not ask for them.
+  g6_4_handling.handling_additional_notes: >-
+    WSDA AGR 2121 L 18's optional space for the post-harvest section.

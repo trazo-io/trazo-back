@@ -63,3 +63,8 @@ questions:
   g6_1_harvest_transport.packaging_reuse_description: "CCOF's grower forms ask whether packaging is free of prohibited materials (G6.4 C1, answered on G6.1 §B by packaging_free_of_prohibited) and nothing more about packaging; the material, proof, food-grade and reuse questions are OTCO C7 7.9 and WSDA L 16/17 asks, and change nothing CCOF asks next."
   g6_1_harvest_transport.reused_packaging_held_nonorganic: "CCOF's grower forms ask whether packaging is free of prohibited materials (G6.4 C1, answered on G6.1 §B by packaging_free_of_prohibited) and nothing more about packaging; the material, proof, food-grade and reuse questions are OTCO C7 7.9 and WSDA L 16/17 asks, and change nothing CCOF asks next."
   g6_1_harvest_transport.reused_packaging_protection: "CCOF's grower forms ask whether packaging is free of prohibited materials (G6.4 C1, answered on G6.1 §B by packaging_free_of_prohibited) and nothing more about packaging; the material, proof, food-grade and reuse questions are OTCO C7 7.9 and WSDA L 16/17 asks, and change nothing CCOF asks next."
+  g6_1_harvest_transport.container_safeguard_documentation: >-
+    The documentation behind safeguards for harvest containers not stamped organic (WSDA AGR 2121 J 7b).
+    CCOF's on-farm handling and harvest forms does not ask whether containers are stamped organic.
+  g6_1_harvest_transport.harvest_additional_notes: >-
+    WSDA AGR 2121 J 14's optional space for the harvest section.

@@ -2832,6 +2832,10 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = _sourced_product_flowables(osp, styles)
                 elif question.embed == "equipment_inventory":
                     rendered = _equipment_flowables(osp, styles)
+                elif question.embed == "facility_pest_pointer":
+                    rendered = [Paragraph(_escape(line), styles["body"]) for line in _facility_pest_pointer(osp)]
+                elif question.embed == "packaging_pointer":
+                    rendered = [Paragraph(_escape(line), styles["body"]) for line in _packaging_pointer(osp)]
                 else:
                     rendered = []
                 if rendered:
@@ -6376,6 +6380,27 @@ def generate_osp_packet(osp, scope=None) -> bytes:
         for path, data in entries:
             zf.writestr(path, data)
     return out.getvalue()
+
+
+def _packaging_pointer(osp) -> list[str]:
+    """Where packaging free of prohibited substances is asked, and the answer there (CCOF G6.4 C1, 2026-11-18).
+
+    CCOF asks it on its handling form; Trazo asks it once, on G6.1 §B. The line names the module as `module_pointer`
+    does, then prints G6.1's own answer as given, or says it is not answered yet. Nothing is inferred from records.
+    """
+    from certifications.osp_modules import MODULES_BY_KEY
+    from certifications.osp_modules.conditions import answer_value
+    from certifications.services.osp_module_compiler import _format_answer_en
+    from certifications.services.parcel_application_lines import module_pointer
+
+    lines = [module_pointer(osp, "g6_1_harvest_transport", "Whether all packaging is free of prohibited substances")]
+    module = MODULES_BY_KEY["g6_1_harvest_transport"]
+    entry = ((osp.module_responses or {}).get("modules") or {}).get(module.key) or {}
+    value = answer_value(entry.get("answers") or {}, "packaging_free_of_prohibited")
+    if value not in (None, "", []) and not entry.get("not_applicable"):
+        question = next(q for page in module.pages for q in page.questions if q.key == "packaging_free_of_prohibited")
+        lines.append(f"G6.1 answers: {_format_answer_en(question, value)}.")
+    return lines
 
 
 def _facility_pest_pointer(osp) -> list[str]:

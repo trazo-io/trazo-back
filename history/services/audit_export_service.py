@@ -7007,6 +7007,11 @@ class AuditExportService:
                         f"{omri.omri_id or 'OMRI'} (OMRI listing lapsed {lapsed_on.isoformat()}, "
                         "on or before this application)"
                     )
+                # The WSDA half (2026-11-18): the same test on the WSDA listing the record attached.
+                _wsda_row = getattr(ev, "wsda_material", None) if getattr(ev, "wsda_material_id", None) else None
+                wsda_lapsed_on = omri_listing_lapsed_by(_wsda_row, ev.date) if _wsda_row else None
+                # One input counts once, even when both its listings lapsed (review of back #478).
+                if lapsed_on is not None or wsda_lapsed_on is not None:
                     lapsed_hits += 1
                 if nl:
                     nl_display = (
@@ -7060,6 +7065,12 @@ class AuditExportService:
                         status_display = "Farmer-reported WSDA"
                     else:
                         status_display = "Self-reported"
+
+                if wsda_lapsed_on is not None:
+                    status_display = (
+                        f"{status_display} (WSDA listing lapsed {wsda_lapsed_on.isoformat()}, "
+                        "on or before this application)"
+                    )
 
                 wsda = getattr(ev, "wsda_material", None)
                 if not omri and not nl and not wsda:
@@ -7127,10 +7138,10 @@ class AuditExportService:
                 elements.append(self._spacer(0.05))
                 elements.append(
                     Paragraph(
-                        f"<b>[REVIEW] OMRI listing lapsed:</b> {lapsed_hits} input(s) were applied on or after "
-                        "the date OMRI's published list stopped carrying the product, shown beside the OMRI ID "
-                        "above. A lapsed listing does not make the material prohibited; the certifier decides "
-                        "whether its use was allowed.",
+                        f"<b>[REVIEW] OMRI or WSDA listing lapsed:</b> {lapsed_hits} input(s) were applied on or "
+                        "after the date the program's published list stopped carrying the product, shown beside "
+                        "the OMRI ID or the status above. A lapsed listing does not make the material prohibited; "
+                        "the certifier decides whether its use was allowed.",
                         self._warning_style(),
                     )
                 )

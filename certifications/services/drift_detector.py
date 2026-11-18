@@ -546,41 +546,54 @@ def _classify_chemical_event(event, osp) -> Optional[Dict[str, Any]]:
             return None
         return _event_ca_dpr_permit_status(event)
 
-    def _wsda_listing_still_covers():
-        """True when a WSDA listing the plan approves still speaks for this record: the one attached
-        to it, or the WSDA row its name matches exactly. An OMRI lapse is then not a gap."""
-        if getattr(event, "wsda_material_id", None) in approved_wsda_ids:
-            return True
+    def _current_approval_covers(kind):
+        """True when the OTHER catalog's approval still speaks for this record on its application day:
+        the listing attached to it, or the row its name matches exactly, approved on the plan and not
+        lapsed by the application (overall review 2026-11, OV-MT-C04). `kind` is the catalog that
+        lapsed ("omri" or "wsda"); a lapse in one is not a gap while the other still covers it."""
+        from certifications.services.listing_lapse import listing_lapsed_by
+
         name = (event.commercial_name or "").strip()
-        if not name:
-            return False
-        _o, r_wsda, _n, _p = _exact_catalog_hits(name)
-        return r_wsda is not None and r_wsda.id in approved_wsda_ids
+        r_omri, r_wsda = None, None
+        if name:
+            r_omri, r_wsda, _n, _p = _exact_catalog_hits(name)
+        if kind == "omri":
+            attached = getattr(event, "wsda_material", None) if getattr(event, "wsda_material_id", None) else None
+            candidates, approved = (attached, r_wsda), approved_wsda_ids
+        else:
+            attached = getattr(event, "omri_product", None) if getattr(event, "omri_product_id", None) else None
+            candidates, approved = (attached, r_omri), approved_omri_ids
+        return any(
+            row is not None and row.id in approved and listing_lapsed_by(row, event.date) is None for row in candidates
+        )
 
     def _approved_issue_reason(cdfa, dpr, product=None):
         """Build the OSP-approved-but-flagged reason.
         Returns (prose, issue_codes, issue_params); prose is None when clean.
 
-        `product` is the listing the approval rests on. When it is an OMRI product whose listing had
-        lapsed by the day of this application, that is an issue (overall review 2026-11, OV-MT-C04):
-        the plan approved an OMRI-listed product and the record applied it after OMRI stopped listing
-        it. A record from before the drop is untouched, and so is one a current WSDA approval covers."""
+        `product` is the listing the approval rests on. When it is an OMRI product or a WSDA material
+        whose listing had lapsed by the day of this application, that is an issue (overall review
+        2026-11, OV-MT-C04): the plan approved a listed product and the record applied it after the
+        program stopped listing it. A record from before the drop is untouched, and so is one the
+        other catalog's current approval covers."""
         parts = []
         codes = []
         params: Dict[str, Any] = {}
-        if isinstance(product, OMRIProduct):
-            from certifications.services.listing_lapse import application_day, omri_listing_lapsed_by
+        if isinstance(product, (OMRIProduct, WSDAMaterial)):
+            from certifications.services.listing_lapse import application_day, listing_lapsed_by
 
-            lapsed = omri_listing_lapsed_by(product, event.date)
-            if lapsed is not None and not _wsda_listing_still_covers():
+            kind = "omri" if isinstance(product, OMRIProduct) else "wsda"
+            lapsed = listing_lapsed_by(product, event.date)
+            if lapsed is not None and not _current_approval_covers(kind):
                 applied = application_day(event.date)
+                program = "OMRI" if kind == "omri" else "WSDA"
                 parts.append(
-                    f"OMRI's published list stopped carrying this product as of {lapsed.isoformat()}, and "
+                    f"{program}'s published list stopped carrying this product as of {lapsed.isoformat()}, and "
                     f"this application is dated {applied.isoformat()}. A lapsed listing does not make the "
                     "material prohibited; the certifier decides whether its use was allowed"
                 )
-                codes.append("omri_listing_lapsed")
-                params["omriDelistedOn"] = lapsed.isoformat()
+                codes.append(f"{kind}_listing_lapsed")
+                params[f"{kind}DelistedOn"] = lapsed.isoformat()
                 params["appliedOn"] = applied.isoformat()
         if cdfa and cdfa.get("status") == CDFA_OIM_UNKNOWN:
             # NOT "registration is missing". Trazo holds a 17-row slice of the CDFA

@@ -219,12 +219,26 @@ def _omri_listing_is_current(chemical_event) -> bool:
 
     NEVER relax this to `omri_product_id` for want of a query. The related row is what carries
     `delisted_on`, and an event whose product cannot be resolved has not shown the listing is
-    current. Callers on the public path select_related("omri_product") so this costs nothing.
+    current. Callers on the public path select_related("omri_product", "wsda_material") so this costs nothing.
     """
     if not getattr(chemical_event, "omri_product_id", None):
         return False
     product = getattr(chemical_event, "omri_product", None)
     return product is not None and getattr(product, "delisted_on", None) is None
+
+
+def _wsda_listing_is_current(chemical_event) -> bool:
+    """True only while WSDA still lists the product the FK points at (overall review 2026-11, OV-MT-C04).
+
+    The same rule as `_omri_listing_is_current`, for the catalog that had no drop marker until
+    2026-11-18: a product WSDA removes from a later edition kept announcing "WSDA Listed" on the buyer
+    page for as long as the row survived. A lapse is not evidence against the input; the event falls
+    through to the next tier. Public callers select_related("wsda_material").
+    """
+    if not getattr(chemical_event, "wsda_material_id", None):
+        return False
+    material = getattr(chemical_event, "wsda_material", None)
+    return material is not None and getattr(material, "delisted_on", None) is None
 
 
 def may_claim_input_listing(chemical_event):
@@ -271,7 +285,7 @@ def may_claim_input_listing(chemical_event):
     if _omri_listing_is_current(chemical_event):
         return ClaimDecision(True, "OMRI catalog match on file", LABEL_INPUT_OMRI_LISTED)
 
-    if getattr(chemical_event, "wsda_material_id", None):
+    if _wsda_listing_is_current(chemical_event):
         return ClaimDecision(True, "WSDA Materials List match on file", LABEL_INPUT_WSDA_LISTED)
 
     # Phase 5 slice 1: only a confirmed classification (exact, alias, operator) is evidence here; a
