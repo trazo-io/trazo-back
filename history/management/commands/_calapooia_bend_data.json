@@ -410,7 +410,7 @@
   "latitude": 44.5402,
   "longitude": -123.1089,
   "name": "Calapooia Bend Farm",
-  "soil_types": "[\"Winter cover crops (cereal rye, vetch, crimson clover)\",\"Purchased OMRI compost (Rexius)\",\"Douglas-fir sawdust mulch on blueberry beds\",\"Permanent grass alleys\",\"Hedgerows and riparian buffer\"]",
+  "soil_types": "[\"Winter cover crops (cereal rye, vetch, crimson clover)\",\"Purchased Rexius compost (no third-party listing)\",\"Douglas-fir sawdust mulch on blueberry beds\",\"Permanent grass alleys\",\"Hedgerows and riparian buffer\"]",
   "split_operation_plan": "Buffer rows only. The outside row (row 1) on the west edge of Home Field West, and on the north part of the west edge of Home Field East, sits against a conventional grass-seed neighbor, so under 7 CFR 205.202(c) its fruit cannot be sold as organic. Those rows are staked orange and marked on the block map, picked last on their own day into red-tagged lugs that touch nothing else, kept out of the organic cooler and pack line, and sold to Willamette Valley Fruit as conventional process fruit on a separate bill of lading under a lot code beginning CBF-CONV, with its own weigh ticket and sales record. No other non-organic product exists on the operation and no prohibited material is stored on the farm.",
   "state": "OR",
   "total_acreage": 138.6,
@@ -5222,7 +5222,7 @@
    "_id": 298,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — river-bottom ground south of River Block",
    "agricultural_details": {
-    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated in spring; purchased OMRI compost 4 t/ac; flame weeding before carrot emergence and mechanical cultivation after; spring chisel only, no fall tillage; annual soil test; riparian buffer left in native vegetation; hedgerow on the road side.",
+    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated in spring; purchased Rexius compost (no third-party listing) 4 t/ac; flame weeding before carrot emergence and mechanical cultivation after; spring chisel only, no fall tillage; annual soil test; riparian buffer left in native vegetation; hedgerow on the road side.",
     "transparency_ready": false
    },
    "apn": "12S03W14-00400",
@@ -5612,7 +5612,7 @@
    "_id": 301,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — river-bottom ground south of Bottom Ground A",
    "agricultural_details": {
-    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated; purchased OMRI compost 4 t/ac; flame weeding and mechanical cultivation; spring chisel only; annual soil test; riparian buffer untouched.",
+    "sustainability_practices": "Winter cover crop every year, flail-mowed and incorporated; purchased Rexius compost (no third-party listing) 4 t/ac; flame weeding and mechanical cultivation; spring chisel only; annual soil test; riparian buffer untouched.",
     "transparency_ready": false
    },
    "apn": "12S03W14-00401",
@@ -5740,7 +5740,7 @@
    "_id": 302,
    "address": "31480 Calapooia Rd, Tangent, OR 97389 — terrace north of the blueberry blocks, adjoining Hartwell on the north",
    "agricultural_details": {
-    "sustainability_practices": "Winter cover crop every year plus a full fallow-cover year in 2024; purchased OMRI compost; flame weeding and cultivation; 40 ft mowed grass buffer on the north; native hedgerow planted 2024; bird and bat boxes on the hedgerow posts; annual soil test.",
+    "sustainability_practices": "Winter cover crop every year plus a full fallow-cover year in 2024; purchased Rexius compost (no third-party listing); flame weeding and cultivation; 40 ft mowed grass buffer on the north; native hedgerow planted 2024; bird and bat boxes on the hedgerow posts; annual soil test.",
     "transparency_ready": false
    },
    "apn": "12S03W11-00100",
@@ -10980,7 +10980,7 @@
        "__dt__": "2026-02-26T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost 4 t/ac. Analysis on file.",
+      "observation": "Rexius compost 4 t/ac. Analysis on file.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -15692,7 +15692,7 @@
        "__dt__": "2025-03-27T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost, 4 t/ac broadcast before the last disk pass. Analysis on file: 1.1% N, C:N 18, 131-160 °F for 15 days, five turnings — PFRP documented by the supplier.",
+      "observation": "Rexius compost, 4 t/ac broadcast before the last disk pass. Analysis on file: 1.1% N, C:N 18, 131-160 °F for 15 days, five turnings — PFRP documented by the supplier.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -16362,7 +16362,7 @@
        "__dt__": "2025-03-20T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost at 4 t/ac before the last pass. Analysis on file (same lot as Bottom Ground A).",
+      "observation": "Rexius compost at 4 t/ac before the last pass. Analysis on file (same lot as Bottom Ground A).",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -23615,7 +23615,7 @@
        "__dt__": "2026-03-26T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost 4 t/ac.",
+      "observation": "Rexius compost 4 t/ac.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -24275,7 +24275,7 @@
        "__dt__": "2026-03-19T08:00:00+00:00"
       },
       "description": "Rexius compost pre-plant",
-      "observation": "Rexius OMRI compost 4 t/ac.",
+      "observation": "Rexius compost 4 t/ac.",
       "performed_by": "Tom Brandt",
       "type": "OM"
      },
@@ -24628,7 +24628,7 @@
       "organic_approved": "omri_listed",
       "performed_by": "Javier Morales",
       "phosphorus_percentage": {
-       "__dec__": "3.00"
+       "__dec__": "4.00"
       },
       "potassium_percentage": {
        "__dec__": "1.00"

@@ -347,6 +347,12 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
                 self.assertEqual((row.get("@omri_product") or {}).get("product_name"), name, name)
                 self.assertEqual(plan[name][0], "omri", name)
         self.assertGreater(checked, 50, "no OMRI application read")
+        # And the other way: a link sits only on an OMRI application of the product it names.
+        for row in self._applications():
+            link = (row.get("@omri_product") or {}).get("product_name")
+            if link:
+                self.assertEqual(row.get("commercial_name"), link, link)
+                self.assertEqual(row.get("organic_approved"), "omri_listed", link)
 
     def test_no_application_claims_a_listing_its_plan_says_it_does_not_have(self):
         """Rex Lime Sulfur, Rexius compost and Tiger 90CR sulfur sit on the plan as a National List
@@ -365,6 +371,22 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
             if entry[0] in ("national_list", "none_unlisted"):
                 self.assertNotEqual(basis, "omri_listed", name)
         self.assertGreater(read, 50, "no planned application read")
+
+    def test_no_free_text_calls_an_unlisted_material_omri(self):
+        """Rexius compost is "no third-party listing" on the plan; its records and the farm's
+        profile said "Rexius OMRI compost" (review of back #496), the same contradiction inside one
+        record."""
+        text = json.dumps(self.data)
+        self.assertNotIn("OMRI compost", text)
+
+    def test_an_npk_product_name_and_its_percentages_agree(self):
+        """Neptune's Harvest 2-4-1 printed 2-3-1, and one row kept P at 3% after the fix."""
+        for row in self._applications():
+            if row.get("commercial_name") != "Neptune's Harvest Organic Fish Fertilizer 2-4-1":
+                continue
+            p = row.get("phosphorus_percentage")
+            if p is not None:
+                self.assertEqual(p, {"__dec__": "4.00"}, row.get("_id"))
 
     def test_every_national_list_link_says_how_it_was_set(self):
         """A National List link with no basis prints "recorded before Trazo kept how it was matched;
