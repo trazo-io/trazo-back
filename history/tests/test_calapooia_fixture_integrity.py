@@ -2,7 +2,7 @@
 
 WHY THIS EXISTS
 ---------------
-`seed_calapooia_bend` rebuilds the deepest dataset Trazo has — 6 parcels, 12 seasons, 512
+`seed_calapooia_bend` rebuilds the deepest dataset Trazo has — 6 parcels, 12 seasons, 510
 events, 3 OSP versions — from a machine-extracted JSON fixture. The farm is the depth demo and
 the artifact the certifier-packet work was validated against.
 
@@ -19,7 +19,7 @@ that drifts.
 
 WHAT IT DELIBERATELY DOES NOT DO
 --------------------------------
-It does not run the seeder. That writes 512 events and fires the carbon signals on every one,
+It does not run the seeder. That writes 510 events and fires the carbon signals on every one,
 and a test that slow gets skipped, which is worse than not having it. Fidelity of the OUTPUT is
 verified by rebuilding into a clean database and diffing the certifier packet against the
 source — DOCUMENTED 15 = 15, GAP 2 = 2, with the single remaining difference being the
@@ -335,6 +335,9 @@ class CalapooiaFixtureIntegrityTests(SimpleTestCase):
         text = json.dumps(self.data)
         for real in ("Real Organic", "ROP-"):
             self.assertNotIn(real, text, f"{real!r} is back in the specimen")
+        # The bare acronym too, on word boundaries ("CROPS" is not it): a season narrative kept
+        # "ROP inspection on the block" after its record was dropped (review of back #488).
+        self.assertIsNone(re.search(r"\bROP\b", text), "the ROP acronym is back in the specimen")
 
 
 def _strings(value):

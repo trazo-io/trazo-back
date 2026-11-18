@@ -14,7 +14,7 @@ the only copy — and it could not be put in front of anyone, because production
 
 Why a JSON fixture and not inline Python
 ----------------------------------------
-`ProductionEvent` has 97 columns, `ChemicalEvent` 82, `SoilManagementEvent` 80. 512 rows across
+`ProductionEvent` has 97 columns, `ChemicalEvent` 82, `SoilManagementEvent` 80. 510 rows across
 those is roughly fifteen thousand values. Written as Python literals that is a ten-thousand-line
 module nobody can review, and every hand-copied value is a chance to invent data that the
 rehearsal never produced. The fixture is machine-extracted from the rows themselves.
