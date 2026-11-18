@@ -179,3 +179,26 @@ class TheRegisterRowsAreClosed(SimpleTestCase):
                 self.assertEqual(row["status"], "covered", f"{path} {ref}")
                 for cited in row["trazo"]["questions"]:
                     self.assertIn(cited, keys, f"{path} {ref}")
+
+
+class TheGoldenCasesAreNotShadowed(SimpleTestCase):
+    """Review of back #479: a second "g5_0_pest" key in GOLDEN_ANSWER_CASES silently dropped the nine cases above it,
+    because a dict literal keeps only the last of a duplicate key. Read from the source, where the duplicate is."""
+
+    def test_no_module_and_no_case_name_appears_twice(self):
+        import ast
+        from collections import Counter
+
+        path = Path(__file__).resolve().parents[1] / "management/commands/export_osp_module_fixture.py"
+        tree = ast.parse(path.read_text())
+        cases = next(
+            n.value
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "GOLDEN_ANSWER_CASES" for t in n.targets)
+        )
+        dicts = [("GOLDEN_ANSWER_CASES", cases)] + [
+            (k.value, v) for k, v in zip(cases.keys, cases.values) if isinstance(v, ast.Dict)
+        ]
+        for name, node in dicts:
+            counts = Counter(k.value for k in node.keys if isinstance(k, ast.Constant))
+            self.assertEqual([k for k, c in counts.items() if c > 1], [], name)

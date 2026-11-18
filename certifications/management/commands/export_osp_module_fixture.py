@@ -176,6 +176,11 @@ GOLDEN_ANSWER_CASES = {
     },
     "g5_0_pest": {
         "unanswered": {},
+        # 2026.12.19: the burn target opens for disease or seed only; the plastic questions for plastic only.
+        "burn_for_disease": {"burns_crop_residue": True, "burn_reason": ["disease_suppression"]},
+        "burn_other_only": {"burns_crop_residue": True, "burn_reason": ["other"]},
+        "plastic_pvc": {"plastic_mulch_used": True, "plastic_mulch_material": "pvc"},
+        "pest_taxa_other": {"pest_taxa_managed": ["insects", "other"]},
         # 2026.11.22: a retired question shows only while it holds an answer; both evaluators must agree.
         "retired_lists_answered": {
             "prevention_practices": ["crop_rotation", "other"],
@@ -309,13 +314,6 @@ GOLDEN_ANSWER_CASES = {
         "markings_not_tied": {"container_markings_tie_to_lot": False},
         "no_nonretail_containers": {"nonretail_container_types": ["none"]},
         "no_identifier": {"container_lot_identifier_types": ["no_identifier"]},
-    },
-    "g5_0_pest": {
-        # 2026.12.19: the burn target opens for disease or seed only; the plastic questions for plastic only.
-        "burn_for_disease": {"burns_crop_residue": True, "burn_reason": ["disease_suppression"]},
-        "burn_other_only": {"burns_crop_residue": True, "burn_reason": ["other"]},
-        "plastic_pvc": {"plastic_mulch_used": True, "plastic_mulch_material": "pvc"},
-        "pest_taxa_other": {"pest_taxa_managed": ["insects", "other"]},
     },
     "g6_5_sales_soe": {
         # Direct marketing (2026.12.18): venues open their lists; signage only when non-organic is sold too.
