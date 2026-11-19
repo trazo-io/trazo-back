@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 806 |
 | Rows that are not questions (instructions, Trazo interpretations) | 57 |
-| Covered | 717 |
-| Partial | 29 |
+| Covered | 718 |
+| Partial | 28 |
 | Not covered | 11 |
 | Out of scope (stated) | 49 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 0 |
-| Minor (P2 / P3) | 40 |
+| Minor (P2 / P3) | 39 |
 
 These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
 
@@ -592,7 +592,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When CCOF requires it:** Item 1 — apply for CCOF organic certification for crop production
 
-**9 questions** — Covered 8 · Partial 1
+**9 questions** — Covered 9
 
 | Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
@@ -602,7 +602,7 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 | C1 | A split operation is one that produces or handles both organic and nonorganic products. Mark all that apply: grow both organic and nonorganic crops; grow identical crops organically and nonorganically; sell organic and nonorganic crops/products, including any sourced from other operations; sell identical organic and nonorganic crops/products, including any sourced from other operations; none of the above — skip to section D. | Covered | — | `g6_0_production.split_operation` · `g6_0_production.nonorganic_product_source` · `g6_0_production.nonorganic_product_source_other` · `g6_0_production.bought_in_identical_to_organic` · `g6_0_production.parallel_production` · `g6_5_sales_soe.sales_soe_supplier_verification` | — |
 | C2 | How do your input records distinguish between materials used on organic and nonorganic crops? | Covered | — | `g6_0_production.split_operation_separation` · `g6_0_production.split_input_records_distinction` | — |
 | C3 | How do your harvest, shipping, and sales records distinguish between organic and nonorganic crops/products? | Covered | — | `g6_0_production.parallel_production_distinction` · `g6_0_production.split_records_distinction` · `g6_0_production.buffer_strategies` | — |
-| D1 | Mark all that apply: my operation purchases certified organic seed, annual seedlings/transplants, or planting stock (describe in G3.0 Seeds & Planting Stock, or G3.2 Mushroom Production); my operation sources certified organic crops or products for resale or distribution (describe in G6.5 Sourcing & Direct Marketing); my operation sends certified organic crops to another operation for storage, handling, or processing (describe in G6.1 Harvest & Transport and/or G6.2 Storage); my operation packs into brands/labels owned by other certified operations (describe in G7.0 Labeling); none of the above — form complete. | Partial | P2 | `g2_0_fraud_prevention.fraud_risk_areas` · `g3_0_seeds.seeds_used` · `g6_5_sales_soe.sales_soe_supplier_verification` · `g7_0_labeling.product_leaves_as` · `history.Production.post_harvest_facilities` | Each scenario is answerable only implicitly, from the presence or absence of data across four different modules (G3.0 seed purchases, G6.5 supplier verification, `PostHarvestFacility` relations, G7.0's brand-owner gate) plus G2.0's own general `fraud_risk_areas` checklist. There is no single yes/no scenario map matching CCOF's D1. Each scenario's verification follow-up is asked where its records live (G2.0 §B, G6.1 §D, G7.0 §C). **Fix:** Derive a D1-style checklist from the four source modules and print it in G8.0 §D / G2.0, rather than requiring the certifier to infer it from four unrelated pages. |
+| D1 | Mark all that apply: my operation purchases certified organic seed, annual seedlings/transplants, or planting stock (describe in G3.0 Seeds & Planting Stock, or G3.2 Mushroom Production); my operation sources certified organic crops or products for resale or distribution (describe in G6.5 Sourcing & Direct Marketing); my operation sends certified organic crops to another operation for storage, handling, or processing (describe in G6.1 Harvest & Transport and/or G6.2 Storage); my operation packs into brands/labels owned by other certified operations (describe in G7.0 Labeling); none of the above — form complete. | Covered | — | `g8_0_record_keeping.sourcing_scenarios` | — |
 | D2 | For each scenario indicated in D1, how do you verify current organic status? Current organic certificate reviewed with each shipment or transaction; certificate reviewed periodically (monthly / quarterly / annually); other (describe). Certificates must be current — issued within the last 15 months — and complete (listing the product sourced or produced/handled, with brand if any); records must link back to the last certified organic operation. | Covered | — | `g2_0_fraud_prevention.fraud_mitigation_practices` · `g2_0_fraud_prevention.supplier_certificate_review_frequency` · `g2_0_fraud_prevention.supplier_certificate_review_frequency_other` · `g6_1_harvest_transport.handler_cert_verification_method` · `g6_1_harvest_transport.handler_cert_verification_method_other` · `g6_1_harvest_transport.handler_cert_verification_frequency` · `g6_1_harvest_transport.handler_cert_verification_frequency_other` · `g7_0_labeling.brand_owner_certificate_check` · `g7_0_labeling.brand_owner_certificate_check_other` · `g7_0_labeling.brand_owner_certificate_frequency` · `g7_0_labeling.brand_owner_certificate_frequency_other` | — |
 | D3 | How do you monitor the effectiveness of your certificate verification practices and procedures? Standard procedure requires sign-off from more than one employee for each transaction; periodic review of records for quality control; other (describe). | Covered | — | `g2_0_fraud_prevention.osp_implementation_monitoring` · `g2_0_fraud_prevention.fraud_review_process` | — |
 
@@ -1784,6 +1784,7 @@ the other does not is the most informative row here.
 | `g2_0_fraud_prevention.fraud_reporting_channels_other` | The other route of `fraud_reporting_channels`; same reason. |
 | `g2_0_fraud_prevention.fraud_reporting_triggers` | What the operation would report as suspected fraud. Asked by WSDA AGR 2121 P 6; CCOF's G8.0 section D does not ask it. |
 | `g2_0_fraud_prevention.fraud_reporting_triggers_other` | The other trigger of `fraud_reporting_triggers`; same reason. |
+| `g2_0_fraud_prevention.fraud_risk_areas` | Where in the supply chain fraud risk exists (Common OSP section 2). CCOF folds fraud prevention into G8.0 D and asks no risk-area inventory: D1's scenarios are stated on G8.0 page D from the sections that answer them, and D2 and D3 are cited to G2.0 pages B and C. Until 2026-11-19 this question was cited on D1 as a partial stand-in for that checklist. |
 | `g2_0_fraud_prevention.fraud_risk_other` | Free-text elaboration for the `other` option inside `fraud_risk_areas`; not a separate CCOF question — G8.0 D1 is a fixed checklist of scenarios with no open-ended 'other'. |
 | `g2_0_fraud_prevention.internal_audit_scope` | The scope and frequency of internal audits. Asked by WSDA P 3a; CCOF does not ask it. |
 | `g2_0_fraud_prevention.internal_audits_conducted` | Whether internal audits are conducted. Asked by WSDA P 3; CCOF does not ask it. |
@@ -2252,6 +2253,7 @@ the other does not is the most informative row here.
 | `g8_0_record_keeping.import_seed_standards_other` | The other standard of `import_seed_standards`, unmapped with its parent. |
 | `g8_0_record_keeping.port_integrity_measures` | Measures that keep organic integrity intact at the port of export or entry. Not asked on C12 or O1; WSDA asks it at §Q 5. |
 | `g8_0_record_keeping.records_additional_notes` | WSDA AGR 2121 O 9's optional space for the record keeping section. OTCO's C12 has no free space of its own. |
+| `g8_0_record_keeping.sourcing_scenarios` | CCOF G8.0 D1's list of supply-chain scenarios (organic seed or stock bought in, product sourced for resale, crops stored or handled by another operation, packing under another operation's label), stated from the G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0 answers. Nothing is asked here; OTCO asks the facts where those questions are cited and keeps no scenario list of its own. |
 | `g9_0_facility_pest.bait_station_use` | WSDA M 5's bait station placement and bait. OTCO C7 7.8 does not ask it. |
 | `g9_0_facility_pest.bait_station_use_other` | Free-text rider on bait_station_use. |
 | `g9_0_facility_pest.facility_pest_records_upload` | Files for the facility pest records the plan says are kept (`pest_control_records`). C7 §7.8 asks for no records, and OTCO collects monitoring and input application records under C12 §12.1, registered separately; these are the § 205.103 records an inspector reviews on site. The upload lets the packet carry them beside modules/G9_0.pdf. |
@@ -2477,6 +2479,7 @@ the other does not is the most informative row here.
 | `g8_0_record_keeping.records_organic_status_explanation` | Whether records identify organic status from harvest through sale, on a No. Asked by OTCO C12 12.2-5a; same reason as `records_identify_organic_status`. |
 | `g8_0_record_keeping.sells_as_organic` | Whether the operation sells crops or crop products as organic. Asked by OTCO C12 12.2-5; WSDA's recordkeeping section asks how records are kept (§O 7) and how they link (§O 8), not this. |
 | `g8_0_record_keeping.sources_organic_products` | Whether the operation sources organic agricultural products, as a yes or no. Asked by OTCO C12 12.2-4; WSDA's recordkeeping section asks how records are kept (§O 7) and how they link (§O 8), not this. |
+| `g8_0_record_keeping.sourcing_scenarios` | CCOF G8.0 D1's list of supply-chain scenarios (organic seed or stock bought in, product sourced for resale, crops stored or handled by another operation, packing under another operation's label), stated from the G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0 answers. Nothing is asked here; WSDA asks the facts where those questions are cited and keeps no scenario list of its own. |
 | `g9_0_facility_pest.additional_pest_measures` | Follow-up to pest_controls_sufficient; same reasoning. |
 | `g9_0_facility_pest.facility_pest_records_upload` | Files for the facility pest records the plan says are kept (`pest_control_records`). WSDA AGR 2121 §M asks how pests are monitored and managed (item 3, covered by `pest_control_records` and the monitoring questions) but never asks for records to be attached; these are the § 205.103 records an inspector reviews on site. The upload lets the packet carry them beside modules/G9_0.pdf. |
 | `g9_0_facility_pest.national_list_sufficient` | CCOF G6.2 B6. WSDA M 7 asks how an allowed material is first shown ineffective, which synthetic_material_justification and preventive_measures_documentation answer. |

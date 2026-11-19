@@ -73,6 +73,19 @@ def scope_facts(osp) -> list[tuple[str, str, str]]:
     else:
         wild, wild_from = "not stated", "certification scope"
 
+    organic, named = organic_seed_or_stock_from_outside(osp)
+    organic_from = "G3.0 and G3.0b" + (f": {', '.join(named)}" if named else "")
+
+    return [
+        ("Perennial crops grown", perennial, "G4.0 system type"),
+        ("Wild crops harvested", wild, wild_from),
+        ("Certified organic seed, seedlings or planting stock from outside the farm", organic, organic_from),
+    ]
+
+
+def organic_seed_or_stock_from_outside(osp) -> tuple[str, list[str]]:
+    """("yes" | "no" | "not stated", what the plan names) for certified organic seed, annual seedlings or planting
+    stock bought from outside the farm, from G3.0 and G3.0b. OTCO OFPP 1-3 and CCOF G8.0 D1 both ask it."""
     g3, g3_na = _answers(osp, "g3_0_seeds")
     g32, _g32_na = _answers(osp, "g3_2_planting_stock")
     outside, unsure = [], []
@@ -98,21 +111,13 @@ def scope_facts(osp) -> list[tuple[str, str, str]]:
         outside += [STOCK_FROM_OUTSIDE[v] for v in sources if v in STOCK_FROM_OUTSIDE]
 
     outside, unsure = list(dict.fromkeys(outside)), list(dict.fromkeys(unsure))
-    # G3.0 decides a "no": G3.2 not applying says only that no perennial stock went in this period.
+    # G3.0 decides a "no": G3.0b not applying says only that no perennial stock went in this period.
     answered = g3_na or any(_listed(_value(g3, k)) for k in ("seeds_used", "seedlings_used", "planting_stock_used"))
     if outside:
-        organic, named = "yes", outside
-    elif unsure or not answered:
-        organic, named = "not stated", unsure
-    else:
-        organic, named = "no", []
-    organic_from = "G3.0 and G3.2" + (f": {', '.join(named)}" if named else "")
-
-    return [
-        ("Perennial crops grown", perennial, "G4.0 system type"),
-        ("Wild crops harvested", wild, wild_from),
-        ("Certified organic seed, seedlings or planting stock from outside the farm", organic, organic_from),
-    ]
+        return "yes", outside
+    if unsure or not answered:
+        return "not stated", unsure
+    return "no", []
 
 
 def ofpp_scope_note(osp) -> list[str]:

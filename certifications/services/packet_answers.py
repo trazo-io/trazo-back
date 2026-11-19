@@ -58,6 +58,7 @@ from dataclasses import dataclass
 EVIDENCED_EMBEDS = frozenset(
     {
         "seedling_suppliers",
+        "sourcing_scenarios",
         "brand_owners",
         "sourced_products",
         "equipment_inventory",
@@ -437,6 +438,17 @@ class _Answers:
         _page, question = _question_and_page(module, question_key)
         return question is not None and question.kind == "info" and question.embed not in EVIDENCED_EMBEDS
 
+    def sourcing_scenarios_state(self) -> tuple[str, str]:
+        """(state, detail) for G8.0 §D: answered once every scenario reads yes or no from the sections it is
+        answered in. One still "not stated" leaves the row open and is named; the follow-ups that did not decide
+        it (a seed source, say) do not hold it open."""
+        from certifications.services.sourcing_scenarios import NOT_STATED, sourcing_scenarios
+
+        open_ = [s for s in sourcing_scenarios(self.osp) if s.state == NOT_STATED]
+        if not open_:
+            return "answered", ""
+        return "unanswered", "; ".join(f"{s.label['en']}: not stated ({'; '.join(s.basis)})" for s in open_)
+
     def sourced_product_state(self) -> tuple[str, str]:
         """(state, detail) for G6.5's sourcing panel: answered only when every sourcing supplier has its
         copy (a current certificate, or the Exempt Handler Affidavit and the operation it sources from)
@@ -685,6 +697,8 @@ class _Answers:
                     "equipment_inventory": self.equipment_state,
                     "operation_contacts": lambda: self.operation_contacts_state(document_id, ref),
                 }[question.embed]()
+            elif question.embed == "sourcing_scenarios":
+                state, detail = self.sourcing_scenarios_state()
             else:
                 state, detail = self.seedling_supplier_state()
             return state, detail, [("", state, detail)]

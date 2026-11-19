@@ -2487,6 +2487,7 @@ _LABELLED_EMBEDS = {
     "crop_table",
     "container_statement",
     "operation_contacts",
+    "sourcing_scenarios",
 }
 
 
@@ -2842,6 +2843,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     rendered = [Paragraph(_escape(line), styles["body"]) for line in _facility_pest_pointer(osp)]
                 elif question.embed == "packaging_pointer":
                     rendered = [Paragraph(_escape(line), styles["body"]) for line in _packaging_pointer(osp)]
+                elif question.embed == "sourcing_scenarios":
+                    from certifications.services.sourcing_scenarios import sourcing_scenario_lines
+
+                    lines, reviews = sourcing_scenario_lines(osp)
+                    rendered = [Paragraph(_escape(line), styles["body"]) for line in lines]
+                    rendered += [Paragraph(_escape(line), styles["meta"]) for line in reviews]
                 else:
                     rendered = []
                 if rendered:

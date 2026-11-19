@@ -64,7 +64,8 @@ class RegistryIntegrityTests(TestCase):
     def test_g8_embeds_s11_registry_panel(self):
         g8 = MODULES_BY_KEY["g8_0_record_keeping"]
         embeds = [q.embed for page in g8.pages for q in page.questions if q.embed]
-        self.assertEqual(embeds, ["s11_record_types"])
+        # Page D's scenario panel (CCOF G8.0 D1, 2026.12.22) reads other modules' answers; it is no registry.
+        self.assertEqual(embeds, ["s11_record_types", "sourcing_scenarios"])
 
 
 class ConditionEvaluatorTests(TestCase):

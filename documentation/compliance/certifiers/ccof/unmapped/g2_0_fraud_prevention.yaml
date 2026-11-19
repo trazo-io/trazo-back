@@ -1,4 +1,9 @@
 questions:
+  g2_0_fraud_prevention.fraud_risk_areas: >-
+    Where in the supply chain fraud risk exists (Common OSP section 2). CCOF folds fraud prevention into G8.0 D
+    and asks no risk-area inventory: D1's scenarios are stated on G8.0 page D from the sections that answer them,
+    and D2 and D3 are cited to G2.0 pages B and C. Until 2026-11-19 this question was cited on D1 as a partial
+    stand-in for that checklist.
   g2_0_fraud_prevention.fraud_risk_other: "Free-text elaboration for the `other` option inside
     `fraud_risk_areas`; not a separate CCOF question — G8.0 D1 is a fixed checklist of scenarios
     with no open-ended 'other'."

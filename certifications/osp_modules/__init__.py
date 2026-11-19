@@ -416,7 +416,10 @@ from .stubs import CERTIFICATION_CONTRACT, G3_1_SEEDLINGS, G6_4_HANDLING, G6_5_S
 #   upload asks for the operator's own marked-up sample (B1); G6.0 asks whether bought-in non-organic product is the same
 #   as an organic one sold (C1); G5.0 the disease prevention records (WSDA AGR 2121 H 4); G8.0 notes (O 9); the Parcel
 #   Application the number and issue date of a certificate another operation held (AGR 2264 6a). Optional.
-CONTENT_VERSION = "2026.12.21"
+# 2026.12.22: G8.0 page D states which supply-chain scenarios apply (CCOF G8.0 D1): organic seed, seedlings or planting
+#   stock bought in, organic product sourced for resale, crops stored or handled by another operation, packing under
+#   another operation's label. Read from the G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0 answers, never asked again.
+CONTENT_VERSION = "2026.12.22"
 
 # Wizard/list order follows the Common OSP grower taxonomy: seeds & stock →
 # soil → pest → production/handling chain → labeling → recordkeeping →

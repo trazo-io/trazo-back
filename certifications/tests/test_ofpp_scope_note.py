@@ -66,7 +66,7 @@ class TheFactsAreTheOnesThePlanStates(_Plan):
         self.assertEqual(facts["Wild crops harvested"], ("no", "certification scope"))
         self.assertEqual(
             facts["Certified organic seed, seedlings or planting stock from outside the farm"],
-            ("yes", "G3.0 and G3.2: organic planting stock from a nursery"),
+            ("yes", "G3.0 and G3.0b: organic planting stock from a nursery"),
         )
 
     def test_nothing_answered_is_not_stated_never_no(self):
@@ -80,12 +80,12 @@ class TheFactsAreTheOnesThePlanStates(_Plan):
         self.assertEqual(self.facts(none)["Wild crops harvested"], ("no", "W2.0 marked not applicable"))
 
     def test_only_the_seed_module_can_say_no(self):
-        """G3.2 not applying says no perennial stock went in this period, nothing about seed."""
+        """G3.0b not applying says no perennial stock went in this period, nothing about seed."""
         stock_only = self.plan(na=("g3_2_planting_stock",))
         key = "Certified organic seed, seedlings or planting stock from outside the farm"
         self.assertEqual(self.facts(stock_only)[key][0], "not stated")
         no_organic = self.plan({"g3_0_seeds": {"seeds_used": ["non_organic_untreated"], "seedlings_used": ["none"]}})
-        self.assertEqual(self.facts(no_organic)[key], ("no", "G3.0 and G3.2"))
+        self.assertEqual(self.facts(no_organic)[key], ("no", "G3.0 and G3.0b"))
 
     def test_what_the_farm_saves_grows_or_propagates_itself_is_not_bought(self):
         """Review of back #459: OFPP 1-3 asks what the operation buys."""
@@ -101,10 +101,10 @@ class TheFactsAreTheOnesThePlanStates(_Plan):
                 "g3_2_planting_stock": {"stock_organic_status": "all_organic", "stock_source": ["produce_own"]},
             }
         )
-        self.assertEqual(self.facts(own)[key], ("no", "G3.0 and G3.2"))
+        self.assertEqual(self.facts(own)[key], ("no", "G3.0 and G3.0b"))
         unsourced = self.plan({"g3_0_seeds": {"seeds_used": ["organic_treated"]}})
         self.assertEqual(
-            self.facts(unsourced)[key], ("not stated", "G3.0 and G3.2: organic seed, its source not stated")
+            self.facts(unsourced)[key], ("not stated", "G3.0 and G3.0b: organic seed, its source not stated")
         )
 
     def test_a_module_marked_not_applicable_holds_no_answers(self):
@@ -114,7 +114,7 @@ class TheFactsAreTheOnesThePlanStates(_Plan):
             na=("g3_0_seeds",),
         )
         key = "Certified organic seed, seedlings or planting stock from outside the farm"
-        self.assertEqual(self.facts(osp)[key], ("no", "G3.0 and G3.2"))
+        self.assertEqual(self.facts(osp)[key], ("no", "G3.0 and G3.0b"))
 
 
 class TheG20PagePrintsItForOtcoOnly(_Plan):
@@ -132,7 +132,7 @@ class TheG20PagePrintsItForOtcoOnly(_Plan):
             "§ 205.201(a)(3)",
             "Perennial crops grown: yes (G4.0 system type).",
             "Wild crops harvested: no (certification scope).",
-            "Certified organic seed, seedlings or planting stock from outside the farm: yes (G3.0 and G3.2: purchased "
+            "Certified organic seed, seedlings or planting stock from outside the farm: yes (G3.0 and G3.0b: purchased "
             "organic seedlings).",
         ):
             with self.subTest(words=words):

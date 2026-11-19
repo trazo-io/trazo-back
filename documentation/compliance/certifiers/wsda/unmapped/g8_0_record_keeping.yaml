@@ -29,3 +29,8 @@ questions:
     documents accompany each shipment (9) and Canada's critical variance, not how the arrangement is met.
   g8_0_record_keeping.equivalency_compliance_method_other: >-
     The other way of `equivalency_compliance_method`, unmapped with its parent.
+  g8_0_record_keeping.sourcing_scenarios: >-
+    CCOF G8.0 D1's list of supply-chain scenarios (organic seed or stock bought in, product sourced for resale,
+    crops stored or handled by another operation, packing under another operation's label), stated from the
+    G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0 answers. Nothing is asked here; WSDA asks the facts where those
+    questions are cited and keeps no scenario list of its own.
