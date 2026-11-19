@@ -45,6 +45,16 @@ def minimum_interval_cite(crop_type) -> str:
     return SOIL_CONTACT_CITE
 
 
+def gathered_from_ground(crop_type) -> bool:
+    """A crop on the 90-day floor whose harvest is swept from the ground (`CropType.harvested_from_ground`).
+
+    The kernel of a walnut or an almond does not touch the soil, so (c)(1)(iii) sets 90 days; the shell lies on
+    the orchard floor, and a certifier can read that as soil contact under (c)(1)(ii), 120 days. The floor stays
+    90 and nothing is refused; an interval under 120 is printed for the certifier to confirm.
+    """
+    return edible_part_touches_soil(crop_type) is False and bool(getattr(crop_type, "harvested_from_ground", False))
+
+
 def interval_days(value) -> int | None:
     """A stored choice ("120", "90", legacy "120_days") as days; None for "na" or blank."""
     raw = str(value or "").split("_")[0]

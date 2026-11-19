@@ -654,6 +654,8 @@ class Command(BaseCommand):
                 "name": "Walnuts",
                 "slug": "walnuts",
                 "category": "tree_nut",
+                # Shaken to the orchard floor and swept: see CropType.harvested_from_ground.
+                "harvested_from_ground": True,
                 "description": "California English walnut production — the US produces ~99% of the domestic crop. "
                 "Deciduous orchards with codling moth/husk fly as key pest pressures.",
                 "typical_farm_size": "10-80 hectares",
@@ -687,6 +689,8 @@ class Command(BaseCommand):
                 "name": "Almonds",
                 "slug": "almonds",
                 "category": "tree_nut",
+                # Shaken to the orchard floor and swept: see CropType.harvested_from_ground.
+                "harvested_from_ground": True,
                 "description": "California's premium tree nut crop with high water requirements and strong export markets.",
                 "typical_farm_size": "40-200 hectares",
                 "growing_season": "12 months (deciduous)",
@@ -1049,6 +1053,8 @@ class Command(BaseCommand):
                 "name": "Pecans",
                 "slug": "pecans",
                 "category": "tree_nut",
+                # Shaken to the orchard floor and swept: see CropType.harvested_from_ground.
+                "harvested_from_ground": True,
                 "description": "Pecan orchards, concentrated in Georgia, Texas and New Mexico — the US produces the "
                 "large majority of the world crop. Long-lived deciduous trees with alternate bearing; "
                 "pecan scab and weevil are the key pest pressures.",
@@ -1083,6 +1089,8 @@ class Command(BaseCommand):
                 "name": "Hazelnuts",
                 "slug": "hazelnuts",
                 "category": "tree_nut",
+                # Shaken to the orchard floor and swept: see CropType.harvested_from_ground.
+                "harvested_from_ground": True,
                 "description": "Hazelnut (filbert) orchards, ~99% of the US crop grown in Oregon's Willamette Valley. "
                 "Wind-pollinated in midwinter; Eastern Filbert Blight resistance drives cultivar choice.",
                 "typical_farm_size": "10-100 hectares",
