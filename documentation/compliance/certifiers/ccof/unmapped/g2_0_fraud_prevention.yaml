@@ -1,4 +1,9 @@
 questions:
+  g2_0_fraud_prevention.fraud_risk_areas: >-
+    Where in the supply chain fraud risk exists (Common OSP section 2). CCOF folds fraud prevention into G8.0 D
+    and asks no risk-area inventory: D1's scenarios are stated on G8.0 page D from the sections that answer them,
+    and D2 and D3 are cited to G2.0 pages B and C. Until 2026-11-19 this question was cited on D1 as a partial
+    stand-in for that checklist.
   g2_0_fraud_prevention.fraud_risk_other: "Free-text elaboration for the `other` option inside
     `fraud_risk_areas`; not a separate CCOF question — G8.0 D1 is a fixed checklist of scenarios
     with no open-ended 'other'."
@@ -76,89 +81,89 @@ questions:
     The supply chain as a map, flow chart or description. Asked by OTCO OFPP 2-1; CCOF does not ask it.
   g2_0_fraud_prevention.critical_control_points: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_other_name: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_seed_stock_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_seed_stock_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_inputs_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_inputs_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_purchased_product_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_purchased_product_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_custom_operators_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_custom_operators_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_transport_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_transport_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_offsite_storage_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_offsite_storage_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_split_handling_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_split_handling_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_sales_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_sales_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_import_export_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_import_export_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_other_strategy: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.
   g2_0_fraud_prevention.ccp_other_monitoring: >-
     OTCO OFPP 3-1's vulnerability table: each critical control point with its prevention strategies and
-    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, read from
-    `fraud_risk_areas` and the modules each scenario points to.
+    its monitoring. CCOF's G8.0 D1 asks a checklist of sourcing scenarios instead, stated on
+    G8.0 page D from the modules each scenario points to.

@@ -1198,5 +1198,37 @@ G8_0_RECORD_KEEPING = Module(
                 ),
             ),
         ),
+        # CCOF G8.0 D1 (2026-11-19): which supply-chain scenarios apply. Each is answered in its own section (G3.0 and
+        # G3.0b, G6.5, G6.1 and G6.2, G7.0), so it is stated here from those answers and never asked again, where it
+        # could disagree with them (`certifications/services/sourcing_scenarios.py`).
+        ModulePage(
+            key="d_sourcing",
+            title=text(
+                "D. Organic products bought in, and other operations",
+                "D. Productos orgánicos comprados y otras operaciones",
+            ),
+            questions=(
+                Question(
+                    key="sourcing_scenarios",
+                    kind="info",
+                    required=False,
+                    embed="sourcing_scenarios",
+                    label=text(
+                        "What this plan says about organic products you buy in, and other operations that store, "
+                        "handle or brand your crop",
+                        "Lo que dice este plan sobre los productos orgánicos que compras y las otras operaciones que "
+                        "almacenan, manejan o ponen su marca a tu cultivo",
+                    ),
+                    coaching=text(
+                        "Each line comes from your answers in G3.0 Seeds and G3.0b Perennial Planting Stock, G6.5 Sales, G6.1 "
+                        "Harvest and G6.2 Storage, and G7.0 Labeling. To change one, change the answer there.",
+                        "Cada línea sale de tus respuestas en G3.0 Semillas y G3.0b Material de plantación perenne, G6.5 Ventas, "
+                        "G6.1 Cosecha y G6.2 Almacenamiento, y G7.0 Etiquetado. Para cambiar una, cambia la respuesta "
+                        "allí.",
+                    ),
+                    nop_cite="§ 205.201(a)(3)",
+                ),
+            ),
+        ),
     ),
 )

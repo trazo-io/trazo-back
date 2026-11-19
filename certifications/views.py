@@ -2213,6 +2213,39 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{stem}-{spec.filename}.xlsx"'
         return response
 
+    @action(detail=True, methods=["get"], url_path="sourcing-scenarios")
+    def sourcing_scenarios(self, request, **kwargs):
+        """G8.0 §D: which supply-chain scenarios the plan's own answers state, for the wizard's panel.
+
+        A read of the answers already given in G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0; nothing is stored or asked. The
+        module PDF prints the same rows (`certifications/services/sourcing_scenarios.py`).
+        """
+        from certifications.services.sourcing_scenarios import NOT_STATED, section_b_disagreement, sourcing_scenarios
+
+        osp = self.get_object()
+        scenarios = sourcing_scenarios(osp)
+        return Response(
+            {
+                "scenarios": [
+                    {
+                        "key": s.key,
+                        "label": s.label,
+                        "state": "not_stated" if s.state == NOT_STATED else s.state,
+                        "answered_in": list(s.answered_in),
+                        # The modules whose answer would decide a scenario still not stated.
+                        "unanswered_in": list(s.unanswered_in),
+                        # The modules whose answers decided a yes or a no; the panel names these, never a
+                        # module the operator has not answered.
+                        "decided_by": list(s.decided_by),
+                    }
+                    for s in scenarios
+                ],
+                # "says_none", "says_some" or null: §B's "sources organic products" answer against the first two
+                # scenarios, the same check as the page's [REVIEW] line.
+                "section_b": section_b_disagreement(osp, scenarios),
+            }
+        )
+
     @action(detail=True, methods=["get"], url_path="module-definitions")
     def module_definitions(self, request, **kwargs):
         """

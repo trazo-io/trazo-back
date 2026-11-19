@@ -93,14 +93,22 @@ items:
 
   - ref: "D1"
     asks: "Mark all that apply: my operation purchases certified organic seed, annual seedlings/transplants, or planting stock (describe in G3.0 Seeds & Planting Stock, or G3.2 Mushroom Production); my operation sources certified organic crops or products for resale or distribution (describe in G6.5 Sourcing & Direct Marketing); my operation sends certified organic crops to another operation for storage, handling, or processing (describe in G6.1 Harvest & Transport and/or G6.2 Storage); my operation packs into brands/labels owned by other certified operations (describe in G7.0 Labeling); none of the above — form complete."
-    status: partial
-    severity: P2
+    status: covered
     trazo:
-      questions: [g2_0_fraud_prevention.fraud_risk_areas, g3_0_seeds.seeds_used, g6_5_sales_soe.sales_soe_supplier_verification, g7_0_labeling.product_leaves_as]
-      models: [history.Production.post_harvest_facilities]
-      prints: "modules/G2_0.pdf §A (risk areas only — no scenario checklist)"
-    gap: "Each scenario is answerable only implicitly, from the presence or absence of data across four different modules (G3.0 seed purchases, G6.5 supplier verification, `PostHarvestFacility` relations, G7.0's brand-owner gate) plus G2.0's own general `fraud_risk_areas` checklist. There is no single yes/no scenario map matching CCOF's D1. Each scenario's verification follow-up is asked where its records live (G2.0 §B, G6.1 §D, G7.0 §C)."
-    fix: "Derive a D1-style checklist from the four source modules and print it in G8.0 §D / G2.0, rather than requiring the certifier to infer it from four unrelated pages."
+      questions: [g8_0_record_keeping.sourcing_scenarios]
+      prints: "modules/G8_0.pdf §D: the four scenarios in D1's order, each yes, no or not stated with the answer it comes from, and \"None of these applies\" when all four are no"
+    # Closed 2026-11-19 by the sourcing checklist slice. D1 is not asked a second time: each scenario is answered where
+    # CCOF sends it (G3.0 and G3.0b, G6.5, G6.1 and G6.2, G7.0), and G8.0 §D states it from those answers
+    # (certifications/services/sourcing_scenarios.py). A section not answered yet makes its scenario "not stated", never
+    # "no". Handling by another operation after ownership passes to it is not this scenario, as CCOF G6.1 C1 ends the
+    # handling form there. A §B "sources organic products" answer that disagrees with G3.0, G3.0b and G6.5 prints a
+    # [REVIEW] line. The row cites the panel alone and is answered once no scenario is "not stated": citing the source
+    # questions too held it open on an optional follow-up that decides nothing (a seed source when no organic seed is
+    # used). They are g3_0_seeds.seeds_used, seed_source, seedlings_used and planting_stock_used,
+    # g3_2_planting_stock.stock_organic_status and stock_source, g6_5_sales_soe.sales_soe_supplier_verification,
+    # g6_1_harvest_transport.handled_by_another_operation, g6_2_storage.storage_locations, owns_crop_in_storage and
+    # third_party_storage_contracted, and g7_0_labeling.product_leaves_as.
+    # Guards: certifications/tests/test_sourcing_scenarios.py
 
   - ref: "D2"
     asks: "For each scenario indicated in D1, how do you verify current organic status? Current organic certificate reviewed with each shipment or transaction; certificate reviewed periodically (monthly / quarterly / annually); other (describe). Certificates must be current — issued within the last 15 months — and complete (listing the product sourced or produced/handled, with brand if any); records must link back to the last certified organic operation."
