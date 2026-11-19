@@ -408,3 +408,15 @@ class TheCorrectionPathIsHeldToTheSameFloorTests(_Production):
     def test_a_correction_at_or_above_the_floor_goes_through(self):
         self._correct(self._record(self.walnuts, "120"), "90")
         self._correct(self._record(self.lettuce, "90"), "120")
+        # The stricter wait on a 90-day crop: an exact-match rule (the bug manure_interval
+        # replaced) would refuse it (review of back #503).
+        self._correct(self._record(self.walnuts, "90"), "120")
+
+    def test_a_correction_cannot_blank_the_interval_of_a_dated_application(self):
+        from history.amendments import AmendmentError
+
+        event = self._record(self.lettuce, "120")
+        with self.assertRaisesMessage(AmendmentError, "Harvest interval (90 or 120 days) is required"):
+            self._correct(event, "")
+        event.refresh_from_db()
+        self.assertEqual(event.manure_harvest_interval, "120")
