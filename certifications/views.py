@@ -2220,9 +2220,10 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         A read of the answers already given in G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0; nothing is stored or asked. The
         module PDF prints the same rows (`certifications/services/sourcing_scenarios.py`).
         """
-        from certifications.services.sourcing_scenarios import NOT_STATED, sourcing_scenarios
+        from certifications.services.sourcing_scenarios import NOT_STATED, section_b_disagreement, sourcing_scenarios
 
         osp = self.get_object()
+        scenarios = sourcing_scenarios(osp)
         return Response(
             {
                 "scenarios": [
@@ -2231,9 +2232,14 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "label": s.label,
                         "state": "not_stated" if s.state == NOT_STATED else s.state,
                         "answered_in": list(s.answered_in),
+                        # The modules whose answer would decide a scenario still not stated.
+                        "unanswered_in": list(s.unanswered_in),
                     }
-                    for s in sourcing_scenarios(osp)
-                ]
+                    for s in scenarios
+                ],
+                # "says_none", "says_some" or null: §B's "sources organic products" answer against the first two
+                # scenarios, the same check as the page's [REVIEW] line.
+                "section_b": section_b_disagreement(osp, scenarios),
             }
         )
 

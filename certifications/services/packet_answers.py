@@ -440,14 +440,18 @@ class _Answers:
 
     def sourcing_scenarios_state(self) -> tuple[str, str]:
         """(state, detail) for G8.0 §D: answered once every scenario reads yes or no from the sections it is
-        answered in. One still "not stated" leaves the row open and is named; the follow-ups that did not decide
-        it (a seed source, say) do not hold it open."""
-        from certifications.services.sourcing_scenarios import NOT_STATED, sourcing_scenarios
+        answered in and §B agrees with them. One still "not stated" leaves the row open and is named; the follow-ups
+        that did not decide it (a seed source, say) do not hold it open. §B disagreeing is `unconfirmed`, as the
+        page's [REVIEW] line says."""
+        from certifications.services.sourcing_scenarios import NOT_STATED, sourcing_scenario_lines, sourcing_scenarios
 
         open_ = [s for s in sourcing_scenarios(self.osp) if s.state == NOT_STATED]
-        if not open_:
-            return "answered", ""
-        return "unanswered", "; ".join(f"{s.label['en']}: not stated ({'; '.join(s.basis)})" for s in open_)
+        if open_:
+            return "unanswered", "; ".join(f"{s.label['en']}: not stated ({'; '.join(s.basis)})" for s in open_)
+        _lines, reviews = sourcing_scenario_lines(self.osp)
+        if reviews:
+            return "unconfirmed", reviews[0].removeprefix("[REVIEW] ")
+        return "answered", ""
 
     def sourced_product_state(self) -> tuple[str, str]:
         """(state, detail) for G6.5's sourcing panel: answered only when every sourcing supplier has its

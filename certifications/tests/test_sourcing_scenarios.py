@@ -159,6 +159,44 @@ class EachScenarioIsTheAnswerGivenWhereItIsAsked(_Plan):
             self.states(osp)[BRAND], ("yes", ("G7.0: sold under the buyer's own label (private label or repack)",))
         )
 
+    def test_storage_somewhere_else_described_in_words_is_not_stated(self):
+        """An "Other" place says nothing Trazo can read about who stores the crop (review of back #506)."""
+        osp = self.plan(
+            g6_2_storage={"storage_locations": ["on_farm_cold", "other"], "storage_other_description": "Packer CA room"}
+        )
+        state, basis = self.states(osp)[HANDLED]
+        self.assertEqual(state, "not stated")
+        self.assertIn(
+            'G6.2: stored at another place ("Packer CA room"), whether another operation stores it not stated', basis
+        )
+        self.assertNotIn("G6.2: stored on the farm only", basis)
+
+    def test_ownership_passing_beside_a_storage_contract_is_not_stated(self):
+        """The two G6.2 answers cannot both hold, so neither decides it (review of back #506)."""
+        osp = self.plan(
+            g6_2_storage={
+                "storage_locations": ["certified_handler"],
+                "owns_crop_in_storage": "no",
+                "third_party_storage_contracted": True,
+            }
+        )
+        state, basis = self.states(osp)[HANDLED]
+        self.assertEqual(state, "not stated")
+        self.assertTrue(any("the two answers disagree" in b for b in basis), basis)
+
+    def test_a_product_form_described_in_words_is_not_stated(self):
+        """An "Other" form may be another company's label; Trazo does not read the words (review of back #506)."""
+        osp = self.plan(
+            g7_0_labeling={"product_leaves_as": ["bulk_bins_marked", "other"], "product_leaves_as_other": "Co-packed"}
+        )
+        self.assertEqual(
+            self.states(osp)[BRAND],
+            (
+                "not stated",
+                ('G7.0: leaves in another form ("Co-packed"), whether under another company\'s label not stated',),
+            ),
+        )
+
     def test_labeling_marked_not_applicable_is_no(self):
         modules = {k: v for k, v in NONE_APPLY.items() if k != "g7_0_labeling"}
         self.assertEqual(
@@ -227,6 +265,15 @@ class TheCoverageRowReadsTheScenarios(_Plan):
         osp = self.plan(g3_0_seeds={"seeds_used": ["non_organic_untreated"]})
         self.assertEqual(self._d1_state(osp).state, "answered")
 
+    def test_unconfirmed_while_section_b_disagrees(self):
+        osp = self.plan(
+            g3_0_seeds={"seedlings_used": ["purchased_organic"]},
+            g8_0_record_keeping={"sources_organic_products": False},
+        )
+        state = self._d1_state(osp)
+        self.assertEqual(state.state, "unconfirmed")
+        self.assertTrue(state.detail.startswith("§B says the operation sources no organic agricultural products"))
+
     def test_open_while_one_is_not_stated_naming_it(self):
         modules = {k: v for k, v in NONE_APPLY.items() if k != "g7_0_labeling"}
         state = self._d1_state(self.plan(modules))
@@ -248,14 +295,33 @@ class TheWizardPanelReadsTheSameRows(_Plan):
         self.assertEqual(response.status_code, 200)
         rows = response.json()["scenarios"]
         self.assertEqual(
-            [(r["key"], r["state"], r["answered_in"]) for r in rows],
+            [(r["key"], r["state"], r["answered_in"], r["unanswered_in"]) for r in rows],
             [
-                ("organic_seed_or_stock", "no", ["G3.0", "G3.0b"]),
-                ("organic_product_for_resale", "yes", ["G6.5"]),
-                ("crop_to_another_operation", "no", ["G6.1", "G6.2"]),
-                ("packs_for_brand_owners", "not_stated", ["G7.0"]),
+                ("organic_seed_or_stock", "no", ["G3.0", "G3.0b"], []),
+                ("organic_product_for_resale", "yes", ["G6.5"], []),
+                ("crop_to_another_operation", "no", ["G6.1", "G6.2"], []),
+                ("packs_for_brand_owners", "not_stated", ["G7.0"], ["G7.0"]),
             ],
         )
+        self.assertIsNone(response.json()["section_b"])
         self.assertEqual(
             rows[1]["label"]["es"], "Adquiere cultivos o productos orgánicos certificados para revender o distribuir"
         )
+
+    def test_endpoint_names_the_module_still_open_and_the_section_b_disagreement(self):
+        user = User.objects.create_user(email="d1b@test.com", password="x", first_name="Ana")
+        WorksIn.objects.create(user=user, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=user)
+        modules = {k: v for k, v in NONE_APPLY.items() if k != "g6_2_storage"}
+        osp = self.plan(
+            modules,
+            g3_0_seeds={"seedlings_used": ["purchased_organic"]},
+            g8_0_record_keeping={"sources_organic_products": False},
+        )
+        body = client.get(
+            f"/api/companies/{self.company.id}/establishments/{self.est.id}/osps/{osp.id}/sourcing-scenarios/"
+        ).json()
+        handled = next(r for r in body["scenarios"] if r["key"] == "crop_to_another_operation")
+        self.assertEqual((handled["state"], handled["unanswered_in"]), ("not_stated", ["G6.2"]))
+        self.assertEqual(body["section_b"], "says_none")

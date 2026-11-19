@@ -15,6 +15,12 @@ this module collects the operator's own answers directly.
 
 from .schema import CompileRule, Condition, Module, ModulePage, Option, Prefill, Question, text
 
+#: `storage_locations` options for storage the operation runs itself, and for storage at another operation's facility.
+#: The gates below and G8.0 page D (`certifications/services/sourcing_scenarios.py`) read these lists; an option in
+#: neither (Other) says nothing about whether another operation stores the crop.
+ON_FARM_STORAGE = ["on_farm_cold", "on_farm_dry", "bins_silos"]
+OFF_FARM_STORAGE = ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"]
+
 G6_2_STORAGE = Module(
     key="g6_2_storage",
     code="G6.2",
@@ -106,7 +112,7 @@ G6_2_STORAGE = Module(
                         Condition(
                             "storage_locations",
                             "includes_any",
-                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                            OFF_FARM_STORAGE,
                         ),
                     ),
                     compiles_to=CompileRule(
@@ -323,7 +329,7 @@ G6_2_STORAGE = Module(
                         Condition(
                             "storage_locations",
                             "includes_any",
-                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                            OFF_FARM_STORAGE,
                         ),
                         Condition("owns_crop_in_storage", "ne", "no"),
                     ),
@@ -357,7 +363,7 @@ G6_2_STORAGE = Module(
                         Condition(
                             "storage_locations",
                             "includes_any",
-                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                            OFF_FARM_STORAGE,
                         ),
                         Condition("owns_crop_in_storage", "ne", "no"),
                     ),
@@ -379,7 +385,7 @@ G6_2_STORAGE = Module(
                         Condition(
                             "storage_locations",
                             "includes_any",
-                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                            OFF_FARM_STORAGE,
                         ),
                     ),
                     compiles_to=CompileRule(
@@ -405,9 +411,7 @@ G6_2_STORAGE = Module(
                         "certificado.",
                     ),
                     nop_cite="\u00a7 205.272(a)",
-                    visible_when=(
-                        Condition("storage_locations", "includes_any", ["on_farm_cold", "on_farm_dry", "bins_silos"]),
-                    ),
+                    visible_when=(Condition("storage_locations", "includes_any", ON_FARM_STORAGE),),
                 ),
                 # Selecting `certified_handler` used to open nothing at all, so the plan named
                 # a facility class and never the facility — while CCOF G6.2 \u00a7A's attachment is
@@ -434,7 +438,7 @@ G6_2_STORAGE = Module(
                         Condition(
                             "storage_locations",
                             "includes_any",
-                            ["commercial_cold_off_farm", "certified_handler", "uncertified_facility"],
+                            OFF_FARM_STORAGE,
                         ),
                         Condition("owns_crop_in_storage", "ne", "no"),
                     ),
