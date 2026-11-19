@@ -211,6 +211,20 @@ class TheActivityFormIsHeldToTheSameFloorTests(_Production):
         self.assertEqual((by_parcel.status_code, by_season.status_code), (400, 400))
         self.assertEqual(by_parcel.json()["manure_harvest_interval"], by_season.json()["manure_harvest_interval"])
 
+    def test_the_refusal_carries_a_code_a_screen_can_translate(self):
+        """The sentence is English; a Spanish grower read it after the field's Spanish label
+        (VID-07). `error_codes` names the refusal and its values, under a dict so the app's error
+        readers (which list a body's field errors) pass over it. Both create paths."""
+        history = self._history(self.lettuce)
+        for address in ({"parcels": [self.parcel.pk]}, {"history": history.pk}):
+            with self.subTest(address=list(address)):
+                body = self._post(history, "90", **address).json()
+                self.assertEqual(
+                    body["error_codes"]["manure_harvest_interval"],
+                    {"code": "manure_below_floor", "crop": self.lettuce.name, "days": "120"},
+                )
+                self.assertIn("at least 120 days", str(body["manure_harvest_interval"]))
+
     def test_the_form_still_saves_120_days_on_a_soil_contact_crop(self):
         lettuce = self._history(self.lettuce)
         response = self._post(lettuce, "120", parcels=[self.parcel.pk])

@@ -4129,11 +4129,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         interval = validated.get("manure_harvest_interval")
         if interval not in ("90", "120"):
             return
-        from history.services.manure_interval import below_minimum, below_minimum_message
+        from history.services.manure_interval import below_minimum, below_minimum_error
 
         crop_type = getattr(history, "crop_type", None)
         if crop_type is not None and below_minimum(interval, crop_type):
-            raise ValidationError({"manure_harvest_interval": [below_minimum_message(crop_type)]})
+            raise ValidationError(below_minimum_error(crop_type))
 
     @staticmethod
     def _refuse_inside_closed_season(history, event_when):
