@@ -278,6 +278,25 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
         if message:
             raise AmendmentError({field_name: message})
 
+    # The raw-manure floor, 7 CFR 205.203(c)(1), as every save path reads it (`manure_interval`):
+    # a correction to an interval shorter than the season's crop allows is refused with the same
+    # sentence. `clean_fields` below does not reach it, so correcting 120 to 90 days on lettuce was
+    # accepted while the same value was refused on create and edit (review of back #501).
+    if field_name == "manure_harvest_interval" and not coerced and getattr(event, "manure_application_date", None):
+        # The serializer's rule: a manure date needs its interval (a blank one is not "no wait").
+        raise AmendmentError(
+            {
+                field_name: "Harvest interval (90 or 120 days) is required when a manure application date is "
+                "specified."
+            }
+        )
+    if field_name == "manure_harvest_interval" and coerced in ("90", "120"):
+        from history.services.manure_interval import below_minimum, below_minimum_message
+
+        crop_type = getattr(getattr(event, "history", None), "crop_type", None)
+        if crop_type is not None and below_minimum(coerced, crop_type):
+            raise AmendmentError({field_name: below_minimum_message(crop_type)})
+
     # A spray's "not on the source record" mark and the value it stands in for change together.
     paired = _paired_changes(event, field_name, coerced, raw=new_value)
     coerced = paired.pop("__primary__", coerced)

@@ -417,3 +417,57 @@ class SeederAndMigrationsClassifyEachCropTests(TestCase):
         self.assertFalse(hops.has_soil_contact)
         self.assertTrue(strawberries.has_soil_contact)
         self.assertTrue(soybeans.has_soil_contact)
+
+
+class TheCorrectionPathIsHeldToTheSameFloorTests(_Production):
+    """Review of back #501: `apply_amendment` runs `clean_fields` only, so correcting a lettuce
+    record's raw-manure interval from 120 to 90 days was accepted while create and edit refuse it."""
+
+    def _record(self, crop, interval):
+        return SoilManagementEvent.objects.create(
+            history=self._history(crop),
+            type="OM",
+            date=timezone.now(),
+            description="Raw manure, incorporated",
+            manure_treatment="raw",
+            manure_application_date=timezone.now().date(),
+            manure_harvest_interval=interval,
+        )
+
+    def _correct(self, event, value):
+        from history.amendments import apply_amendment
+        from history.constants import SOIL_MANAGEMENT_EVENT_TYPE
+
+        return apply_amendment(
+            event=event,
+            event_type=SOIL_MANAGEMENT_EVENT_TYPE,
+            field_name="manure_harvest_interval",
+            new_value=value,
+            reason="misread the log",
+            user=self.user,
+        )
+
+    def test_a_correction_below_the_floor_is_refused_with_the_save_paths_sentence(self):
+        from history.amendments import AmendmentError
+
+        event = self._record(self.lettuce, "120")
+        with self.assertRaisesMessage(AmendmentError, "at least 120 days"):
+            self._correct(event, "90")
+        event.refresh_from_db()
+        self.assertEqual(event.manure_harvest_interval, "120")
+
+    def test_a_correction_at_or_above_the_floor_goes_through(self):
+        self._correct(self._record(self.walnuts, "120"), "90")
+        self._correct(self._record(self.lettuce, "90"), "120")
+        # The stricter wait on a 90-day crop: an exact-match rule (the bug manure_interval
+        # replaced) would refuse it (review of back #503).
+        self._correct(self._record(self.walnuts, "90"), "120")
+
+    def test_a_correction_cannot_blank_the_interval_of_a_dated_application(self):
+        from history.amendments import AmendmentError
+
+        event = self._record(self.lettuce, "120")
+        with self.assertRaisesMessage(AmendmentError, "Harvest interval (90 or 120 days) is required"):
+            self._correct(event, "")
+        event.refresh_from_db()
+        self.assertEqual(event.manure_harvest_interval, "120")
