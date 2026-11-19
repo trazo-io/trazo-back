@@ -75,3 +75,25 @@ def below_minimum_message(crop_type) -> str:
         f"{SOIL_CONTACT_MINIMUM_DAYS} days between incorporating raw manure and harvest. Choose "
         f"{SOIL_CONTACT_MINIMUM_DAYS} days, or record the manure as composted if it meets § 205.203(c)(2)."
     )
+
+
+#: A stable code for the refusal, so a screen can word it in the reader's language. The sentence
+#: above is English, and a Spanish grower read it after the field's Spanish label (recordkeeping
+#: checklist run 2026-11-16, VID-07).
+BELOW_MINIMUM_CODE = "manure_below_floor"
+
+
+def below_minimum_error(crop_type) -> dict:
+    """The refusal as a DRF error body: the English sentence under the field, and its code with
+    the values a translation needs under `error_codes` (a dict, so error readers that list a
+    body's field errors pass over it)."""
+    return {
+        "manure_harvest_interval": [below_minimum_message(crop_type)],
+        "error_codes": {
+            "manure_harvest_interval": {
+                "code": BELOW_MINIMUM_CODE,
+                "crop": getattr(crop_type, "name", "") or "",
+                "days": str(SOIL_CONTACT_MINIMUM_DAYS),
+            }
+        },
+    }

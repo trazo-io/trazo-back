@@ -20,6 +20,7 @@ What these tests hold:
 """
 
 import importlib
+import uuid
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -210,6 +211,56 @@ class TheActivityFormIsHeldToTheSameFloorTests(_Production):
         by_season = self._post(history, "90", history=history.pk)
         self.assertEqual((by_parcel.status_code, by_season.status_code), (400, 400))
         self.assertEqual(by_parcel.json()["manure_harvest_interval"], by_season.json()["manure_harvest_interval"])
+
+    def test_the_refusal_carries_a_code_a_screen_can_translate(self):
+        """The sentence is English; a Spanish grower read it after the field's Spanish label
+        (VID-07). `error_codes` names the refusal and its values, under a dict so the app's error
+        readers (which list a body's field errors) pass over it. Both create paths."""
+        history = self._history(self.lettuce)
+        for address in ({"parcels": [self.parcel.pk]}, {"history": history.pk}):
+            with self.subTest(address=list(address)):
+                body = self._post(history, "90", **address).json()
+                self.assertEqual(
+                    body["error_codes"]["manure_harvest_interval"],
+                    {"code": "manure_below_floor", "crop": self.lettuce.name, "days": "120"},
+                )
+                self.assertIn("at least 120 days", str(body["manure_harvest_interval"]))
+
+    def test_a_multi_parcel_save_carries_the_code_under_each_place(self):
+        """The multi-target path nests each place's serializer body under `targets`, codes
+        included; the app words it per place (review of app #438)."""
+        history = self._history(self.lettuce)
+        walnut_block = Parcel.objects.create(name="Block 2", establishment=self.parcel.establishment, area=10.0)
+        walnut_season = self._history(self.walnuts)
+        Production.objects.filter(pk=walnut_season.pk).update(parcel=walnut_block)
+        Parcel.objects.filter(pk=walnut_block.pk).update(current_history=walnut_season)
+        Parcel.objects.filter(pk=self.parcel.pk).update(current_history=history)
+        response = self.client.post(
+            f"/api/companies/{self.company.pk}/establishments/{self.parcel.establishment_id}/events/",
+            {
+                "event_type": 5,
+                "type": "OM",
+                "date": timezone.now().isoformat(),
+                "name": "Raw manure",
+                "area_unit": "ha",
+                "manure_treatment": "raw",
+                "manure_application_date": "2026-03-20",
+                "manure_harvest_interval": "90",
+                "application_group": str(uuid.uuid4()),
+                "targets": [
+                    {"parcel": self.parcel.pk, "area_covered": "5"},
+                    {"parcel": walnut_block.pk, "area_covered": "5"},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        places = response.json()["targets"]
+        # Only the lettuce block is refused: 90 days is the walnuts' floor.
+        self.assertEqual(list(places), [str(self.parcel.pk)], places)
+        place = places[str(self.parcel.pk)]
+        self.assertEqual(place["error_codes"]["manure_harvest_interval"]["code"], "manure_below_floor")
+        self.assertIn("at least 120 days", str(place["manure_harvest_interval"]))
 
     def test_the_form_still_saves_120_days_on_a_soil_contact_crop(self):
         lettuce = self._history(self.lettuce)

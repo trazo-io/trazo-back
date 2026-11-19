@@ -7154,7 +7154,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         # crop's floor is refused: 90 days on a crop whose edible part touches the soil. 120 days
         # on a tree crop is the stricter wait and is accepted. No crop known: defer to the export.
         if interval in ("90", "120"):
-            from history.services.manure_interval import below_minimum, below_minimum_message
+            from history.services.manure_interval import below_minimum, below_minimum_error
 
             history = attrs.get("history") or (instance.history if instance else None)
             crop_type = None
@@ -7163,7 +7163,7 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
             except Exception:  # noqa: BLE001 — FK may be unpopulated
                 crop_type = None
             if crop_type is not None and below_minimum(interval, crop_type):
-                raise serializers.ValidationError({"manure_harvest_interval": below_minimum_message(crop_type)})
+                raise serializers.ValidationError(below_minimum_error(crop_type))
 
         return attrs
 
