@@ -10,11 +10,17 @@ chemical inputs against:
 Returns a `VerificationResult` compatible with the existing BaseCertificationVerifier
 pattern (see usda_organic_verifier.py).
 
-Classification priority:
-    omri_listed         -> OMRIProduct record present (farmer-confirmed)
-    nop_allowed         -> Substance matches NationalListSubstance with status=allowed
-    nop_prohibited      -> Substance matches NationalListSubstance with status=prohibited
-    not_found           -> No match in either source (treat as self-reported only)
+Statuses `verify` answers with, in the order it tries them:
+    listing_match    -> one OMRI product (by the code the grower pasted, or the only product the name
+                        matches), or an allowed National List row. A § 205.601 row the rule allows only
+                        under a condition of use carries the rule's words in `notes`.
+    delisted         -> the OMRI product matched, and Trazo's copy of OMRI's list no longer carries it.
+    restricted_use   -> a § 205.602 row the rule prohibits except for one stated use (calcium chloride,
+                        potassium chloride, sodium nitrate). Never "prohibited": the use may meet it.
+    revoked          -> a § 205.602 row prohibited with no exception.
+    several_matches  -> several OMRI products match the name and no National List row does; none is
+                        chosen, because a guessed product is a listing the grower may not have applied.
+    not_found        -> no match in either source (treat as self-reported only).
 """
 
 import re
@@ -23,10 +29,29 @@ from urllib.parse import quote_plus
 
 from certifications.models import NationalListSubstance, OMRIProduct, WSDAMaterial
 from certifications.services.base_verifier import BaseCertificationVerifier, VerificationResult
+from certifications.services.national_list_citations import use_condition
+
+_ECFR_PART_205 = "https://www.ecfr.gov/current/title-7/subtitle-B/chapter-I/subchapter-M/part-205"
+
+#: How many of several matching OMRI products the verdict names before saying how many more there are.
+_SEVERAL_NAMED = 3
 
 
 def _normalize(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip().lower())
+
+
+def _several_omri_products(operation_name: str, products) -> str:
+    """The sentence a verdict carries when a name matches more than one OMRI product. It names a few and
+    counts the rest, and chooses none of them."""
+    named = ", ".join(p.product_name for p in products[:_SEVERAL_NAMED])
+    rest = len(products) - _SEVERAL_NAMED
+    if rest > 0:
+        named += f" and {rest} more"
+    return (
+        f"{len(products)} OMRI-listed products match '{operation_name}' ({named}). None is chosen here: "
+        "the grower picks the one on the label."
+    )
 
 
 #: OMRI's own published product-code shape: company letters, a hyphen, a product number.
@@ -488,40 +513,54 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         if certification_number:
             omri = OMRIProduct.objects.filter(omri_id__iexact=certification_number.strip()).first()
             if omri:
-                return VerificationResult(
-                    found=True,
-                    status="listing_match",  # run 8: a listing describes a material, never a verification
+                return self._build_omri_result(
+                    omri,
                     certifier_name="OMRI (farmer-reported)",
-                    source_url=omri_certificate_url(omri.omri_id),
-                    confidence_score=0.9,  # farmer-confirmed, not Trazo-verified
-                    notes=(
-                        f"OMRI ID {omri.omri_id} ({omri.product_name}) — farmer-reported. "
-                        f"Inspector should cross-check at omri.org."
-                    ),
+                    confidence=0.9,  # farmer-confirmed, not Trazo-verified
+                    lead=f"OMRI ID {omri.omri_id} ({omri.product_name}), farmer-reported.",
                 )
 
-        # 2) OMRI catalog lookup by product name (seeded from the official OMRI
-        # Crop Products List PDF — see seed_omri_minimal.py). OMRI is more
-        # specific than the National List, so a hit here shortcuts NL matching.
-        omri_by_name = _resolve_omri_by_name(operation_name)
-        if omri_by_name:
-            return VerificationResult(
-                found=True,
-                status="listing_match",  # run 8: a listing describes a material, never a verification
-                certifier_name="OMRI (catalog match)",
-                source_url=omri_certificate_url(omri_by_name.omri_id),
-                confidence_score=0.85,  # catalog hit, one step weaker than farmer-pasted ID
-                notes=(
-                    f"Matched OMRI catalog: {omri_by_name.product_name} "
-                    f"(OMRI #{omri_by_name.omri_id}). Inspector should cross-check at omri.org."
-                ),
-            )
-
-        # 3) National List lookup by name (allowed list first, then prohibited).
-        normalized = _normalize(operation_name)
-        if not normalized:
+        if not _normalize(operation_name):
             return VerificationResult(found=False, status="not_found", notes="No name provided.")
 
+        # 2) OMRI catalog lookup by product name (seeded from the official OMRI Crop Products List
+        # PDF, see seed_omri_minimal.py). OMRI is more specific than the National List, so ONE
+        # product shortcuts National List matching. Several do not: until 2026-11 this took the
+        # top-ranked row and answered `found: True` for it, so "Neptune" named the 2-4-1 among seven
+        # Neptune's Harvest products (overall review 2026-11, OV-MT-C14). The lookup's candidate
+        # list already makes the grower pick; the verdict must not pick for them.
+        omri_matches = _omri_candidates_by_name(operation_name)
+        if len(omri_matches) == 1:
+            product = omri_matches[0]
+            return self._build_omri_result(
+                product,
+                certifier_name="OMRI (catalog match)",
+                confidence=0.85,  # catalog hit, one step weaker than farmer-pasted ID
+                lead=f"Matched OMRI catalog: {product.product_name} (OMRI #{product.omri_id}).",
+            )
+        several = _several_omri_products(operation_name, omri_matches) if omri_matches else ""
+
+        # 3) National List lookup by name. A substance match is a statement about the substance, so
+        # it answers even when the name also matched several OMRI products, and says that it did.
+        listed = self._match_national_list(operation_name)
+        if listed is not None:
+            if several:
+                listed.notes = f"{listed.notes} {several}".strip()
+            return listed
+        if several:
+            return VerificationResult(found=False, status="several_matches", notes=several)
+        return VerificationResult(
+            found=False,
+            status="not_found",
+            notes=(
+                f"'{operation_name}' not found on the National List and no OMRI ID provided. "
+                f"Inspector will treat as self-reported only."
+            ),
+        )
+
+    def _match_national_list(self, operation_name: str) -> Optional[VerificationResult]:
+        """The crop-production National List row the name matches, as a result; None when none does."""
+        normalized = _normalize(operation_name)
         # Crop rows only: this verifies a crop input, and § 205.605/606 list HANDLING substances.
         from certifications.services.reference_data_status import national_list_crop_rows
 
@@ -546,14 +585,30 @@ class OMRIProductVerifier(BaseCertificationVerifier):
             contains = crop_rows.filter(substance_name_normalized=best).first()
             if contains:
                 return self._build_nl_result(contains, confidence=0.75, match_type="contained")
+        return None
 
+    def _build_omri_result(self, product: OMRIProduct, certifier_name: str, confidence: float, lead: str):
+        """One OMRI product, named. A product OMRI has dropped is `delisted`, never a listing match: the
+        lookup's `omri_product_delisted_on` already said so (OV-MT-C04) while this verdict did not."""
+        if product.delisted_on:
+            return VerificationResult(
+                found=True,
+                status="delisted",
+                certifier_name=certifier_name,
+                source_url=omri_certificate_url(product.omri_id),
+                confidence_score=confidence,
+                notes=(
+                    f"{lead} OMRI no longer lists it: the first OMRI list Trazo loaded without it is dated "
+                    f"{product.delisted_on.isoformat()}. Check the product's certificate at omri.org."
+                ),
+            )
         return VerificationResult(
-            found=False,
-            status="not_found",
-            notes=(
-                f"'{operation_name}' not found on the National List and no OMRI ID provided. "
-                f"Inspector will treat as self-reported only."
-            ),
+            found=True,
+            status="listing_match",  # run 8: a listing describes a material, never a verification
+            certifier_name=certifier_name,
+            source_url=omri_certificate_url(product.omri_id),
+            confidence_score=confidence,
+            notes=f"{lead} Inspector should cross-check at omri.org.",
         )
 
     def _build_nl_result(self, entry: NationalListSubstance, confidence: float, match_type: str) -> VerificationResult:
@@ -572,15 +627,43 @@ class OMRIProductVerifier(BaseCertificationVerifier):
                 ),
             )
         if entry.status == "allowed":
+            notes = f"Matched National List ({match_type}): {entry.substance_name}."
+            # The typed paragraph table decides (`national_list_citations.USE_CONDITION_601`), and the
+            # words are the rule's, verbatim: "Minimize soil accumulation." beside copper hydroxide was
+            # a paraphrase with no condition in it (OV-MT-C01, carried to this verdict by OV-MT-C14).
+            condition = use_condition(entry)
+            if condition:
+                paragraph, words = condition
+                notes += (
+                    f" Allowed only under a condition of use. The rule's words, § {entry.cfr_section}{paragraph}: "
+                    f"{words} The record of each use must show it met that condition."
+                )
+            elif entry.restriction_notes:
+                notes += f" {entry.restriction_notes}"
             return VerificationResult(
                 found=True,
                 status="listing_match",  # run 8: a listing describes a material, never a verification
                 certifier_name=f"7 CFR {entry.citation}",
-                source_url="https://www.ecfr.gov/current/title-7/subtitle-B/chapter-I/subchapter-M/part-205",
+                source_url=_ECFR_PART_205,
+                confidence_score=confidence,
+                notes=notes,
+            )
+        if entry.is_conditionally_permitted:
+            # § 205.602(c), (e), (h): prohibited EXCEPT for one stated use. "PROHIBITED ... disqualifies
+            # the crop from organic sale" told an orchard spraying calcium chloride for bitter pit, which
+            # the rule names as the allowed use, that it had lost organic status. Whether a use met the
+            # condition is not knowable here, so the verdict states the condition and stops.
+            return VerificationResult(
+                found=True,
+                status="restricted_use",
+                certifier_name=f"7 CFR {entry.citation}",
+                source_url=_ECFR_PART_205,
                 confidence_score=confidence,
                 notes=(
-                    f"Matched National List ({match_type}): {entry.substance_name}. " f"{entry.restriction_notes or ''}"
-                ).strip(),
+                    f"Matched National List ({match_type}): {entry.substance_name}, prohibited except for the use "
+                    f"the rule names. The rule's words, {entry.citation}: {(entry.restriction_notes or '').strip()} "
+                    "The record of each use must show it met that condition."
+                ),
             )
         return VerificationResult(
             found=True,

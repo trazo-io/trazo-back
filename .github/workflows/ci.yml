@@ -1423,6 +1423,7 @@ jobs:
             certifications.tests.test_omri_candidates_ambiguity \
             certifications.tests.test_omri_seed_csv_integrity \
             certifications.tests.test_omri_verifier \
+            certifications.tests.test_verifier_verdict_follows_the_rule \
             certifications.tests.test_osp \
             certifications.tests.test_osp_change_notification \
             certifications.tests.test_osp_change_notification_api \
