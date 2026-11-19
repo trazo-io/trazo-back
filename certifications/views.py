@@ -2234,6 +2234,9 @@ class OrganicSystemPlanViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         "answered_in": list(s.answered_in),
                         # The modules whose answer would decide a scenario still not stated.
                         "unanswered_in": list(s.unanswered_in),
+                        # The modules whose answers decided a yes or a no; the panel names these, never a
+                        # module the operator has not answered.
+                        "decided_by": list(s.decided_by),
                     }
                     for s in scenarios
                 ],

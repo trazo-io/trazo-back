@@ -92,17 +92,32 @@ class EachScenarioIsTheAnswerGivenWhereItIsAsked(_Plan):
 
     def test_seedlings_bought_certified_organic(self):
         osp = self.plan(g3_0_seeds={"seedlings_used": ["purchased_organic"]})
-        self.assertEqual(self.states(osp)[SEED], ("yes", ("G3.0 and G3.0b: purchased organic seedlings",)))
+        self.assertEqual(self.states(osp)[SEED], ("yes", ("G3.0: purchased organic seedlings",)))
 
     def test_organic_seed_with_no_source_is_not_stated(self):
         osp = self.plan(g3_0_seeds={"seeds_used": ["organic_untreated"]})
-        self.assertEqual(
-            self.states(osp)[SEED], ("not stated", ("G3.0 and G3.0b: organic seed, its source not stated",))
-        )
+        self.assertEqual(self.states(osp)[SEED], ("not stated", ("G3.0: organic seed, its source not stated",)))
 
     def test_seed_saved_on_the_farm_is_not_bought(self):
         osp = self.plan(g3_0_seeds={"seeds_used": ["organic_untreated"], "seed_source": ["save_own"]})
         self.assertEqual(self.states(osp)[SEED], ("no", ("G3.0: none bought in",)))
+
+    def test_stock_from_a_nursery_is_named_under_g30b(self):
+        osp = self.plan(
+            g3_0_seeds={"planting_stock_used": ["organic"]},
+            g3_2_planting_stock={"stock_source": ["nursery"]},
+        )
+        scenario = next(x for x in sourcing_scenarios(osp) if x.key == "organic_seed_or_stock")
+        self.assertEqual(
+            (scenario.state, scenario.basis, scenario.decided_by),
+            ("yes", ("G3.0b: organic planting stock from a nursery",), ("G3.0b",)),
+        )
+
+    def test_handled_by_a_certified_operation_is_decided_by_g61_alone(self):
+        modules = {k: v for k, v in NONE_APPLY.items() if k != "g6_2_storage"}
+        osp = self.plan(modules, g6_1_harvest_transport={"handled_by_another_operation": "yes_certified"})
+        scenario = next(x for x in sourcing_scenarios(osp) if x.key == "crop_to_another_operation")
+        self.assertEqual((scenario.state, scenario.decided_by), ("yes", ("G6.1",)))
 
     def test_product_bought_in_for_resale(self):
         osp = self.plan(g6_5_sales_soe={"sales_soe_supplier_verification": "yes"})
@@ -294,6 +309,8 @@ class TheWizardPanelReadsTheSameRows(_Plan):
         )
         self.assertEqual(response.status_code, 200)
         rows = response.json()["scenarios"]
+        # Each yes or no names only the modules that decided it (review of app #440).
+        self.assertEqual([r["decided_by"] for r in rows], [["G3.0"], ["G6.5"], ["G6.1", "G6.2"], []])
         self.assertEqual(
             [(r["key"], r["state"], r["answered_in"], r["unanswered_in"]) for r in rows],
             [
@@ -324,4 +341,6 @@ class TheWizardPanelReadsTheSameRows(_Plan):
         ).json()
         handled = next(r for r in body["scenarios"] if r["key"] == "crop_to_another_operation")
         self.assertEqual((handled["state"], handled["unanswered_in"]), ("not_stated", ["G6.2"]))
+        seed = next(r for r in body["scenarios"] if r["key"] == "organic_seed_or_stock")
+        self.assertEqual((seed["state"], seed["decided_by"]), ("yes", ["G3.0"]))
         self.assertEqual(body["section_b"], "says_none")

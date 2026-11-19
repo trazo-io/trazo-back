@@ -41,21 +41,32 @@ class Scenario:
     answered_in: tuple[str, ...]
     #: For a scenario not stated, the modules whose answer would decide it.
     unanswered_in: tuple[str, ...] = ()
+    #: For a yes or a no, the modules whose answers decided it: never one the operator has not answered.
+    decided_by: tuple[str, ...] = ()
+
+
+def _module_of(basis_line: str) -> str:
+    """The module code a basis line opens with ("G6.1: ...", "G6.2 marked not applicable")."""
+    return basis_line.split(":")[0].split(" ")[0]
 
 
 def _seed_and_stock(osp) -> Scenario:
     from certifications.services.ofpp_scope import organic_seed_or_stock_from_outside
 
     state, named = organic_seed_or_stock_from_outside(osp)
-    unanswered = ()
+    unanswered = decided = ()
     if named:
-        basis = (f"G3.0 and G3.0b: {', '.join(named)}",)
+        # Each fact under the module that asks it: stock sources are G3.0b's, seed and seedlings G3.0's.
+        by_module: dict[str, list[str]] = {}
+        for n in named:
+            by_module.setdefault("G3.0b" if n.startswith("organic planting stock") else "G3.0", []).append(n)
+        basis = tuple(f"{code}: {', '.join(items)}" for code, items in by_module.items())
         if state == NOT_STATED:
-            unanswered = tuple(
-                dict.fromkeys("G3.0b" if n.startswith("organic planting stock") else "G3.0" for n in named)
-            )
+            unanswered = tuple(by_module)
+        else:
+            decided = tuple(by_module)
     elif state == NO:
-        basis = ("G3.0: none bought in",)
+        basis, decided = ("G3.0: none bought in",), ("G3.0",)
     else:
         basis, unanswered = ("G3.0 not answered yet",), ("G3.0",)
     return Scenario(
@@ -68,6 +79,7 @@ def _seed_and_stock(osp) -> Scenario:
         basis=basis,
         answered_in=("G3.0", "G3.0b"),
         unanswered_in=unanswered,
+        decided_by=decided,
     )
 
 
@@ -91,6 +103,7 @@ def _resale(osp) -> Scenario:
         basis=basis,
         answered_in=("G6.5",),
         unanswered_in=unanswered,
+        decided_by=() if unanswered else ("G6.5",),
     )
 
 
@@ -172,6 +185,7 @@ def _handled_or_stored_elsewhere(osp) -> Scenario:
         basis=tuple(basis),
         answered_in=("G6.1", "G6.2"),
         unanswered_in=unanswered,
+        decided_by=() if state == NOT_STATED else tuple(dict.fromkeys(_module_of(b) for b in basis)),
     )
 
 
@@ -204,6 +218,7 @@ def _brand_owners(osp) -> Scenario:
         basis=basis,
         answered_in=("G7.0",),
         unanswered_in=unanswered,
+        decided_by=() if unanswered else ("G7.0",),
     )
 
 
