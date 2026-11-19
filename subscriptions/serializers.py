@@ -80,7 +80,18 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "effective_limits",
             "downgrade_preview",
         ]
-        read_only_fields = ["cancellation_reason", "cancellation_requested_at"]
+        # All of it. Entitlement is computed from `status` and the period fields, and the viewset
+        # no longer offers a generic write (OV-SEC-C07); this keeps a future write path from
+        # reopening the hole through this serializer.
+        read_only_fields = [
+            "status",
+            "current_period_start",
+            "current_period_end",
+            "cancel_at_period_end",
+            "cancellation_reason",
+            "cancellation_requested_at",
+            "trial_end",
+        ]
 
     def _get_cached_usage(self, obj):
         """Compute all usage metrics once per serialization and cache on the instance."""

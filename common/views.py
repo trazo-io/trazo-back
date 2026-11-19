@@ -58,119 +58,64 @@ def health_check(request):
     return JsonResponse(response, status=status)
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def get_upload_urls(request):
-    """
-    Generate pre-signed URLs for direct S3 uploads.
-
-    Expected request format:
-    {
-        "files": [
-            {"name": "image1.jpg", "type": "image/jpeg", "size": 12345},
-            {"name": "image2.png", "type": "image/png", "size": 67890}
-        ],
-        "entity_type": "establishment", // or "user", "company", "parcel", etc.
-        "entity_id": "123" // optional, for updates to existing entities
-    }
-    """
-    files_info = request.data.get("files", [])
-    entity_type = request.data.get("entity_type", "misc")
-    entity_id = request.data.get("entity_id", "")
-
-    # Storage quota check — MEDIA (hard-limited). Sizes here are CLIENT-REPORTED, so this
-    # check is advisory at the margin: a client that understates them buys itself one
-    # over-quota batch. It self-corrects rather than compounds — `GalleryImage.file_size`
-    # is written from the real object after upload, so the next check measures the truth.
-    #
-    # Summed defensively: `files_info` comes off the request body, so a `size` of `"abc"` or
-    # `None` used to raise TypeError inside `sum()` and return a 500 from a quota check.
-    def _reported_size(entry):
-        try:
-            return max(0, int(float((entry or {}).get("size", 0) or 0)))
-        except (TypeError, ValueError, AttributeError):
-            return 0
-
-    total_upload_bytes = sum(_reported_size(f) for f in files_info)
-    allowed, error_detail = check_storage_quota(request.user, total_upload_bytes, category=CATEGORY_MEDIA)
-    if not allowed:
-        return Response(error_detail, status=413)
-
-    # Validate S3 configuration
-    is_valid, error_message = SecureAWSClient.validate_s3_configuration()
-    if not is_valid:
-        logger.error(f"S3 configuration error: {error_message}")
-        return Response({"error": "S3 storage is not properly configured", "details": error_message}, status=500)
-
-    try:
-        # Get S3 client using secure method
-        s3_client = SecureAWSClient.get_s3_client()
-
-        urls_and_keys = []
-        for file_info in files_info:
-            file_name = file_info.get("name")
-            file_type = file_info.get("type")
-
-            # Sanitize filename to avoid issues with spaces and special characters
-            sanitized_filename = re.sub(r"[^\w\-_\.]", "_", file_name)
-
-            # Create a unique key for the file based on entity type
-            folder = f"{entity_type}s"
-            if entity_id:
-                key = f"{folder}/{entity_id}/{uuid.uuid4()}-{sanitized_filename}"
-            else:
-                # For new entities, use user ID or timestamp
-                key = f"{folder}/new-{request.user.id}-{uuid.uuid4()}-{sanitized_filename}"
-
-            # Generate a pre-signed URL for this specific file
-            presigned_url = s3_client.generate_presigned_url(
-                "put_object",
-                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": key, "ContentType": file_type},
-                ExpiresIn=3600,  # URL expires in 1 hour
-            )
-
-            urls_and_keys.append(
-                {
-                    "uploadUrl": presigned_url,
-                    "s3Key": key,
-                    "publicUrl": f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}",
-                }
-            )
-
-        return Response(urls_and_keys)
-
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "Unknown")
-        logger.error(f"AWS S3 ClientError: {error_code} - {str(e)}")
-        return Response({"error": "Failed to generate upload URLs", "details": f"S3 error: {error_code}"}, status=500)
-    except NoCredentialsError:
-        logger.error("No AWS credentials available")
-        return Response(
-            {"error": "Storage service configuration error", "details": "Authentication failed"}, status=500
-        )
-    except ValueError as e:
-        logger.error(f"Invalid input data: {str(e)}")
-        return Response({"error": "Invalid request data", "details": str(e)}, status=400)
-    except Exception as e:
-        logger.error(f"Unexpected error generating pre-signed URLs: {str(e)}")
-        return Response({"error": "Internal server error", "details": "Failed to process upload request"}, status=500)
+#: What the app's image uploader accepts (`TrazoImageUpload`). Never SVG or HTML: `media/` is
+#: public-read, and an object served as either runs script from the bucket's origin.
+_UPLOAD_IMAGE_TYPES = frozenset(
+    {"image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif"}
+)
+#: Some browsers report a HEIC photo as application/octet-stream; accepted under these names only.
+_HEIC_SUFFIXES = (".heic", ".heif")
+#: The folders under `media/` the app uploads to.
+_UPLOAD_FOLDERS = frozenset({"establishments"})
+#: The uploader's `maxSize` and `PhotoEvidenceService.MAX_FILE_SIZE`.
+_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def get_presigned_url(request):
-    """Generate a pre-signed URL for client-side S3 upload"""
-    filename = request.data.get("filename")
-    file_type = request.data.get("fileType")
-    folder = request.data.get("folder", "uploads")
+    """Sign one image upload to S3 for the app's image uploader (`TrazoImageUpload`).
+
+    Overall review 2026-11, OV-SEC-C12. Until 2026-11-18 any signed-in account could get a PUT
+    signed for any content type, under any folder of the public-read `media/` prefix, with no size
+    bound: the quota check read a size the client reported and the signature did not carry it. An
+    object served as text/html or image/svg+xml from the bucket runs script. Now the type is an
+    image the uploader accepts, the folder is one the app uses, and the size the client states
+    (at most 10 MB, the uploader's and `PhotoEvidenceService`'s limit) is signed as
+    Content-Length, so S3 refuses a body of any other length. The sibling `get_upload_urls`, which
+    put a client-chosen prefix into the key and had no caller in the app, is gone.
+    """
+
+    # A list or number in the body is a malformed request, not a server error.
+    not_text = [
+        name
+        for name in ("filename", "fileType", "folder")
+        if request.data.get(name) not in (None, "") and not isinstance(request.data.get(name), str)
+    ]
+    if not_text:
+        return Response({"error": f"{', '.join(not_text)} must be text"}, status=400)
+
+    filename = (request.data.get("filename") or "").strip()
+    file_type = (request.data.get("fileType") or "").strip().lower()
+    folder = (request.data.get("folder") or "").strip() or "establishments"
 
     if not filename or not file_type:
         return Response({"error": "Filename and fileType are required"}, status=400)
 
-    # Storage quota check — MEDIA (hard-limited). Same client-reported caveat as
-    # `get_upload_urls`: advisory at the margin, self-correcting once the real size lands
-    # on the GalleryImage row.
-    file_size = request.data.get("fileSize", 2 * 1024 * 1024)
+    heic_by_name = filename.lower().endswith(_HEIC_SUFFIXES)
+    if file_type not in _UPLOAD_IMAGE_TYPES and not (file_type == "application/octet-stream" and heic_by_name):
+        return Response({"error": "Only JPG, PNG, GIF, WEBP and HEIC images can be uploaded"}, status=400)
+    if folder not in _UPLOAD_FOLDERS:
+        return Response({"error": "Unknown upload folder"}, status=400)
+
+    try:
+        file_size = int(request.data.get("fileSize"))
+    except (TypeError, ValueError):
+        return Response({"error": "fileSize is required"}, status=400)
+    if file_size <= 0 or file_size > _UPLOAD_MAX_BYTES:
+        return Response({"error": f"An image can be at most {_UPLOAD_MAX_BYTES // (1024 * 1024)} MB"}, status=400)
+
+    # Storage quota check: MEDIA (hard-limited). The size is the one the signature now binds.
     allowed, error_detail = check_storage_quota(request.user, file_size, category=CATEGORY_MEDIA)
     if not allowed:
         return Response(error_detail, status=413)
@@ -190,7 +135,13 @@ def get_presigned_url(request):
 
             presigned_url = s3_client.generate_presigned_url(
                 "put_object",
-                Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": key, "ContentType": file_type},
+                Params={
+                    "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+                    "Key": key,
+                    "ContentType": file_type,
+                    # Signed, so the PUT must carry exactly this many bytes.
+                    "ContentLength": file_size,
+                },
                 ExpiresIn=3600,  # URL expires after 1 hour
             )
 
@@ -229,7 +180,14 @@ def get_presigned_url(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def local_file_upload(request):
-    """Handle file uploads in development environment"""
+    """Handle file uploads in development environment.
+
+    Development only. It saves any file type, and until 2026-11-18 it was also live in production,
+    where the app never calls it (`uploadService.ts` uses it only when NODE_ENV is development);
+    production uploads go through `get_presigned_url` (overall review 2026-11, OV-SEC-C12).
+    """
+    if using_s3_storage():
+        return Response({"error": "Not found"}, status=404)
     # Log request details for debugging
     logger.debug(f"Request method: {request.method}")
     logger.debug(f"Content type: {request.content_type}")

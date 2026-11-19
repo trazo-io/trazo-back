@@ -12,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 import requests
 import stripe
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -121,8 +121,16 @@ def _may_manage_billing_for(user, company):
     return WorksIn.objects.filter(user=user, company=company, role=WorksIn.COMPANY_ADMIN).exists()
 
 
-class SubscriptionViewSet(viewsets.ModelViewSet):
-    """API endpoint for managing subscriptions"""
+class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """API endpoint for managing subscriptions.
+
+    Read, plus the named actions below. Until 2026-11-18 this was a ModelViewSet, so a Company
+    Admin could PUT or PATCH their own row: `status` and the period fields were writable and
+    entitlement is computed from `status`, so a past-due company could mark itself active, or
+    DELETE the row outright (overall review 2026-11, OV-SEC-C07). Every legitimate change goes
+    through an action that validates it (`cancel`, `reactivate`, `change_plan`, `add_addon`) or
+    through Stripe's webhook; the app never called the generic writes.
+    """
 
     serializer_class = SubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -143,7 +151,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             "change_plan",
             "add_addon",
         ]
-        if self.action in write_actions or self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action in write_actions:
             return [permissions.IsAuthenticated(), IsCompanyAdminForSubscription()]
         return super().get_permissions()
 
@@ -501,6 +509,16 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             # not a control if the id still works when posted here.
             plan = self_serve_plans().get(id=plan_id)
             is_downgrade = subscription.plan and self._is_downgrade(subscription.plan, plan)
+
+            # A paid plan is bought through checkout. With no Stripe subscription there is nothing
+            # to modify or invoice, and until 2026-11-18 the branch below then simply wrote the new
+            # plan: a Starter Company Admin could POST {"plan_id": <Compliance>} and get paid
+            # features for nothing (independent review of PR 494, beside OV-SEC-C07).
+            if not subscription.stripe_subscription_id and plan.price > 0:
+                return Response(
+                    {"error": "A paid plan starts at checkout.", "code": "checkout_required"},
+                    status=status.HTTP_402_PAYMENT_REQUIRED,
+                )
 
             if subscription.stripe_subscription_id:
                 stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)

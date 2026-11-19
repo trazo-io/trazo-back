@@ -247,7 +247,7 @@ class HistoryAdmin(admin.ModelAdmin):
         upload = form.cleaned_data.get("cover_image_file")
         if upload:
             # Sanitize the filename (spaces/unicode would yield a broken, unencoded
-            # S3 URL) — mirrors common.views.get_upload_urls.
+            # S3 URL) — mirrors common.views.get_presigned_url.
             safe_name = re.sub(r"[^\w\-.]", "_", upload.name)
             is_s3 = using_s3_storage()
             # On S3 the photo must live under the proven-public "media/" prefix (where the

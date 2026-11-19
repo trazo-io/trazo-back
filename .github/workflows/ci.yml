@@ -1378,6 +1378,8 @@ jobs:
             subscriptions.tests.test_seeded_lineup \
             subscriptions.tests.test_storage_accounting \
             subscriptions.tests.test_subscription_events \
+            subscriptions.tests.test_subscription_rows_not_writable \
+            support.tests.test_ticket_staff_fields \
             users.tests.test_onboarding_email_claims \
             users.tests.test_invitation_sole_admin \
             carbon.tests.test_amendment_nitrogen_n2o \
@@ -1442,6 +1444,7 @@ jobs:
             common.tests.test_database_optimizer \
             common.tests.test_models \
             common.tests.test_pdf_text \
+            common.tests.test_presigned_upload_limits \
             common.tests.test_us_states \
             company.tests.test_certifier_readiness \
             company.tests.test_certifier_readiness_actionable \

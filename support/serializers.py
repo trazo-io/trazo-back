@@ -74,6 +74,27 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             "sla_resolution_hours",
         ]
 
+    #: Written by support staff only. Until 2026-11-18 a customer could PATCH their own ticket's
+    #: `assigned_to` to any user id, and `assigned_to_name` echoed that user's full name, which
+    #: listed every account's name one id at a time; and they could read and rewrite the staff's
+    #: `internal_notes` (overall review 2026-11, OV-SEC-C08). Staff assign through the `assign`
+    #: action, which accepts staff accounts only; a customer closes or resolves through its actions.
+    STAFF_ONLY_WRITE = ("priority", "status", "assigned_to", "tags", "internal_notes")
+    #: Not shown to a customer at all.
+    STAFF_ONLY_READ = ("internal_notes",)
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_staff", False):
+            for name in self.STAFF_ONLY_READ:
+                fields.pop(name, None)
+            for name in self.STAFF_ONLY_WRITE:
+                if name in fields:
+                    fields[name].read_only = True
+        return fields
+
     def get_message_count(self, obj):
         """Get count of messages in this ticket"""
         return obj.messages.count()

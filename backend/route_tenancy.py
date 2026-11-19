@@ -429,16 +429,15 @@ ROUTE_TENANCY = {
     # ---------------------------------------------------------------------------------------------
     "common.views.get_presigned_read_url": Route(CATALOG, "signs public-prefix media keys only"),
     "common.views.get_presigned_read_urls_batch": Route(CATALOG, "signs public-prefix media keys only"),
-    "common.views.get_presigned_url": Route(USER, "uuid key under media/; no overwrite"),
-    "common.views.get_upload_urls": Route(
-        COMPANY,
-        "uuid key, no overwrite",
-        finding="entity_type/entity_id go into the key unchecked: objects can be planted under "
-        "another company's prefix; whether any reader trusts the prefix is unconfirmed",
+    "common.views.get_presigned_url": Route(
+        USER,
+        "uuid key under media/establishments/; image types only, size signed as Content-Length, "
+        "10 MB at most (OV-SEC-C12, 2026-11-18; get_upload_urls, which took the prefix from the "
+        "request, was removed)",
     ),
     "common.views.global_search": Route(COMPANY, "company_id__in the caller's companies"),
     "common.views.health_check": Route(ANONYMOUS, "liveness probe"),
-    "common.views.local_file_upload": Route(DEAD, "dev-only upload still routed in production"),
+    "common.views.local_file_upload": Route(DEAD, "dev-only upload; 404 whenever storage is S3 (OV-SEC-C12)"),
     "education.views.FarmerQuestionAnswerViewSet": Route(CATALOG, "FAQ rows; mark_helpful bumps a global counter"),
     # ---------------------------------------------------------------------------------------------
     # users
@@ -490,9 +489,13 @@ ROUTE_TENANCY = {
     "subscriptions.views.AddOnViewSet": Route(CATALOG, "active add-ons"),
     "subscriptions.views.SubscriptionViewSet": Route(
         COMPANY,
-        "filter(company__in=user.companies); writes need CA of obj.company",
-        finding="within one company: status and period fields are writable, so a CA can PATCH "
-        "status=active; start_trial answers 404 vs 403 on company ids",
+        "filter(company__in=user.companies); list and retrieve only, writes are actions that need "
+        "CA of obj.company (no generic create, update or destroy since OV-SEC-C07, 2026-11-18)",
+        finding="start_trial answers 404 vs 403 on company ids",
+        outsider_tests=(
+            "subscriptions.tests.test_subscription_rows_not_writable."
+            "AnOutsiderCannotReadAnotherCompanysSubscriptionTests.test_a_member_of_another_company_gets_404",
+        ),
     ),
     "subscriptions.views.InvoiceViewSet": Route(COMPANY, "filter(company__in=user.companies)"),
     "subscriptions.views.PaymentMethodViewSet": Route(
@@ -512,9 +515,12 @@ ROUTE_TENANCY = {
     ),
     "support.views.SupportTicketViewSet": Route(
         COMPANY,
-        "filter(company__in=user.companies); queue/metrics/assign need is_staff",
-        finding="assigned_to accepts any user id and echoes assigned_to_name: enumerates every "
-        "user's full name; within a ticket a customer can read and write internal_notes",
+        "filter(company__in=user.companies); queue/metrics/assign need is_staff; priority, status, "
+        "assigned_to, tags and internal_notes are staff-written, internal_notes staff-read (OV-SEC-C08)",
+        outsider_tests=(
+            "support.tests.test_ticket_staff_fields."
+            "AnOutsiderCannotReachAnotherCompanysTicketTests.test_a_member_of_another_company_gets_404",
+        ),
     ),
     "support.views.SupportMessageViewSet": Route(COMPANY, "ticket__company__in the caller's companies"),
     "support.views.SupportAttachmentViewSet": Route(
@@ -554,7 +560,7 @@ ROUTE_TENANCY = {
 }
 
 # Company- or user-scoped views with no outsider test. Lower it as tests land; never raise it.
-UNPROVEN_CEILING = 48
+UNPROVEN_CEILING = 45
 
 # Declarations carrying a `finding`, any scope. Same rule: lower it as findings close.
-OPEN_FINDINGS_CEILING = 16
+OPEN_FINDINGS_CEILING = 14

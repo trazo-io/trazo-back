@@ -127,7 +127,7 @@ class TestSecurityImprovements(TestCase):
         """Test that improved exception handling works"""
         # Test that we can import the improved views without errors
         try:
-            from common.views import get_presigned_url, get_upload_urls, local_file_upload
+            from common.views import get_presigned_url, local_file_upload  # noqa: F401
 
             # If we can import without error, the refactoring worked
             self.assertTrue(True, "Improved views import successfully")
