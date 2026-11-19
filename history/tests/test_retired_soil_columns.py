@@ -1,23 +1,22 @@
-"""The retired SoilManagementEvent columns (history/retired_columns.py), step 1 of 3.
+"""The retired SoilManagementEvent columns (history/retired_columns.py), retired in three deploys.
 
-Step 1 stops every reader and writer and clears the values through a logged data operation. These
-tests hold: a correction cannot write a retired column back, the clear command (dry run, apply,
-check, restore, and its refusal to write any other column), and the census counting held values
-and refusing a drop until they are cleared.
+#483 stopped every reader and writer and cleared the values through a logged data operation;
+0266 takes the field out of the model while the column stays in the table, because containers on
+the #483 model still name it while the new one migrates; step 3 drops the column. These tests hold
+the step 2 state (no field; the column still there and nullable, so new rows save), 0266's refusal
+to run over a held value, a correction naming the column being refused, and the census compare
+refusing a column that leaves while it held a value.
 """
 
+import importlib
 import json
-import os
-import tempfile
-from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.core.management import call_command
-from django.core.management.base import CommandError
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from common.models import DataOperationLog
 from common.services import census
 from company.models import Company, Establishment
 from history.amendments import AmendmentError, amendable_fields, apply_amendment
@@ -27,7 +26,9 @@ from history.retired_columns import RETIRED_SOIL_EVENT_COLUMNS
 from product.models import Parcel
 
 LABEL = "history.SoilManagementEvent"
-OPERATION = "clear_retired_soil_columns"
+TABLE = "history_soilmanagementevent"
+STEP_2 = "0266_retire_soil_sequestration_from_model"
+BEFORE_STEP_2 = "0265_production_permissions_take_over_history"
 
 
 class _FarmMixin:
@@ -38,27 +39,33 @@ class _FarmMixin:
         establishment = Establishment.objects.create(name="Retire Soil Farm", company=company)
         parcel = Parcel.objects.create(name="North", establishment=establishment, area=1)
         self.season = Production.objects.create(parcel=parcel, name="2026", start_date=timezone.now())
-        self.tmp = tempfile.mkdtemp()
-
-    def _event(self, **values):
-        return SoilManagementEvent.objects.create(
-            history=self.season, type="CC", date=timezone.now(), description="Ryegrass", **values
+        self.event = SoilManagementEvent.objects.create(
+            history=self.season, type="CC", date=timezone.now(), description="Ryegrass"
         )
 
-    def _run(self, name, *args):
-        path = os.path.join(self.tmp, name)
-        call_command(OPERATION, "--report", path, *args, stdout=open(os.devnull, "w"))
-        with open(path) as handle:
-            return json.load(handle)
+
+def _table_columns():
+    with connection.cursor() as cursor:
+        return {c.name: c for c in connection.introspection.get_table_description(cursor, TABLE)}
 
 
-class TheListTests(TestCase):
-    def test_each_listed_column_is_a_nullable_field_today(self):
-        """Step 1 keeps the fields in the model: old containers still name them."""
-        fields = {f.name: f for f in SoilManagementEvent._meta.get_fields()}
-        for column, empty in RETIRED_SOIL_EVENT_COLUMNS.items():
-            self.assertIsNone(empty, column)
-            self.assertTrue(fields[column].null, column)
+class TheFieldIsGoneTests(_FarmMixin, TestCase):
+    def test_no_retired_column_is_left_in_the_model(self):
+        fields = {f.name for f in SoilManagementEvent._meta.get_fields()}
+        self.assertIn("soil_ph", fields)  # the model was read
+        self.assertEqual(fields & set(RETIRED_SOIL_EVENT_COLUMNS), set())
+
+    def test_the_column_stays_in_the_table_and_takes_null(self):
+        """Until step 3: containers on the #483 model still name it in their INSERTs."""
+        columns = _table_columns()
+        self.assertIn("soil_ph", columns)  # the guard read the real table
+        for column in RETIRED_SOIL_EVENT_COLUMNS:
+            self.assertTrue(columns[column].null_ok, column)
+
+    def test_a_new_row_saves_and_leaves_it_null(self):
+        with connection.cursor() as cursor:
+            cursor.execute(f'SELECT "carbon_sequestration_potential" FROM "{TABLE}" WHERE id = %s', [self.event.pk])
+            self.assertEqual(cursor.fetchone(), (None,))
 
 
 class NoCorrectionWritesItBackTests(_FarmMixin, TestCase):
@@ -68,96 +75,77 @@ class NoCorrectionWritesItBackTests(_FarmMixin, TestCase):
         self.assertEqual(names & set(RETIRED_SOIL_EVENT_COLUMNS), set())
 
     def test_a_correction_naming_it_is_refused(self):
-        event = self._event()
         with self.assertRaisesMessage(AmendmentError, "is not a field that can be corrected"):
             apply_amendment(
-                event=event,
+                event=self.event,
                 event_type=SOIL_MANAGEMENT_EVENT_TYPE,
                 field_name="carbon_sequestration_potential",
                 new_value="50",
                 reason="typo",
                 user=self.user,
             )
-        event.refresh_from_db()
-        self.assertIsNone(event.carbon_sequestration_potential)
         self.assertFalse(EventAmendment.objects.exists())
 
 
-class ClearCommandTests(_FarmMixin, TestCase):
-    def test_dry_run_apply_check_and_restore(self):
-        held = self._event(carbon_sequestration_potential=Decimal("1.2"))
-        clean = self._event()
+class TheMigrationGuardTests(_FarmMixin, TestCase):
+    """0266 changes no table, so the state before it reads the real table as it is now."""
 
-        dry = self._run("dry.json")
-        self.assertEqual([c["pk"] for c in dry["changes"]], [held.pk])
-        held.refresh_from_db()
-        self.assertEqual(held.carbon_sequestration_potential, Decimal("1.2"))  # the dry run wrote nothing
-        self.assertFalse(DataOperationLog.objects.filter(operation=OPERATION).exists())
+    def setUp(self):
+        super().setUp()
+        self.step_2 = importlib.import_module(f"history.migrations.{STEP_2}")
+        self.before = MigrationExecutor(connection).loader.project_state(("history", BEFORE_STEP_2)).apps
 
-        count = SoilManagementEvent.objects.count()
-        self._run("apply.json", "--apply")
-        held.refresh_from_db()
-        self.assertIsNone(held.carbon_sequestration_potential)
-        self.assertEqual((held.description, held.type), ("Ryegrass", "CC"))  # only the retired column
-        self.assertEqual(SoilManagementEvent.objects.count(), count)
-        self.assertEqual(self._run("check.json")["changes"], [])
+    def test_it_runs_when_no_row_holds_a_value(self):
+        self.step_2.refuse_if_a_value_is_held(self.before, None)
 
-        log = DataOperationLog.objects.get(operation=OPERATION, action=DataOperationLog.ACTION_APPLY)
-        call_command(OPERATION, "--restore", f"log:{log.pk}", stdout=open(os.devnull, "w"))
-        held.refresh_from_db()
-        self.assertEqual(held.carbon_sequestration_potential, Decimal("1.2"))
-        clean.refresh_from_db()
-        self.assertIsNone(clean.carbon_sequestration_potential)
+    def test_it_refuses_a_held_value(self):
+        old = self.before.get_model("history", "SoilManagementEvent")
+        old.objects.filter(pk=self.event.pk).update(carbon_sequestration_potential="1.200")
+        with self.assertRaisesMessage(RuntimeError, "{'carbon_sequestration_potential': 1}"):
+            self.step_2.refuse_if_a_value_is_held(self.before, None)
 
-    def test_restore_refuses_a_column_that_is_not_retired(self):
-        from history.management.commands.clear_retired_soil_columns import write
-
-        event = self._event()
-        with self.assertRaises(CommandError):
-            write(LABEL, event.pk, {"description": "rewritten"})
-        with self.assertRaises(CommandError):
-            write("history.ChemicalEvent", event.pk, {"carbon_sequestration_potential": None})
-        event.refresh_from_db()
-        self.assertEqual(event.description, "Ryegrass")
+    def test_the_migration_freezes_the_same_list(self):
+        self.assertEqual(set(self.step_2.RETIRED), set(RETIRED_SOIL_EVENT_COLUMNS))
 
 
-def _drop(snapshot, label, columns):
-    """The census `snapshot` as it would read after `columns` left `label`'s table."""
-    after = json.loads(json.dumps(snapshot))
-    table = after["tables"][label]
-    n = census.CELL_HASH_CHARS
-    keep = [i for i, c in enumerate(table["columns"]) if c not in columns]
+def _with_columns(snapshot, columns, counted):
+    """`snapshot` as a census would have read it while `columns` were still in the model.
+
+    `counted` is {column: rows holding a value}, the `retiring_columns` fact the census stored for a
+    declared column; a column missing from it was never declared.
+    """
+    before = json.loads(json.dumps(snapshot))
+    table = before["tables"][LABEL]
+    filler = "0" * census.CELL_HASH_CHARS * len(columns)
     for key, row in table["rows"].items():
-        digest, cells = row.split(":", 1)
-        table["rows"][key] = digest + ":" + "".join(cells[i * n : (i + 1) * n] for i in keep)
-    table["columns"] = [table["columns"][i] for i in keep]
-    after["domain"]["retiring_columns"][label] = {
-        c: v for c, v in after["domain"]["retiring_columns"][label].items() if c not in columns
-    }
-    return after
+        table["rows"][key] = row + filler
+    table["columns"] = table["columns"] + list(columns)
+    before["domain"]["retiring_columns"][LABEL] = dict(counted)
+    return before
 
 
-class CensusTests(_FarmMixin, TransactionTestCase):
+class CensusAcrossTheRetirementTests(_FarmMixin, TransactionTestCase):
     """`TransactionTestCase`: the census opens its own read-only snapshot transaction."""
 
-    def test_the_census_counts_rows_holding_a_value(self):
-        self._event(carbon_sequestration_potential=Decimal("1.2"))
-        self._event()
-        facts = census._retiring_column_facts()[LABEL]
-        self.assertEqual(facts, {"carbon_sequestration_potential": 1})
+    def setUp(self):
+        super().setUp()
+        self.now = census.take_census(label="after-0266")
 
-    def test_a_drop_is_a_loss_until_the_values_are_cleared(self):
-        self._event(carbon_sequestration_potential=Decimal("1.2"))
-        dropped = sorted(RETIRED_SOIL_EVENT_COLUMNS)
+    def test_the_census_counts_nothing_once_the_field_is_gone(self):
+        self.assertEqual(census._retiring_column_facts()[LABEL], {})
+        self.assertEqual(self.now["domain"]["retiring_columns"][LABEL], {})
 
-        held = census.take_census(label="held")
-        result = census.compare(held, _drop(held, LABEL, dropped))
-        self.assertFalse(result["ok"])
-        [loss] = [x for x in result["losses"] if "still held a value" in x]
-        self.assertIn("'carbon_sequestration_potential': 1", loss)
-
-        self._run("apply.json", "--apply")
-        cleared = census.take_census(label="cleared")
-        result = census.compare(cleared, _drop(cleared, LABEL, dropped))
+    def test_a_retirement_counted_empty_before_is_a_note(self):
+        before = _with_columns(self.now, ["carbon_sequestration_potential"], {"carbon_sequestration_potential": 0})
+        result = census.compare(before, self.now)
         self.assertTrue(result["ok"], result["losses"])
         self.assertTrue(any("retired columns dropped" in note for note in result["notes"]))
+
+    def test_a_retirement_while_a_row_held_a_value_is_a_loss(self):
+        before = _with_columns(self.now, ["carbon_sequestration_potential"], {"carbon_sequestration_potential": 1})
+        result = census.compare(before, self.now)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            f"{LABEL}: retired columns dropped while rows still held a value {{'carbon_sequestration_potential': 1}}",
+            result["losses"],
+        )
