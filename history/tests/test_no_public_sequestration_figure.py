@@ -15,7 +15,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
 
@@ -94,13 +93,8 @@ class NoPublicSequestrationFigureTests(APITestCase):
         self.client.force_authenticate(user=self.user)
         url = f"{reverse('events-detail', args=[self.open_cover_crop.pk])}?event_type={SOIL_MANAGEMENT_EVENT_TYPE}"
         res = self.client.patch(url, {"carbon_sequestration_potential": "50.0"}, format="json")
+        # The key is ignored: the column left the table in history 0267 (test_retired_soil_columns).
         self.assertEqual(res.status_code, status.HTTP_200_OK, res.content)
-        with connection.cursor() as cursor:  # the column is still in the table until step 3
-            cursor.execute(
-                'SELECT "carbon_sequestration_potential" FROM "history_soilmanagementevent" WHERE id = %s',
-                [self.open_cover_crop.pk],
-            )
-            self.assertEqual(cursor.fetchone(), (None,))
         served = self.client.get(url).json()
         self.assertEqual(served["id"], self.open_cover_crop.pk)  # the detail call returned the record
         self.assertEqual([k for k in _keys(served) if "sequestr" in k.lower()], [])

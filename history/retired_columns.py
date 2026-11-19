@@ -21,9 +21,9 @@ each INSERT and UPDATE:
 3. A later migration drops the column from the table, once no container runs a model naming it.
 
 Step 1 shipped in back #483. In production on 2026-11-18 the census `before-soil-retire` counted 0
-rows holding a value and the clear changed 0 rows. Step 2 is history 0266 (the clear command left
-with the field: restoring a cleared value means reversing 0266 and running the command from #483's
-merge commit 1b66feb2).
+rows holding a value and the clear changed 0 rows. Step 2 is history 0266 (#493; the clear command
+left with the field: restoring a cleared value means reversing 0266 and running the command from
+#483's merge commit 1b66feb2). Step 3 is history 0267, which drops the column.
 
 The list stays as the record of what was retired. The census still reads it and, with no listed
 field left in the model, counts nothing; the compare across the drop reads the counts stored in the
