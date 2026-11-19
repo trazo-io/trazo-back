@@ -68,6 +68,21 @@ class OrganicBasisAttributionTests(TestCase):
             with self.subTest(value=value):
                 self.assertIn("grower-selected", _organic_basis_cell(self._Event(value)))
 
+    def test_a_seal_or_a_certifiers_review_is_not_asked_for_a_listing(self):
+        """A seal on the label or a certifier's review names no catalogue. The Input Log printed
+        "Reviewed and approved by my certifier — grower-selected, no listing on file", asking for
+        evidence the basis never relies on; the land history page already worded it without the
+        listing (recordkeeping checklist run 2026-11-16, VID-11 follow-up)."""
+        for value in ("nop_seal_on_label", "certifier_approved", "usda_nop_approved"):
+            with self.subTest(value=value):
+                cell = _organic_basis_cell(self._Event(value))
+                self.assertTrue(cell.endswith("— grower-selected"), cell)
+                self.assertNotIn("listing", cell)
+        # The listing bases keep asking for the listing they name.
+        for value in ("omri_listed", "wsda_listed"):
+            with self.subTest(value=value):
+                self.assertIn("no listing on file", _organic_basis_cell(self._Event(value)))
+
     def test_a_first_party_answer_is_left_alone(self):
         """ "Not Organic" names no third party — qualifying it would be noise."""
         cell = _organic_basis_cell(self._Event("not_organic"))

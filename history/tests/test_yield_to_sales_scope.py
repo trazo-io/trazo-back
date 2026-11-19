@@ -882,6 +882,22 @@ class Run7AggregationTests(TestCase):
         for _, text in out.values():
             self.assertNotIn("N/A", text)
 
+    def test_an_unresolved_compost_still_states_the_interval_kept(self):
+        """VID-09 (recordkeeping checklist run 2026-11-16): spinach 2026 was cut 75 days after a
+        compost whose C:N basis was unresolved, and the dossier never said so. The fact is printed
+        beside the open question, with the floor that would apply; no verdict."""
+        from history.services.audit_export_service import _compost_out_of_range_assessment as assess
+
+        ev = self._compost("yard debris, manure", purchased=True)
+        later = [(self.when + timedelta(days=75)).date(), (self.when + timedelta(days=90)).date()]
+        branch, text = assess(ev, later, 120)
+        self.assertEqual(branch, "unresolved")
+        self.assertIn("Recorded application to first harvest: 75 days", text)
+        self.assertIn("if the compost does not qualify: 120 days", text)
+        self.assertNotIn("does not meet", text)
+        _, none_after = assess(ev, [(self.when - timedelta(days=5)).date()], 120)
+        self.assertIn("No harvest is recorded after the application.", none_after)
+
     def test_the_snapshot_raw_manure_row_is_not_na_after_the_compost_row_raised_it(self):
         self._compost("yard debris, food waste, manure (Rexius)", purchased=True, saved=True)
         rows = {r["label"]: r for r in self._svc().compliance_snapshot_rows()}

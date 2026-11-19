@@ -831,14 +831,25 @@ def _compost_out_of_range_assessment(ev, harvest_dates, rule_days):
             "whether the C:N is the starting mix or a finished-product analysis (supplier documentation of "
             "the composting process)"
         )
+    later = sorted(d for d in harvest_dates if d >= ev.date.date())
     if missing:
+        # The interval actually kept, stated beside the open question (recordkeeping checklist run
+        # 2026-11-16, VID-09: spinach 2026 was cut 75 days after this compost and the dossier never
+        # said so). A fact, not a verdict: whether it had to meet the raw-manure floor is what is
+        # unresolved, so the floor is named as the one that would apply.
+        kept = (
+            f" Recorded application to first harvest: {(later[0] - ev.date.date()).days} days (the raw-manure "
+            f"interval for this crop, if the compost does not qualify: {rule_days} days)."
+            if later
+            else " No harvest is recorded after the application."
+        )
         return (
             "unresolved",
             f"{label}: C:N {cn:g}:1 is outside 25:1-40:1. Manure interval assessment unresolved; missing: "
             + "; ".join(missing)
-            + ".",
+            + "."
+            + kept,
         )
-    later = sorted(d for d in harvest_dates if d >= ev.date.date())
     lead = (
         f"{label}: manure-containing feedstock with initial C:N {cn:g}:1, outside 25:1-40:1, so the compost "
         f"pathway is not met as recorded and the § 205.203(c)(1) interval applies ({rule_days} days for this crop)"
@@ -1684,11 +1695,18 @@ def _organic_basis_cell(event, raw=_UNSET):
         return f"{label} — grower-selected, basis not recorded"
     if str(raw_value).strip() not in _THIRD_PARTY_BASIS_VALUES:
         return label
+    from product.services.input_evidence import _LISTING_BASIS, listing_on_file
+
+    if str(raw_value).strip() not in _LISTING_BASIS:
+        # A seal on the label or a certifier's review names no catalogue, so "no listing on
+        # file" asked for evidence the basis never relies on: "Reviewed and approved by my
+        # certifier — grower-selected, no listing on file" (recordkeeping checklist run
+        # 2026-11-16, VID-11 follow-up). Attributed to the operator, as the land history page
+        # words the same pick ("reviewed by the certifier, per the operator").
+        return f"{label} — grower-selected"
     # Either catalogue backs the claim. WSDA added 2026-09-02: `wsda_listed` was already in
     # the set above, so a WSDA basis was claimable and unbackable — it carried the
     # "no listing on file" suffix even when the operator had attached the WSDA row.
-    from product.services.input_evidence import listing_on_file
-
     if listing_on_file(event, raw_value):
         return label
     return f"{label} — grower-selected, no listing on file"
