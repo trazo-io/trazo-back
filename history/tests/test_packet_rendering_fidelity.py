@@ -78,6 +78,12 @@ class OrganicBasisAttributionTests(TestCase):
                 cell = _organic_basis_cell(self._Event(value))
                 self.assertTrue(cell.endswith("— grower-selected"), cell)
                 self.assertNotIn("listing", cell)
+        # An OMRI row attached to a seal or certifier pick shows neither (review of back #500:
+        # either listing used to count for any basis, so the cell printed the bare label).
+        for value in ("nop_seal_on_label", "certifier_approved"):
+            with self.subTest(value=value, omri=True):
+                cell = _organic_basis_cell(self._Event(value, omri_product_id=42))
+                self.assertTrue(cell.endswith("— grower-selected"), cell)
         # The listing bases keep asking for the listing they name.
         for value in ("omri_listed", "wsda_listed"):
             with self.subTest(value=value):

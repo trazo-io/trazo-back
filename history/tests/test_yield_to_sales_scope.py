@@ -894,9 +894,29 @@ class Run7AggregationTests(TestCase):
         self.assertEqual(branch, "unresolved")
         self.assertIn("Recorded application to first harvest: 75 days", text)
         self.assertIn("if the compost does not qualify: 120 days", text)
-        self.assertNotIn("does not meet", text)
+        # No verdict: neither of the function's verdict phrasings.
+        self.assertNotIn("is not met as recorded", text)
+        self.assertNotIn("interval applies", text)
         _, none_after = assess(ev, [(self.when - timedelta(days=5)).date()], 120)
         self.assertIn("No harvest is recorded after the application.", none_after)
+
+    def test_the_interval_kept_names_its_condition_and_the_nut_reading(self):
+        """Review of back #500: with the manure content unknown, "if the compost does not qualify"
+        implied that plant material becomes raw manure; and a walnut's 90-day floor dropped the
+        120-day reading the raw-manure review names for a harvest gathered from the ground."""
+        from history.services.audit_export_service import _compost_out_of_range_assessment as assess
+
+        later = [(self.when + timedelta(days=100)).date()]
+        _, unknown = assess(self._compost("yard debris, food waste"), later, 120)
+        self.assertIn("if the feedstock contained manure and the compost does not qualify: 120 days", unknown)
+        _, walnut = assess(self._compost("yard debris, manure", purchased=True), later, 90, True)
+        self.assertIn(
+            "if the compost does not qualify: 90 days, or 120 if the certifier reads a harvest gathered from "
+            "the ground as soil contact, § 205.203(c)(1)(ii)",
+            walnut,
+        )
+        _, apple = assess(self._compost("yard debris, manure", purchased=True), later, 90)
+        self.assertNotIn("gathered from the ground", apple)
 
     def test_the_snapshot_raw_manure_row_is_not_na_after_the_compost_row_raised_it(self):
         self._compost("yard debris, food waste, manure (Rexius)", purchased=True, saved=True)
