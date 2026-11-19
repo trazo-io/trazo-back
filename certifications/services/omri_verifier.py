@@ -11,15 +11,17 @@ Returns a `VerificationResult` compatible with the existing BaseCertificationVer
 pattern (see usda_organic_verifier.py).
 
 Statuses `verify` answers with, in the order it tries them:
-    listing_match    -> one OMRI product (by the code the grower pasted, or the only product the name
-                        matches), or an allowed National List row. A § 205.601 row the rule allows only
-                        under a condition of use carries the rule's words in `notes`.
-    delisted         -> the OMRI product matched, and Trazo's copy of OMRI's list no longer carries it.
+    listing_match    -> an OMRI product the input identifies (the code off the certificate, or a name
+                        exactly one product holds), or an allowed National List row (exact name, curated
+                        alias, or the row's full name inside the input). A § 205.601 row the rule allows
+                        only under a condition of use carries the rule's words in `notes`.
+    delisted         -> the OMRI product identified, and Trazo's copy of OMRI's list no longer carries it.
     restricted_use   -> a § 205.602 row the rule prohibits except for one stated use (calcium chloride,
                         potassium chloride, sodium nitrate). Never "prohibited": the use may meet it.
-    revoked          -> a § 205.602 row prohibited with no exception.
-    several_matches  -> several OMRI products match the name and no National List row does; none is
-                        chosen, because a guessed product is a listing the grower may not have applied.
+    revoked          -> a prohibited row with no exception: § 205.602, or a § 205.105 synthetic.
+    possible_match   -> nothing confirmed; `notes` names the National List rows and OMRI products the
+                        name partially matches and chooses none, because a guess is a listing the grower
+                        may not have applied.
     not_found        -> no match in either source (treat as self-reported only).
 """
 
@@ -33,7 +35,7 @@ from certifications.services.national_list_citations import use_condition
 
 _ECFR_PART_205 = "https://www.ecfr.gov/current/title-7/subtitle-B/chapter-I/subchapter-M/part-205"
 
-#: How many of several matching OMRI products the verdict names before saying how many more there are.
+#: How many candidates a verdict names before saying how many more there are.
 _SEVERAL_NAMED = 3
 
 
@@ -41,16 +43,66 @@ def _normalize(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip().lower())
 
 
-def _several_omri_products(operation_name: str, products) -> str:
-    """The sentence a verdict carries when a name matches more than one OMRI product. It names a few and
-    counts the rest, and chooses none of them."""
-    named = ", ".join(p.product_name for p in products[:_SEVERAL_NAMED])
-    rest = len(products) - _SEVERAL_NAMED
-    if rest > 0:
-        named += f" and {rest} more"
+def _named(items, render) -> str:
+    """The first few items rendered and joined, then a count of the rest."""
+    named = "; ".join(render(item) for item in items[:_SEVERAL_NAMED])
+    rest = len(items) - _SEVERAL_NAMED
+    return f"{named}; and {rest} more" if rest > 0 else named
+
+
+def _is_identity(product, normalized: str) -> bool:
+    """True when what was typed IS this product: its OMRI code, or its exact name (with or without the
+    "-O" OMRI appends to listed variants). Anything else is a candidate, however well it ranked."""
+    name = (product.product_name or "").lower()
+    return (product.omri_id or "").lower() == normalized or name in (normalized, normalized + "-o")
+
+
+def _omri_candidates_note(operation_name: str, products) -> str:
+    """The sentence a verdict carries for OMRI products the name matched but did not identify. It names a
+    few, with their codes (two products can share a name), counts the rest, and chooses none."""
+    if not products:
+        return ""
+    named = _named(products, lambda p: f"{p.product_name} (OMRI #{p.omri_id})")
+    if len(products) == 1:
+        return (
+            f"One OMRI-listed product's name matches '{operation_name}': {named}. It is a possible match, "
+            "not a confirmed one: the grower checks it against the label."
+        )
     return (
-        f"{len(products)} OMRI-listed products match '{operation_name}' ({named}). None is chosen here: "
+        f"{len(products)} OMRI-listed products match '{operation_name}': {named}. None is chosen here: "
         "the grower picks the one on the label."
+    )
+
+
+def _standing(substance) -> str:
+    """What the rule says of a National List row, in a few words, for a suggestion."""
+    if not substance.is_national_list_entry:
+        return "a nonsynthetic substance with no National List entry"
+    if substance.is_conditionally_permitted:
+        return "prohibited except for one stated use"
+    if (substance.status or "").lower() == "prohibited":
+        return "prohibited"
+    if substance.allowed_with_condition:
+        return "allowed only under a condition of use"
+    return "allowed"
+
+
+def _national_list_suggestions_note(operation_name: str) -> str:
+    """The crop-production rows the lookup offers for a name that matched no row exactly, else "".
+
+    A suggestion is not a citation (`national_list_basis`: a partial-name match may not be cited), so the
+    verdict names them and says the name must match the listing to confirm one."""
+    from certifications.services.reference_data_status import HANDLING_SECTIONS
+
+    rows = [s for s in national_list_candidates_by_name(operation_name) if s.cfr_section not in HANDLING_SECTIONS]
+    if not rows:
+        return ""
+    named = _named(
+        rows, lambda s: f"{s.substance_name}" + (f", {s.citation}" if s.citation else "") + f", {_standing(s)}"
+    )
+    return (
+        f"No National List entry is named '{operation_name}'. Entries whose names contain it: {named}. "
+        "The substance on the label has to be named as the listing names it before the listing applies."
     )
 
 
@@ -325,13 +377,19 @@ def _omri_candidates_by_name(farmer_input: str, allow_prefix: bool = False):
         # guess a product name from "gus" and "4423".
         return []
 
-    exact = OMRIProduct.objects.extra(
-        where=["LOWER(product_name) = %s OR LOWER(product_name) = %s"],
-        params=[normalized, normalized + "-o"],
-    ).first()
+    exact = list(
+        OMRIProduct.objects.extra(
+            where=["LOWER(product_name) = %s OR LOWER(product_name) = %s"],
+            params=[normalized, normalized + "-o"],
+        ).order_by("product_name", "pk")
+    )
     if exact:
-        # An exact hit is the answer, not a shortlist — never offer alternatives to it.
-        return [exact]
+        # An exact hit is the answer, not a shortlist: never offer weaker matches beside it. But a
+        # name is not always one product. 73 names in the committed catalogue belong to two to six
+        # products ("Potassium humate" six times, "Fulvic acid" five, from different manufacturers),
+        # and `.first()` here picked one of them by row order and reported one candidate (review of
+        # PR 505). Every product holding the exact name is returned, so the grower picks by maker.
+        return exact
 
     farmer_tokens = _name_tokens(farmer_input)
     if not farmer_tokens:
@@ -520,17 +578,20 @@ class OMRIProductVerifier(BaseCertificationVerifier):
                     lead=f"OMRI ID {omri.omri_id} ({omri.product_name}), farmer-reported.",
                 )
 
-        if not _normalize(operation_name):
+        normalized = _normalize(operation_name)
+        if not normalized:
             return VerificationResult(found=False, status="not_found", notes="No name provided.")
 
         # 2) OMRI catalog lookup by product name (seeded from the official OMRI Crop Products List
-        # PDF, see seed_omri_minimal.py). OMRI is more specific than the National List, so ONE
-        # product shortcuts National List matching. Several do not: until 2026-11 this took the
-        # top-ranked row and answered `found: True` for it, so "Neptune" named the 2-4-1 among seven
-        # Neptune's Harvest products (overall review 2026-11, OV-MT-C14). The lookup's candidate
-        # list already makes the grower pick; the verdict must not pick for them.
-        omri_matches = _omri_candidates_by_name(operation_name)
-        if len(omri_matches) == 1:
+        # PDF, see seed_omri_minimal.py). Only an IDENTITY answers before the National List: the code
+        # off the certificate, or a product name typed exactly that one product holds. Until 2026-11
+        # any name match did, with `found: True` for the top-ranked row: "Neptune" named the 2-4-1
+        # among seven Neptune's Harvest products, and "Potassium chloride" named one fertilizer whose
+        # name contains the words, so the § 205.602(e) condition never answered (overall review
+        # 2026-11, OV-MT-C14, and its review). Every other match is a candidate the grower picks from,
+        # counted the way the lookup counts them (`allow_prefix=True`, as `verify_input` calls it).
+        omri_matches = _omri_candidates_by_name(operation_name, allow_prefix=True)
+        if len(omri_matches) == 1 and _is_identity(omri_matches[0], normalized):
             product = omri_matches[0]
             return self._build_omri_result(
                 product,
@@ -538,17 +599,22 @@ class OMRIProductVerifier(BaseCertificationVerifier):
                 confidence=0.85,  # catalog hit, one step weaker than farmer-pasted ID
                 lead=f"Matched OMRI catalog: {product.product_name} (OMRI #{product.omri_id}).",
             )
-        several = _several_omri_products(operation_name, omri_matches) if omri_matches else ""
+        omri_note = _omri_candidates_note(operation_name, omri_matches)
 
         # 3) National List lookup by name. A substance match is a statement about the substance, so
-        # it answers even when the name also matched several OMRI products, and says that it did.
+        # it answers even when the name also matched OMRI products, and says that it did.
         listed = self._match_national_list(operation_name)
         if listed is not None:
-            if several:
-                listed.notes = f"{listed.notes} {several}".strip()
+            if omri_note:
+                listed.notes = f"{listed.notes} {omri_note}".strip()
             return listed
-        if several:
-            return VerificationResult(found=False, status="several_matches", notes=several)
+
+        # Nothing confirmed. Name what the lookup would offer, so the verdict and the lookup's fields in
+        # the same response do not disagree ("calcium chloride" is not the listing's name, and the
+        # lookup offers § 205.602(c) for it), and choose none of it.
+        possible = " ".join(note for note in (_national_list_suggestions_note(operation_name), omri_note) if note)
+        if possible:
+            return VerificationResult(found=False, status="possible_match", notes=possible)
         return VerificationResult(
             found=False,
             status="not_found",
@@ -570,6 +636,18 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         exact = crop_rows.filter(substance_name_normalized=normalized).first()
         if exact:
             return self._build_nl_result(exact, confidence=1.0, match_type="exact")
+
+        # The curated crosswalk, in the same place the save path consults it
+        # (`history.signals.auto_classify_chemical_against_national_list`): "zinc sulfate", "boron" and
+        # "sulfur" are how growers name the § 205.601 rows, and a saved record is classified by them, so
+        # the verdict answering "not found" for the same name disagreed with the record it describes.
+        from certifications.services.national_list_aliases import resolve_alias
+
+        canonical = resolve_alias(normalized)
+        if canonical:
+            aliased = crop_rows.filter(substance_name=canonical).first()
+            if aliased:
+                return self._build_nl_result(aliased, confidence=0.9, match_type="alias")
 
         # Containment match — ONE DIRECTION ONLY: full NL substance name must appear
         # inside the farmer's input. (The inverse — farmer's generic word inside an NL
@@ -652,7 +730,14 @@ class OMRIProductVerifier(BaseCertificationVerifier):
             # § 205.602(c), (e), (h): prohibited EXCEPT for one stated use. "PROHIBITED ... disqualifies
             # the crop from organic sale" told an orchard spraying calcium chloride for bitter pit, which
             # the rule names as the allowed use, that it had lost organic status. Whether a use met the
-            # condition is not knowable here, so the verdict states the condition and stops.
+            # condition is not knowable here, so the verdict states the condition and stops. The quote is
+            # the rule's whole entry (`RULE_TEXT`); the stored note is an excerpt of it.
+            from certifications.services.national_list_citations import RULE_TEXT
+
+            words = (
+                RULE_TEXT.get((entry.cfr_section, f"({entry.subsection})")) or (entry.restriction_notes or "").strip()
+            )
+            quoted = f' The rule, {entry.citation}: "{words}"' if words else f" See {entry.citation}."
             return VerificationResult(
                 found=True,
                 status="restricted_use",
@@ -661,8 +746,7 @@ class OMRIProductVerifier(BaseCertificationVerifier):
                 confidence_score=confidence,
                 notes=(
                     f"Matched National List ({match_type}): {entry.substance_name}, prohibited except for the use "
-                    f"the rule names. The rule's words, {entry.citation}: {(entry.restriction_notes or '').strip()} "
-                    "The record of each use must show it met that condition."
+                    f"the rule names.{quoted} The record of each use must show it met that condition."
                 ),
             )
         return VerificationResult(
