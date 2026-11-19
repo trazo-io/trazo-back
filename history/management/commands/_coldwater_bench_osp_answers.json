@@ -1,5 +1,5 @@
 {
-  "_about": "Coldwater Bench Orchard's answers to every Organic System Plan module, loaded by seed_coldwater_bench and checked against the live questionnaire on every run. A fabricated Washington apple and pear orchard (the rehearsal kit's farm, documentation/gtm-v3/rehearsal/). No real certifier, packer, nursery, supplier, irrigation district or public body is credited with any act: the packer is 'Sample Bench Packing Co.' and the ditch belongs to an unnamed district. The answers agree with the seeded records, including the ones a reviewer will question: the purchased compost has no paperwork yet, the district's canal treatment is not known, and the calcium chloride is a foliar spray for bitter pit. A module marked not_applicable describes work this orchard does not do (the packer stores and packs the fruit). common_osp_records lists the Common OSP section 11 record types the operator states it keeps.",
+  "_about": "Coldwater Bench Orchard's answers to every Organic System Plan module, loaded by seed_coldwater_bench and checked against the live questionnaire on every run. A fabricated Washington apple and pear orchard (the rehearsal kit's farm, documentation/gtm-v3/rehearsal/). No real certifier, packer, nursery, supplier, irrigation district or public body is credited with any act: the packer is 'Sample Bench Packing Co.' and the ditch belongs to the fictional 'Sample Bench Irrigation District'. The answers agree with the seeded records, including the ones a reviewer will question: the purchased compost has no paperwork yet, the district's canal treatment is not known, and the calcium chloride is a foliar spray for bitter pit. A module marked not_applicable describes work this orchard does not do (the packer stores and packs the fruit). common_osp_records lists the Common OSP section 11 record types the operator states it keeps.",
   "common_osp_records": [
     "bill_of_lading",
     "bin_ticket_stubs",
@@ -88,7 +88,38 @@
       "osp_implementation_monitoring": [
         "record_review",
         "staff_training"
-      ]
+      ],
+      "fraud_reporting_channels": [
+        "own_certifier",
+        "usda_nop"
+      ],
+      "fraud_reporting_triggers": [
+        "suspected_fraud",
+        "quantity_exceeds_capacity",
+        "below_market_price"
+      ],
+      "fraud_plan_kept_separately": false,
+      "ofpp_team": "Karen Tollefsen, owner and office manager, (509) 555-0147, karen@coldwaterbench.example. Dan Tollefsen, orchard manager and licensed applicator, (509) 555-0147.",
+      "record_review_frequency": "Weekly in season: Karen reads the spray sheet every Friday. The whole binder each winter, before the March renewal.",
+      "ofpp_training_cadence": [
+        "onboarding",
+        "within_month_of_change"
+      ],
+      "internal_audits_conducted": false,
+      "written_sops_kept": false,
+      "supply_chain_shown_as": "described",
+      "critical_control_points": [
+        "inputs",
+        "transport",
+        "sales"
+      ],
+      "supply_chain_description": "Inputs come from the farm co-op, a hardware store and a county compost yard. Fruit leaves the farm in our own bins, tagged at the block, on the packer's truck to Sample Bench Packing Co., a certified organic packer that packs, stores and sells it. A small share of Gala is sold loose from bins at the farm stand.",
+      "ccp_inputs_strategy": "Nothing goes on a block unless it is on the materials list. Karen checks each invoice and label against the list before the product goes in the shed.",
+      "ccp_inputs_monitoring": "Every invoice when it arrives, and the whole input list against the spray sheet each winter. The 2026 compost came without its feedstock and process sheet; it is on the plan and the paperwork has been asked for.",
+      "ccp_transport_strategy": "Fruit moves only in our own bins, tagged with the lot code at the block, on the packer's truck. The driver signs the receiving ticket.",
+      "ccp_transport_monitoring": "Bin counts on our harvest sheet are checked against the packer's receiving ticket for every load.",
+      "ccp_sales_strategy": "Organic fruit is sold only through the certified packer, which issues the invoices. The packer's organic certificate is checked each January.",
+      "ccp_sales_monitoring": "Each season the settlement statement is checked against our bin counts by lot; the packer's certificate each January."
     }
   },
   "g3_0_seeds": {
@@ -104,7 +135,8 @@
         "established_in_place"
       ],
       "grafts_stock": "no",
-      "seeds_additional_notes": "No seed is planted: the orchard floor is resident grass. The trees in all five blocks were in the ground before 2026; no tree was planted or replaced this season."
+      "seeds_additional_notes": "No seed is planted: the orchard floor is resident grass. The trees in all five blocks were in the ground before 2026; no tree was planted or replaced this season.",
+      "farm_grown_processing_contracted": "no"
     }
   },
   "g3_1_seedlings": {
@@ -149,7 +181,9 @@
       "erosion_practices": [
         "permanent_cover",
         "micro_irrigation"
-      ]
+      ],
+      "in_lieu_description": "Perennial apple and pear blocks with no tillage. Resident grass in every alley, mowed four or five times a season, with prunings flailed in place. Compost spread on the surface along the tree rows of Blocks 1, 2 and 3 on July 15, 2026; Block 4 was not done after the spreader broke, and Block 5 gets none.",
+      "applies_fertilizers": true
     }
   },
   "g4_1_compost_manure": {
@@ -201,7 +235,16 @@
       "monitoring_method": [
         "visual_field_checks",
         "farm_logs"
-      ]
+      ],
+      "permanent_ground_cover_90pct": false,
+      "slope_under_10pct": true,
+      "other_conservation_measures": false,
+      "irrigation_source_names": "Block 4: the Sample Bench Irrigation District ditch. Blocks 1, 2, 3 and 5: the farm's own well.",
+      "water_verification_method": [
+        "not_verified"
+      ],
+      "non_district_water_additives": false,
+      "materials_via_irrigation": false
     }
   },
   "g5_0_pest": {
@@ -248,7 +291,17 @@
       ],
       "pest_monitoring_frequency": "weekly",
       "disease_monitoring_frequency": "weekly",
-      "monitoring_records": "Codling moth trap catches and what was seen on the walk are written on the spray sheet beside the spray they led to. In 2026 the trap counts themselves were not kept in the binder; from 2027 they are logged in Trazo against the block."
+      "monitoring_records": "Codling moth trap catches and what was seen on the walk are written on the spray sheet beside the spray they led to. In 2026 the trap counts themselves were not kept in the binder; from 2027 they are logged in Trazo against the block.",
+      "pests_diseases_of_concern": "Codling moth, leafrollers, pear psylla and mites; fire blight and powdery mildew. Bitter pit on Honeycrisp is a calcium disorder, not a disease, and is handled under soil fertility.",
+      "pest_taxa_managed": [
+        "insects",
+        "mites",
+        "rodents",
+        "birds"
+      ],
+      "pest_prevention_records": "The spray sheet notes when the mating disruption dispensers went up in each block, and the trap checks that timed each granulovirus cover. In 2026 the trap counts themselves were not written down.",
+      "disease_prevention_records": "Disease sprays are on the spray sheet with their dates and blocks. Pruning and the dormant cleanup are done every winter but are not written down.",
+      "weed_prevention_records": "None written. The alleys are mowed four or five times a season and the tree rows are kept clear without herbicide; neither is recorded by date."
     }
   },
   "g6_0_production": {
@@ -365,7 +418,13 @@
     "answers": {
       "sales_soe_channels": "Almost all fruit goes in bins to one certified organic packer, which packs, stores and sells it. A small share of Gala is sold loose from bins at the farm stand for cash.",
       "sales_soe_supplier_verification": "no",
-      "sales_soe_lot_linkage": "Each pick gets a lot code (CB-26-B1-GALA for Block 1 Gala in 2026) written on the bin tags. The packer's receiving ticket and settlement carry it. Stand sales are written in the receipt book by date, without a lot code."
+      "sales_soe_lot_linkage": "Each pick gets a lot code (CB-26-B1-GALA for Block 1 Gala in 2026) written on the bin tags. The packer's receiving ticket and settlement carry it. Stand sales are written in the receipt book by date, without a lot code.",
+      "direct_sales": "yes",
+      "direct_sales_venues": [
+        "farm_stand"
+      ],
+      "direct_sales_nonorganic": "only_organic",
+      "other_venues_detail": "Farm stand at the farm, 100 Sample Bench Rd, Manson: organic Gala sold loose from bins. No non-organic products are sold there."
     }
   },
   "g7_0_labeling": {
@@ -417,7 +476,12 @@
       ],
       "import_export_activity": [
         "none_no_known_export"
-      ]
+      ],
+      "sources_organic_products": false,
+      "sells_as_organic": true,
+      "canada_export_possible": false,
+      "records_identify_organic_status": false,
+      "records_organic_status_explanation": "The Gala sold loose from bins at the farm stand is not written down, so no sales record exists for it. Everything sold through the packer carries its lot code from the bin tag to the settlement statement, which identifies it as organic."
     }
   },
   "g9_0_facility_pest": {
