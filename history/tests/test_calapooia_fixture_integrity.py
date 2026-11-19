@@ -30,6 +30,7 @@ import io
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.apps import apps
 from django.test import SimpleTestCase, TestCase
@@ -785,3 +786,146 @@ class SeederOwnerTests(TestCase):
         with self.assertRaisesMessage(CommandError, "not a producer account"):
             call_command("seed_calapooia_bend", owner_email="shopper@test.com", stdout=io.StringIO())
         self.assertFalse(Establishment.objects.exists())
+
+
+class SpecimenPlanAgreesWithItsRecordsTests(SimpleTestCase):
+    """Three places where the specimen's plan and its records told different stories (recordkeeping
+    checklist run 2026-11-16): an inspector reads both, and a demo that disagrees with itself
+    teaches the wrong habit."""
+
+    MONTHS = r"January|February|March|April|May|June|July|August|September|October|November|December"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.raw = FIXTURE.read_text()
+        cls.data = json.loads(cls.raw)
+
+    def _season_events(self, model):
+        return [e for s in self.data["seasons"] for e in s["events"].get(model, [])]
+
+    def _answers(self, key):
+        found = []
+
+        def walk(node):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if k == key:
+                        found.append(v.get("value") if isinstance(v, dict) else v)
+                    walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v)
+
+        walk(self.data)
+        return found
+
+    def test_the_windrow_held_temperature_15_days_with_five_turnings_inside(self):
+        """§ 205.203(c)(2)(iii): a windrow at 131-170 °F for 15 days, "during which period" turned
+        five times. The records spread the turnings over 30 days (9 August to 8 September), which no
+        15-day window holds."""
+        from datetime import date, timedelta
+
+        from history.services.manure_check import compost_time_at_temperature_met
+
+        pile = sorted(
+            (
+                e
+                for e in self._season_events("SoilManagementEvent")
+                if e.get("compost_unit_id") == "Windrow UT-2 (headland pad)"
+            ),
+            key=lambda e: e["date"]["__dt__"],
+        )
+        turns = {}
+        for e in pile:
+            for day, n in re.findall(r"^(\d{4}-\d{2}-\d{2}) turn (\d)", e.get("compost_temperature_log") or "", re.M):
+                turns[int(n)] = date.fromisoformat(day)
+        self.assertEqual(sorted(turns), [1, 2, 3, 4, 5])
+        last = pile[-1]
+        since, held = re.search(r"since (\d{4}-\d{2}-\d{2}) \((\d+) days\)", last["compost_temperature_log"]).groups()
+        since = date.fromisoformat(since)
+        finished = date.fromisoformat(last["date"]["__dt__"][:10])
+        # The stated days are the calendar days from the first reading at temperature to the last turning.
+        self.assertEqual(int(held), (finished - since).days + 1)
+        self.assertEqual(last["compost_duration_days_at_temp"], int(held))
+        self.assertGreaterEqual(int(held), 15)
+        # All five turnings inside the period at temperature, and inside 15 days of each other.
+        self.assertTrue(all(since <= d <= finished for d in turns.values()), turns)
+        self.assertLessEqual(max(turns.values()) - min(turns.values()), timedelta(days=14))
+        record = SimpleNamespace(
+            compost_method=last["compost_method"],
+            compost_duration_days_at_temp=last["compost_duration_days_at_temp"],
+            compost_turning_count=last["compost_turning_count"],
+        )
+        self.assertIs(compost_time_at_temperature_met(record), True)
+
+    def test_no_plan_answer_reports_a_result_it_had_not_reached(self):
+        """The compost answers are dated 21 August and named turnings on 25 August to 8 September,
+        and "16 days on the 2026 windrow", which the pile reached on 8 September. Plans filed in
+        2024 and early 2026 carried the same words. They state the practice now."""
+        for key in ("compost_turnings", "compost_temp_and_days"):
+            answers = [a for a in self._answers(key) if a]
+            self.assertTrue(answers, key)
+            for answer in answers:
+                self.assertNotRegex(answer, self.MONTHS, key)
+                self.assertNotRegex(answer, r"\d{4}-\d{2}-\d{2}|\b20\d\d\b", key)
+        self.assertNotIn("2026 windrow", self.raw)
+        for line in re.findall(r"Number of windrow turnings: [^\\]*", self.raw):
+            self.assertNotRegex(line, self.MONTHS)
+
+    def test_acres_to_certify_is_each_parcels_area(self):
+        """The filed revisions certify 86.9 acres across six parcels, buffer rows included; the
+        per-parcel answers added up to 84.5."""
+        total = 0.0
+        for parcel in self.data["parcels"]:
+            area_acres = round(float(parcel["area"]) * 2.47105, 1)
+            answer = self._parcel_answer(parcel, "acres_to_certify")
+            self.assertEqual(float(answer), area_acres, parcel["name"])
+            total += float(answer)
+        self.assertAlmostEqual(total, 86.9, places=6)
+
+    def _parcel_answer(self, parcel, key):
+        found = []
+
+        def walk(node):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if k == key:
+                        found.append(v.get("value") if isinstance(v, dict) else v)
+                    else:
+                        walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v)
+
+        walk(parcel)
+        self.assertEqual(len(found), 1, parcel["name"])
+        return found[0]
+
+    def test_the_plan_names_the_deepest_tillage_the_records_show(self):
+        """The plan said the 6-inch rototill was "the deepest we go"; four records chisel to 8-10 in.
+        Bottom Ground B 2026 has no chisel record, so the plan says where the ground has packed."""
+        self.assertNotIn("the deepest we go", self.raw)
+        depths = [
+            float(_decode(e["working_depth"]))
+            for e in self._season_events("SoilManagementEvent")
+            if e.get("type") == "TI" and e.get("working_depth")
+        ]
+        self.assertEqual(max(depths), 10.0)
+        answers = [a for a in self._answers("tillage_practices") if a]
+        self.assertTrue(answers)
+        for answer in answers:
+            self.assertIn("where the ground has packed, a spring chisel pass to eight to ten inches", answer)
+
+    def test_no_autumn_tillage_where_the_parcels_say_spring_only(self):
+        """Bottom Ground A and B: "spring chisel only, no fall tillage"; the plan disced residue in
+        every autumn. No record of any kind tills between September and December."""
+        self.assertNotIn("flail-mowed and disced in and the cover is drilled", self.raw)
+        tilling = re.compile(r"\b(disc|disced|discing|chisel\w*|plow\w*|plough\w*|rototill\w*|tilled)\b", re.I)
+        for season in self.data["seasons"]:
+            for model, events in season["events"].items():
+                for e in events:
+                    if e["date"]["__dt__"][5:7] not in ("09", "10", "11", "12"):
+                        continue
+                    text = " ".join(str(e.get(k) or "") for k in ("name", "description", "observation"))
+                    self.assertNotRegex(text, tilling, f"{model} {e['_id']}")
