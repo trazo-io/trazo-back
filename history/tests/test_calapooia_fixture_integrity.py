@@ -30,6 +30,7 @@ import io
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 from django.apps import apps
 from django.test import SimpleTestCase, TestCase
@@ -819,26 +820,56 @@ class SpecimenPlanAgreesWithItsRecordsTests(SimpleTestCase):
         walk(self.data)
         return found
 
-    def test_the_five_windrow_turnings_fall_inside_fifteen_days(self):
-        """§ 205.203(c)(2)(ii): 131-170 °F for 15 days, "during which period" five turnings. The
-        records spread them over 30 days (9 August to 8 September), which no 15-day window holds."""
-        from datetime import date
+    def test_the_windrow_held_temperature_15_days_with_five_turnings_inside(self):
+        """§ 205.203(c)(2)(iii): a windrow at 131-170 °F for 15 days, "during which period" turned
+        five times. The records spread the turnings over 30 days (9 August to 8 September), which no
+        15-day window holds."""
+        from datetime import date, timedelta
 
+        from history.services.manure_check import compost_time_at_temperature_met
+
+        pile = sorted(
+            (
+                e
+                for e in self._season_events("SoilManagementEvent")
+                if e.get("compost_unit_id") == "Windrow UT-2 (headland pad)"
+            ),
+            key=lambda e: e["date"]["__dt__"],
+        )
         turns = {}
-        for e in self._season_events("SoilManagementEvent"):
-            if e.get("compost_unit_id") != "Windrow UT-2 (headland pad)":
-                continue
+        for e in pile:
             for day, n in re.findall(r"^(\d{4}-\d{2}-\d{2}) turn (\d)", e.get("compost_temperature_log") or "", re.M):
                 turns[int(n)] = date.fromisoformat(day)
         self.assertEqual(sorted(turns), [1, 2, 3, 4, 5])
-        self.assertLessEqual((max(turns.values()) - min(turns.values())).days, 14, turns)
+        last = pile[-1]
+        since, held = re.search(r"since (\d{4}-\d{2}-\d{2}) \((\d+) days\)", last["compost_temperature_log"]).groups()
+        since = date.fromisoformat(since)
+        finished = date.fromisoformat(last["date"]["__dt__"][:10])
+        # The stated days are the calendar days from the first reading at temperature to the last turning.
+        self.assertEqual(int(held), (finished - since).days + 1)
+        self.assertEqual(last["compost_duration_days_at_temp"], int(held))
+        self.assertGreaterEqual(int(held), 15)
+        # All five turnings inside the period at temperature, and inside 15 days of each other.
+        self.assertTrue(all(since <= d <= finished for d in turns.values()), turns)
+        self.assertLessEqual(max(turns.values()) - min(turns.values()), timedelta(days=14))
+        record = SimpleNamespace(
+            compost_method=last["compost_method"],
+            compost_duration_days_at_temp=last["compost_duration_days_at_temp"],
+            compost_turning_count=last["compost_turning_count"],
+        )
+        self.assertIs(compost_time_at_temperature_met(record), True)
 
-    def test_the_plan_states_the_turning_practice_not_dates_it_had_not_reached(self):
-        """The answer is dated 21 August and named turnings on 25 August to 8 September."""
-        answers = [a for a in self._answers("compost_turnings") if a]
-        self.assertTrue(answers)
-        for answer in answers:
-            self.assertNotRegex(answer, self.MONTHS)
+    def test_no_plan_answer_reports_a_result_it_had_not_reached(self):
+        """The compost answers are dated 21 August and named turnings on 25 August to 8 September,
+        and "16 days on the 2026 windrow", which the pile reached on 8 September. Plans filed in
+        2024 and early 2026 carried the same words. They state the practice now."""
+        for key in ("compost_turnings", "compost_temp_and_days"):
+            answers = [a for a in self._answers(key) if a]
+            self.assertTrue(answers, key)
+            for answer in answers:
+                self.assertNotRegex(answer, self.MONTHS, key)
+                self.assertNotRegex(answer, r"\d{4}-\d{2}-\d{2}|\b20\d\d\b", key)
+        self.assertNotIn("2026 windrow", self.raw)
         for line in re.findall(r"Number of windrow turnings: [^\\]*", self.raw):
             self.assertNotRegex(line, self.MONTHS)
 
@@ -872,7 +903,8 @@ class SpecimenPlanAgreesWithItsRecordsTests(SimpleTestCase):
         return found[0]
 
     def test_the_plan_names_the_deepest_tillage_the_records_show(self):
-        """The plan said the 6-inch rototill was "the deepest we go"; four records chisel to 8-10 in."""
+        """The plan said the 6-inch rototill was "the deepest we go"; four records chisel to 8-10 in.
+        Bottom Ground B 2026 has no chisel record, so the plan says where the ground has packed."""
         self.assertNotIn("the deepest we go", self.raw)
         depths = [
             float(_decode(e["working_depth"]))
@@ -880,12 +912,20 @@ class SpecimenPlanAgreesWithItsRecordsTests(SimpleTestCase):
             if e.get("type") == "TI" and e.get("working_depth")
         ]
         self.assertEqual(max(depths), 10.0)
-        self.assertIn("spring chisel pass to eight to ten inches", self.raw)
+        answers = [a for a in self._answers("tillage_practices") if a]
+        self.assertTrue(answers)
+        for answer in answers:
+            self.assertIn("where the ground has packed, a spring chisel pass to eight to ten inches", answer)
 
     def test_no_autumn_tillage_where_the_parcels_say_spring_only(self):
         """Bottom Ground A and B: "spring chisel only, no fall tillage"; the plan disced residue in
-        every autumn."""
+        every autumn. No record of any kind tills between September and December."""
         self.assertNotIn("flail-mowed and disced in and the cover is drilled", self.raw)
-        for e in self._season_events("SoilManagementEvent"):
-            if e.get("type") == "TI":
-                self.assertNotIn(e["date"]["__dt__"][5:7], ("09", "10", "11", "12"), e["_id"])
+        tilling = re.compile(r"\b(disc|disced|discing|chisel\w*|plow\w*|plough\w*|rototill\w*|tilled)\b", re.I)
+        for season in self.data["seasons"]:
+            for model, events in season["events"].items():
+                for e in events:
+                    if e["date"]["__dt__"][5:7] not in ("09", "10", "11", "12"):
+                        continue
+                    text = " ".join(str(e.get(k) or "") for k in ("name", "description", "observation"))
+                    self.assertNotRegex(text, tilling, f"{model} {e['_id']}")
