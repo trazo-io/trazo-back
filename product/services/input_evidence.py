@@ -78,14 +78,14 @@ def listing_on_file(event, basis=None) -> bool:
     The catalogue must be the one the pick names. The pick and the attached listing are two
     controls, and a product such as a fish fertilizer sits on both lists, so "OMRI listed" with
     only a WSDA row attached printed plain beside an OMRI verification table reading "OMRI ID: —"
-    (review of back #460). Any other basis (a seal, a certifier's review) names no catalogue,
-    and either listing counts for it, as it always has in the Input Log.
+    (review of back #460). Any other basis (a seal, a certifier's review) names no catalogue, so
+    there is no listing for it to carry: False. Until back #500 either listing counted for it, and
+    the Input Log printed a seal with an OMRI row attached as a bare label, as if a listing showed
+    the seal or the certifier's review.
     """
     basis = (basis if basis is not None else getattr(event, "organic_approved", None)) or ""
     field = _LISTING_FIELD.get(str(basis).strip())
-    if field:
-        return bool(getattr(event, field, None))
-    return bool(getattr(event, "omri_product_id", None) or getattr(event, "wsda_material_id", None))
+    return bool(field and getattr(event, field, None))
 
 
 @dataclass(frozen=True)

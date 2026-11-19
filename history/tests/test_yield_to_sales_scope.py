@@ -882,6 +882,42 @@ class Run7AggregationTests(TestCase):
         for _, text in out.values():
             self.assertNotIn("N/A", text)
 
+    def test_an_unresolved_compost_still_states_the_interval_kept(self):
+        """VID-09 (recordkeeping checklist run 2026-11-16): spinach 2026 was cut 75 days after a
+        compost whose C:N basis was unresolved, and the dossier never said so. The fact is printed
+        beside the open question, with the floor that would apply; no verdict."""
+        from history.services.audit_export_service import _compost_out_of_range_assessment as assess
+
+        ev = self._compost("yard debris, manure", purchased=True)
+        later = [(self.when + timedelta(days=75)).date(), (self.when + timedelta(days=90)).date()]
+        branch, text = assess(ev, later, 120)
+        self.assertEqual(branch, "unresolved")
+        self.assertIn("Recorded application to first harvest: 75 days", text)
+        self.assertIn("if the compost does not qualify: 120 days", text)
+        # No verdict: neither of the function's verdict phrasings.
+        self.assertNotIn("is not met as recorded", text)
+        self.assertNotIn("interval applies", text)
+        _, none_after = assess(ev, [(self.when - timedelta(days=5)).date()], 120)
+        self.assertIn("No harvest is recorded after the application.", none_after)
+
+    def test_the_interval_kept_names_its_condition_and_the_nut_reading(self):
+        """Review of back #500: with the manure content unknown, "if the compost does not qualify"
+        implied that plant material becomes raw manure; and a walnut's 90-day floor dropped the
+        120-day reading the raw-manure review names for a harvest gathered from the ground."""
+        from history.services.audit_export_service import _compost_out_of_range_assessment as assess
+
+        later = [(self.when + timedelta(days=100)).date()]
+        _, unknown = assess(self._compost("yard debris, food waste"), later, 120)
+        self.assertIn("if the feedstock contained manure and the compost does not qualify: 120 days", unknown)
+        _, walnut = assess(self._compost("yard debris, manure", purchased=True), later, 90, True)
+        self.assertIn(
+            "if the compost does not qualify: 90 days, or 120 if the certifier reads a harvest gathered from "
+            "the ground as soil contact, § 205.203(c)(1)(ii)",
+            walnut,
+        )
+        _, apple = assess(self._compost("yard debris, manure", purchased=True), later, 90)
+        self.assertNotIn("gathered from the ground", apple)
+
     def test_the_snapshot_raw_manure_row_is_not_na_after_the_compost_row_raised_it(self):
         self._compost("yard debris, food waste, manure (Rexius)", purchased=True, saved=True)
         rows = {r["label"]: r for r in self._svc().compliance_snapshot_rows()}

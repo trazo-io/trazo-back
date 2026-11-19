@@ -803,14 +803,27 @@ _MANURE_READ_AS_RAW = {
 
 _COMPOST_SUPPLIER_DOCS_NOTE = "supplier's process documentation (C:N, temperatures, turnings) not on file"
 
+#: § 205.203(c)(1)(ii)'s floor, named beside the 90-day one for a crop gathered from the ground.
+SOIL_CONTACT_DAYS_FOR_GROUND_HARVEST = 120
 
-def _compost_out_of_range_assessment(ev, harvest_dates, rule_days):
+
+def _compost_out_of_range_assessment(ev, harvest_dates, rule_days, ground_harvested=False):
     """(branch, sentence) for a compost record whose C:N is outside § 205.203(c)(2)(i)'s 25:1-40:1.
 
     Run 7 (R7-09): every such record was declared "handled as raw manure", and the raw-manure row
     then printed "N/A". Plant-only material is never raw manure; manure content or the C:N basis
     that is not established leaves the interval assessment unresolved, naming what is missing.
+
+    `ground_harvested`: the crop is on the 90-day floor but gathered from the ground
+    (`manure_interval.gathered_from_ground`), so the 120-day reading is named beside it, as the
+    raw-manure review does (back #495).
     """
+    floor = f"{rule_days} days"
+    if ground_harvested and rule_days < SOIL_CONTACT_DAYS_FOR_GROUND_HARVEST:
+        floor += (
+            f", or {SOIL_CONTACT_DAYS_FOR_GROUND_HARVEST} if the certifier reads a harvest gathered from the "
+            "ground as soil contact, § 205.203(c)(1)(ii)"
+        )
     cn = float(ev.compost_initial_cn_ratio)
     label = f"{_fmt_date(ev.date)} {(ev.amendment_product_name or '').strip() or 'on-farm compost'}"
     kind = _compost_feedstock_kind(ev)
@@ -831,17 +844,33 @@ def _compost_out_of_range_assessment(ev, harvest_dates, rule_days):
             "whether the C:N is the starting mix or a finished-product analysis (supplier documentation of "
             "the composting process)"
         )
+    later = sorted(d for d in harvest_dates if d >= ev.date.date())
     if missing:
+        # The interval actually kept, stated beside the open question (recordkeeping checklist run
+        # 2026-11-16, VID-09: spinach 2026 was cut 75 days after this compost and the dossier never
+        # said so). A fact, not a verdict: whether it had to meet the raw-manure floor is what is
+        # unresolved, so the floor is named as the one that would apply.
+        condition = (
+            "if the feedstock contained manure and the compost does not qualify"
+            if kind in ("not_recorded", "not_stated")
+            else "if the compost does not qualify"
+        )
+        kept = (
+            f" Recorded application to first harvest: {(later[0] - ev.date.date()).days} days (the raw-manure "
+            f"interval for this crop, {condition}: {floor})."
+            if later
+            else " No harvest is recorded after the application."
+        )
         return (
             "unresolved",
             f"{label}: C:N {cn:g}:1 is outside 25:1-40:1. Manure interval assessment unresolved; missing: "
             + "; ".join(missing)
-            + ".",
+            + "."
+            + kept,
         )
-    later = sorted(d for d in harvest_dates if d >= ev.date.date())
     lead = (
         f"{label}: manure-containing feedstock with initial C:N {cn:g}:1, outside 25:1-40:1, so the compost "
-        f"pathway is not met as recorded and the § 205.203(c)(1) interval applies ({rule_days} days for this crop)"
+        f"pathway is not met as recorded and the § 205.203(c)(1) interval applies ({floor} for this crop)"
     )
     if not later:
         return ("manure_no_interval", lead + "; interval not recorded (no harvest recorded after the application).")
@@ -1684,11 +1713,18 @@ def _organic_basis_cell(event, raw=_UNSET):
         return f"{label} — grower-selected, basis not recorded"
     if str(raw_value).strip() not in _THIRD_PARTY_BASIS_VALUES:
         return label
+    from product.services.input_evidence import _LISTING_BASIS, listing_on_file
+
+    if str(raw_value).strip() not in _LISTING_BASIS:
+        # A seal on the label or a certifier's review names no catalogue, so "no listing on
+        # file" asked for evidence the basis never relies on: "Reviewed and approved by my
+        # certifier — grower-selected, no listing on file" (recordkeeping checklist run
+        # 2026-11-16, VID-11 follow-up). Attributed to the operator, as the land history page
+        # words the same pick ("reviewed by the certifier, per the operator").
+        return f"{label} — grower-selected"
     # Either catalogue backs the claim. WSDA added 2026-09-02: `wsda_listed` was already in
     # the set above, so a WSDA basis was claimable and unbackable — it carried the
     # "no listing on file" suffix even when the operator had attached the WSDA row.
-    from product.services.input_evidence import listing_on_file
-
     if listing_on_file(event, raw_value):
         return label
     return f"{label} — grower-selected, no listing on file"
@@ -4056,14 +4092,19 @@ class AuditExportService:
             if temp_ok and duration_ok:
                 compost_compliant += 1
 
+        from history.services.manure_interval import gathered_from_ground
+        from history.services.phi_check import PICK_TYPES
+
+        # Every pick, buffer harvests included, as the save-path manure check reads them.
         _harvest_dates = [
             ev.date.date()
-            for ev in related_events(self.production, "history_productionevent_events", type__in=("HA",))
+            for ev in related_events(self.production, "history_productionevent_events", type__in=PICK_TYPES)
             if ev.date
         ]
         _rule_days = self._manure_interval_rule_for_crop()["days"]
+        _ground = gathered_from_ground(getattr(self.production, "crop_type", None))
         compost_assessments = [
-            _compost_out_of_range_assessment(ev, _harvest_dates, _rule_days)
+            _compost_out_of_range_assessment(ev, _harvest_dates, _rule_days, _ground)
             for ev in compost_events
             if ev.compost_initial_cn_ratio is not None and not (25.0 <= float(ev.compost_initial_cn_ratio) <= 40.0)
         ]
@@ -9157,16 +9198,20 @@ class AuditExportService:
             ct = Table(compost_data, colWidths=compost_widths, repeatRows=1)
             ct.setStyle(self._base_table_style())
             elements.append(ct)
+            from history.services.manure_interval import gathered_from_ground
+            from history.services.phi_check import PICK_TYPES
+
             _harvest_dates = [
                 hev.date.date()
-                for hev in related_events(self.production, "history_productionevent_events", type__in=("HA",))
+                for hev in related_events(self.production, "history_productionevent_events", type__in=PICK_TYPES)
                 if hev.date
             ]
             _rule_days = self._manure_interval_rule_for_crop()["days"]
+            _ground = gathered_from_ground(getattr(self.production, "crop_type", None))
             for cev in compost_events:
                 if cev.compost_initial_cn_ratio is None or 25.0 <= float(cev.compost_initial_cn_ratio) <= 40.0:
                     continue
-                _, sentence = _compost_out_of_range_assessment(cev, _harvest_dates, _rule_days)
+                _, sentence = _compost_out_of_range_assessment(cev, _harvest_dates, _rule_days, _ground)
                 elements.append(Spacer(1, 3))
                 elements.append(Paragraph(f"[REVIEW] {_esc(sentence)}", self._warning_style()))
 
