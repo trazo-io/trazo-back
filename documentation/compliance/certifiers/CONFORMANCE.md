@@ -24,13 +24,13 @@ asserts something untrue · **P1** a request for information · **P2** noticed, 
 |---|---|
 | Questions compared | 806 |
 | Rows that are not questions (instructions, Trazo interpretations) | 57 |
-| Covered | 712 |
-| Partial | 34 |
+| Covered | 713 |
+| Partial | 33 |
 | Not covered | 11 |
 | Out of scope (stated) | 49 |
 | Blockers (P0) | 0 |
 | Request-for-information (P1) | 0 |
-| Minor (P2 / P3) | 45 |
+| Minor (P2 / P3) | 44 |
 
 These totals cover the forms of operations Trazo serves. **3 more forms (52 questions)** exist only for operation types Trazo has decided not to serve; they are counted under [Operation types Trazo does not serve](#operation-types-trazo-does-not-serve).
 
@@ -1371,11 +1371,11 @@ These totals cover the forms of operations Trazo serves. **3 more forms (52 ques
 
 **When CCOF requires it:** Item 7 — simple post-harvest handling of only my own organic crops at my own facility
 
-**12 questions** — Covered 11 · Partial 1
+**12 questions** — Covered 12
 
 | Ref | What CCOF asks | Status | Sev | Where it lives in Trazo | Note |
 |---|---|---|---|---|---|
-| Preamble (applicability) | Complete this form ONLY if you are an all-organic operation performing simple post-harvest handling activities on-farm for only your own organic product (washing, drying, dehydrating, hulling, shelling, pressing, sun drying, freezing, cutting, sorting, sizing, or packing). This form does not apply if you are handling both organic and nonorganic products, making multi-ingredient products, operating a multi-farm CSA, or performing complex handling such as baking, brewing, extracting, etc. — instead complete the Handler OSP forms indicated in the Guide to Handler OSP Forms. | Partial | P2 | `g6_4_handling.handling_activities` · `g6_4_handling.handling_activities_other` · `g6_4_handling.own_products_only` · `g6_4_handling.custom_handling_separation` · `g6_4_handling.simple_handling_disqualifiers` | CCOF's first condition, an all-organic operation, is never checked: a split operation (G6.0) that answers G6.4 prints nothing saying the form may not apply to it, and the four disqualifiers asked do not include it (blind re-grade 2026-11-19, Calapooia Bend sells buffer fruit as nonorganic). **Fix:** Print a [REVIEW] on G6.4 when G6.0 states the operation produces or handles nonorganic product. |
+| Preamble (applicability) | Complete this form ONLY if you are an all-organic operation performing simple post-harvest handling activities on-farm for only your own organic product (washing, drying, dehydrating, hulling, shelling, pressing, sun drying, freezing, cutting, sorting, sizing, or packing). This form does not apply if you are handling both organic and nonorganic products, making multi-ingredient products, operating a multi-farm CSA, or performing complex handling such as baking, brewing, extracting, etc. — instead complete the Handler OSP forms indicated in the Guide to Handler OSP Forms. | Covered | — | `g6_4_handling.handling_activities` · `g6_4_handling.handling_activities_other` · `g6_4_handling.own_products_only` · `g6_4_handling.custom_handling_separation` · `g6_4_handling.simple_handling_disqualifiers` · `g6_0_production.split_operation` | — |
 | A1 | Site Name & Location (full address). | Covered | — | `g6_4_handling.on_farm_facility_table` · `g6_4_handling.handling_site` · `certifications.PostHarvestFacility.operated_by` · `certifications.PostHarvestFacility.name` · `certifications.PostHarvestFacility.address` | — |
 | A2 | List, or attach a list of, all organic products handled here. | Covered | — | `g6_4_handling.products_handled` · `g6_4_handling.products_list_upload` | — |
 | A3 | Attach a complete written description or a schematic flow chart of where and how the product is received, processed, packaged, and stored. Identify ALL equipment, processes, pest control practices (including preventative practices and mechanical/physical controls), and storage areas. "Complete description attached" checkbox. | Covered | — | `g6_4_handling.process_flow` · `g6_4_handling.handling_site` · `g6_4_handling.facility_docs` · `g9_0_facility_pest.preventive_practices` · `g9_0_facility_pest.mechanical_controls` | — |

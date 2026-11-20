@@ -611,6 +611,18 @@ def _qualified_where(standing: str, where: str, client_id_held: bool, other_agen
     return standing, where + (f" ({'; '.join(notes)})" if notes else "")
 
 
+#: Open states that come from this plan's attachments or routes, not from the register row itself.
+PLAN_OPEN_STATES = frozenset(
+    {
+        "attachment_missing",
+        "attachment_not_identified",
+        "attachment_unreadable",
+        "attachment_held_outside_packet",
+        "route_unresolved",
+    }
+)
+
+
 def plan_standing(row_state, standing: str) -> str:
     """A renewal row's standing once this plan's answers are read: an open answer replaces the register's
     routing words, a closed one keeps them. A pending answer (the operator does not know yet) is stated, so
@@ -621,6 +633,13 @@ def plan_standing(row_state, standing: str) -> str:
         return f"not yet answered in this plan ({row_state.state})"
     if row_state.state == "pending":
         return "answered in this plan as not yet known"
+    if row_state.state in PLAN_OPEN_STATES:
+        # An attachment or a route still open: the coverage page's own words, never the register's "answered in this
+        # packet" for a row page 04 lists as open (review of back #507). `partial`, `not_collected` and
+        # `not_assessed` are the register's own standing, which its routing words already say.
+        from certifications.services.question_index import _state_words
+
+        return f"open in this plan: {_state_words(row_state.state)}"
     return standing
 
 

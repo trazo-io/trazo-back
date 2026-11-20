@@ -287,6 +287,12 @@ def _states_orchard_fields(crop) -> bool:
     return any(getattr(crop, field) not in (None, "") for field in ORCHARD_FIELDS)
 
 
+def harvest_passed(crop, today: date | None = None) -> bool:
+    """The crop's expected harvest is already past: last season's date, printed as given and marked so. WSDA AGR 2264
+    ref 8 asks for the ESTIMATED harvest of a crop to be certified (blind re-grade 2026-11-19)."""
+    return bool(crop.expected_harvest) and crop.expected_harvest < (today or date.today())
+
+
 def planned_crop_table(parcel) -> tuple[tuple[str, ...], tuple[float, ...], list[tuple[list[str], list[str]]]]:
     """(header, widths, rows) for the planned-crop table, rows as (cells, notes) in the shape `_register_table`
     prints.
@@ -295,13 +301,12 @@ def planned_crop_table(parcel) -> tuple[tuple[str, ...], tuple[float, ...], list
     bearing status; a blank cell then prints "Not stated" like the other columns. A blank bearing status is never
     printed as not yet bearing."""
     crops = list(parcel.planned_crops.all().order_by("pk"))
+    today = date.today()
     orchard = any(_states_orchard_fields(crop) for crop in crops)
     rows = []
     for crop in crops:
         harvest = crop.expected_harvest.isoformat() if crop.expected_harvest else "Not stated"
-        if crop.expected_harvest and crop.expected_harvest < date.today():
-            # WSDA AGR 2264 ref 8 asks for the ESTIMATED harvest of a crop to be certified: a date already past
-            # is last season's, printed as given and marked so (blind re-grade 2026-11-19).
+        if harvest_passed(crop, today):
             harvest = f"{harvest} (passed)"
         acres = format_acres(crop.acres) if crop.acres is not None else "Not stated"
         if orchard:
@@ -355,13 +360,11 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
             f"[REVIEW] The acres to be certified ({format_acres(to_certify)}) are more than the parcel area on file "
             f"({area_acres:.1f} acres)."
         )
-    past = [
-        f"{c.crop} ({c.block_name})" if c.block_name else c.crop
-        for c in crops
-        if c.expected_harvest and c.expected_harvest < date.today()
-    ]
+    past = [f"{c.crop} ({c.block_name})" if c.block_name else c.crop for c in crops if harvest_passed(c)]
     if past:
         lines.append(
+            # Not a [REVIEW]: the date is the grower's to update before sending, and the table marks it. A review
+            # note keyed on the day a packet is built would flag every packet made after harvest (review of #507).
             "Expected harvest dates already passed: "
             + ", ".join(past)
             + ". The table gives no date for the coming season's harvest of these crops."

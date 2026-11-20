@@ -381,9 +381,13 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
     row = IndexRow(ref=state.ref, asks=_short(getattr(item, "asks", "")), state=state.state, optional=state.optional)
     if state.parts:
         for question_key, parcel, part_state, part_detail in state.parts:
-            if part_state == "answered":
+            if part_state in ("answered", "pending"):
+                # A pending answer is printed with its [REVIEW] line: the reviewer is pointed at it, and it is still
+                # listed open below (review of back #507).
                 row.locations.extend(_question_locations(question_key, parcel, recorder, manifest))
-            elif part_state == "not_applicable":
+            if part_state == "answered":
+                continue
+            if part_state == "not_applicable":
                 row.open_parts.append(
                     OpenPart(
                         part_state,

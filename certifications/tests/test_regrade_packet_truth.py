@@ -184,6 +184,7 @@ class PassedHarvestDateTests(TestCase):
         self.assertNotIn("(passed)", cells[1])
         lines = " ".join(planned_crop_lines(self.parcel, {}))
         self.assertIn("Expected harvest dates already passed: Apples (9).", lines)
+        self.assertNotIn("[REVIEW] Expected harvest", lines)
         self.assertNotIn("Pears", lines.split("already passed:")[1])
 
 
@@ -201,3 +202,131 @@ class RenewalRowStandingTests(SimpleTestCase):
             "answered in this plan as not yet known",
         )
         self.assertEqual(plan_standing(RowState("1", "answered"), register_words), register_words)
+
+
+class ReviewOfBack507Tests(TestCase):
+    """What the review of back #507 found: a missing document counted twice, five status reads per parcel, open
+    renewal rows still worded as answered, a pending answer the index did not point at, and CCOF G6.4's all-organic
+    condition."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from company.models import Company, Establishment
+
+        cls.company = Company.objects.create(name="Review Co")
+        cls.establishment = Establishment.objects.create(name="Review Farm", company=cls.company, state="WA")
+
+    def test_a_certified_parcel_counts_its_window_once(self):
+        from certifications.services.parcel_land_history import coverage, prior_manager_rows
+        from product.models import Parcel
+        from product.services.parcel_application_status import parcel_evidence_status
+
+        parcel = Parcel.objects.create(
+            name="Certified block",
+            establishment=self.establishment,
+            area=4.0,
+            date_began_managing=date(2025, 3, 1),
+            application_answers={"currently_certified": "yes", "livestock_present": "none"},
+        )
+        self.assertIs(coverage(parcel, prior_manager_rows(parcel)).complete, False, "premise: the window has a gap")
+        self.assertNotIn("land_history_window", parcel_evidence_status(parcel)["missing"])
+
+    def test_the_parcel_serializer_reads_the_status_once(self):
+        from unittest import mock
+
+        from product.models import Parcel
+        from product.serializers import RetrieveParcelSerializer
+        from product.services import parcel_application_status as service
+
+        parcel = Parcel.objects.create(name="Once", establishment=self.establishment, area=4.0)
+        with mock.patch.object(service, "parcel_application_status", wraps=service.parcel_application_status) as spy:
+            data = RetrieveParcelSerializer(parcel).data
+        self.assertIn("evidence_missing", data, "premise: the evidence fields are serialized")
+        self.assertEqual(spy.call_count, 1)
+
+    def test_every_open_renewal_row_reads_open(self):
+        from certifications.services.packet_coverage import plan_standing
+
+        self.assertEqual(
+            plan_standing(RowState("1", "attachment_missing", "Upload x"), "answered in this packet"),
+            "open in this plan: attachment not uploaded",
+        )
+
+    def test_the_index_points_at_a_pending_answer(self):
+        from unittest import mock
+
+        from certifications.services import question_index
+
+        state = RowState(
+            "D3",
+            "pending",
+            "Not yet confirmed with the district",
+            parts=(("g4_2_natural_resources.irrigation_district_additives", "", "pending", "Not yet confirmed"),),
+        )
+        with mock.patch.object(question_index, "_question_locations", return_value=["G4_2 p. 2"]) as where:
+            row = question_index.index_row(state, object(), None, None, {})
+        self.assertEqual(where.call_count, 1)
+        self.assertEqual(row.locations, ["G4_2 p. 2"])
+        self.assertEqual([p.state for p in row.open_parts], ["pending"], "still listed open")
+
+    def test_ccof_g6_4_names_its_all_organic_condition(self):
+        from certifications.models import OrganicSystemPlan
+        from certifications.services.osp_module_pdf import g6_4_all_organic_lines
+
+        def plan(certifier, split):
+            return OrganicSystemPlan.objects.create(
+                establishment=self.establishment,
+                version_number=OrganicSystemPlan.objects.count() + 1,
+                status="draft",
+                certifier_name=certifier,
+                module_responses={
+                    "schema_version": 1,
+                    "parcel_modules": {},
+                    "modules": {"g6_0_production": {"answers": {"split_operation": {"value": split}}}},
+                },
+            )
+
+        ccof = "CCOF Certification Services, LLC"
+        self.assertEqual(g6_4_all_organic_lines(plan(ccof, False)), [], "premise: an all-organic operation")
+        self.assertEqual(g6_4_all_organic_lines(plan("Washington State Department of Agriculture", True)), [])
+        lines = g6_4_all_organic_lines(plan(ccof, True))
+        self.assertEqual(len(lines), 1)
+        self.assertIn("all-organic operation", lines[0])
+
+    def test_the_g6_4_page_prints_it_under_the_disqualifiers(self):
+        import io
+
+        from pdfminer.high_level import extract_text
+
+        from certifications.models import OrganicSystemPlan
+        from certifications.services.osp_module_pdf import generate_module_pdf
+
+        answered = {"value": ["none"]}
+        osp = OrganicSystemPlan.objects.create(
+            establishment=self.establishment,
+            version_number=OrganicSystemPlan.objects.count() + 1,
+            status="draft",
+            certifier_name="CCOF Certification Services, LLC",
+            module_responses={
+                "schema_version": 1,
+                "parcel_modules": {},
+                "modules": {
+                    "g6_0_production": {"answers": {"split_operation": {"value": True}}},
+                    "g6_4_handling": {
+                        "answers": {
+                            "handling_activities": {"value": ["washing"]},
+                            "simple_handling_disqualifiers": answered,
+                        }
+                    },
+                },
+            },
+        )
+        page = " ".join(extract_text(io.BytesIO(generate_module_pdf(osp, "g6_4_handling"))).split())
+        self.assertIn("Does any of this apply to your on-farm handling?", page, "premise: the question prints")
+        self.assertIn("is for an all-organic operation handling only its own organic product", page)
+
+    def test_a_partial_row_keeps_the_registers_words(self):
+        from certifications.services.packet_coverage import plan_standing
+
+        words = "answered in part in this packet"
+        self.assertEqual(plan_standing(RowState("1", "partial"), words), words)

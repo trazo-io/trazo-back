@@ -3002,6 +3002,9 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
                 for line in trade_lines(osp, question.key, value, evidence_bundles):
                     story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g6_4_handling" and question.key == "simple_handling_disqualifiers":
+                for line in g6_4_all_organic_lines(osp):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
                 for line in _facility_pest_pointer(osp):
                     story.append(Paragraph(_escape(line), styles["meta"]))
@@ -6450,6 +6453,24 @@ def _packaging_pointer(osp) -> list[str]:
         question = next(q for page in module.pages for q in page.questions if q.key == "packaging_free_of_prohibited")
         lines.append(f"G6.1 answers: {_format_answer_en(question, value)}.")
     return lines
+
+
+def g6_4_all_organic_lines(osp) -> list[str]:
+    """CCOF G6.4's first condition, an all-organic operation, set against G6.0's split operation. CCOF only: WSDA L
+    and OTCO C7 ask post-harvest handling of any operation (blind re-grade 2026-11-19, CCOF G6.4 preamble)."""
+    from certifications.osp_modules.conditions import answer_value
+    from certifications.services.packet_coverage import packet_agent
+
+    if packet_agent(osp).slug != "ccof":
+        return []
+    entry = ((osp.module_responses or {}).get("modules") or {}).get("g6_0_production") or {}
+    if entry.get("not_applicable") or answer_value(entry.get("answers") or {}, "split_operation") is not True:
+        return []
+    return [
+        "[REVIEW] G6.0 states the operation produces or handles both organic and nonorganic crops or products. "
+        "CCOF's G6.4 (ORGB36) is for an all-organic operation handling only its own organic product, and points any "
+        "other operation to the Handler OSP forms."
+    ]
 
 
 def _facility_pest_pointer(osp) -> list[str]:

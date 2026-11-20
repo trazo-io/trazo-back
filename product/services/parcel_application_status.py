@@ -249,9 +249,11 @@ def parcel_evidence_status(parcel, osp=None) -> dict:
 
     # Blind re-grade 2026-11-19 (CCOF Parcel G, Block 3): the header read "Supporting evidence: on
     # file" above the body's "[REVIEW] not accounted for". Days of the 36-month window that no
-    # declaration or affidavit covers are missing evidence on any route that asks for the accounting
-    # (the same condition `land_history_summary` applies before it shows the gap list).
-    if not parcel.container_production and not (certified is not None and certified.land_history_asked is False):
+    # declaration or affidavit covers are missing evidence. Only off the certified routes: a parcel
+    # stated currently certified counts its own items above (prior manager, declaration, no lapse),
+    # and the same missing document must not count twice (review of back #507). Container parcels
+    # are skipped, as the affidavit check above skips them.
+    if not parcel.container_production and certified is None:
         from certifications.services.parcel_land_history import coverage, prior_manager_rows
 
         account = coverage(parcel, prior_manager_rows(parcel), assessment=certified)
