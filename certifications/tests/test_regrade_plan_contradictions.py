@@ -85,6 +85,30 @@ class StorageNotApplicableTests(_Plan):
         )
         self.assertEqual(storage_na_contradictions(sold), [], "the handler stores its own crop, not this operation's")
 
+    def test_the_operations_own_store_counts_even_when_ownership_transfers(self):
+        PostHarvestFacility.objects.create(
+            establishment=self.est, name="Farm cooler", role="storage", operated_by="this_operation"
+        )
+        PostHarvestFacility.objects.create(establishment=self.est, name="Packer", role="both")
+        sold = self.plan(
+            {
+                "g6_2_storage": _na(),
+                "g6_1_harvest_transport": _answered({"handled_by_another_operation": "yes_ownership_transfers"}),
+            }
+        )
+        self.assertEqual(
+            storage_na_contradictions(sold),
+            ["[REVIEW] G6.2 is marked not applicable, but these facilities on file store the crop: Farm cooler."],
+        )
+
+    def test_a_cold_store_with_no_role_recorded_stores(self):
+        PostHarvestFacility.objects.create(establishment=self.est, name="Old cold store", facility_type="cold_storage")
+        PostHarvestFacility.objects.create(establishment=self.est, name="Old huller", facility_type="huller")
+        self.assertEqual(
+            storage_na_contradictions(self.plan({"g6_2_storage": _na()})),
+            ["[REVIEW] G6.2 is marked not applicable, but these facilities on file store the crop: Old cold store."],
+        )
+
 
 class CertificationHistoryTests(_Plan):
     def _parcel(self, name, **answers):
@@ -115,12 +139,36 @@ class CertificationHistoryTests(_Plan):
         )
         self.assertEqual(history_answer_lines(osp, "history_certified_elsewhere_now", True), [])
 
-    def test_never_certified_beside_certified_parcels(self):
+    def test_never_certified_beside_certified_parcels_whoever_certified_them(self):
+        """Agent-agnostic (review of back #508): a WSDA plan whose parcels WSDA certifies is contradicted too."""
         self._parcel("Block 1")
-        osp = self.plan({}, certifier=OTCO)
+        self.assertEqual(history_answer_lines(self.plan({}, certifier=WSDA), "history_ever_certified", True), [])
+        line = (
+            "[REVIEW] The plan states the operation has never been certified, but these parcels are recorded as "
+            "certified: Block 1."
+        )
+        for certifier in (OTCO, WSDA):
+            with self.subTest(certifier=certifier):
+                osp = self.plan({}, certifier=certifier)
+                self.assertEqual(history_answer_lines(osp, "history_ever_certified", False), [line])
+
+    def test_never_certified_beside_a_certificate_on_file(self):
+        from certifications.constants import NOP_CERTIFICATION_TYPES
+        from certifications.models import Certification
+
+        Certification.objects.create(
+            establishment=self.est,
+            certification_type=sorted(NOP_CERTIFICATION_TYPES)[0],
+            certification_number="WA-1234",
+            certifier_name=WSDA,
+        )
+        osp = self.plan({}, certifier=WSDA)
         self.assertEqual(
             history_answer_lines(osp, "history_ever_certified", False),
-            ["[REVIEW] The plan states the operation has never been certified, but parcels are recorded as certified."],
+            [
+                "[REVIEW] The plan states the operation has never been certified, but certificate WA-1234, issued by "
+                f"{WSDA} is on file."
+            ],
         )
 
     def test_the_module_pdf_prints_it_under_the_answer(self):
@@ -136,3 +184,31 @@ class CertificationHistoryTests(_Plan):
         page = _text(generate_module_pdf(osp, "certification_contract"))
         self.assertIn("certified organic today by another certifying agency", page, "premise: the question prints")
         self.assertIn(f"recorded as certified by {WSDA}: Block 1.", page)
+
+    def test_dual_certification_is_not_a_contradiction(self):
+        from certifications.constants import NOP_CERTIFICATION_TYPES
+        from certifications.models import Certification
+
+        Certification.objects.create(
+            establishment=self.est,
+            certification_type=NOP_CERTIFICATION_TYPES[0],
+            certification_number="WA-1234",
+            certifier_name=WSDA,
+        )
+        single = self.plan({"certification_contract": _answered({"history_certified_by_this_agency": True})})
+        self.assertEqual(
+            history_answer_lines(single, "history_certified_by_this_agency", True),
+            [
+                f"[REVIEW] The plan states {OTCO} certifies the operation today, but the certificate on file was "
+                f"issued by {WSDA}."
+            ],
+            "premise: one agency stated, another agency's certificate on file",
+        )
+        dual = self.plan(
+            {
+                "certification_contract": _answered(
+                    {"history_certified_by_this_agency": True, "history_certified_elsewhere_now": True}
+                )
+            }
+        )
+        self.assertEqual(history_answer_lines(dual, "history_certified_by_this_agency", True), [])

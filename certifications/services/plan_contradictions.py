@@ -43,31 +43,31 @@ def _answer(osp, module_key, question_key):
 # G6.2 attested not applicable
 # ---------------------------------------------------------------------------------------------------------------
 
-#: `PostHarvestFacility.role` values that hold the crop.
-STORING_ROLES = ("storage", "both")
-
 
 def storage_na_contradictions(osp) -> list[str]:
     """[REVIEW] lines for a G6.2 marked not applicable, one per fact that says the crop is stored. Empty when none do.
 
-    A facility that stores the crop counts only while the operation still owns it: G6.1's "ownership of the crop
-    transfers" says the handler holds its own crop, which is not this operation's storage."""
+    A facility another operation runs counts only while this operation still owns the crop: G6.1's "ownership of the
+    crop transfers" says that handler holds its own crop. The operation's own store counts either way (review of back
+    #508). A facility stores by `agent_form_sheet.facility_stores`, the rule the WSDA sheet uses. G6.1's cold storage
+    is asked as a stop BEFORE the buyer, so a transfer of ownership to a handler does not move it out of the
+    operation's hands; that line prints either way."""
     lines = []
     first_stop = _answer(osp, "g6_1_harvest_transport", "first_stop_before_buyer") or []
     if isinstance(first_stop, list) and "cold_storage" in first_stop:
         lines.append(
             "[REVIEW] G6.2 is marked not applicable, but G6.1 states the crop goes to cold storage before the buyer."
         )
-    if _answer(osp, "g6_1_harvest_transport", "handled_by_another_operation") == "yes_ownership_transfers":
-        return lines
+    transfers = _answer(osp, "g6_1_harvest_transport", "handled_by_another_operation") == "yes_ownership_transfers"
     if osp.establishment_id:
         from certifications.models import PostHarvestFacility
+        from certifications.services.agent_form_sheet import facility_stores
 
-        names = list(
-            PostHarvestFacility.objects.filter(establishment_id=osp.establishment_id, role__in=STORING_ROLES)
-            .order_by("name")
-            .values_list("name", flat=True)
-        )
+        names = [
+            facility.name
+            for facility in PostHarvestFacility.objects.filter(establishment_id=osp.establishment_id).order_by("name")
+            if facility_stores(facility) and not (transfers and facility.operated_by != "this_operation")
+        ]
         if names:
             lines.append(
                 "[REVIEW] G6.2 is marked not applicable, but these facilities on file store the crop: "
@@ -79,6 +79,19 @@ def storage_na_contradictions(osp) -> list[str]:
 # ---------------------------------------------------------------------------------------------------------------
 # Certification history
 # ---------------------------------------------------------------------------------------------------------------
+
+
+def _parcels_certified_under_this_operation(osp) -> list[str]:
+    """Names of parcels stated currently certified under THIS operation, by any agent or none named."""
+    from certifications.services.certified_parcel_branch import EXISTING_SITE, branch_for, is_certified
+
+    if not osp.establishment_id:
+        return []
+    return [
+        parcel.name
+        for parcel in osp.establishment.parcels.order_by("name")
+        if is_certified(parcel) and branch_for(parcel) == EXISTING_SITE
+    ]
 
 
 def _parcels_certified_by_another_agent(osp, plan_slug: str) -> dict[str, list[str]]:
@@ -97,7 +110,9 @@ def _parcels_certified_by_another_agent(osp, plan_slug: str) -> dict[str, list[s
             continue
         slug = stated_agent(parcel)
         if slug and slug != plan_slug:
-            out.setdefault(names_by_slug.get(slug, slug), []).append(parcel.name)
+            # The operator's own words when the registry has no name for the slug, never the bare slug.
+            name = names_by_slug.get(slug) or (parcel.application_answers or {}).get("prior_certifier_name") or slug
+            out.setdefault(name, []).append(parcel.name)
     return out
 
 
@@ -109,38 +124,55 @@ def history_answer_lines(osp, question_key: str, value) -> list[str]:
         "history_certified_elsewhere_now",
     ):
         return []
-    from certifications.services.operation_certificate import certificate_from_another_agent
+    from certifications.services.operation_certificate import certificate_from_another_agent, certificate_of_record
     from certifications.services.packet_coverage import packet_agent
+
+    if question_key == "history_ever_certified":
+        # Agent-agnostic: any certificate on file, or any parcel stated certified under this operation, says it has
+        # been certified, whoever the plan is filed with (review of back #508).
+        if value is not False:
+            return []
+        held = certificate_of_record(osp.establishment_id) if osp.establishment_id else None
+        certified = _parcels_certified_under_this_operation(osp)
+        lines = []
+        if held is not None and held.number:
+            named = f", issued by {held.agent}" if held.agent else ""
+            lines.append(
+                f"[REVIEW] The plan states the operation has never been certified, but certificate {held.number}"
+                f"{named} is on file."
+            )
+        if certified:
+            lines.append(
+                "[REVIEW] The plan states the operation has never been certified, but these parcels are recorded as "
+                f"certified: {_listed(certified)}"
+            )
+        return lines
 
     agent = packet_agent(osp)
     if not agent.slug:
         return []
+    # Only an answer that can be contradicted pays for the lookups (review of back #508).
+    if question_key == "history_certified_by_this_agency":
+        # Dual certification is a true answer: with another agency stated, the other certificate is expected.
+        if value is not True or _answer(osp, "certification_contract", "history_certified_elsewhere_now") is True:
+            return []
+    elif value is not False:
+        return []
     other = certificate_from_another_agent(osp)
     other_agent = other.certificate.agent if other is not None and other.confirmed else ""
-    parcels = _parcels_certified_by_another_agent(osp, agent.slug)
     lines = []
-    if question_key == "history_ever_certified" and value is False and (other_agent or parcels):
-        lines.append(
-            "[REVIEW] The plan states the operation has never been certified, but "
-            + (
-                f"the certificate on file was issued by {other_agent}"
-                if other_agent
-                else "parcels are recorded as certified"
-            )
-            + "."
-        )
-    if question_key == "history_certified_by_this_agency" and value is True and other_agent:
+    if question_key == "history_certified_by_this_agency" and other_agent:
         lines.append(
             f"[REVIEW] The plan states {agent.name} certifies the operation today, but the certificate on file was "
             f"issued by {other_agent}."
         )
-    if question_key == "history_certified_elsewhere_now" and value is False:
+    if question_key == "history_certified_elsewhere_now":
         if other_agent:
             lines.append(
                 "[REVIEW] The plan states no other agency certifies the operation today, but the certificate on file "
                 f"was issued by {other_agent}."
             )
-        for name, parcel_names in parcels.items():
+        for name, parcel_names in _parcels_certified_by_another_agent(osp, agent.slug).items():
             lines.append(
                 "[REVIEW] The plan states no other agency certifies the operation today, but these parcels are "
                 f"recorded as certified by {name}: {_listed(parcel_names)}"
