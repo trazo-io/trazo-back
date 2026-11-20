@@ -1,15 +1,16 @@
 """The retired SoilManagementEvent columns (history/retired_columns.py), retired in three deploys.
 
 #483 stopped every reader and writer and cleared the values through a logged data operation;
-0266 takes the field out of the model while the column stays in the table, because containers on
-the #483 model still name it while the new one migrates; step 3 drops the column. These tests hold
-the step 2 state (no field; the column still there and nullable, so new rows save), 0266's refusal
-to run over a held value, a correction naming the column being refused, and the census compare
-refusing a column that leaves while it held a value.
+0266 (#493) took the field out of the model while the column stayed in the table, because
+containers on the #483 model still named it while the new one migrated; 0267 drops the column.
+These tests hold the end state (no field, no column), each migration's refusal to run over a held
+value, the chain reversing step by step, a correction naming the column being refused, and the
+census compare refusing a column that leaves while it held a value.
 """
 
 import importlib
 import json
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -28,6 +29,7 @@ from product.models import Parcel
 LABEL = "history.SoilManagementEvent"
 TABLE = "history_soilmanagementevent"
 STEP_2 = "0266_retire_soil_sequestration_from_model"
+STEP_3 = "0267_drop_soil_sequestration_column"
 BEFORE_STEP_2 = "0265_production_permissions_take_over_history"
 
 
@@ -55,17 +57,10 @@ class TheFieldIsGoneTests(_FarmMixin, TestCase):
         self.assertIn("soil_ph", fields)  # the model was read
         self.assertEqual(fields & set(RETIRED_SOIL_EVENT_COLUMNS), set())
 
-    def test_the_column_stays_in_the_table_and_takes_null(self):
-        """Until step 3: containers on the #483 model still name it in their INSERTs."""
+    def test_no_retired_column_is_left_in_the_table(self):
         columns = _table_columns()
         self.assertIn("soil_ph", columns)  # the guard read the real table
-        for column in RETIRED_SOIL_EVENT_COLUMNS:
-            self.assertTrue(columns[column].null_ok, column)
-
-    def test_a_new_row_saves_and_leaves_it_null(self):
-        with connection.cursor() as cursor:
-            cursor.execute(f'SELECT "carbon_sequestration_potential" FROM "{TABLE}" WHERE id = %s', [self.event.pk])
-            self.assertEqual(cursor.fetchone(), (None,))
+        self.assertEqual(set(columns) & set(RETIRED_SOIL_EVENT_COLUMNS), set())
 
 
 class NoCorrectionWritesItBackTests(_FarmMixin, TestCase):
@@ -87,29 +82,66 @@ class NoCorrectionWritesItBackTests(_FarmMixin, TestCase):
         self.assertFalse(EventAmendment.objects.exists())
 
 
-class TheMigrationGuardTests(_FarmMixin, TestCase):
-    """0266 changes no table, so the state before it reads the real table as it is now."""
+def _migration(name):
+    return importlib.import_module(f"history.migrations.{name}")
 
-    def setUp(self):
-        super().setUp()
-        self.step_2 = importlib.import_module(f"history.migrations.{STEP_2}")
-        self.before = MigrationExecutor(connection).loader.project_state(("history", BEFORE_STEP_2)).apps
 
-    def test_it_runs_when_no_row_holds_a_value(self):
-        self.step_2.refuse_if_a_value_is_held(self.before, None)
+def _migrate_history_to(name):
+    """Migrate the test database's history app to `name` and return that state's apps."""
+    executor = MigrationExecutor(connection)
+    target = [("history", name)] if name else executor.loader.graph.leaf_nodes()
+    executor.migrate(target)
+    return MigrationExecutor(connection).loader.project_state(target).apps
 
-    def test_it_refuses_a_held_value(self):
-        old = self.before.get_model("history", "SoilManagementEvent")
+
+class TheMigrationChainTests(_FarmMixin, TransactionTestCase):
+    """Each step refuses a held value, and the chain reverses step by step.
+
+    `TransactionTestCase`: migrating the test database cannot happen inside a test transaction.
+    """
+
+    def tearDown(self):
+        present = set(_table_columns()) & set(RETIRED_SOIL_EVENT_COLUMNS)
+        with connection.cursor() as cursor:  # a held value would stop the way back
+            for column in present:
+                cursor.execute(f'UPDATE "{TABLE}" SET "{column}" = NULL')
+        _migrate_history_to(None)
+        super().tearDown()
+
+    def test_0267_refuses_a_held_value_and_reverses_to_a_nullable_column(self):
+        _migrate_history_to(STEP_2)
+        columns = _table_columns()
+        for column in RETIRED_SOIL_EVENT_COLUMNS:
+            self.assertTrue(columns[column].null_ok, column)  # back as 0266 left it
+        step_3 = _migration(STEP_3)
+        editor = SimpleNamespace(connection=connection)
+        step_3.refuse_if_a_value_is_held(None, editor)  # NULL everywhere: runs
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'UPDATE "{TABLE}" SET "carbon_sequestration_potential" = 1.2 WHERE id = %s', [self.event.pk]
+            )
+        with self.assertRaisesMessage(RuntimeError, "{'carbon_sequestration_potential': 1}"):
+            step_3.refuse_if_a_value_is_held(None, editor)
+
+    def test_0266_refuses_a_held_value_and_reverses_to_the_step_1_model(self):
+        before = _migrate_history_to(BEFORE_STEP_2)
+        old = before.get_model("history", "SoilManagementEvent")
+        self.assertIsNone(old.objects.get(pk=self.event.pk).carbon_sequestration_potential)
+        step_2 = _migration(STEP_2)
+        step_2.refuse_if_a_value_is_held(before, None)  # NULL everywhere: runs
+
         old.objects.filter(pk=self.event.pk).update(carbon_sequestration_potential="1.200")
         with self.assertRaisesMessage(RuntimeError, "{'carbon_sequestration_potential': 1}"):
-            self.step_2.refuse_if_a_value_is_held(self.before, None)
+            step_2.refuse_if_a_value_is_held(before, None)
 
-    def test_the_migration_freezes_the_same_list(self):
-        self.assertEqual(set(self.step_2.RETIRED), set(RETIRED_SOIL_EVENT_COLUMNS))
+    def test_both_migrations_freeze_the_same_list(self):
+        self.assertEqual(set(_migration(STEP_2).RETIRED), set(RETIRED_SOIL_EVENT_COLUMNS))
+        self.assertEqual(set(_migration(STEP_3).RETIRED), set(RETIRED_SOIL_EVENT_COLUMNS))
 
 
 def _with_columns(snapshot, columns, counted):
-    """`snapshot` as a census would have read it while `columns` were still in the model.
+    """`snapshot` as a census would have read it while `columns` were still in the table.
 
     `counted` is {column: rows holding a value}, the `retiring_columns` fact the census stored for a
     declared column; a column missing from it was never declared.
@@ -129,7 +161,7 @@ class CensusAcrossTheRetirementTests(_FarmMixin, TransactionTestCase):
 
     def setUp(self):
         super().setUp()
-        self.now = census.take_census(label="after-0266")
+        self.now = census.take_census(label="after-0267")
 
     def test_the_census_counts_nothing_once_the_field_is_gone(self):
         self.assertEqual(census._retiring_column_facts()[LABEL], {})
