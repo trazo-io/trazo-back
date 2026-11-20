@@ -171,13 +171,14 @@ class AnOMRIProductAnswersOnlyWhenTheInputIdentifiesItTests(_Seeded):
         OMRIProduct.objects.create(omri_id="hum-4002", product_name="Potassium humate", manufacturer="Maker Two")
         OMRIProduct.objects.create(omri_id="agt-5001", product_name="Champ WG Agricultural Fungicide", manufacturer="C")
         OMRIProduct.objects.create(omri_id="agt-5002", product_name="Championship Copper", manufacturer="D")
+        OMRIProduct.objects.create(omri_id="spn-6001", product_name="Spinosad 480 SC", manufacturer="E")
 
     def test_a_name_several_products_share_chooses_none(self):
         result = self.verifier.verify("Neptune's Harvest")
         self.assertFalse(result.found)
         self.assertEqual(result.status, "possible_match")
         self.assertIsNone(result.source_url)
-        self.assertIn("4 OMRI-listed products match", result.notes)
+        self.assertIn("4 products in OMRI's catalogue match", result.notes)
         self.assertIn("(OMRI #nep-1000)", result.notes)
         self.assertIn("and 1 more", result.notes)
 
@@ -190,7 +191,7 @@ class AnOMRIProductAnswersOnlyWhenTheInputIdentifiesItTests(_Seeded):
     def test_one_fuzzy_product_does_not_outrank_the_national_list(self):
         result = self.verifier.verify("Potassium chloride")
         self.assertEqual(result.status, "restricted_use")
-        self.assertIn("One OMRI-listed product's name matches", result.notes)
+        self.assertIn("One product in OMRI's catalogue matches", result.notes)
         self.assertIn("sqm-3001", result.notes)
 
     def test_one_fuzzy_product_alone_is_a_possible_match(self):
@@ -203,20 +204,27 @@ class AnOMRIProductAnswersOnlyWhenTheInputIdentifiesItTests(_Seeded):
         self.assertEqual({p.omri_id for p in _omri_candidates_by_name("Potassium humate")}, {"hum-4001", "hum-4002"})
         result = self.verifier.verify("Potassium humate")
         self.assertFalse(result.found)
-        self.assertIn("2 OMRI-listed products match", result.notes)
+        self.assertIn("2 products in OMRI's catalogue match", result.notes)
 
     def test_the_verdict_counts_what_the_lookup_counts(self):
         body = _client().get("/api/certifications/verify-input/", {"name": "Champ"}).json()
         self.assertEqual(body["omri_candidate_count"], 2)
         self.assertEqual(body["status"], "possible_match")
-        self.assertIn("2 OMRI-listed products match", body["notes"])
+        self.assertIn("2 products in OMRI's catalogue match", body["notes"])
+
+    def test_a_nonsynthetic_row_with_a_product_candidate_is_a_possible_match(self):
+        result = self.verifier.verify("Spinosad")
+        self.assertFalse(result.found)
+        self.assertEqual(result.status, "possible_match")
+        self.assertIn("nonsynthetic", result.notes)
+        self.assertIn("spn-6001", result.notes)
 
     def test_a_substance_match_still_answers_and_says_the_products_were_several(self):
         result = self.verifier.verify("Elemental sulfur")
         self.assertTrue(result.found)
         self.assertEqual(result.status, "listing_match")
         self.assertIn("205.601", result.certifier_name)
-        self.assertIn("2 OMRI-listed products match", result.notes)
+        self.assertIn("2 products in OMRI's catalogue match", result.notes)
 
 
 class ADroppedOMRIProductIsNotListedTests(_Seeded):
@@ -226,6 +234,14 @@ class ADroppedOMRIProductIsNotListedTests(_Seeded):
         OMRIProduct.objects.create(
             omri_id="old-0042", product_name="Retired Fungicide X", manufacturer="C", delisted_on=date(2026, 10, 1)
         )
+
+    def test_a_dropped_product_among_candidates_is_marked_and_counted(self):
+        OMRIProduct.objects.create(omri_id="new-0043", product_name="Retired Fungicide X Plus", manufacturer="C")
+        result = self.verifier.verify("Retired Fungicide")
+        self.assertEqual(result.status, "possible_match")
+        self.assertIn("Retired Fungicide X (OMRI #old-0042, dropped from OMRI's list as of 2026-10-01)", result.notes)
+        self.assertIn("1 of them OMRI no longer lists", result.notes)
+        self.assertNotIn("OMRI-listed", result.notes)
 
     def test_by_code_and_by_name(self):
         for result in (
@@ -281,4 +297,4 @@ class AgainstTheCommittedOMRICatalogueTests(_Seeded):
                 count = body["omri_candidate_count"]
                 self.assertGreater(count, 1)
                 self.assertFalse(body["found"])
-                self.assertIn(f"{count} OMRI-listed products match", body["notes"])
+                self.assertIn(f"{count} products in OMRI's catalogue match", body["notes"])

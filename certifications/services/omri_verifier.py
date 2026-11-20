@@ -59,18 +59,29 @@ def _is_identity(product, normalized: str) -> bool:
 
 def _omri_candidates_note(operation_name: str, products) -> str:
     """The sentence a verdict carries for OMRI products the name matched but did not identify. It names a
-    few, with their codes (two products can share a name), counts the rest, and chooses none."""
+    few, with their codes (two products can share a name), counts the rest, and chooses none.
+
+    "In OMRI's catalogue", never "OMRI-listed": the candidates are the lookup's, which keep products OMRI
+    has dropped (`delisted_on`, OV-MT-C04) so the grower can see the drop. A dropped product is marked
+    where it is named and counted where it is not (review of PR 505)."""
     if not products:
         return ""
-    named = _named(products, lambda p: f"{p.product_name} (OMRI #{p.omri_id})")
+
+    def render(product):
+        dropped = f", dropped from OMRI's list as of {product.delisted_on.isoformat()}" if product.delisted_on else ""
+        return f"{product.product_name} (OMRI #{product.omri_id}{dropped})"
+
+    named = _named(products, render)
     if len(products) == 1:
         return (
-            f"One OMRI-listed product's name matches '{operation_name}': {named}. It is a possible match, "
+            f"One product in OMRI's catalogue matches '{operation_name}': {named}. It is a possible match, "
             "not a confirmed one: the grower checks it against the label."
         )
+    dropped = sum(1 for product in products if product.delisted_on)
+    dropped_note = f" {dropped} of them OMRI no longer lists." if dropped else ""
     return (
-        f"{len(products)} OMRI-listed products match '{operation_name}': {named}. None is chosen here: "
-        "the grower picks the one on the label."
+        f"{len(products)} products in OMRI's catalogue match '{operation_name}': {named}.{dropped_note} None is "
+        "chosen here: the grower picks the one on the label."
     )
 
 
@@ -607,6 +618,11 @@ class OMRIProductVerifier(BaseCertificationVerifier):
         if listed is not None:
             if omri_note:
                 listed.notes = f"{listed.notes} {omri_note}".strip()
+                if not listed.found:
+                    # A nonsynthetic row (spinosad, Bt) has no listing to confirm, so its own answer is
+                    # `not_found`; with OMRI candidates beside it, the answer is that one of them may be the
+                    # evidence, which is what `possible_match` says (review of PR 505).
+                    listed.status = "possible_match"
             return listed
 
         # Nothing confirmed. Name what the lookup would offer, so the verdict and the lookup's fields in
