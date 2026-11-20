@@ -4741,8 +4741,8 @@ class AuditExportService:
                     (
                         f"{manure_with_interval}/{len(manure_events)} events have an interval "
                         f"recorded, but {manure_classification_mismatches} state fewer days than "
-                        f"the {manure_interval_rule['label']} floor this crop requires. See the "
-                        f"Pre-Export Consistency Check and the Manure Handling Records for each one."
+                        f"the {manure_interval_rule['label']} floor this crop requires. The Manure "
+                        f"Handling Records list each one."
                     ),
                     said(
                         "raw_manure_interval.classification_mismatch",
@@ -9765,15 +9765,23 @@ class AuditExportService:
             # Resolve the crop's required interval ONCE so each row can be
             # checked against it. Inline per-row rule check makes the
             # mismatch impossible to miss when an inspector flips to this
-            # page (the page-2 Pre-Export Consistency Check covers the
-            # same finding at the executive summary level).
+            # page. The single-season export's cover also lists it (the
+            # Pre-Export Consistency Check); the operation dossier reuses this
+            # section under its own cover, which has no such check, so nothing
+            # printed here may point to it.
             try:
                 expected_rule = self._manure_interval_rule_for_crop()
             except Exception:  # noqa: BLE001
                 expected_rule = None
             manure_data = [[self._hdr(h) for h in manure_headers]]
             row_warning_indices = []  # 1-based row indices that need red-text styling
-            any_mismatch = False
+            # Two different problems, kept apart (walkthrough 2026-11-20, W1): an interval
+            # SHORTER than the crop's minimum is a wrong record; a planned harvest before the
+            # earliest safe date is a plan that cannot be followed with this manure. One flag
+            # for both printed "the interval does not match the soil-contact classification"
+            # beside a row that said "OK: at least 90 days", on pears, where 90 was right.
+            any_interval_short = False
+            any_plan_short = False
             ground_review_ids = {r.application_id for r in self._ground_harvest_reviews()}
             for mev in manure_events:
                 interval_display = mev.get_manure_harvest_interval_display() if mev.manure_harvest_interval else "—"
@@ -9825,7 +9833,7 @@ class AuditExportService:
                                     f"{expected_rule['cite']}"
                                 )
                                 rule_check_is_warning = True
-                                any_mismatch = True
+                                any_interval_short = True
                         except ValueError:
                             pass
 
@@ -9853,7 +9861,7 @@ class AuditExportService:
 
                 if plan_short_by:
                     rule_check_is_warning = True
-                    any_mismatch = True
+                    any_plan_short = True
                     # Terse on purpose: this column is 1.35in wide. The full sentence — which
                     # date, which clause, what to do about it — is the page-2 finding.
                     short_note = f"Plan short by {plan_short_by} days"
@@ -9917,18 +9925,27 @@ class AuditExportService:
                 elements.append(self._body("Manure type, form, source and application method:"))
                 for line in manure_detail_lines:
                     elements.append(Paragraph("&bull; " + line, self._styles["footer_note"]))
-            if any_mismatch:
+            if any_interval_short:
                 elements.append(
                     Paragraph(
-                        "<b>[WARNING] § 205.203(c)(1):</b> One or more manure "
-                        "events above have a farmer-selected harvest interval "
-                        "that does not match the soil-contact classification "
-                        "required for this crop. The Pre-Export Consistency "
-                        "Check on page 2 lists each mismatched event by date "
-                        "with the correct interval. Update the event record "
-                        "before submitting this dossier to a certifier — an "
-                        "inspector will flag the mismatch as a record-keeping "
-                        "failure even when no contamination occurred.",
+                        "<b>[WARNING] § 205.203(c)(1):</b> The harvest interval on one "
+                        "or more manure events above is shorter than this crop's "
+                        "minimum (the rows marked SHORT in the Crop-Rule Check "
+                        "column). Correct the event record before this dossier goes "
+                        "to a certifier: an inspector reads a short interval as a "
+                        "record-keeping failure even when no contamination occurred.",
+                        self._warning_style(),
+                    )
+                )
+            if any_plan_short:
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] § 205.203(c)(1):</b> The planned harvest recorded "
+                        "with one or more manure applications above is earlier than "
+                        "the earliest safe harvest date (the rows marked Plan short in "
+                        "the Crop-Rule Check column). The interval is a minimum, so "
+                        "this crop is harvested after that date or this manure is not "
+                        "used on it.",
                         self._warning_style(),
                     )
                 )
