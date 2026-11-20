@@ -146,6 +146,12 @@ class Option:
     #: what the certifier should look at, never a verdict. For answers the operator gives honestly
     #: but cannot vouch for ("believed, not yet confirmed in writing").
     review: str = ""
+    #: The operator does not know the answer yet ("Not yet confirmed with the district"). True to say
+    #: and kept as given, but it does not answer what the form asks, so a register row citing a
+    #: question that holds only pending options stays open on the coverage page (`pending`), and the
+    #: option carries a `review` line for the module PDF. A belief ("we believe so, not confirmed in
+    #: writing") is an answer with a caveat, not pending.
+    pending: bool = False
     #: The key of an `upload` question in the same module that this option says holds a file
     #: ("SOP attached"). When chosen and no file is filed to that question, the module PDF prints
     #: a [REVIEW] line instead of letting the answer claim an attachment that is not there.
@@ -386,6 +392,10 @@ def validate_module(module: Module, section_keys: tuple) -> list:
                         f"{where} question '{q.key}' option '{o.value}': requires_upload "
                         f"'{o.requires_upload}' is not an upload question of this module"
                     )
+                # A pending answer holds its coverage row open; without a review line the module PDF
+                # would print it as if it answered the form (blind re-grade, 2026-11-19, CCOF G6.0 D3).
+                if o.pending and not o.review:
+                    errors.append(f"{where} question '{q.key}' option '{o.value}': pending without a review line")
 
     if not seen_keys and not module.allows_not_applicable:
         errors.append(f"{where}: no questions and no N/A attestation — module can never complete")

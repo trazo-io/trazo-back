@@ -435,7 +435,10 @@ class TheRegisterReadsThem(_Plan):
         )
         for ref in self.WSDA_ROWS + ("1b", "11"):
             with self.subTest(ref=ref):
-                self.assertEqual(self.row("wsda", "2121-E-biodiversity", ref).state, "answered")
+                # E 17 is answered in full and still `partial`: the blind re-grade of 2026-11-19 found nothing in the
+                # packet stating which practices address sedimentation (register gap).
+                expected = "partial" if ref == "17" else "answered"
+                self.assertEqual(self.row("wsda", "2121-E-biodiversity", ref).state, expected)
 
     def test_streams_by_the_land_need_their_practices(self):
         answers = {**ANSWERS}
@@ -452,7 +455,8 @@ class TheRegisterReadsThem(_Plan):
                 "g4_0_rotation_soil": erosion,
             }
         )
-        self.assertEqual(self.row("wsda", "2121-E-biodiversity", "17").state, "answered")
+        # Closed as far as the register allows: `partial` since the blind re-grade of 2026-11-19.
+        self.assertEqual(self.row("wsda", "2121-E-biodiversity", "17").state, "partial")
 
     def test_no_other_measures_is_an_answer(self):
         self.plan({"g4_2_natural_resources": {**FILED, "other_conservation_measures": False}}, certifier=CCOF)

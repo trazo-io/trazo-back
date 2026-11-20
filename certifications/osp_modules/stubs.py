@@ -1247,6 +1247,7 @@ G6_4_HANDLING = Module(
                             "not_confirmed",
                             text("Not confirmed yet", "Todavía no se confirma"),
                             review="Water treated on site is not yet confirmed to meet the Safe Drinking Water Act.",
+                            pending=True,
                         ),
                         Option(
                             "no",

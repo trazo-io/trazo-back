@@ -2447,7 +2447,10 @@ EVIDENCE_LABELS = {
     "map": "no field map on file",
     "operator_map": "no operator-supplied map attached",
     "map_geometry_disagrees_with_area": "recorded geometry disagrees with the stated parcel area",
-    "affidavit_document": "landowner affidavit recorded but not signed",
+    # The fact is "no signed copy attached" (`row_without_signed_document`): the row can carry the
+    # signer's own signing date, and "not signed" beside it contradicted the table (re-grade 2026-11-19).
+    "affidavit_document": "landowner affidavit recorded; no signed copy attached",
+    "land_history_window": "part of the 36-month window is not accounted for by a declaration or affidavit",
     # Run 3, R3-05: the certified route's items, in words. The draft packet printed the keys.
     "certified_certificate": "no copy of the certificate attached or referenced",
     "certified_continuity": "no verification of no lapse attached or referenced",
@@ -2998,6 +3001,9 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 from certifications.services.international_trade_review import answer_lines as trade_lines
 
                 for line in trade_lines(osp, question.key, value, evidence_bundles):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "g6_4_handling" and question.key == "simple_handling_disqualifiers":
+                for line in g6_4_all_organic_lines(osp):
                     story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
                 for line in _facility_pest_pointer(osp):
@@ -5805,6 +5811,7 @@ def _coverage_location(location: str, parcel_names: list) -> str:
 _OPEN_STATE_WORDING = (
     ("unanswered", "not yet answered"),
     ("unconfirmed", "answered on an earlier version of the question, not yet confirmed"),
+    ("pending", "answered as not yet known by the operation"),
     ("unresolved", "waiting on an earlier answer that decides whether it applies"),
     ("route_unresolved", "not determined for parcels whose route is unresolved"),
     ("partial", "answered in part: Trazo does not collect everything the form asks"),
@@ -6446,6 +6453,24 @@ def _packaging_pointer(osp) -> list[str]:
         question = next(q for page in module.pages for q in page.questions if q.key == "packaging_free_of_prohibited")
         lines.append(f"G6.1 answers: {_format_answer_en(question, value)}.")
     return lines
+
+
+def g6_4_all_organic_lines(osp) -> list[str]:
+    """CCOF G6.4's first condition, an all-organic operation, set against G6.0's split operation. CCOF only: WSDA L
+    and OTCO C7 ask post-harvest handling of any operation (blind re-grade 2026-11-19, CCOF G6.4 preamble)."""
+    from certifications.osp_modules.conditions import answer_value
+    from certifications.services.packet_coverage import packet_agent
+
+    if packet_agent(osp).slug != "ccof":
+        return []
+    entry = ((osp.module_responses or {}).get("modules") or {}).get("g6_0_production") or {}
+    if entry.get("not_applicable") or answer_value(entry.get("answers") or {}, "split_operation") is not True:
+        return []
+    return [
+        "[REVIEW] G6.0 states the operation produces or handles both organic and nonorganic crops or products. "
+        "CCOF's G6.4 (ORGB36) is for an all-organic operation handling only its own organic product, and points any "
+        "other operation to the Handler OSP forms."
+    ]
 
 
 def _facility_pest_pointer(osp) -> list[str]:
