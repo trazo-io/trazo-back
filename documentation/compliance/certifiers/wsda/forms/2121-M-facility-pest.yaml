@@ -102,7 +102,13 @@ items:
   asks: Prior to using a synthetic pest control material not on the National List, describe how you will
     first determine an allowed material is not effective to control the targeted pest. Not applicable,
     my business does not plan to use a synthetic input in organic handling or storage areas.
-  status: covered
+  status: partial
+  severity: P3
+  gap: 'The packet states the structures'' pest materials used today ("None are used"); the form asks how
+    the operation will decide before it uses a synthetic, or that it does not plan to use one. The
+    procedure questions are asked only when a synthetic is already in use (blind re-grade 2026-11-19).'
+  fix: 'Ask the forward-looking statement (a procedure, or no plan to use a synthetic) of every operation
+    with structures.'
   trazo:
     questions:
     - g9_0_facility_pest.synthetic_material_justification

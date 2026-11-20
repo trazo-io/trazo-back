@@ -863,6 +863,7 @@ G5_0_PEST = Module(
                             text("Not known yet", "Aún no se sabe"),
                             review="The plastic mulch's material is not yet known; § 205.601(b)(2)(ii) allows "
                             "petroleum-based plastic mulch other than polyvinyl chloride.",
+                            pending=True,
                         ),
                     ),
                 ),

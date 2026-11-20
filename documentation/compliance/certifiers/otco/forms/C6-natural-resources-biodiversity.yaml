@@ -83,7 +83,13 @@ items:
     bathing, nest building / Manage water for priority species (rare fish, reptiles, amphibians, birds, beavers)
     / Retain or restore vegetated riparian buffers and wetlands / Protect or improve natural hydrology and ecological
     function of riparian areas / Other.'
-  status: covered
+  status: partial
+  severity: P2
+  gap: 'OTCO''s five boxes are options across three purpose-free lists, and the waterway list is asked only
+    where streams or channels run by the land; nothing states how the operation shares its water
+    resources, so the reviewer reads three lists and translates (blind re-grade 2026-11-19).'
+  fix: 'State the water-sharing practices on the module PDF from the answers already given, in OTCO''s
+    words.'
   trazo:
     questions:
     - g4_2_natural_resources.soil_water_practices

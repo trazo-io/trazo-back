@@ -272,7 +272,13 @@ items:
       forest buffer / Riparian herbaceous cover / Seasonal till / Stream crossing / Streambank and shoreline protection
       / Tailwater recovery / Tree or shrub establishment / Vegetative barriers / Water and sediment control basin
       / Other.)
-    status: covered
+    status: partial
+    severity: P2
+    gap: 'Every practice WSDA lists is an option, but across three purpose-free lists (soil and water,
+      habitat, waterways) and G4.0''s erosion practices; nothing states which the operation relies on for
+      sedimentation, so the reviewer reads four lists and translates (blind re-grade 2026-11-19).'
+    fix: 'State the sedimentation practices on the module PDF from the answers already given, in WSDA''s
+      words.'
     trazo:
       questions:
       - g4_2_natural_resources.soil_water_practices

@@ -21,6 +21,9 @@ percentage; the page names the questions that are still open.
     unanswered                 a visible cited question has no answer
     unconfirmed                a visible cited question holds only an option that has since been
                                replaced, so the stored answer does not answer what is asked now
+    pending                    a visible cited question holds only options the operator marks as not
+                               yet known ("Not yet confirmed with the district"): stated, but not an
+                               answer to what the form asks
     unresolved                 a cited question is hidden only because a question that decides
                                whether it applies has not been answered, so nobody has said it
                                does not apply
@@ -125,6 +128,8 @@ _SEVERITY = (
     "unresolved",
     "route_unresolved",
     "unanswered",
+    # Stated, but as "not yet known": open, and named apart from a question nobody answered.
+    "pending",
     "not_assessed",
     "answered",
     "not_applicable",
@@ -270,6 +275,18 @@ def hidden_state(module, page, question, answers: dict, _depth: int = 0) -> tupl
     return None
 
 
+def pending_answer_label(question, value) -> str:
+    """The English label of the answer when every option it holds is `pending` (the operator does not
+    know yet), else "". Read on the current value, so a retired option never decides it."""
+    pending = {o.value: o.label for o in (question.options or ()) if getattr(o, "pending", False)}
+    if not pending or value in (None, "", [], ()):
+        return ""
+    values = list(value) if isinstance(value, (list, tuple)) else [value]
+    if not all(v in pending for v in values):
+        return ""
+    return "; ".join((pending[v].get("en", v) if isinstance(pending[v], dict) else str(pending[v])) for v in values)
+
+
 def question_state(
     module,
     question_key: str,
@@ -309,7 +326,11 @@ def question_state(
         return ("attachment_not_identified" if section_uploads else "attachment_missing"), label
 
     value = answer_value(answers, question_key)
-    if is_answered(effective_value(question, value)):
+    current = effective_value(question, value)
+    if is_answered(current):
+        pending = pending_answer_label(question, current)
+        if pending:
+            return "pending", pending
         return "answered", ""
     if is_answered(value):
         # Only a retired option is stored: given before the question asked what it asks now.

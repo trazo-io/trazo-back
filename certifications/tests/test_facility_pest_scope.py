@@ -135,7 +135,9 @@ class RegisterRowsTests(SimpleTestCase):
     def test_the_rows_are_covered(self):
         for agent, code, refs in (
             ("otco", "C7", ("7.8-1", "7.8-2", "7.8-3", "7.8-4", "7.8-4a", "7.8-4b")),
-            ("wsda", "M", ("2", "4", "5", "6", "7")),
+            # M 7 is `partial` since the blind re-grade of 2026-11-19: the packet states the materials used today,
+            # the form asks the plan before any synthetic is used (`test_m7_is_partial_on_the_plan_it_asks`).
+            ("wsda", "M", ("2", "4", "5", "6")),
             ("ccof", "G6.2", ("B3", "B4", "B5", "B6", "B7", "B8", "B9")),
         ):
             form = next(
@@ -145,3 +147,8 @@ class RegisterRowsTests(SimpleTestCase):
             )
             for ref in refs:
                 self.assertEqual(next(i for i in form.items if i.ref == ref).status, "covered", (agent, ref))
+
+    def test_m7_is_partial_on_the_plan_it_asks(self):
+        form = next(f for f in load_forms("wsda") if f.path.stem.startswith("2121-M-"))
+        item = next(i for i in form.items if i.ref == "7")
+        self.assertEqual(item.status, "partial")

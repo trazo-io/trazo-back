@@ -249,18 +249,25 @@ class RetrieveParcelSerializer(ModelSerializer):
         model = Parcel
         exclude = ("album",)
 
-    def get_application_status(self, parcel):
+    def _application_status(self, parcel):
+        """One `parcel_application_status` per parcel per response. Five fields read it, and each call runs the
+        land-history and certified-route queries (review of back #507)."""
         from product.services.parcel_application_status import parcel_application_status
 
-        return parcel_application_status(parcel)["state"]
+        cache = self.__dict__.setdefault("_application_status_cache", {})
+        key = parcel.pk if parcel.pk is not None else id(parcel)
+        if key not in cache:
+            cache[key] = parcel_application_status(parcel)
+        return cache[key]
+
+    def get_application_status(self, parcel):
+        return self._application_status(parcel)["state"]
 
     def get_application_missing(self, parcel):
         # The service always computed WHICH of the §205.202 blocks are missing, but this
         # serializer stripped it to the bare state — so the UI could only say "In progress",
         # never what was left (found in the 2026-08-10 signposting audit).
-        from product.services.parcel_application_status import parcel_application_status
-
-        return parcel_application_status(parcel)["missing"]
+        return self._application_status(parcel)["missing"]
 
     def get_evidence_status(self, parcel):
         """Is the supporting EVIDENCE on file — a different question from "are the questions
@@ -270,19 +277,13 @@ class RetrieveParcelSerializer(ModelSerializer):
         schematic from recorded geometry, geometry that disagrees with the stated area, or
         nothing). Whether that satisfies a given certifying agent is the agent's call.
         """
-        from product.services.parcel_application_status import parcel_application_status
-
-        return parcel_application_status(parcel)["evidence_state"]
+        return self._application_status(parcel)["evidence_state"]
 
     def get_evidence_missing(self, parcel):
-        from product.services.parcel_application_status import parcel_application_status
-
-        return parcel_application_status(parcel)["evidence_missing"]
+        return self._application_status(parcel)["evidence_missing"]
 
     def get_evidence_detail(self, parcel):
-        from product.services.parcel_application_status import parcel_application_status
-
-        return parcel_application_status(parcel)["evidence_detail"]
+        return self._application_status(parcel)["evidence_detail"]
 
     def get_known_block_ids(self, parcel):
         """Blocks already recorded on this parcel, so the grower picks instead of retyping.

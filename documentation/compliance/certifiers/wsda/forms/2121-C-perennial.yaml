@@ -90,7 +90,13 @@ items:
   asks: Are pre-plant treatments applied to nonorganic planting stock by your farm, supplier, or a third
     party? Yes, include all materials applied to planting stock before planting on your Input Material
     List. / No.
-  status: covered
+  status: partial
+  severity: P2
+  gap: 'Trazo asks whether nonorganic stock was treated before or at delivery, and by whom only when it was.
+    A treatment the farm itself applies after delivery and before planting (a root dip) is never asked
+    when the nursery confirms none, so the form''s "by your farm" leg is not answered (blind re-grade
+    2026-11-19).'
+  fix: 'Ask whether this farm, or anyone working for it, treated the stock between delivery and planting.'
   trazo:
     questions: [g3_2_planting_stock.stock_treatments, g3_2_planting_stock.stock_treatment_applied_by]
     prints: "modules/G3_0b.pdf §B; a [REVIEW] line for treated stock whose materials are not all listed, or for unlisted treatments the records name"

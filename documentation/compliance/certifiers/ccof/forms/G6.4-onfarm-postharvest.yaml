@@ -28,8 +28,11 @@ items:
     - g6_4_handling.own_products_only
     - g6_4_handling.custom_handling_separation
     - g6_4_handling.simple_handling_disqualifiers
-    prints: "modules/G6_4.pdf §A (handling_activities; simple_handling_disqualifiers carries CCOF's four disqualifiers, each printing a [REVIEW] when ticked, and \"none of these\" when the form applies); §B (own_products_only, custom_handling_separation)"
-  note: "Closed 2026-11-10 (content 2026.11.30)."
+    - g6_0_production.split_operation
+    prints: "modules/G6_4.pdf §A (handling_activities; simple_handling_disqualifiers carries CCOF's four disqualifiers, each printing a [REVIEW] when ticked, and \"none of these\" when the form applies; on a CCOF packet, a [REVIEW] under it when G6.0 states a split operation, the form's all-organic condition); §B (own_products_only, custom_handling_separation)"
+  note: "Closed 2026-11-10 (content 2026.11.30). The blind re-grade of 2026-11-19 found the all-organic condition
+    unchecked (Calapooia Bend, a split operation, answered G6.4 with nothing said); G6.0's split_operation is now
+    read and printed as a [REVIEW] on CCOF packets."
 - ref: A1
   asks: Site Name & Location (full address).
   status: covered

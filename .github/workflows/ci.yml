@@ -547,6 +547,11 @@ jobs:
       # certification history that another agent's parcels or certificate contradict, each print a [REVIEW] line.
       # Builds its own farm; no sibling repo.
       #
+      # 2026-11-20: certifications.tests.test_regrade_packet_truth joins. From the blind re-grade of 2026-11-19: an
+      # answer the operator marks as not yet known holds its coverage row open (`pending`) and prints a [REVIEW]
+      # line; the parcel header names a missing signed affidavit copy and an unaccounted 36-month window; a passed
+      # expected-harvest date is marked. Builds its own parcels; no sibling repo.
+      #
       # 2026-11-19: certifications.tests.test_sourcing_scenarios joins. G8.0 page D states CCOF G8.0 D1's four
       # supply-chain scenarios from the G3.0, G3.0b, G6.5, G6.1, G6.2 and G7.0 answers (yes, no or not stated); the
       # coverage row reads them, and a section B answer that disagrees prints a [REVIEW] line. Builds its own farm;
@@ -1160,6 +1165,7 @@ jobs:
             certifications.tests.test_record_keeping_leftovers \
             certifications.tests.test_manure_register_truth \
             certifications.tests.test_sourcing_scenarios \
+            certifications.tests.test_regrade_packet_truth \
             certifications.tests.test_regrade_plan_contradictions \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
