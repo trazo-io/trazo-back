@@ -32,6 +32,11 @@ than the records support:
   * the Entrust "6 oz" and the second cover's "3oz" have no unit basis, so no rate is stored;
   * the stand sales ("~30 bins") have no number and are not recorded; Block 3 is still picking.
 
+One trap is the plan's, not the kit's: G6.2 is attested not applicable ("product is never stored") while G6.1 sends
+the crop to the packer's cold storage before the sale and the packer is on file as storing it. A grower who reads the
+packer's rooms as not his own answers this way; the packet prints the [REVIEW] lines that say otherwise (blind
+re-grade 2026-11-19), and the specimen keeps the answer so a reader sees them.
+
 Additions the kit does not hold, each made so the specimen shows a record column, and each said here:
   * wind, temperature, start and stop time and the apparatus line come from the applicator's
     field card for most sprays. The May 29 second cover has no card: its time and concentration

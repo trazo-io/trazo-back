@@ -461,6 +461,14 @@ RESPONSIBILITY_UNCERTIFIED = "uncertified_third_party"
 
 #: Facility types that hold the crop rather than handle it, read when the record's `role` is unset.
 _STORAGE_TYPES = frozenset({"cold_storage", "dry_storage"})
+
+
+def facility_stores(facility) -> bool:
+    """The facility holds the crop: its role says so, or, with no role recorded (a row from before the field, or one
+    nobody asked), its type is a cold or dry store. Nothing is inferred from its name."""
+    return facility.role in ("storage", "both") or (not facility.role and facility.facility_type in _STORAGE_TYPES)
+
+
 #: G6.1 "Is your organic crop handled off the farm by another operation?" (AGR 2121 §J 13, §L 1). Under
 #: these two Yes answers the operation keeps ownership while another operation handles the crop; under
 #: "Yes, but ownership of the crop transfers to that operation before or upon delivery" and "No" no
@@ -542,7 +550,7 @@ def _on_behalf(facility, plan: _OwnershipAnswers) -> tuple[str, tuple]:
     A facility that both stores and handles is listed when either side is, and is named as not on
     behalf only when both sides say so. Nothing is inferred from the facility's name.
     """
-    stores = facility.role in ("storage", "both") or (not facility.role and facility.facility_type in _STORAGE_TYPES)
+    stores = facility_stores(facility)
     handles = facility.role in ("handling", "both") or (
         not facility.role and facility.facility_type not in _STORAGE_TYPES
     )

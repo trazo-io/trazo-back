@@ -2767,6 +2767,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
 
             for line in none_used_lines(osp, "not_applicable"):
                 story.append(Paragraph(_escape(line), styles["meta"]))
+        if module.key == "g6_2_storage":
+            # "Product is never stored" set against G6.1 and the facilities on file (blind re-grade 2026-11-19).
+            from certifications.services.plan_contradictions import storage_na_contradictions
+
+            for line in storage_na_contradictions(osp):
+                story.append(Paragraph(_escape(line), styles["meta"]))
     else:
         pairs = visible_questions(module, answers)
         # Where the "nothing answered" line goes, so it leads the questions it summarises instead of
@@ -3004,6 +3010,12 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                     story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g6_4_handling" and question.key == "simple_handling_disqualifiers":
                 for line in g6_4_all_organic_lines(osp):
+                    story.append(Paragraph(_escape(line), styles["meta"]))
+            if module.key == "certification_contract":
+                # The history answers set against the certificate on file and the parcels (blind re-grade 2026-11-19).
+                from certifications.services.plan_contradictions import history_answer_lines
+
+                for line in history_answer_lines(osp, question.key, value):
                     story.append(Paragraph(_escape(line), styles["meta"]))
             if module.key == "g6_2_storage" and question.key == "storage_pest_control_materials_used":
                 for line in _facility_pest_pointer(osp):
