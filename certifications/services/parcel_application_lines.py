@@ -299,6 +299,10 @@ def planned_crop_table(parcel) -> tuple[tuple[str, ...], tuple[float, ...], list
     rows = []
     for crop in crops:
         harvest = crop.expected_harvest.isoformat() if crop.expected_harvest else "Not stated"
+        if crop.expected_harvest and crop.expected_harvest < date.today():
+            # WSDA AGR 2264 ref 8 asks for the ESTIMATED harvest of a crop to be certified: a date already past
+            # is last season's, printed as given and marked so (blind re-grade 2026-11-19).
+            harvest = f"{harvest} (passed)"
         acres = format_acres(crop.acres) if crop.acres is not None else "Not stated"
         if orchard:
             cells = [
@@ -350,6 +354,17 @@ def planned_crop_lines(parcel, answers: dict) -> list[str]:
         lines.append(
             f"[REVIEW] The acres to be certified ({format_acres(to_certify)}) are more than the parcel area on file "
             f"({area_acres:.1f} acres)."
+        )
+    past = [
+        f"{c.crop} ({c.block_name})" if c.block_name else c.crop
+        for c in crops
+        if c.expected_harvest and c.expected_harvest < date.today()
+    ]
+    if past:
+        lines.append(
+            "Expected harvest dates already passed: "
+            + ", ".join(past)
+            + ". The table gives no date for the coming season's harvest of these crops."
         )
     listed_names = [c.crop for c in crops]
     unlisted = [name for name in open_season_crops(parcel) if not crop_is_listed(name, listed_names)]

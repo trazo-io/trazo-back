@@ -247,5 +247,17 @@ def parcel_evidence_status(parcel, osp=None) -> dict:
         for key in certified.missing:
             missing.append(f"certified_{key}")
 
+    # Blind re-grade 2026-11-19 (CCOF Parcel G, Block 3): the header read "Supporting evidence: on
+    # file" above the body's "[REVIEW] not accounted for". Days of the 36-month window that no
+    # declaration or affidavit covers are missing evidence on any route that asks for the accounting
+    # (the same condition `land_history_summary` applies before it shows the gap list).
+    if not parcel.container_production and not (certified is not None and certified.land_history_asked is False):
+        from certifications.services.parcel_land_history import coverage, prior_manager_rows
+
+        account = coverage(parcel, prior_manager_rows(parcel), assessment=certified)
+        if account.complete is False:
+            missing.append("land_history_window")
+            detail["land_history_gaps"] = [[a.isoformat(), b.isoformat()] for a, b in account.gaps]
+
     state = "complete" if not missing else "outstanding"
     return {"state": state, "missing": missing, "detail": detail}

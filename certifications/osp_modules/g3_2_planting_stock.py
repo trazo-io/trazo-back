@@ -266,6 +266,9 @@ G3_2_PLANTING_STOCK = Module(
                         Option(
                             "unknown",
                             text("Not yet confirmed with the supplier", "Todavía no confirmado con el proveedor"),
+                            review="Whether the organic planting stock was treated before planting is not yet confirmed "
+                            "with the supplier.",
+                            pending=True,
                         ),
                     ),
                 ),
@@ -608,6 +611,7 @@ G3_2_PLANTING_STOCK = Module(
                                 "Todavía no confirmado con el vivero",
                             ),
                             review="Whether the nonorganic planting stock was treated is not yet confirmed with the nursery.",
+                            pending=True,
                         ),
                     ),
                 ),

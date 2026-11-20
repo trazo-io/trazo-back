@@ -92,7 +92,12 @@ items:
 - ref: Preamble (adding or removing materials)
   asks: To add or remove materials after your initial application, update your OSP Materials List (MyCCOF Material
     Search, email, or other notice to CCOF).
-  status: covered
+  status: partial
+  severity: P3
+  gap: 'The change log is in the audit export, a separate document; the packet itself states no procedure
+    for telling the agent of materials added or removed (blind re-grade 2026-11-19).'
+  fix: 'State the operation''s notice practice in the packet, or file the row as the agent''s own procedure
+    (MyCCOF).'
   trazo:
     where: not in this packet; the operation's audit export, a separate document, carries the change log, and
       the plan review names each addition and removal since the plan's answers
@@ -100,7 +105,7 @@ items:
     - certifications.models.ApprovedInputChangeLog
     - certifications.models.OSPChangeNotification
     prints: history/audit-export dossier (change log); plan_review flags inputs_changed
-  gap: 'Closed 2026-11-16 (feat/c11-materials-list). Catalog attaches and removals were always logged; an
+  note: 'Closed 2026-11-16 (feat/c11-materials-list). Catalog attaches and removals were always logged; an
     operator-entered material added or removed now writes the same dated, append-only `ApprovedInputChangeLog`
     row (kind `operator_entered`), so `plan_review` surfaces it as `inputs_changed` and the audit export''s
     change log carries it.'

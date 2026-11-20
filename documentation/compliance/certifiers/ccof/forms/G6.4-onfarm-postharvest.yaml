@@ -20,7 +20,12 @@ items:
     are handling both organic and nonorganic products, making multi-ingredient products, operating a multi-farm
     CSA, or performing complex handling such as baking, brewing, extracting, etc. — instead complete the Handler
     OSP forms indicated in the Guide to Handler OSP Forms.
-  status: covered
+  status: partial
+  severity: P2
+  gap: 'CCOF''s first condition, an all-organic operation, is never checked: a split operation (G6.0) that
+    answers G6.4 prints nothing saying the form may not apply to it, and the four disqualifiers asked do
+    not include it (blind re-grade 2026-11-19, Calapooia Bend sells buffer fruit as nonorganic).'
+  fix: 'Print a [REVIEW] on G6.4 when G6.0 states the operation produces or handles nonorganic product.'
   trazo:
     questions:
     - g6_4_handling.handling_activities

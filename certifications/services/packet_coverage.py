@@ -611,6 +611,19 @@ def _qualified_where(standing: str, where: str, client_id_held: bool, other_agen
     return standing, where + (f" ({'; '.join(notes)})" if notes else "")
 
 
+def plan_standing(row_state, standing: str) -> str:
+    """A renewal row's standing once this plan's answers are read: an open answer replaces the register's
+    routing words, a closed one keeps them. A pending answer (the operator does not know yet) is stated, so
+    it is not called unanswered (blind re-grade 2026-11-19)."""
+    if row_state is None:
+        return standing
+    if row_state.state in ("unanswered", "unresolved", "unconfirmed"):
+        return f"not yet answered in this plan ({row_state.state})"
+    if row_state.state == "pending":
+        return "answered in this plan as not yet known"
+    return standing
+
+
 def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
     """(agent name, the agent's renewal forms with a row-by-row crosswalk), for the 02s supplement.
 
@@ -658,18 +671,8 @@ def renewal_routing(osp) -> tuple[str, list[RenewalForm]]:
                 standing = _OUT_OF_SCOPE_WORDS[item.scope_basis]
             else:
                 standing = _ROUTING_WORDS.get(item.status, item.status)
-            row_state = plan_state.get(item.ref)
-            if (
-                item.questions
-                and row_state is not None
-                and row_state.state
-                in (
-                    "unanswered",
-                    "unresolved",
-                    "unconfirmed",
-                )
-            ):
-                standing = f"not yet answered in this plan ({row_state.state})"
+            if item.questions:
+                standing = plan_standing(plan_state.get(item.ref), standing)
             where = item.where if item.status in ("covered", "partial") else ""
             if where:
                 standing, where = _qualified_where(

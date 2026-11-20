@@ -2447,7 +2447,10 @@ EVIDENCE_LABELS = {
     "map": "no field map on file",
     "operator_map": "no operator-supplied map attached",
     "map_geometry_disagrees_with_area": "recorded geometry disagrees with the stated parcel area",
-    "affidavit_document": "landowner affidavit recorded but not signed",
+    # The fact is "no signed copy attached" (`row_without_signed_document`): the row can carry the
+    # signer's own signing date, and "not signed" beside it contradicted the table (re-grade 2026-11-19).
+    "affidavit_document": "landowner affidavit recorded; no signed copy attached",
+    "land_history_window": "part of the 36-month window is not accounted for by a declaration or affidavit",
     # Run 3, R3-05: the certified route's items, in words. The draft packet printed the keys.
     "certified_certificate": "no copy of the certificate attached or referenced",
     "certified_continuity": "no verification of no lapse attached or referenced",
@@ -5805,6 +5808,7 @@ def _coverage_location(location: str, parcel_names: list) -> str:
 _OPEN_STATE_WORDING = (
     ("unanswered", "not yet answered"),
     ("unconfirmed", "answered on an earlier version of the question, not yet confirmed"),
+    ("pending", "answered as not yet known by the operation"),
     ("unresolved", "waiting on an earlier answer that decides whether it applies"),
     ("route_unresolved", "not determined for parcels whose route is unresolved"),
     ("partial", "answered in part: Trazo does not collect everything the form asks"),

@@ -1486,6 +1486,9 @@ G4_2_NATURAL_RESOURCES = Module(
                                 "Not yet confirmed with the district",
                                 "Todavía no confirmado con el distrito",
                             ),
+                            review="Whether the irrigation district adds prohibited substances to the water is not yet "
+                            "confirmed with the district.",
+                            pending=True,
                         ),
                     ),
                 ),
