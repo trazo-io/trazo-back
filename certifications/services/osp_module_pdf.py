@@ -2344,6 +2344,7 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
             )
         else:
             from certifications.services.operation_certificate import (
+                never_certified,
                 recorded_without_number,
                 unnumbered_from_another_agent,
             )
@@ -2365,6 +2366,19 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     "No certificate is on file for this operation in Trazo. The parcel is stated above as "
                     "currently certified; the certifying agent's own record governs."
                 )
+                # Walkthrough 2026-11-20, W3: this sentence sat on a parcel stated "currently certified" while
+                # the cover, reading `never_certified`, called the plan a first application, and no review note
+                # joined the two, so the cover's list of notes was silent about it. When Trazo holds nothing
+                # that says the operation was ever certified, the gap is a note with its remedy. Otherwise (a
+                # lapsed certification row, or an approved plan without a certificate number) the plain
+                # sentence stays: the cover reads that operation as renewing too.
+                if parcel.establishment_id and never_certified(parcel.establishment_id):
+                    said = (
+                        "No certificate is on file for this operation in Trazo. [REVIEW] The parcel is stated above "
+                        "as currently certified, but Trazo prepares this plan as a first application. Add the "
+                        "certificate to the farm profile, or correct the answer above. The certifying agent's own "
+                        "record governs."
+                    )
             out.append(Paragraph(_escape(said), styles["body"]))
 
     elif embed == "adjoining_land_affidavit":
