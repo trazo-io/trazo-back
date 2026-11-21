@@ -929,3 +929,63 @@ class SpecimenPlanAgreesWithItsRecordsTests(SimpleTestCase):
                         continue
                     text = " ".join(str(e.get(k) or "") for k in ("name", "description", "observation"))
                     self.assertNotRegex(text, tilling, f"{model} {e['_id']}")
+
+
+class EachPlanPrintsItsOwnAnswersTests(SimpleTestCase):
+    """Plan v3's printed narrative was plan v2's, copied: 8 of its 67 written answers appeared in it,
+    and 16 of its sentences stated v2's wording ("In March or April", where v3's answer says "Between
+    late February and April"; "the field border" where it says "the hedgerow planting"). The narrative
+    is what the plan PDF prints, so the active plan told the certifier the previous plan's practices.
+    Recompiled from v3's own answers, 2026-11-21."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = json.loads(FIXTURE.read_text())
+
+    @staticmethod
+    def _norm(text):
+        return re.sub(r"\s+", " ", text or "").strip()
+
+    @classmethod
+    def _written_answers(cls, osp):
+        """Each free-text answer long enough to be the operator's own sentence, by (module, question)."""
+        out = {}
+        for module, body in (osp.get("module_responses") or {}).get("modules", {}).items():
+            for question, answer in (body.get("answers") or {}).items():
+                value = answer.get("value") if isinstance(answer, dict) else answer
+                if isinstance(value, str) and len(value) > 40:
+                    out[(module, question)] = cls._norm(value)
+        return out
+
+    def _printed(self, osp):
+        return self._norm(" ".join(s.get("narrative") or "" for s in osp["sections"].values()))
+
+    def test_no_plan_prints_another_versions_wording_of_an_answer(self):
+        plans = self.data["osps"]
+        answers = [self._written_answers(osp) for osp in plans]
+        for i, osp in enumerate(plans):
+            printed = self._printed(osp)
+            for key, own in answers[i].items():
+                for j, other in enumerate(answers):
+                    if j != i and key in other and other[key] != own:
+                        with self.subTest(plan=osp["_id"], question=key, other=plans[j]["_id"]):
+                            self.assertNotIn(other[key], printed)
+
+    def test_the_active_plan_prints_its_written_answers(self):
+        (active,) = [osp for osp in self.data["osps"] if osp["status"] == "active"]
+        printed = self._printed(active)
+        missing = {key for key, own in self._written_answers(active).items() if own not in printed}
+        # Two answers the compiler does not print word for word, in any version of the plan.
+        self.assertLessEqual(
+            missing,
+            {("g3_1_seedlings", "seedlings_description"), ("certification_contract", "regulatory_agencies")},
+        )
+
+    def test_blueberry_row_middles_are_one_practice_in_the_plan(self):
+        """v3's in-lieu-of-rotation answer had a cover crop sown in the blueberry alleys each fall; its
+        tillage answer and every scouting record call the row middles permanent sod."""
+        (active,) = [osp for osp in self.data["osps"] if osp["status"] == "active"]
+        answer = active["module_responses"]["modules"]["g4_0_rotation_soil"]["answers"]["in_lieu_description"]
+        self.assertIn("permanent grass ground cover", answer["value"])
+        self.assertNotRegex(answer["value"], r"(?i)cover crop sown in the alleys")
