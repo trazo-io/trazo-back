@@ -416,6 +416,9 @@ def _serialize_option(o: Option) -> dict:
     # Only when set, so the payload of every option that was never retired stays as it was.
     if o.retired:
         out["retired"] = True
+    # Same rule: only when set. The wizard says, under the answer, that the packet keeps the question open.
+    if o.pending:
+        out["pending"] = True
     return out
 
 

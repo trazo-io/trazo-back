@@ -105,6 +105,36 @@ class PendingAnswerTests(SimpleTestCase):
         )
 
 
+class PendingOptionPayloadTests(SimpleTestCase):
+    """The wizard learns which options are pending from the module-definitions payload, so it can say under the
+    answer that the packet keeps the agent's question open. Until 2026-11-21 only the packet said so."""
+
+    def test_the_payload_marks_exactly_the_pending_options(self):
+        from certifications.osp_modules import serialize_registry
+
+        marked, unmarked = set(), 0
+        for module in serialize_registry()["modules"]:
+            for page in module["pages"]:
+                for question in page["questions"]:
+                    for option in question["options"]:
+                        if "pending" in option:
+                            self.assertIs(option["pending"], True)
+                            marked.add((module["key"], question["key"], option["value"]))
+                        else:
+                            unmarked += 1
+        declared = {
+            (m.key, q.key, o.value)
+            for m in MODULE_REGISTRY
+            for p in m.pages
+            for q in p.questions
+            for o in q.options
+            if o.pending
+        }
+        self.assertGreaterEqual(len(declared), 5, "premise: the five not-yet-known options are declared")
+        self.assertEqual(marked, declared)
+        self.assertGreater(unmarked, 100, "premise: options that are not pending were read, and carry no key")
+
+
 class ParcelEvidenceHeaderTests(TestCase):
     @classmethod
     def setUpTestData(cls):
