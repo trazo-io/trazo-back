@@ -97,13 +97,14 @@ class PairedNameRoutesTheParcelTests(_Farm):
 
 
 class CertificateWithoutNumberTests(_Farm):
-    def _certify(self, number=""):
+    def _certify(self, number="", agent="Washington State Department of Agriculture", **extra):
         return Certification.objects.create(
             establishment=self.est,
             certification_type="usda_organic",
-            certifier_name="Washington State Department of Agriculture",
+            certifier_name=agent,
             certification_number=number,
             effective_date=date(2020, 1, 1),
+            **extra,
         )
 
     def test_nothing_recorded_is_none(self):
@@ -130,7 +131,7 @@ class CertificateWithoutNumberTests(_Farm):
             _cover_certificate_value(
                 {"certificate_number": "", "certifier_name": "", "certificate_unnumbered_agent": "WSDA"}
             ),
-            "recorded on the farm profile, number not recorded — WSDA",
+            "recorded on the farm profile, number not recorded (WSDA)",
         )
         self.assertEqual(
             _cover_certificate_value(
@@ -148,3 +149,42 @@ class CertificateWithoutNumberTests(_Farm):
         summary = land_history_summary(self.parcel)
         self.assertEqual(summary["certificate"]["number"], "WSDA-4821")
         self.assertIsNone(summary["certificate_unnumbered_agent"])
+
+
+class ReviewOfBack513Tests(CertificateWithoutNumberTests):
+    """The independent review of back #513."""
+
+    def test_a_lapsed_certificate_without_its_number_is_not_the_operations_certificate(self):
+        # One number-less row per farm at a time (unique on establishment, type and number).
+        expired = self._certify(expiry_date=date(2024, 12, 31))
+        self.assertIsNone(recorded_without_number(self.est.id))
+        expired.delete()
+        revoked = self._certify(verification_status="revoked")
+        self.assertIsNone(recorded_without_number(self.est.id))
+        self.assertIn("No certificate is on file for this operation in Trazo.", self._parcel_text())
+        revoked.delete()
+        self._certify()
+        self.assertEqual(
+            recorded_without_number(self.est.id),
+            "Washington State Department of Agriculture",
+            "premise: the same row, active, counts",
+        )
+
+    def test_a_certificate_from_another_agent_is_flagged(self):
+        self._certify(agent="CCOF")
+        text = self._parcel_text()
+        self.assertIn("organic certificate from CCOF without its number", text, "premise: the row is named")
+        # The sentence can break across a page footer in the extracted text; the agent names start it.
+        self.assertIn("[REVIEW] That certificate is from CCOF; this plan names Washington State Department of", text)
+
+    def test_the_plans_own_agent_is_not_flagged(self):
+        self._certify()
+        self.assertNotIn("[REVIEW] That certificate is from", self._parcel_text())
+
+    def test_the_cover_names_it_and_flags_another_agent(self):
+        from certifications.services.osp_module_pdf import _packet_cover_pdf
+
+        self._certify(agent="CCOF")
+        text = _text(_packet_cover_pdf(self.osp))
+        self.assertIn("Certificate: recorded on the farm profile, number not recorded (CCOF)", text)
+        self.assertIn("[REVIEW] The certificate recorded without its number is from CCOF; this plan names", text)

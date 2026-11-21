@@ -171,7 +171,7 @@ def _cover_certificate_value(ctx) -> str:
         return number + (f" — {ctx['certifier_name']}" if ctx.get("certifier_name") else "")
     unnumbered = ctx.get("certificate_unnumbered_agent")
     if unnumbered is not None:
-        return "recorded on the farm profile, number not recorded" + (f" — {unnumbered}" if unnumbered else "")
+        return "recorded on the farm profile, number not recorded" + (f" ({unnumbered})" if unnumbered else "")
     return "—"
 
 
@@ -2342,7 +2342,10 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                 )
             )
         else:
-            from certifications.services.operation_certificate import recorded_without_number
+            from certifications.services.operation_certificate import (
+                recorded_without_number,
+                unnumbered_from_another_agent,
+            )
 
             unnumbered = recorded_without_number(parcel.establishment_id)
             if unnumbered is not None:
@@ -2353,6 +2356,9 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     "no certificate number is printed here. The parcel is stated above as currently certified; the "
                     "certifying agent's own record governs."
                 )
+                plan_agent = unnumbered_from_another_agent(osp, unnumbered) if osp is not None else ""
+                if plan_agent:
+                    said += f" [REVIEW] That certificate is from {unnumbered}; this plan names {plan_agent}."
             else:
                 said = (
                     "No certificate is on file for this operation in Trazo. The parcel is stated above as "
@@ -3763,6 +3769,21 @@ def _packet_cover_pdf(osp, review_notes=None) -> bytes:
     from certifications.services.operation_certificate import certificate_from_another_agent
     from certifications.services.packet_coverage import packet_agent
 
+    unnumbered = ctx.get("certificate_unnumbered_agent")
+    if unnumbered:
+        from certifications.services.operation_certificate import unnumbered_from_another_agent
+
+        plan_agent = unnumbered_from_another_agent(osp, unnumbered)
+        if plan_agent:
+            story.append(
+                Paragraph(
+                    _escape(
+                        f"[REVIEW] The certificate recorded without its number is from {unnumbered}; this plan "
+                        f"names {plan_agent}."
+                    ),
+                    styles["meta"],
+                )
+            )
     other = certificate_from_another_agent(osp)
     if other is not None:
         # The plan names a different agent than the one that issued the certificate on file: the
