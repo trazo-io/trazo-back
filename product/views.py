@@ -234,7 +234,10 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     elif expected is bool:
                         # bool("false") is True — JSON clients send real booleans,
                         # but a string must not silently flip a compliance flag.
-                        if isinstance(value, str):
+                        # None stays None: the question is not answered (never a "No").
+                        if value is None:
+                            pass
+                        elif isinstance(value, str):
                             value = value.strip().lower() in ("true", "1", "yes")
                         else:
                             value = bool(value)

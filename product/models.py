@@ -82,9 +82,12 @@ class Parcel(models.Model):
     # WS-5 (2026-08): container/greenhouse production flag (NOP § 205.2 crop production
     # includes container systems; certifier parcel applications ask this directly —
     # it changes which land-history questions apply, since container media is not land).
+    # Null until the operator answers (2026-11-21, first-run audit). A default of False was a "No" the
+    # packet printed for every parcel nobody had asked; a parcel created before then keeps its False.
     container_production = models.BooleanField(
-        default=False,
-        help_text="Whether this parcel produces in containers/greenhouse rather than in-ground",
+        null=True,
+        default=None,
+        help_text="Whether this parcel produces in containers/greenhouse rather than in-ground; null = not answered",
     )
     # WS-5 Parcel Application: the FEW answers with no model home (county, livestock,
     # attestations). Everything that has a real column binds via parcel_field instead —
@@ -142,9 +145,13 @@ class Parcel(models.Model):
     )
     # Prohibited treated-lumber contamination source (7 CFR 205.272) — e.g. arsenate-treated
     # trellis end-posts adjacent to the organic crop.
+    # Null until the operator answers, for the same reason as `container_production`.
     treated_lumber_present = models.BooleanField(
-        default=False,
-        help_text="Whether prohibited treated lumber (e.g. arsenate end-posts) is present on the parcel.",
+        null=True,
+        default=None,
+        help_text=(
+            "Whether prohibited treated lumber (e.g. arsenate end-posts) is present on the parcel; null = not answered."
+        ),
     )
     treated_lumber_description = models.CharField(
         max_length=200,

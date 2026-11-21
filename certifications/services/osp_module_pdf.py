@@ -2932,7 +2932,10 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 # for an agent with no question register nothing else in the packet says which
                 # question is open (production packet, 2026-10-29). A plain paragraph, not a
                 # `QuestionLabel`: the question index reads those as the places answers are printed.
-                if question.parcel_field:
+                # A bound column is printed by its own section when blank (identity, tenure), except the
+                # two parcel yes/no statements: nothing else names them, and since 2026-11-21 a new parcel
+                # holds no answer to either instead of a default "No".
+                if question.parcel_field and question.kind != "boolean":
                     continue
                 if question.required:
                     open_page(page)
