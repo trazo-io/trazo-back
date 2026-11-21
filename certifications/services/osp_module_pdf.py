@@ -163,6 +163,18 @@ def _lot_key_and_trace_lines(osp, module, question, value, answers) -> list:
     return []
 
 
+def _cover_certificate_value(ctx) -> str:
+    """The cover's certificate line. A certificate recorded on the farm profile without its number reads as
+    recorded, not as a dash (first-run audit, 2026-11-21); the agent always comes from the same record."""
+    number = ctx.get("certificate_number") or ""
+    if number:
+        return number + (f" — {ctx['certifier_name']}" if ctx.get("certifier_name") else "")
+    unnumbered = ctx.get("certificate_unnumbered_agent")
+    if unnumbered is not None:
+        return "recorded on the farm profile, number not recorded" + (f" ({unnumbered})" if unnumbered else "")
+    return "—"
+
+
 def _treated_lumber_parcel_lines(osp, module, question, value) -> list:
     """A plan that says no treated lumber is present, beside a parcel application in the same packet
     that says treated lumber is there: in contact with crops or soil (`Parcel.treated_lumber_present`),
@@ -2331,13 +2343,29 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                 )
             )
         else:
-            out.append(
-                Paragraph(
-                    "No certificate is on file for this operation in Trazo. The parcel is stated above as "
-                    "currently certified; the certifying agent's own record governs.",
-                    styles["body"],
-                )
+            from certifications.services.operation_certificate import (
+                recorded_without_number,
+                unnumbered_from_another_agent,
             )
+
+            unnumbered = recorded_without_number(parcel.establishment_id)
+            if unnumbered is not None:
+                # A certificate recorded without its number is not "no certificate" (first-run audit, 2026-11-21).
+                held = f"from {unnumbered} " if unnumbered else ""
+                said = (
+                    f"The farm profile records this operation's organic certificate {held}without its number, so "
+                    "no certificate number is printed here. The parcel is stated above as currently certified; the "
+                    "certifying agent's own record governs."
+                )
+                plan_agent = unnumbered_from_another_agent(osp, unnumbered) if osp is not None else ""
+                if plan_agent:
+                    said += f" [REVIEW] That certificate is from {unnumbered}; this plan names {plan_agent}."
+            else:
+                said = (
+                    "No certificate is on file for this operation in Trazo. The parcel is stated above as "
+                    "currently certified; the certifying agent's own record governs."
+                )
+            out.append(Paragraph(_escape(said), styles["body"]))
 
     elif embed == "adjoining_land_affidavit":
         rows = list(parcel.adjoining_land_affidavits.all().order_by("border_side", "id"))
@@ -3309,7 +3337,7 @@ def _renewal_context(osp) -> dict:
         getattr(est, "state", None),
         getattr(est, "zip_code", None) or getattr(est, "postal_code", None),
     ]
-    from certifications.services.operation_certificate import never_certified
+    from certifications.services.operation_certificate import never_certified, recorded_without_number
 
     return {
         "filing": filing,
@@ -3320,6 +3348,8 @@ def _renewal_context(osp) -> dict:
         "never_certified": filing is None and other_filing is None and never_certified(est.id),
         "certificate_number": certificate_number,
         "certifier_name": certifier_name,
+        # A certificate recorded without its number (2026-11-21): its agent, or "" / None.
+        "certificate_unnumbered_agent": recorded_without_number(est.id) if not certificate_number else None,
         "legal_name": getattr(company, "name", "") or "",
         "trade_name": (getattr(company, "tradename", "") or "").strip(),
         "responsible_person": responsible,
@@ -3738,14 +3768,26 @@ def _packet_cover_pdf(osp, review_notes=None) -> bytes:
         kv("Address", ctx["address"] or "—"),
         kv("Phone", ctx["phone"] or "—"),
         kv("Email", ctx["email"] or "—"),
-        kv(
-            "Certificate",
-            f"{ctx['certificate_number'] or '—'}" + (f" — {ctx['certifier_name']}" if ctx["certifier_name"] else ""),
-        ),
+        kv("Certificate", _cover_certificate_value(ctx)),
     ]
     from certifications.services.operation_certificate import certificate_from_another_agent
     from certifications.services.packet_coverage import packet_agent
 
+    unnumbered = ctx.get("certificate_unnumbered_agent")
+    if unnumbered:
+        from certifications.services.operation_certificate import unnumbered_from_another_agent
+
+        plan_agent = unnumbered_from_another_agent(osp, unnumbered)
+        if plan_agent:
+            story.append(
+                Paragraph(
+                    _escape(
+                        f"[REVIEW] The certificate recorded without its number is from {unnumbered}; this plan "
+                        f"names {plan_agent}."
+                    ),
+                    styles["meta"],
+                )
+            )
     other = certificate_from_another_agent(osp)
     if other is not None:
         # The plan names a different agent than the one that issued the certificate on file: the
