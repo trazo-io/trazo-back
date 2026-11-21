@@ -9,7 +9,8 @@ Checks (each returns a missing-key when unsatisfied):
   identity      APN or Section-Township-Range present
   transition    date_began_managing set
   buffers       buffer_zones rows exist OR the no-adjoining attestation is set
-  map           polygon drawn OR a map upload is attested in answers
+  (map)         moved to the evidence axis on 2026-09-24 (`parcel_evidence_status`); never in
+                `missing`, so a reader of the map must read `evidence_missing`
   land_history  >= 3 distinct ParcelCropHistory years OR a landowner affidavit
                 exists for the parcel (container production on impermeable
                 flooring skips this check; containers on land do not, CCOF F3)

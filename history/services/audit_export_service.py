@@ -5287,6 +5287,32 @@ class AuditExportService:
                 except Exception:  # noqa: BLE001 — never let the enrichment break the row
                     pass
 
+                # Walkthrough 2026-11-20, W3: a parcel answered "currently certified" read here as
+                # "No active organic certification ... nothing on record evidences the 36-month
+                # period", while this dossier's parcel page printed the operation's statement that
+                # it is certified. Both true, and nothing joined them. On a certified parcel the
+                # certificate is what covers the 36 months (OV-FJ-C05), so the row names the
+                # statement and the missing certificate together. A dated prohibited application or
+                # an input without a status keeps its own sentence: it is actionable either way.
+                stated_certified = False
+                try:
+                    from certifications.osp_modules.conditions import answer_value
+
+                    stated_certified = (
+                        answer_value(self.production.parcel.application_answers or {}, "currently_certified") == "yes"
+                    )
+                except Exception:  # noqa: BLE001 — never let the enrichment break the row
+                    pass
+                if stated_certified and (land_said is None or land_said["code"] == "land_requirements.no_history"):
+                    status = "REVIEW"
+                    detail = (
+                        "Parcel Application F states this parcel is currently certified organic, but no "
+                        "organic certificate on file covers the production period. On a certified parcel "
+                        "the certificate is what shows the § 205.202(b) 36-month period: add it to the "
+                        "farm profile, or correct the answer"
+                    )
+                    land_said = said("land_requirements.stated_certified")
+
                 # Neither a certificate nor any field history: nothing evidences § 205.202 at
                 # all, which is a real documentation gap and stays REVIEW.
                 snapshot_rows.append(("Land requirements (§ 205.202)", status, detail, land_said))

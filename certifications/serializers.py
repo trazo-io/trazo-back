@@ -1094,12 +1094,27 @@ class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
     # The count the OSP page and the onboarding checklist show; see services/osp_sections.py.
     sections_with_text = serializers.SerializerMethodField()
     packet_agent = serializers.SerializerMethodField()
+    # Walkthrough 2026-11-20, W4: the OSP page asked an operation that was never certified for the
+    # § 205.406(a) annual update ("Each year, a certified operation must file an update ...") while
+    # the packet cover, reading `never_certified`, told the same operation no annual update applies.
+    # The page now reads the cover's own predicate, so the two cannot disagree.
+    never_certified = serializers.SerializerMethodField()
 
     def get_packet_agent(self, osp):
         return packet_agent_payload(osp)
 
     def get_sections_with_text(self, osp):
         return sections_with_text(osp)
+
+    def get_never_certified(self, osp):
+        from certifications.services.operation_certificate import never_certified
+
+        # One answer per operation: every version in the list belongs to the same establishment,
+        # and the predicate reads four tables.
+        cache = self.context.setdefault("_never_certified", {})
+        if osp.establishment_id not in cache:
+            cache[osp.establishment_id] = never_certified(osp.establishment_id)
+        return cache[osp.establishment_id]
 
     class Meta:
         model = OrganicSystemPlan
@@ -1110,6 +1125,7 @@ class OrganicSystemPlanListSerializer(serializers.ModelSerializer):
             # The annual-update card asks what the certifier holds only of a first version in
             # Trazo (`annual_update_filing.basis_question_applies`), before any filing exists.
             "previous_version",
+            "never_certified",
             "status",
             "status_display",
             "effective_date",
