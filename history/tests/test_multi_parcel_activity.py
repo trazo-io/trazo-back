@@ -281,6 +281,40 @@ class MultiParcelActivityTests(APITestCase):
         self.assertEqual(list(res.json()["targets"]), [str(self.block_a.id)])
         self.assertFalse(ChemicalEvent.objects.exists())
 
+    def test_each_season_refusal_carries_a_code_the_screen_words(self):
+        """The sentences are English; the app words the code in the reader's language (VID-07)."""
+
+        def codes(res, parcel):
+            place = res.json()["targets"][str(parcel.id)]
+            return {key: value for key, value in place["error_codes"].items()}
+
+        bare, _ = _parcel(self.farm, "Bare Block", season=False)
+        res = self._post(self._spray([{"parcel": self.block_a.id}, {"parcel": bare.id}]))
+        self.assertEqual(codes(res, bare), {"history": {"code": "no_open_season"}})
+
+        res = self._post(
+            self._spray([{"parcel": self.block_a.id, "history": self.season_b.id}, {"parcel": self.block_b.id}])
+        )
+        self.assertEqual(codes(res, self.block_a), {"history": {"code": "season_not_on_parcel"}})
+
+        Production.objects.create(parcel=self.block_b, name="Block B 2027", start_date=timezone.now())
+        res = self._post(self._spray([{"parcel": self.block_a.id}, {"parcel": self.block_b.id}]))
+        self.assertEqual(codes(res, self.block_b)["history"]["code"], "season_ambiguous")
+        self.assertIn("Block B 2027", codes(res, self.block_b)["history"]["seasons"])
+
+        self.season_a.finish_date = self.when + timedelta(days=1)
+        self.season_a.save(update_fields=["finish_date"])
+        res = self._post(
+            self._spray([{"parcel": self.block_a.id, "history": self.season_a.id}, {"parcel": self.block_c.id}])
+        )
+        place = res.json()["targets"][str(self.block_a.id)]
+        self.assertIn("closed record", place["detail"])
+        self.assertEqual(
+            place["error_codes"]["detail"],
+            {"code": "season_closed", "finish_date": timezone.localdate(self.season_a.finish_date).isoformat()},
+        )
+        self.assertFalse(ChemicalEvent.objects.exists())
+
     # --- refused shapes: 400 before anything is read or written ------------------------------
 
     def test_refused_shapes(self):

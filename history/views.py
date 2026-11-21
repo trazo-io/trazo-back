@@ -90,7 +90,7 @@ from .serializers import (
     UpdateWeatherEventSerializer,
     WeatherEventSerializer,
 )
-from .services import season_plan_service
+from .services import season_plan_service, season_refusals
 
 logger = logging.getLogger(__name__)
 
@@ -4011,12 +4011,12 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                         # Named a season this parcel does not have. Silently retargeting the
                         # record at some other season is how a misfile happens, so say so.
                         raise ValidationError(
-                            {
-                                "history": [
-                                    f"No production {explicit_history_id!r} on this parcel. "
-                                    "Log the activity from the production you mean."
-                                ]
-                            }
+                            season_refusals.coded(
+                                "history",
+                                f"No production {explicit_history_id!r} on this parcel. "
+                                "Log the activity from the production you mean.",
+                                season_refusals.SEASON_NOT_ON_PARCEL,
+                            )
                         )
                 else:
                     # 🔴 2026-08-20 — `current_history` is ONE pointer, and it holds whichever
@@ -4039,19 +4039,20 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     )
                     if len(open_seasons) > 1:
                         raise ValidationError(
-                            {
-                                "history": [
-                                    "This parcel has more than one open production, so the season "
-                                    "for this activity is ambiguous: "
-                                    + "; ".join(
-                                        f"{h.name or 'Production'} (id {h.id}, started "
-                                        f"{h.start_date.date().isoformat() if h.start_date else 'unknown'})"
-                                        for h in open_seasons
-                                    )
-                                    + ". Log the activity from the production you mean, or send "
-                                    "its `history` id."
-                                ]
-                            }
+                            season_refusals.coded(
+                                "history",
+                                "This parcel has more than one open production, so the season "
+                                "for this activity is ambiguous: "
+                                + "; ".join(
+                                    f"{h.name or 'Production'} (id {h.id}, started "
+                                    f"{h.start_date.date().isoformat() if h.start_date else 'unknown'})"
+                                    for h in open_seasons
+                                )
+                                + ". Log the activity from the production you mean, or send "
+                                "its `history` id.",
+                                season_refusals.SEASON_AMBIGUOUS,
+                                seasons=", ".join(h.name or "Production" for h in open_seasons),
+                            )
                         )
                     history = parcel.current_history
 
@@ -4095,7 +4096,11 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             # Every parcel matched but none had an active production. Answering 201 here
             # would tell the grower their record was saved when nothing was written.
             raise ValidationError(
-                {"detail": ["No active production found for the selected parcel. Start a production first."]}
+                season_refusals.coded(
+                    "detail",
+                    "No active production found for the selected parcel. Start a production first.",
+                    season_refusals.NO_OPEN_SEASON,
+                )
             )
 
         # Bind the created row to the serializer so the 201 body carries the real id.
@@ -4184,12 +4189,13 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         )
         finish_day = timezone.localdate(history.finish_date)
         if event_day is None or event_day <= finish_day:
-            raise PermissionDenied(
+            raise season_refusals.ClosedSeasonRefused(
                 f"This production was finished on {finish_day.isoformat()}, so its "
                 "season is a closed record. A record dated inside it goes in as a "
                 "correction to an existing activity (the original is kept beside it). "
                 "Work done after the finish date — shipments from storage, cover crop, "
-                "post-harvest field work — can be logged here with its own later date."
+                "post-harvest field work — can be logged here with its own later date.",
+                finish_day,
             )
 
     @staticmethod
@@ -4336,21 +4342,32 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 except (ValueError, ValidationError, DjangoValidationError):
                     history = None
             if history is None:
-                raise ValidationError({"history": [f"No production {raw_history!r} on this parcel."]})
+                raise ValidationError(
+                    season_refusals.coded(
+                        "history",
+                        f"No production {raw_history!r} on this parcel.",
+                        season_refusals.SEASON_NOT_ON_PARCEL,
+                    )
+                )
             return history
         open_seasons = list(Production.objects.filter(parcel=parcel, finish_date__isnull=True).order_by("-start_date"))
         if not open_seasons:
             raise ValidationError(
-                {
-                    "history": [
-                        "This parcel has no open production. Start one, or name the finished season "
-                        "for work done after its harvest."
-                    ]
-                }
+                season_refusals.coded(
+                    "history",
+                    "This parcel has no open production. Start one, or name the finished season "
+                    "for work done after its harvest.",
+                    season_refusals.NO_OPEN_SEASON,
+                )
             )
         if len(open_seasons) > 1:
             raise ValidationError(
-                {"history": ["This parcel has more than one open production. Name the one this activity belongs to."]}
+                season_refusals.coded(
+                    "history",
+                    "This parcel has more than one open production. Name the one this activity belongs to.",
+                    season_refusals.SEASON_AMBIGUOUS,
+                    seasons=", ".join(h.name or "Production" for h in open_seasons),
+                )
             )
         return open_seasons[0]
 
@@ -4471,7 +4488,7 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 try:
                     self._refuse_inside_closed_season(locked[history.id], validated.get("date"))
                 except PermissionDenied as exc:
-                    closed[key] = [exc.detail]
+                    closed[key] = exc.detail
             if closed:
                 raise ValidationError({"targets": closed})
 
