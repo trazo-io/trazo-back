@@ -33,7 +33,16 @@ class ParcelApplicationStatusTests(TestCase):
         self.assertEqual(status["state"], "not_started")
         self.assertEqual(
             set(status["missing"]),
-            {"identity", "transition", "buffers", "land_history", "certification_status", "livestock"},
+            # site_statements since 2026-11-21: container production and treated lumber are null until answered.
+            {
+                "identity",
+                "transition",
+                "buffers",
+                "land_history",
+                "certification_status",
+                "livestock",
+                "site_statements",
+            },
         )
         # Since 2026-09-24 the map is evidence, not an answer: it is reported on the evidence axis
         # only, so the two axes cannot disagree about it.
@@ -41,6 +50,8 @@ class ParcelApplicationStatusTests(TestCase):
         self.assertEqual(status["evidence_detail"]["map"], "none")
 
     def test_live_model_changes_move_the_status(self):
+        self.parcel.container_production = False
+        self.parcel.treated_lumber_present = False
         self.parcel.apn = "042-031-007"
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
@@ -62,6 +73,8 @@ class ParcelApplicationStatusTests(TestCase):
 
         An unanswered question is not "no": the check passes only on one of the three answers.
         """
+        self.parcel.container_production = False
+        self.parcel.treated_lumber_present = False
         self.parcel.apn = "042-031-007"
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
@@ -91,6 +104,7 @@ class ParcelApplicationStatusTests(TestCase):
         self.parcel.date_began_managing = date(2020, 1, 1)
         self.parcel.polygon = [{"lat": 1, "lng": 2}]
         self.parcel.container_production = True
+        self.parcel.treated_lumber_present = False
         self.parcel.application_answers = {
             "no_adjoining_prohibited": True,
             "currently_certified": "no",
@@ -140,6 +154,7 @@ class ParcelApplicationAPITests(TestCase):
                     "apn": "042-031-007",
                     "date_began_managing": "2020-01-01",
                     "container_production": True,
+                    "treated_lumber_present": False,
                     "county": "Yolo",
                     "livestock_present": "none",
                 },

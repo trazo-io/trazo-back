@@ -84,6 +84,9 @@ class ParcelTwoAxesTests(TestCase):
             polygon={"type": "Polygon", "coordinates": [ring]} if polygon else None,
             buffer_zones=[{"direction": "north", "adjoining_land_use": "County road"}] if answered else [],
             application_answers={"currently_certified": "yes", "livestock_present": "none"} if answered else {},
+            # Null until answered since 2026-11-21; an answered parcel states both.
+            container_production=False if answered else None,
+            treated_lumber_present=False if answered else None,
         )
         if answered:
             for year in (2023, 2024, 2025):

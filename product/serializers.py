@@ -527,6 +527,9 @@ class CreateParcelSerializer(CallerScopedRelatedFields, USContactFieldsMixin, Mo
         "system_pressure_psi",
         "pump_test_date",
         "ca_near_schoolsite",
+        # Null until answered since 2026-11-21 (first-run audit).
+        "container_production",
+        "treated_lumber_present",
     )
 
     def to_internal_value(self, data):

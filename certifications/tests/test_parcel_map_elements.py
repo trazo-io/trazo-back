@@ -112,7 +112,12 @@ class TheList(SimpleTestCase):
         self.assertIn("livestock", _values(unmarked_elements([], {"livestock_present": "yes"}, None, "wsda")))
         self.assertIn(
             "treated_lumber",
-            _values(unmarked_elements([], {"treated_lumber_noncontact_present": True}, None, "ccof")),
+            # Under an answered No, where the installation question is asked (null until answered since 2026-11-21).
+            _values(
+                unmarked_elements(
+                    [], {"treated_lumber_present": False, "treated_lumber_noncontact_present": True}, None, "ccof"
+                )
+            ),
         )
         self.assertIn("treated_lumber", _values(unmarked_elements([], {"treated_lumber_present": True}, None, "otco")))
 
@@ -249,6 +254,10 @@ class TreatedLumberAwayFromCrops(_Parcel):
     def test_a_plan_saying_none_beside_a_parcel_with_an_installation_prints_a_review(self):
         from certifications.osp_modules import MODULES_BY_KEY
 
+        # The installation question is asked only under an answered No; since 2026-11-21 a new parcel holds no
+        # answer to the contact question instead of a default False.
+        self.parcel.treated_lumber_present = False
+        self.parcel.save(update_fields=["treated_lumber_present"])
         self.answer(treated_lumber_noncontact_present=True)
         osp = self.plan(CCOF, {"g6_0_production": {"answers": {"treated_lumber_any": {"value": False}}}})
         data = generate_module_pdf(osp, MODULES_BY_KEY["g6_0_production"].key)
