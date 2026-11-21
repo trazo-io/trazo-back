@@ -689,7 +689,7 @@ def _closed_season_reason(history, event_when):
     try:
         EventViewSet._refuse_inside_closed_season(history, event_when)
     except PermissionDenied as exc:
-        return str(exc.detail)
+        return getattr(exc, "sentence", None) or str(exc.detail)
     return None
 
 
