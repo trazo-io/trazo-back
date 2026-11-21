@@ -108,6 +108,28 @@ def certificate_of_record(establishment_id) -> OperationCertificate:
     return OperationCertificate()
 
 
+def recorded_without_number(establishment_id) -> str | None:
+    """The agent of a farm-profile NOP certificate that carries no number, when the operation has no
+    certificate of record: the agent's name, "" when that row names none, None otherwise.
+
+    First run as a new grower (2026-11-21): a grower who added her WSDA certification without its
+    number (she did not know it offhand) got "No certificate is on file for this operation in Trazo"
+    on every parcel page and "Certificate: —" on the cover, while G8.0 counted "1 organic
+    certificate on file". The same one-record rule as `certificate_of_record`: the agent comes from
+    the row it describes, in the same order, and no number is supplied from anywhere else.
+    """
+    try:
+        if certificate_of_record(establishment_id).number:
+            return None
+        candidates = _certification_candidates(establishment_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read the certification rows for establishment %s", establishment_id)
+        return None
+    if not candidates:
+        return None
+    return candidates[0][1]
+
+
 def agent_names(establishment_id) -> list[str]:
     """Every certifying-agent name on the operation's records, most authoritative first.
 
