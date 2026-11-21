@@ -97,3 +97,52 @@ def below_minimum_error(crop_type) -> dict:
             }
         },
     }
+
+
+#: Code for the refusal of a crop set on a season whose raw-manure records already fall short of
+#: that crop's floor.
+CROP_BELOW_FLOOR_CODE = "manure_below_floor_for_crop"
+
+
+def records_below_floor(history, crop_type) -> list:
+    """The season's raw-manure records whose stored interval is shorter than `crop_type`'s floor.
+
+    A season with no crop holds no floor (every save path defers), so 90 days could be saved on it;
+    naming the crop later must not leave those records under the floor without a word.
+    """
+    from history.models import SoilManagementEvent
+
+    rows = SoilManagementEvent.objects.filter(history=history, manure_harvest_interval__in=("90", "120")).order_by(
+        "manure_application_date", "date", "pk"
+    )
+    return [ev for ev in rows if below_minimum(ev.manure_harvest_interval, crop_type)]
+
+
+def crop_below_floor_error(crop_type, records) -> dict:
+    """The refusal of a crop set while `records` fall short of its floor, as a DRF error body."""
+    name = getattr(crop_type, "name", "") or "This crop"
+    dates = ", ".join(
+        (ev.manure_application_date or (ev.date.date() if ev.date else None)).isoformat()
+        for ev in records
+        if ev.manure_application_date or ev.date
+    )
+    count = len(records)
+    noun = "record keeps" if count == 1 else "records keep"
+    message = (
+        f"{name}: {count} raw-manure {noun} a harvest interval of 90 days on this production "
+        f"(applied {dates}). The edible part touches the soil, so 7 CFR 205.203(c)(1)(ii) requires at "
+        f"least {SOIL_CONTACT_MINIMUM_DAYS} days. Correct each record to {SOIL_CONTACT_MINIMUM_DAYS} "
+        "days, or record the manure as composted if it meets § 205.203(c)(2), then set the crop."
+    )
+    return {
+        "crop_type_id": [message],
+        "error_codes": {
+            "crop_type_id": {
+                "code": CROP_BELOW_FLOOR_CODE,
+                "crop": name,
+                "count": str(count),
+                "dates": dates,
+                "days": str(SOIL_CONTACT_MINIMUM_DAYS),
+            }
+        },
+    }
