@@ -318,6 +318,86 @@ class DossierReadsTheSameFloorTests(_Production):
         self.assertIn("SHORT: crop requires at least 120 days", text)
 
 
+class TheDossierNamesWhichManureProblemItIsTests(_Production):
+    """A short interval and a short plan are two problems, and each says which it is.
+
+    Walkthrough 2026-11-20 (W1): raw manure on pears, 90 days chosen (right), planned harvest 57
+    days after. The table row said "OK: at least 90 days ...; Plan short by 33 days", and the
+    paragraph under it told the inspector the farmer-selected interval "does not match the
+    soil-contact classification required for this crop", then sent them to a "Pre-Export
+    Consistency Check on page 2" that the operation dossier does not have. One flag carried both
+    problems and the paragraph only knew the older one.
+    """
+
+    def _record(self, crop, interval, planned_after_days=None):
+        history = self._history(crop)
+        applied = (timezone.now() - timedelta(days=150)).date()
+        SoilManagementEvent.objects.create(
+            history=history,
+            created_by=self.user,
+            type="OM",
+            date=timezone.now() - timedelta(days=150),
+            amendment_type="manure",
+            manure_application_date=applied,
+            manure_harvest_interval=interval,
+            manure_harvest_date_planned=(
+                applied + timedelta(days=planned_after_days) if planned_after_days is not None else None
+            ),
+        )
+        return history
+
+    @staticmethod
+    def _text(buf):
+        from pdfminer.high_level import extract_text
+
+        return " ".join(extract_text(buf).split())
+
+    def _season_pdf(self, history):
+        from history.services.audit_export_service import AuditExportService
+
+        return self._text(AuditExportService(history, certification_type="organic").generate_pdf(strict_ofpp=False))
+
+    def _operation_pdf(self):
+        from history.services.operation_audit_export_service import OperationAuditExportService
+
+        return self._text(
+            OperationAuditExportService(self.parcel.establishment, certification_type="organic").generate_pdf()
+        )
+
+    def test_a_right_interval_with_a_short_plan_is_not_called_a_class_mismatch(self):
+        self._record(self.walnuts, "90", planned_after_days=57)
+        for text in (self._season_pdf(Production.objects.get()), self._operation_pdf()):
+            self.assertIn("OK: at least 90 days", text)
+            self.assertIn("Plan short by 33 days", text)
+            self.assertIn("is earlier than the earliest safe harvest date", text)
+            self.assertNotIn("soil-contact classification", text)
+            self.assertNotIn("shorter than this crop's minimum", text)
+
+    def test_a_short_interval_is_named_as_one(self):
+        self._record(self.lettuce, "90")
+        text = self._season_pdf(Production.objects.get())
+        self.assertIn("SHORT: crop requires at least 120 days", text)
+        self.assertIn("is shorter than this crop's minimum", text)
+        self.assertNotIn("is earlier than the earliest safe harvest date", text)
+
+    def test_neither_warning_prints_when_interval_and_plan_both_hold(self):
+        self._record(self.walnuts, "90", planned_after_days=120)
+        text = self._season_pdf(Production.objects.get())
+        self.assertIn("OK: at least 90 days", text)
+        self.assertNotIn("Plan short", text)
+        self.assertNotIn("shorter than this crop's minimum", text)
+        self.assertNotIn("is earlier than the earliest safe harvest date", text)
+
+    def test_the_operation_dossier_points_to_nothing_it_does_not_contain(self):
+        self._record(self.lettuce, "90", planned_after_days=57)
+        text = self._operation_pdf()
+        # Both problems print, and neither sends the reader to a check this PDF does not hold.
+        self.assertIn("is shorter than this crop's minimum", text)
+        self.assertIn("is earlier than the earliest safe harvest date", text)
+        if "Pre-Export Consistency Check" in text:
+            self.fail("the operation dossier names a Pre-Export Consistency Check; it renders none")
+
+
 # Every seeded crop, classified by name. True: the edible part touches the soil, or can
 # (§ 205.203(c)(1)(ii), 120 days). False: it is held off the ground ((c)(1)(iii), 90 days).
 # A category cannot decide this ("berry" holds blueberries and strawberries), so a crop added to
