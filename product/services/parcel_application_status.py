@@ -105,6 +105,12 @@ def parcel_application_status(parcel, osp=None) -> dict:
     if answers.get("livestock_present") not in ("none", "yes"):
         missing.append("livestock")
 
+    # Container production (CCOF ORGB49 F3) and treated lumber (§ 205.206(f)) are null until answered since
+    # 2026-11-21. Before then a default False answered both "No", so an unanswered parcel never read as open;
+    # now it keeps section A open instead of printing a statement nobody made.
+    if parcel.container_production is None or parcel.treated_lumber_present is None:
+        missing.append("site_statements")
+
     if not missing:
         state = "complete"
     else:

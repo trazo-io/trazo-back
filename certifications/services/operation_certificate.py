@@ -108,6 +108,56 @@ def certificate_of_record(establishment_id) -> OperationCertificate:
     return OperationCertificate()
 
 
+def recorded_without_number(establishment_id) -> str | None:
+    """The agent of an active farm-profile NOP certificate that carries no number: the agent's name, "" when
+    that row names none, None otherwise.
+
+    First run as a new grower (2026-11-21): a grower who added her WSDA certification without its
+    number (she did not know it offhand) got "No certificate is on file for this operation in Trazo"
+    on every parcel page and "Certificate: —" on the cover, while G8.0 counted "1 organic
+    certificate on file". The same one-record rule as `certificate_of_record`: the agent comes from
+    the row it describes and no number is supplied from anywhere else.
+
+    Only an ACTIVE row counts: a revoked, suspended or expired certificate is not the operation's
+    certificate (review of back #513). Callers ask only after `certificate_of_record` found no number,
+    so the rows are read once here, newest effective date first.
+    """
+    from certifications.constants import NOP_CERTIFICATION_TYPES
+    from certifications.models import Certification
+
+    try:
+        rows = sorted(
+            Certification.objects.filter(
+                establishment_id=establishment_id, certification_type__in=NOP_CERTIFICATION_TYPES
+            ),
+            key=lambda c: c.effective_date or date.min,
+            reverse=True,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read the certification rows for establishment %s", establishment_id)
+        return None
+    for row in rows:
+        if row.is_active and not _clean(row.certification_number):
+            return _clean(row.certifier_name)
+    return None
+
+
+def unnumbered_from_another_agent(osp, agent: str) -> str:
+    """The plan's agent name when `agent` (from `recorded_without_number`) is a known agent other than the one
+    the plan names, else "". The numbered certificate gets this check in `certificate_from_another_agent`; a
+    certificate without its number gets the same one (review of back #513)."""
+    from certifications.certifying_agents import agent_for_name
+    from certifications.services.packet_coverage import packet_agent
+
+    if not agent:
+        return ""
+    plan = packet_agent(osp)
+    held = agent_for_name(agent)
+    if not plan.slug or held is None or held.slug == plan.slug:
+        return ""
+    return plan.name or plan.slug
+
+
 def agent_names(establishment_id) -> list[str]:
     """Every certifying-agent name on the operation's records, most authoritative first.
 

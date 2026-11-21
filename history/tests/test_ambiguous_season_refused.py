@@ -155,3 +155,55 @@ class AmbiguousSeasonTests(APITestCase):
         self.assertIn("No production", str(resp.data))
         self.assertEqual(WeatherEvent.objects.count(), 0)
         self.assertEqual(Production.objects.filter(pk=mine.pk).count(), 1)
+
+
+class SeasonRefusalsCarryACodeTests(AmbiguousSeasonTests):
+    """Each refusal keeps its English sentence and adds `error_codes`, so the app can word it in the
+    reader's language (recordkeeping checklist run 2026-11-16, VID-07: a Spanish grower read these in
+    English). Runs the parent's tests too; they must keep passing with the codes added."""
+
+    def _code(self, resp, key):
+        return {k: str(v) for k, v in resp.data["error_codes"][key].items()}
+
+    def test_two_open_seasons_names_them_in_the_code(self):
+        self._season("Honeycrisp 2025", 400)
+        self._season("Honeycrisp 2026", 60)
+        resp = self._post(self._weather_payload())
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("more than one open production", str(resp.data["history"][0]))
+        self.assertEqual(
+            self._code(resp, "history"),
+            {"code": "season_ambiguous", "seasons": "Honeycrisp 2026, Honeycrisp 2025"},
+        )
+
+    def test_a_season_the_parcel_does_not_have(self):
+        self._season("Honeycrisp 2026", 60)
+        elsewhere = Production.objects.create(
+            parcel=Parcel.objects.create(name="Other Block", establishment=self.est, area=2.0),
+            product=self.product,
+            crop_type=self.crop,
+            name="Other Block 2026",
+            start_date=timezone.now() - timedelta(days=30),
+        )
+        resp = self._post(self._weather_payload(history=elsewhere.id))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._code(resp, "history"), {"code": "season_not_on_parcel"})
+
+    def test_a_parcel_with_no_season(self):
+        resp = self._post(self._weather_payload())
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No active production", str(resp.data["detail"][0]))
+        self.assertEqual(self._code(resp, "detail"), {"code": "no_open_season"})
+
+    def test_a_record_dated_inside_a_finished_season(self):
+        finished = self._season("Honeycrisp 2025", 400, finished=True)
+        resp = self._post(
+            self._weather_payload(history=finished.id, date=(timezone.now() - timedelta(days=3)).isoformat())
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("closed record", resp.data["detail"])
+        self.assertEqual(
+            self._code(resp, "detail"),
+            {"code": "season_closed", "finish_date": timezone.localdate(finished.finish_date).isoformat()},
+        )
+        self.assertEqual(WeatherEvent.objects.count(), 0)

@@ -221,6 +221,8 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
             update_fields = set()
             for key, value in incoming.items():
                 field = question_to_field.get(key)
+                if field and value is None and not Parcel._meta.get_field(field).null:
+                    return Response({"detail": f"{key}: an answer is required"}, status=400)
                 if field:
                     expected = self._APPLICATION_PARCEL_FIELDS[field]
                     if expected == "date":
@@ -234,7 +236,10 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     elif expected is bool:
                         # bool("false") is True — JSON clients send real booleans,
                         # but a string must not silently flip a compliance flag.
-                        if isinstance(value, str):
+                        # None stays None: the question is not answered (never a "No").
+                        if value is None or (isinstance(value, str) and value.strip().lower() in ("", "null", "none")):
+                            value = None
+                        elif isinstance(value, str):
                             value = value.strip().lower() in ("true", "1", "yes")
                         else:
                             value = bool(value)

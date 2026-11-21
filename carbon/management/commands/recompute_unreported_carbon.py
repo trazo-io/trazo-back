@@ -44,13 +44,12 @@ def _entries_for(event):
 
 def _dump_with_dependents(queryset) -> str:
     """The entries and every row Django would delete with them, as fixture JSON."""
-    from django.core import serializers
     from django.db.models.deletion import Collector
 
     collector = Collector(using=queryset.db)
     collector.collect(list(queryset))
     rows = [obj for model_rows in collector.data.values() for obj in model_rows]
-    return serializers.serialize("json", rows)
+    return ops.dump_rows_exactly(rows)
 
 
 def plan():

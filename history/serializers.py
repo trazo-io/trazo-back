@@ -3386,6 +3386,14 @@ class HistoryWriteSerializer(serializers.ModelSerializer):
             except CropType.DoesNotExist:
                 raise serializers.ValidationError({"crop_type_id": "Unknown crop type."})
             if instance.crop_type_id is None:
+                # A season with no crop holds no raw-manure floor, so 90 days could be saved on it.
+                # Naming a crop whose floor is 120 would leave those records short with no word
+                # said; refuse, as every other save path refuses 90 days on that crop.
+                from history.services.manure_interval import crop_below_floor_error, records_below_floor
+
+                short = records_below_floor(instance, crop_type)
+                if short:
+                    raise serializers.ValidationError(crop_below_floor_error(crop_type, short))
                 instance.crop_type = crop_type
                 if instance.product_id is None:
                     product, _ = Product.objects.get_or_create(name=crop_type.name)

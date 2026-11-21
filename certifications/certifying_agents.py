@@ -156,9 +156,34 @@ def _index() -> dict[str, CertifyingAgent]:
 _BY_SPELLING = _index()
 
 
+#: "WSDA (Washington State Department of Agriculture)", "Washington State Department of Agriculture (WSDA)".
+_PARENTHESISED = re.compile(r"^\s*(?P<a>[^()]+?)\s*\((?P<b>[^()]+)\)\s*$")
+#: "WSDA — Washington State Department of Agriculture", the picker's own label. A spaced dash only, so
+#: "NOFA-NY" and "Pro-Cert" are never split.
+_DASHED = re.compile(r"^\s*(?P<a>.+?)\s+[—–-]\s+(?P<b>.+?)\s*$")
+
+
 def agent_for_name(name) -> CertifyingAgent | None:
-    """The agent a typed or stored name means, or None. Exact after normalisation, never fuzzy."""
-    return _BY_SPELLING.get(normalize_agent_name(name))
+    """The agent a typed or stored name means, or None. Exact after normalisation, never fuzzy.
+
+    A name written as two spellings of one agent, "WSDA (Washington State Department of Agriculture)" or
+    "WSDA — Washington State Department of Agriculture", means that agent when EACH half is an exact
+    spelling of it (first-run audit, 2026-11-21: a grower typed the first form on her parcel application and
+    all three parcels fell out of WSDA's routing). Two halves naming two agents mean neither.
+    """
+    exact = _BY_SPELLING.get(normalize_agent_name(name))
+    if exact is not None:
+        return exact
+    text = str(name or "")
+    for pattern in (_PARENTHESISED, _DASHED):
+        match = pattern.match(text)
+        if not match:
+            continue
+        first = _BY_SPELLING.get(normalize_agent_name(match.group("a")))
+        second = _BY_SPELLING.get(normalize_agent_name(match.group("b")))
+        if first is not None and first is second:
+            return first
+    return None
 
 
 def agent_by_slug(slug) -> CertifyingAgent | None:

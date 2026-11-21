@@ -513,6 +513,22 @@ class Apply(RecomputeSoilCarbonBase):
 
 
 class Restore(RecomputeSoilCarbonBase):
+    def test_a_restore_keeps_every_microsecond_of_a_timestamp(self):
+        """The restore file kept milliseconds only: a row stamped 12:00:29.000123 came back as
+        12:00:29, and the exact-state tests here failed whenever the clock landed in that range
+        (back #502 and #503, 2026-11-19)."""
+        stamp = timezone.now().replace(microsecond=123)
+        CarbonEntry.objects.filter(pk=self.stale_lab.pk).update(timestamp=stamp, created_at=stamp)
+        self.dry_run()
+        self.apply()
+        self.assertFalse(CarbonEntry.objects.filter(pk=self.stale_lab.pk).exists())
+
+        self.run_cmd("--restore", self.path("restore.json"))
+
+        restored = CarbonEntry.objects.get(pk=self.stale_lab.pk)
+        self.assertEqual(restored.timestamp, stamp)
+        self.assertEqual(restored.created_at, stamp)
+
     def test_restore_brings_back_the_exact_prior_state_including_the_removed_entry(self):
         before = _all_carbon_rows(self.history)
         self.assertTrue(any(row["model"] == "carbon.usdacalculationaudit" for row in before))

@@ -70,6 +70,12 @@ class CertificateLine:
         return bool(self.number)
 
 
+def _recorded_without_number(establishment_id):
+    from certifications.services.operation_certificate import recorded_without_number
+
+    return recorded_without_number(establishment_id)
+
+
 def certificate_line(establishment) -> CertificateLine:
     """Number and agent from `certificate_of_record`; dates and document only when the same
     `Certification` row supplied the number — never assembled from two records."""
@@ -711,6 +717,8 @@ def land_history_summary(parcel, answers: Optional[dict] = None) -> dict:
             if line.on_file
             else None
         ),
+        # A certificate recorded on the farm profile without its number (2026-11-21): its agent, "" or None.
+        "certificate_unnumbered_agent": (None if line.on_file else _recorded_without_number(parcel.establishment_id)),
         "current_manager": _row_json(current_manager_row(parcel, answers)),
         "prior_managers": [_row_json(r) for r in prior],
         # T21-F1: on a route that does not ask for the accounting, the wizard gets what the PDF prints

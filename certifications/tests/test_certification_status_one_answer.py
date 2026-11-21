@@ -29,7 +29,7 @@ from history.services.audit_export_service import AuditExportService
 from product.models import Parcel, Product
 from users.models import User
 
-_NOTE = "[REVIEW] The parcel is stated above as currently certified, but no organic certificate"
+_NOTE = "[REVIEW] The parcel is stated above as currently certified, but Trazo prepares this plan as a first"
 _PLAIN = "No certificate is on file for this operation in Trazo. The parcel is stated above as"
 
 
@@ -60,7 +60,7 @@ class _Operation(TestCase):
             },
         )
 
-    def _certify(self):
+    def _certify(self, **extra):
         # A certification row with no certificate number: the cover reads the operation as renewing,
         # and the parcel page's certificate line is still not on file (it needs a number).
         Certification.objects.create(
@@ -68,6 +68,7 @@ class _Operation(TestCase):
             certification_type="usda_organic",
             certifier_name="Washington State Department of Agriculture",
             effective_date=date(2020, 1, 1),
+            **extra,
         )
 
 
@@ -84,11 +85,20 @@ class ParcelPageNamesTheMissingCertificateTests(_Operation):
 
     def test_an_operation_with_a_certification_on_record_keeps_the_plain_sentence(self):
         """The cover reads that operation as renewing, so there is no first-application reading to
-        reconcile; the certificate line is still honest that no numbered certificate is on file."""
-        self._certify()
+        reconcile; the certificate line is still honest that no certificate is on file. A lapsed row:
+        an active one without its number is named instead (back #513)."""
+        self._certify(expiry_date=date(2024, 12, 31))
         text = self._page()
         self.assertIn(_PLAIN, text)
         self.assertNotIn(_NOTE, text)
+
+    def test_an_active_certificate_without_its_number_is_named_not_flagged(self):
+        """Back #513's sentence for a certificate recorded without its number wins over both."""
+        self._certify()
+        text = self._page()
+        self.assertIn("The farm profile records this operation's organic certificate", text)
+        self.assertNotIn(_NOTE, text)
+        self.assertNotIn("No certificate is on file", text)
 
     def test_a_parcel_not_stated_certified_prints_neither(self):
         self.parcel.application_answers = {"currently_certified": "no"}
