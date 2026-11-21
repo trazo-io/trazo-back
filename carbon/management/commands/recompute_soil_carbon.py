@@ -300,7 +300,9 @@ def _cascade_rows(instances: List) -> List:
 
 def dump_entries(entries: Iterable) -> str:
     """Entries plus every dependent row, as fixture JSON (raw restore keeps auto_now values)."""
-    return serializers.serialize("json", _cascade_rows(list(entries)))
+    from common.services.data_operations import dump_rows_exactly
+
+    return dump_rows_exactly(_cascade_rows(list(entries)))
 
 
 def load_fixture(text: str) -> None:

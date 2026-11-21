@@ -22,14 +22,40 @@ A command supplies `plan()` (the list of changes) and `write(model_label, pk, va
 
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List
 
+from django.core import serializers
 from django.core.management.base import CommandError
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
+
+
+class ExactJSONEncoder(DjangoJSONEncoder):
+    """Django's encoder, keeping every microsecond of a datetime or a time.
+
+    DjangoJSONEncoder keeps milliseconds only, so a row dumped to a restore file and loaded back
+    lost its last three digits: `updated_at` 12:00:29.000123 came back as 12:00:29. A restore must
+    put back exactly what was there, and the carbon recompute tests compare before and after and
+    failed whenever a timestamp fell in that range (back #502 and #503, 2026-11-19).
+    """
+
+    def default(self, o):
+        if isinstance(o, datetime.datetime):
+            text = o.isoformat()
+            return text[:-6] + "Z" if text.endswith("+00:00") else text
+        if isinstance(o, datetime.time) and o.utcoffset() is None:
+            return o.isoformat()
+        return super().default(o)
+
+
+def dump_rows_exactly(rows) -> str:
+    """Model rows as fixture JSON a restore can load back without losing any precision."""
+    return serializers.serialize("json", rows, cls=ExactJSONEncoder)
 
 
 class ReportError(CommandError):
