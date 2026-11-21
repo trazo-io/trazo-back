@@ -110,3 +110,62 @@ class ParcelAnswersNotPrefilledTests(TestCase):
         parcel.save(update_fields=["treated_lumber_present"])
         text = _text(generate_module_pdf(osp, PARCEL_APPLICATION.key, parcel=parcel))
         self.assertRegex(text.split(question, 1)[1][:60], r"^\s*No\b", "premise: an answered No still prints No")
+
+
+class ReviewOfBack512Tests(TestCase):
+    """The independent review of back #512."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Sample Ridge Orchards")
+        self.user = User.objects.create_user(email="ridge512@test.com", password="x")
+        WorksIn.objects.create(user=self.user, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        self.est = Establishment.objects.create(name="Sample Ridge", company=self.company, state="WA")
+        self.parcel = Parcel.objects.create(name="Block B", establishment=self.est, area=15.0)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = (
+            f"/api/companies/{self.company.id}/establishments/{self.est.id}/parcels/{self.parcel.id}/application/"
+        )
+
+    def test_an_unanswered_statement_keeps_the_application_open(self):
+        from product.services.parcel_application_status import parcel_application_status
+
+        self.assertIn("site_statements", parcel_application_status(self.parcel)["missing"])
+        self.parcel.treated_lumber_present = False
+        self.parcel.save(update_fields=["treated_lumber_present"])
+        self.assertIn("site_statements", parcel_application_status(self.parcel)["missing"], "container still open")
+        self.parcel.container_production = False
+        self.parcel.save(update_fields=["container_production"])
+        self.assertNotIn("site_statements", parcel_application_status(self.parcel)["missing"])
+
+    def test_an_empty_or_null_string_clears_instead_of_answering_no(self):
+        self.parcel.treated_lumber_present = True
+        self.parcel.save(update_fields=["treated_lumber_present"])
+        for blank in ("", "null"):
+            r = self.client.put(self.url, {"values": {"treated_lumber_present": blank}}, format="json")
+            self.assertEqual(r.status_code, 200, r.data)
+            self.parcel.refresh_from_db()
+            self.assertIsNone(self.parcel.treated_lumber_present, blank)
+            self.parcel.treated_lumber_present = True
+            self.parcel.save(update_fields=["treated_lumber_present"])
+        r = self.client.put(self.url, {"values": {"treated_lumber_present": "false"}}, format="json")
+        self.parcel.refresh_from_db()
+        self.assertIs(self.parcel.treated_lumber_present, False, "premise: a real No is still stored")
+
+    def test_null_for_a_column_that_cannot_hold_it_is_refused(self):
+        self.client.raise_request_exception = False  # a crash reads as a 500 response, not a test error
+        r = self.client.put(self.url, {"values": {"parcel_name": None}}, format="json")
+        self.assertEqual(r.status_code, 400, getattr(r, "data", r))
+        self.parcel.refresh_from_db()
+        self.assertEqual(self.parcel.name, "Block B")
+
+    def test_an_installation_answer_counts_only_under_an_answered_no(self):
+        from certifications.services.parcel_map_elements import _treated_lumber
+
+        self.assertTrue(
+            _treated_lumber({"treated_lumber_present": False, "treated_lumber_noncontact_present": True}, None)
+        )
+        self.assertFalse(
+            _treated_lumber({"treated_lumber_present": None, "treated_lumber_noncontact_present": True}, None)
+        )
+        self.assertTrue(_treated_lumber({"treated_lumber_present": True}, None))

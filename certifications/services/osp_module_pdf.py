@@ -180,7 +180,8 @@ def _treated_lumber_parcel_lines(osp, module, question, value) -> list:
     other = [
         p.name
         for p in parcels
-        if not p.treated_lumber_present
+        # Only under an answered No: the installation question is asked only then (null since 2026-11-21).
+        if p.treated_lumber_present is False
         and (p.application_answers or {}).get("treated_lumber_noncontact_present") is True
     ]
     if other:
