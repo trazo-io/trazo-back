@@ -547,6 +547,11 @@ jobs:
       # so the parcel takes WSDA's existing-site route; a farm-profile certificate without its number is named on
       # the cover and the parcel page instead of "No certificate is on file". Builds its own farm; no sibling repo.
       #
+      # 2026-11-21: product.tests.test_parcel_answers_not_prefilled joins. From the first run as a new grower:
+      # a new parcel holds no answer to container production or treated lumber (null, not a default No), the
+      # application stores and clears them, and the parcel page prints them as not answered. Builds its own farm;
+      # no sibling repo.
+      #
       # 2026-11-20: certifications.tests.test_regrade_plan_contradictions joins. From the blind re-grade of
       # 2026-11-19: a G6.2 attested not applicable beside G6.1 cold storage or a facility that stores the crop, and a
       # certification history that another agent's parcels or certificate contradict, each print a [REVIEW] line.
@@ -1173,6 +1178,7 @@ jobs:
             certifications.tests.test_regrade_packet_truth \
             certifications.tests.test_regrade_plan_contradictions \
             certifications.tests.test_first_run_parcel_certifier \
+            product.tests.test_parcel_answers_not_prefilled \
             certifications.tests.test_sourced_products \
             certifications.tests.test_facility_crops \
             certifications.tests.test_water_lumber_noncertified \

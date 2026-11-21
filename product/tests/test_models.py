@@ -59,7 +59,8 @@ class ParcelCoreTests(ParcelTestBase):
         self.assertEqual(parcel.agricultural_details, {})
         self.assertEqual(parcel.application_answers, {})
         self.assertFalse(parcel.certified)
-        self.assertFalse(parcel.container_production)
+        # Null until the parcel application answers it (2026-11-21): a default False was a "No" nobody gave.
+        self.assertIsNone(parcel.container_production)
 
     def test_str_identifies_the_parcel_and_its_farm(self):
         parcel = self.parcel(name="Creek Block")

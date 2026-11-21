@@ -41,8 +41,10 @@ def _livestock(parcel_answers, osp) -> bool:
 
 
 def _treated_lumber(parcel_answers, osp) -> bool:
+    # The installation question is asked only under an answered No (null until answered since 2026-11-21).
     return parcel_answers.get("treated_lumber_present") is True or (
-        parcel_answers.get("treated_lumber_noncontact_present") is True
+        parcel_answers.get("treated_lumber_present") is False
+        and parcel_answers.get("treated_lumber_noncontact_present") is True
     )
 
 

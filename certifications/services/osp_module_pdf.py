@@ -192,7 +192,8 @@ def _treated_lumber_parcel_lines(osp, module, question, value) -> list:
     other = [
         p.name
         for p in parcels
-        if not p.treated_lumber_present
+        # Only under an answered No: the installation question is asked only then (null since 2026-11-21).
+        if p.treated_lumber_present is False
         and (p.application_answers or {}).get("treated_lumber_noncontact_present") is True
     ]
     if other:
@@ -2960,7 +2961,10 @@ def generate_module_pdf(osp, module_key: str, parcel=None) -> bytes:
                 # for an agent with no question register nothing else in the packet says which
                 # question is open (production packet, 2026-10-29). A plain paragraph, not a
                 # `QuestionLabel`: the question index reads those as the places answers are printed.
-                if question.parcel_field:
+                # A bound column is printed by its own section when blank (identity, tenure), except the
+                # two parcel yes/no statements: nothing else names them, and since 2026-11-21 a new parcel
+                # holds no answer to either instead of a default "No".
+                if question.parcel_field and question.kind != "boolean":
                     continue
                 if question.required:
                     open_page(page)
