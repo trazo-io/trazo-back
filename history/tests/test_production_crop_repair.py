@@ -14,7 +14,8 @@ can't (start_production requires crop and backfills Product). The rules:
      those records: a season with no crop holds no floor, so 90 days could be saved on it.
 """
 
-from datetime import date
+from datetime import date, datetime
+from datetime import timezone as dt_timezone
 
 from django.utils import timezone
 
@@ -167,7 +168,7 @@ class CropSetIsHeldToTheManureFloorTests(APITestCase):
         cls.carrots = crop("Floor Test Carrots", "floor-test-carrots", "vegetable", True)
         cls.walnuts = crop("Floor Test Walnuts", "floor-test-walnuts", "tree_nut", False)
 
-    def _season_with_manure(self, *intervals):
+    def _season_with_manure(self, *intervals, application_dated=True):
         season = Production.objects.create(
             name="Imported Season", parcel=self.parcel, start_date=timezone.now(), published=False
         )
@@ -175,10 +176,10 @@ class CropSetIsHeldToTheManureFloorTests(APITestCase):
             SoilManagementEvent.objects.create(
                 history=season,
                 type="OM",
-                date=timezone.now(),
+                date=datetime(2026, 3, n, 15, tzinfo=dt_timezone.utc),
                 description="Raw manure, incorporated",
                 manure_treatment="raw",
-                manure_application_date=date(2026, 3, n),
+                manure_application_date=date(2026, 2, n) if application_dated else None,
                 manure_harvest_interval=interval,
             )
         return season
@@ -194,9 +195,11 @@ class CropSetIsHeldToTheManureFloorTests(APITestCase):
 
         self.assertEqual(resp.status_code, 400, resp.data)
         message = str(resp.data["crop_type_id"][0])
-        self.assertIn("Floor Test Carrots: 2 raw-manure records keep", message)
-        self.assertIn("2026-03-01, 2026-03-03", message)
+        self.assertIn("Floor Test Carrots: raw manure is recorded with a harvest interval of 90 days", message)
+        # Each record by its own date, the one the activity list shows; never the application date.
+        self.assertIn("(2 records, dated 2026-03-01, 2026-03-03)", message)
         self.assertNotIn("2026-03-02", message)
+        self.assertNotIn("2026-02-0", message)
         self.assertEqual(
             {k: str(v) for k, v in resp.data["error_codes"]["crop_type_id"].items()},
             {
@@ -210,6 +213,18 @@ class CropSetIsHeldToTheManureFloorTests(APITestCase):
         season.refresh_from_db()
         self.assertIsNone(season.crop_type_id)
         self.assertIsNone(season.product_id)
+
+    def test_a_record_with_no_application_date_is_counted_and_never_given_one(self):
+        """Review of back #514: the message fell back to the record's date and printed it as the
+        day the manure was applied."""
+        season = self._season_with_manure("90", application_dated=False)
+
+        resp = self._set(season, self.carrots)
+
+        self.assertEqual(resp.status_code, 400, resp.data)
+        message = str(resp.data["crop_type_id"][0])
+        self.assertIn("(1 record, dated 2026-03-01)", message)
+        self.assertNotIn("applied", message)
 
     def test_once_the_records_say_120_days_the_crop_is_set(self):
         season = self._season_with_manure("90")
