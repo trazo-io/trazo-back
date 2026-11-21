@@ -86,6 +86,7 @@ class Parcel(models.Model):
     # packet printed for every parcel nobody had asked; a parcel created before then keeps its False.
     container_production = models.BooleanField(
         null=True,
+        blank=True,
         default=None,
         help_text="Whether this parcel produces in containers/greenhouse rather than in-ground; null = not answered",
     )
@@ -148,6 +149,7 @@ class Parcel(models.Model):
     # Null until the operator answers, for the same reason as `container_production`.
     treated_lumber_present = models.BooleanField(
         null=True,
+        blank=True,
         default=None,
         help_text=(
             "Whether prohibited treated lumber (e.g. arsenate end-posts) is present on the parcel; null = not answered."
