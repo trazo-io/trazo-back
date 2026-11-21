@@ -140,7 +140,7 @@ class LandRequirementsRowNamesTheStatementTests(_Operation):
         row = self._land_row()
         self.assertEqual(row["status"], "REVIEW")
         self.assertIn("Parcel Application F states this parcel is currently certified organic", row["detail"])
-        self.assertIn("no organic certificate on file covers the production period", row["detail"])
+        self.assertIn("no organic certificate for this operation is on file in Trazo", row["detail"])
         self.assertNotIn("nothing on record evidences", row["detail"])
         self.assertEqual(row["detail_code"], "land_requirements.stated_certified")
 
@@ -169,6 +169,20 @@ class LandRequirementsRowNamesTheStatementTests(_Operation):
         self.assertEqual(row["detail_code"], "land_requirements.no_history")
         self.assertIn("nothing on record evidences", row["detail"])
 
+    def test_a_certificate_that_does_not_cover_this_season_is_not_called_missing(self):
+        """A certificate reissued after the season began (or lapsed) is on file but covers nothing
+        here. Telling that operation to add it to the farm profile would be wrong advice, so the
+        row keeps its own sentence (review of back #511)."""
+        Certification.objects.create(
+            establishment=self.est,
+            certification_type="usda_organic",
+            certifier_name="Washington State Department of Agriculture",
+            effective_date=date.today(),
+        )
+        row = self._land_row()
+        self.assertNotEqual(row["detail_code"], "land_requirements.stated_certified")
+        self.assertNotIn("add it to the farm profile", row["detail"])
+
     def test_a_covering_certificate_is_reported_as_before(self):
         self._certify()
         row = self._land_row()
@@ -187,6 +201,15 @@ class PlanListSaysWhetherAnAnnualUpdateAppliesTests(_Operation):
 
     def test_a_certification_on_record_reads_false(self):
         self._certify()
+        self.assertEqual(self._flags(), [False])
+
+    def test_an_annual_update_on_record_reads_false(self):
+        """The OSP page leaves the annual update card out when this is True, so a farm with a filing
+        on record must never read True: the card is where that filing is listed (review of app
+        #444)."""
+        from certifications.models import OSPAnnualUpdate
+
+        OSPAnnualUpdate.objects.create(prior_osp=self.plan, reporting_year=2026, changes_summary="Hedgerow.")
         self.assertEqual(self._flags(), [False])
 
     def test_an_approved_version_reads_false(self):

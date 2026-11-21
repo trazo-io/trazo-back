@@ -5294,20 +5294,27 @@ class AuditExportService:
                 # certificate is what covers the 36 months (OV-FJ-C05), so the row names the
                 # statement and the missing certificate together. A dated prohibited application or
                 # an input without a status keeps its own sentence: it is actionable either way.
+                #
+                # Only when Trazo holds nothing that says the operation was ever certified (the
+                # packet cover's `never_certified`, the same test as the parcel page's note). A
+                # certificate on file that does not cover this season (reissued after it began, or
+                # lapsed) is already in the farm profile, so "add it" would be wrong advice, and a
+                # clean field history there stays INFO (review of back #511).
                 stated_certified = False
                 try:
                     from certifications.osp_modules.conditions import answer_value
+                    from certifications.services.operation_certificate import never_certified
 
-                    stated_certified = (
-                        answer_value(self.production.parcel.application_answers or {}, "currently_certified") == "yes"
-                    )
+                    stated_certified = answer_value(
+                        self.production.parcel.application_answers or {}, "currently_certified"
+                    ) == "yes" and never_certified(est_for_land.id)
                 except Exception:  # noqa: BLE001 — never let the enrichment break the row
                     pass
                 if stated_certified and (land_said is None or land_said["code"] == "land_requirements.no_history"):
                     status = "REVIEW"
                     detail = (
                         "Parcel Application F states this parcel is currently certified organic, but no "
-                        "organic certificate on file covers the production period. On a certified parcel "
+                        "organic certificate for this operation is on file in Trazo. On a certified parcel "
                         "the certificate is what shows the § 205.202(b) 36-month period: add it to the "
                         "farm profile, or correct the answer"
                     )
