@@ -909,15 +909,17 @@ class EventCarbonCalculator:
             result["confidence_score"] = confidence_score
 
             # Add to result
+            # The figure keeps the source its calculation stated. This step wrote "USDA
+            # Agricultural Research Service" over it until 2026-11-22 (OV-FJ-C17), so every
+            # non-chemical record was stored and served as sourced from an agency that publishes
+            # none of the factors applied.
             result.update(
                 {
                     "usda_factors_based": True,
                     "verification_status": "factors_verified",
-                    "data_source": metadata["data_source"],
-                    "methodology": metadata["methodology"],
+                    "data_source": self._stated_source(result),
                     "regional_specificity": metadata["regional_specificity"],
                     "confidence_level": metadata["confidence_level"],
-                    "usda_compliance": metadata["usda_compliance"],
                     "regional_optimization": metadata.get("regional_optimization", False),
                     "real_time_data": metadata.get("real_time_data", False),
                     "api_integration": metadata.get("api_enabled", False),
@@ -974,7 +976,7 @@ class EventCarbonCalculator:
                 {
                     "usda_factors_based": True,
                     "verification_status": "factors_verified",
-                    "data_source": "USDA Agricultural Research Service",
+                    "data_source": self._stated_source(result),
                     "confidence_level": "medium",
                     "confidence_score": 0.5,
                 }
@@ -982,11 +984,21 @@ class EventCarbonCalculator:
             return result
 
     @staticmethod
+    def _stated_source(result: Dict[str, Any]) -> str:
+        """The source a calculation stated for itself: its `data_source`, else the factors it
+        listed in `data_sources`. Never an agency it did not cite (OV-FJ-C17)."""
+        own = result.get("data_source")
+        if own:
+            return str(own)[:200]
+        listed = [str(s) for s in (result.get("data_sources") or []) if s]
+        return ("; ".join(dict.fromkeys(listed)) or "No factor applied")[:200]
+
+    @staticmethod
     def _state_chemical_basis(result: Dict[str, Any], status: str, data_sources) -> Dict[str, Any]:
         """Put back what an input figure rests on after `_add_enhanced_usda_metadata` (2026-11-13).
 
-        That step stamps every US result `factors_verified`, `usda_factors_based: True` and a
-        blanket "USDA Agricultural Research Service" source. For a chemical figure the status
+        That step stamps every US result `factors_verified` and `usda_factors_based: True` (and
+        wrote a blanket "USDA Agricultural Research Service" source until 2026-11-22). For a chemical figure the status
         follows its basis: an estimate in any part keeps `estimate` and never carries the flag the
         app badges "From recorded inputs"; the source column names the factors actually applied.
         """
@@ -2039,8 +2051,14 @@ class EventCarbonCalculator:
             # ENHANCED: Use structured equipment data
             equipment_data = self._get_structured_equipment_data(event, crop_name)
 
+            from carbon.choices import FUEL_TYPE_FACTORS
+
+            from .verified_emission_factors import VerifiedEmissionFactors
+
             base_emissions = 0.0
             cost_estimate = 0.0
+            # Hour-rate and fixed estimates below cite no published factor; fuel paths replace this.
+            factor_source = "Industry Standards"
 
             if event.type == "FC":  # Fuel Consumption
                 # `fuel_amount` is normalized to **liters** (or kWh for electric) by
@@ -2053,6 +2071,13 @@ class EventCarbonCalculator:
                 fuel_type = equipment_data["fuel_type"].lower()
 
                 emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, self.FUEL_EMISSION_FACTORS["diesel"])
+                # The figure cites the factor it applied (OV-FJ-C17): the fuel's own EPA row, or the
+                # operating country's grid factor, never the blanket agency it used to name.
+                factor_source = (
+                    VerifiedEmissionFactors.get_country_electricity_factor().source
+                    if fuel_type == "electric"
+                    else FUEL_TYPE_FACTORS.get(fuel_type, FUEL_TYPE_FACTORS["diesel"])["source"]
+                )
 
                 if fuel_type == "electric":
                     # fuel_amount is kWh, factor is per-kWh
@@ -2116,13 +2141,12 @@ class EventCarbonCalculator:
                 # (avoids factor drift when EPA/USDA updates are applied).
                 repair_fuel = self._extract_numeric_value(getattr(event, "fuel_consumed", "0"), default=0.0)
                 if repair_fuel > 0:
-                    from .verified_emission_factors import VerifiedEmissionFactors
-
                     fuel_unit = getattr(event, "fuel_unit", "L") or "L"
                     # Convert to gallons for EPA diesel factor (10.21 kg CO2/gal)
                     repair_fuel_gallons = repair_fuel / 3.78541 if fuel_unit == "L" else repair_fuel
                     diesel_factor = VerifiedEmissionFactors.EPA_DIESEL_FACTORS["agricultural_equipment"]
                     base_emissions = repair_fuel_gallons * diesel_factor.value
+                    factor_source = diesel_factor.source
                 else:
                     base_emissions = 0.0
                 cost_estimate = float(event.maintenance_cost or 0)
@@ -2140,7 +2164,7 @@ class EventCarbonCalculator:
                 "calculation_method": (
                     "usda_fuel_factors_enhanced" if event.type == "FC" else "equipment_estimation_enhanced"
                 ),
-                "data_source": "USDA Agricultural Research Service" if event.type == "FC" else "Industry Standards",
+                "data_source": factor_source,
                 "verification_status": "factors_verified" if event.type == "FC" else "estimated",
                 "breakdown": {
                     "fuel_amount": equipment_data["fuel_amount"],

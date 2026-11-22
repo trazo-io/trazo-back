@@ -165,6 +165,39 @@ def verification_status_for(basis: Dict[str, Any], published_status: str) -> str
     return published_status if basis.get("figure_basis") == FIGURE_BASIS_PUBLISHED else VERIFICATION_STATUS_ESTIMATE
 
 
+#: Text that names an agency and no document it published (overall review 2026-11, OV-FJ-C17).
+#: Until 2026-11-22 the calculator's metadata step overwrote every non-chemical figure's own
+#: `data_source` with "USDA Agricultural Research Service", and six per-hectare fuel defaults
+#: (Trazo estimates) carried the agency's name as their `source`. Rows already stored keep that
+#: text until their activity is saved again, so readers pass it through `stated_data_source`.
+#: The same step's `methodology`, "USDA emission factors with regional adjustments", is the third.
+AGENCY_WITHOUT_DOCUMENT = ("Agricultural Research Service", "USDA ARS", "USDA emission factors")
+
+
+def stated_data_source(text) -> Optional[str]:
+    """What a stored or computed `data_source` may say: the text, or None when it names an agency
+    without a document. Unknown is None, never a guessed source."""
+    if not text or not isinstance(text, str):
+        return None
+    if any(marker in text for marker in AGENCY_WITHOUT_DOCUMENT):
+        return None
+    return text
+
+
+def calculation_as_served(calculation: Dict[str, Any]) -> Dict[str, Any]:
+    """A stored calculation dict (an event's `extra_data["carbon_calculation"]`) as it may be
+    served: its source fields through `stated_data_source`, list entries naming an agency without
+    a document dropped, and the retired `usda_compliance` flag removed. Returns a copy."""
+    served = dict(calculation)
+    for key in ("data_source", "calculation_method", "methodology"):
+        if key in served and isinstance(served[key], str):
+            served[key] = stated_data_source(served[key])
+    if isinstance(served.get("data_sources"), list):
+        served["data_sources"] = [s for s in served["data_sources"] if stated_data_source(s)]
+    served.pop("usda_compliance", None)
+    return served
+
+
 @dataclass
 class EmissionFactor:
     """Represents an emission factor with its source documentation and provenance."""
@@ -906,11 +939,13 @@ class VerifiedEmissionFactors:
             last_updated="2026-09-07",
             notes="US average delivered electricity applied to irrigation pumps. Same derivation as EPA_ELECTRICITY_FACTORS above (0.821 -> 0.39 in 2025-12, 0.39 -> 0.365 in 2026-09).",
         ),
-        # USDA Agricultural Research Service Data
+        # Per-hectare diesel defaults: Trazo estimates (provenance below). Their `source` named
+        # "USDA Agricultural Research Service - <topic>" until 2026-11-22, an agency and no
+        # document (OV-FJ-C17); it is printed wherever `data_sources` is, so it says what it is.
         "crop_production_diesel": EmissionFactor(
             value=2.5,  # gallons diesel per hectare (typical agricultural operations)
             unit="gallons_per_hectare",
-            source="USDA Agricultural Research Service - Farm Energy Use",
+            source="Trazo estimate of diesel per hectare, crop production operations",
             provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2024-01-01",
@@ -919,7 +954,7 @@ class VerifiedEmissionFactors:
         "harvesting_diesel": EmissionFactor(
             value=0.7,  # gallons diesel per hectare for harvesting (modern efficient equipment)
             unit="gallons_per_hectare",
-            source="USDA Agricultural Research Service - Machinery Energy Use (2025 efficiency standards)",
+            source="Trazo estimate of diesel per hectare, harvesting",
             provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.85,
             last_updated="2025-01-21",
@@ -928,7 +963,7 @@ class VerifiedEmissionFactors:
         "planting_diesel": EmissionFactor(
             value=1.8,  # gallons diesel per hectare for planting
             unit="gallons_per_hectare",
-            source="USDA Agricultural Research Service - Field Operations",
+            source="Trazo estimate of diesel per hectare, planting",
             provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2024-01-01",
@@ -937,7 +972,7 @@ class VerifiedEmissionFactors:
         "transplanting_diesel": EmissionFactor(
             value=2.4,  # gallons diesel per hectare for transplanting (higher than planting due to careful handling)
             unit="gallons_per_hectare",
-            source="USDA Agricultural Research Service - Transplanting Operations & UC Davis Nursery Studies",
+            source="Trazo estimate of diesel per hectare, transplanting",
             provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.82,
             last_updated="2025-10-11",
@@ -946,7 +981,7 @@ class VerifiedEmissionFactors:
         "thinning_diesel": EmissionFactor(
             value=0.75,  # gallons diesel per hectare for thinning (lightweight manual operation)
             unit="gallons_per_hectare",
-            source="USDA Agricultural Research Service - Lightweight Field Operations & Fruit Crop Management",
+            source="Trazo estimate of diesel per hectare, thinning",
             provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.80,
             last_updated="2025-12-10",
@@ -955,7 +990,7 @@ class VerifiedEmissionFactors:
         "cultivation_diesel": EmissionFactor(
             value=3.2,  # gallons diesel per hectare for cultivation/weed control (high fuel intensity)
             unit="gallons_per_hectare",
-            source="USDA Agricultural Research Service - Soil Preparation & Mechanical Weed Control",
+            source="Trazo estimate of diesel per hectare, cultivation and mechanical weed control",
             provenance=PROVENANCE_INTERNAL_ESTIMATE,
             confidence_level=0.82,
             last_updated="2025-12-11",

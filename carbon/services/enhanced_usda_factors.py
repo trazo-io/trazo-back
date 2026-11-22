@@ -506,17 +506,20 @@ class EnhancedUSDAFactors:
             }
 
     def get_enhanced_calculation_metadata(self, crop_type: str, state: str) -> Dict[str, Any]:
-        """Get enhanced metadata about USDA calculation methodology"""
+        """Regional metadata for a calculation: never where its factors come from.
+
+        Until 2026-11-22 this also returned `data_source` "USDA Agricultural Research Service",
+        `methodology` "USDA emission factors with regional adjustments", `usda_compliance` and
+        `factors_verified` True, and the calculator copied them over every figure's own source
+        (overall review 2026-11, OV-FJ-C17). No factor Trazo applies is published by USDA; each
+        factor names its own source (verified_emission_factors.py), so this states none.
+        """
         state_upper = (state or "").upper()
         normalized_crop = self._normalize_crop_type(crop_type)
         return {
-            "data_source": "USDA Agricultural Research Service",
-            "methodology": "USDA emission factors with regional adjustments",
             "regional_specificity": state_upper in self.regional_adjustments,
             "confidence_level": "high" if state_upper in self.regional_adjustments else "medium",
             "last_updated": "2024-12",
-            "usda_compliance": True,
-            "factors_verified": True,
             "regional_optimization": state_upper in self.regional_adjustments
             and normalized_crop in self.regional_adjustments.get(state_upper, {}),
             "api_enabled": False,
