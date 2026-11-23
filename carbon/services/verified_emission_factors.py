@@ -184,6 +184,34 @@ def stated_data_source(text) -> Optional[str]:
     return text
 
 
+#: `CarbonEntry.data_source` max_length (carbon 0058). It was 200, and a figure's sources joined with
+#: "; " were cut at 200 characters mid-word (an eGRID row plus the pump equation is 205).
+DATA_SOURCE_MAX_LENGTH = 500
+
+
+def join_sources(sources, limit: int = DATA_SOURCE_MAX_LENGTH) -> str:
+    """The sources a figure applied, joined with "; ", whole entries only, never cut mid-entry.
+
+    Entries that do not fit are counted ("and 2 more"), not truncated. A single entry longer than
+    the limit is the only thing shortened, with an ellipsis. Empty means "No factor applied".
+    """
+    entries = [str(s) for s in dict.fromkeys(sources or []) if s]
+    if not entries:
+        return "No factor applied"
+    if len(entries[0]) > limit:
+        return entries[0][: limit - 1] + "…"
+    kept = [entries[0]]
+    for i, entry in enumerate(entries[1:], start=1):
+        left = len(entries) - i - 1
+        tail = f"; and {left} more" if left else ""
+        if len("; ".join(kept + [entry])) + len(tail) > limit:
+            break
+        kept.append(entry)
+    dropped = len(entries) - len(kept)
+    joined = "; ".join(kept)
+    return f"{joined}; and {dropped} more" if dropped else joined
+
+
 def calculation_as_served(calculation: Dict[str, Any]) -> Dict[str, Any]:
     """A stored calculation dict (an event's `extra_data["carbon_calculation"]`) as it may be
     served: its source fields through `stated_data_source`, list entries naming an agency without
@@ -1677,6 +1705,7 @@ class VerifiedEmissionFactors:
         result = cls._calculate_production_event_emissions_raw(
             production_type, area_covered, fuel_consumed, equipment_hours, **kwargs
         )
+        cls._name_only_the_factors_applied(result)
         basis = (result.get("breakdown") or {}).get("calculation_basis")
         if basis == "usda_standard_per_hectare":
             try:
@@ -2086,6 +2115,43 @@ class VerifiedEmissionFactors:
             "limitations": "Excludes indirect transportation emissions for hive delivery/pickup",
             "validation_warnings": [],
         }
+
+    @classmethod
+    def _fuel_and_rate_sources(cls) -> set:
+        """Sources of the factors `fuel_basis` speaks for: combustion, grid and per-area fuel rates."""
+        tables = (
+            cls.EPA_DIESEL_FACTORS,
+            cls.EPA_FUEL_FACTORS,
+            cls.EPA_ELECTRICITY_FACTORS,
+            cls.COUNTRY_ELECTRICITY_FACTORS,
+            cls.ELECTRICITY_SOURCE_FACTORS,
+            cls.PRODUCTION_FACTORS,
+        )
+        return {f.source for table in tables for f in table.values() if isinstance(f, EmissionFactor)}
+
+    @classmethod
+    def _name_only_the_factors_applied(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """`data_sources` names the fuel factor that produced the figure, and the per-area rate only
+        when it was used (review of back #516).
+
+        Each calculator listed its fuel row and its per-hectare default whatever the branch, and
+        the diesel row for any liquid fuel, so a measured gasoline harvest cited diesel and a
+        Trazo per-hectare estimate that never touched the number. `fuel_basis` already records
+        what did (`_annotate_fuel_basis`); this reads it. Sources outside fuel and rates (a haul,
+        a methodology note) are kept. A zero names no fuel factor: nothing was counted.
+        """
+        fuel_basis = (result.get("breakdown") or {}).get("fuel_basis")
+        if not fuel_basis:
+            return result
+        applied = []
+        if result.get("co2e_kg"):
+            applied.append(fuel_basis["emission_factor"]["source"])
+            if fuel_basis.get("assumed_rate"):
+                applied.append(fuel_basis["assumed_rate"]["source"])
+        fuel_and_rates = cls._fuel_and_rate_sources()
+        others = [s for s in result.get("data_sources") or [] if s not in fuel_and_rates]
+        result["data_sources"] = list(dict.fromkeys(applied + others))
+        return result
 
     @classmethod
     def _annotate_fuel_basis(

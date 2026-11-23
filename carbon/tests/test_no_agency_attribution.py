@@ -21,12 +21,24 @@ WHAT WAS WRONG
   Agricultural Research Service." No factor Trazo applies is published by USDA
   (.claude/rules/carbon-methodology.md).
 
+Found by the review of back #516, once each figure kept its own source:
+* general events cited "EPA Training Program Carbon Assessment (2024)" and two siblings, documents
+  that do not exist, for Trazo estimates (`EnhancedEmissionFactors`);
+* a production figure listed its per-hectare default even when measured fuel made the number, and
+  the diesel row for any liquid fuel;
+* the joined sources were cut at 200 characters mid-word;
+* general, business and hour-rate equipment figures kept the published-factor status
+  ("epa_usda_sourced") that `_add_enhanced_usda_metadata` stamps on every US figure.
+
 WHAT THIS PINS
 --------------
 * no factor source and no regional metadata names an agency without a document;
 * each non-chemical figure keeps the source its calculation stated, computed and stored;
 * a row stored before the fix is served with its source as not stated (None);
-* the audit cover states the sources per input class.
+* the audit cover states the sources per input class;
+* a production figure names only the factors that made it;
+* sources are joined whole and stored whole (carbon 0058);
+* a figure resting on a Trazo default is an `estimate`, a zero is `no_factor_applied`.
 
 It does not read the sibling repository.
 """
@@ -40,17 +52,21 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from carbon.choices import FUEL_TYPE_FACTORS
 from carbon.event_link import entries_for_event
 from carbon.models import CarbonEntry
+from carbon.services.enhanced_emission_factors import EnhancedEmissionFactors
 from carbon.services.enhanced_usda_factors import EnhancedUSDAFactors
 from carbon.services.event_carbon_calculator import EventCarbonCalculator
 from carbon.services.verified_emission_factors import (
     AGENCY_WITHOUT_DOCUMENT,
+    DATA_SOURCE_MAX_LENGTH,
+    VERIFICATION_STATUS_ESTIMATE,
     EmissionFactor,
     VerifiedEmissionFactors,
     calculation_as_served,
+    join_sources,
     stated_data_source,
 )
 from company.models import Company, Establishment
-from history.models import EquipmentEvent, GeneralEvent, PestManagementEvent, Production, ProductionEvent
+from history.models import BusinessEvent, EquipmentEvent, GeneralEvent, PestManagementEvent, Production, ProductionEvent
 from history.serializers import EquipmentEventSerializer, GeneralEventSerializer
 from history.services.records_export import FACTOR_SOURCES_BY_CLASS
 from product.models import Parcel, Product
@@ -116,6 +132,28 @@ class SourcesStatedTests(SimpleTestCase):
         self.assertIsNone(served["methodology"])
         self.assertNotIn("usda_compliance", served)
         self.assertEqual(served["data_sources"], ["EPA eGRID 2023"])
+
+    def test_general_event_defaults_say_they_are_trazo_estimates(self):
+        for key, factor in EnhancedEmissionFactors.GENERAL_FACTORS.items():
+            self.assertTrue(factor.source.startswith("Trazo estimate"), f"{key}: {factor.source!r}")
+
+    def test_sources_are_joined_whole_never_cut_mid_entry(self):
+        a, b, c = "A" * 150, "B" * 150, "C" * 150
+        self.assertEqual(join_sources([a, b]), f"{a}; {b}")
+        self.assertEqual(join_sources([a, b, c], limit=320), f"{a}; {b}; and 1 more")
+        self.assertEqual(join_sources([a, b, c], limit=200), f"{a}; and 2 more")
+        self.assertEqual(join_sources(["x" * 30], limit=10), "x" * 9 + "…")
+        self.assertEqual(join_sources([]), "No factor applied")
+
+    def test_an_irrigation_figure_stores_both_of_its_sources(self):
+        result = VerifiedEmissionFactors.calculate_drought_irrigation_emissions(
+            water_volume_gallons=325851, pump_depth_ft=120
+        )
+        self.assertEqual(len(result["data_sources"]), 2, result["data_sources"])
+        joined = join_sources(result["data_sources"])
+        self.assertGreater(len(joined), 200, "the case the old 200-character cut broke")
+        self.assertEqual(joined, "; ".join(result["data_sources"]))
+        self.assertEqual(CarbonEntry._meta.get_field("data_source").max_length, DATA_SOURCE_MAX_LENGTH)
 
 
 # The US branch of `_add_enhanced_usda_metadata` is the one that wrote the blanket.
@@ -183,7 +221,13 @@ class WrittenSourceTests(_Season):
             history=self.history, type="HA", date=self.date, description="First pick", area_covered=Decimal("4")
         )
         result = self.calc.calculate_production_event_impact(event)
-        self.assertIn("Trazo estimate of diesel per hectare, harvesting", result["data_source"])
+        self.assertEqual(
+            result["data_sources"],
+            [
+                VerifiedEmissionFactors.EPA_DIESEL_FACTORS["agricultural_equipment"].source,
+                "Trazo estimate of diesel per hectare, harvesting",
+            ],
+        )
         self.assertStatesNoAgency(result, event)
 
     def test_a_harvest_with_recorded_fuel_names_the_epa_factor(self):
@@ -197,8 +241,23 @@ class WrittenSourceTests(_Season):
             fuel_consumed=Decimal("12.5"),
         )
         result = self.calc.calculate_production_event_impact(event)
-        self.assertIn("EPA", result["data_source"])
+        diesel = VerifiedEmissionFactors.EPA_FUEL_FACTORS["diesel"].source
+        self.assertEqual(result["data_sources"], [diesel], "measured fuel: the per-hectare default made nothing")
+        self.assertEqual(result["data_source"], diesel)
         self.assertStatesNoAgency(result, event)
+
+    def test_a_measured_gasoline_harvest_cites_the_gasoline_row(self):
+        event = ProductionEvent.objects.create(
+            history=self.history,
+            type="HA",
+            date=self.date,
+            description="Third pick",
+            area_covered=Decimal("4"),
+            fuel_type="gasoline",
+            fuel_consumed=Decimal("6"),
+        )
+        result = self.calc.calculate_production_event_impact(event)
+        self.assertEqual(result["data_sources"], [VerifiedEmissionFactors.EPA_FUEL_FACTORS["gasoline"].source])
 
     def test_scouting_and_a_general_activity_state_no_agency(self):
         pest = PestManagementEvent.objects.create(
@@ -207,6 +266,63 @@ class WrittenSourceTests(_Season):
         self.assertStatesNoAgency(self.calc.calculate_pest_management_event_impact(pest), pest)
         general = GeneralEvent.objects.create(history=self.history, name="Walked rows", description="d", date=self.date)
         self.assertStatesNoAgency(self.calc.calculate_general_event_impact(general), general)
+
+
+class StatusFollowsTheBasisTests(_Season):
+    """A figure no published factor made never carries the published label."""
+
+    def _stored(self, event):
+        entries = list(entries_for_event(event, link=False))
+        self.assertEqual(len(entries), 1, "expected one stored carbon entry")
+        return entries[0]
+
+    def test_a_general_event_is_a_trazo_estimate(self):
+        event = GeneralEvent.objects.create(
+            history=self.history, name="Training day", description="training session for the crew", date=self.date
+        )
+        result = self.calc.calculate_general_event_impact(event)
+        self.assertGreater(result["co2e"], 0)
+        self.assertEqual(result["verification_status"], VERIFICATION_STATUS_ESTIMATE)
+        self.assertFalse(result["usda_factors_based"])
+        self.assertIn("trazo_estimate_factor", result["breakdown"]["estimate_reasons"])
+        self.assertTrue(result["data_source"].startswith("Trazo estimate"), result["data_source"])
+        self.assertNotIn("verified", result["transparency_note"])
+        # A general event stores no carbon (history/signals.py); this figure reaches the form preview.
+        self.assertEqual(list(entries_for_event(event, link=False)), [])
+
+    def test_maintenance_hours_are_an_estimate(self):
+        # `hours_operated` is read on the structured branch, which a recorded fuel figure (here 0) selects.
+        event = self._equipment(
+            type="MN", fuel_consumed=Decimal("0"), hours_operated=Decimal("3"), equipment_name="Large tractor"
+        )
+        result = self.calc.calculate_equipment_event_impact(event)
+        self.assertGreater(result["co2e"], 0)
+        self.assertEqual(result["verification_status"], VERIFICATION_STATUS_ESTIMATE)
+        self.assertFalse(result["usda_factors_based"])
+        entry = self._stored(event)
+        self.assertEqual(entry.verification_status, VERIFICATION_STATUS_ESTIMATE)
+        self.assertFalse(entry.usda_factors_based)
+        served = EquipmentEventSerializer(event).data["carbon_data"]
+        self.assertEqual(served["verification_status"], "estimate")
+        self.assertFalse(served["usda_factors_based"])
+
+    def test_a_zero_names_no_factor(self):
+        calibration = self._equipment(type="CA")
+        self.assertEqual(
+            self.calc.calculate_equipment_event_impact(calibration)["verification_status"], "no_factor_applied"
+        )
+        inspection = BusinessEvent.objects.create(
+            history=self.history, type=BusinessEvent.INSPECTION, description="annual inspection", date=self.date
+        )
+        result = self.calc.calculate_business_event_impact(inspection)
+        self.assertEqual(result["verification_status"], "no_factor_applied")
+        self.assertFalse(result["usda_factors_based"])
+
+    def test_recorded_fuel_keeps_the_published_label(self):
+        event = self._equipment(type="FC", fuel_consumed=Decimal("40"), fuel_unit="L", fuel_type="diesel")
+        result = self.calc.calculate_equipment_event_impact(event)
+        self.assertEqual(result["verification_status"], "factors_verified")
+        self.assertTrue(result["usda_factors_based"])
 
 
 class ServedSourceTests(_Season):

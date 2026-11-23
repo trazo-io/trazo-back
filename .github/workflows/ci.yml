@@ -984,9 +984,10 @@ jobs:
       # 2026-11-17: history.tests.test_photo_flag_reaches_producer (new, 3 tests) pins the Vision
       # photo verdict on the record detail (absent when clean, like the season payload) and never on
       # HistorySerializer's events (what a signed-in shopper's my_reviews returns). No sibling repo.
-      # 2026-11-22: carbon.tests.test_no_agency_attribution (new, 14 tests) pins OV-FJ-C17: no factor
+      # 2026-11-22: carbon.tests.test_no_agency_attribution (new, 22 tests) pins OV-FJ-C17: no factor
       # source or regional metadata names USDA ARS, each figure keeps the source its calculation
-      # stated, a row stored before the fix is served as not stated, and the audit cover states the
+      # stated (only the factors that made it, joined whole), a row stored before the fix is served
+      # as not stated, a figure on a Trazo default is an estimate, and the audit cover states the
       # sources per input class. No sibling repo.
       - name: Claim-safety and compliance suites
         env:
