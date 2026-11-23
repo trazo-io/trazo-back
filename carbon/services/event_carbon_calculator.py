@@ -12,7 +12,7 @@ from ..models import CarbonEntry, CarbonSource, USDACalculationAudit, USDACompli
 from .emission_factors import emission_factors
 from .enhanced_emission_factors import EnhancedEmissionFactors
 from .enhanced_usda_factors import EnhancedUSDAFactors
-from .verified_emission_factors import VERIFICATION_STATUS_ESTIMATE, figure_basis, verification_status_for
+from .verified_emission_factors import VERIFICATION_STATUS_ESTIMATE, figure_basis, join_sources, verification_status_for
 
 logger = logging.getLogger(__name__)
 
@@ -909,15 +909,17 @@ class EventCarbonCalculator:
             result["confidence_score"] = confidence_score
 
             # Add to result
+            # The figure keeps the source its calculation stated. This step wrote "USDA
+            # Agricultural Research Service" over it until 2026-11-22 (OV-FJ-C17), so every
+            # non-chemical record was stored and served as sourced from an agency that publishes
+            # none of the factors applied.
             result.update(
                 {
                     "usda_factors_based": True,
                     "verification_status": "factors_verified",
-                    "data_source": metadata["data_source"],
-                    "methodology": metadata["methodology"],
+                    "data_source": self._stated_source(result),
                     "regional_specificity": metadata["regional_specificity"],
                     "confidence_level": metadata["confidence_level"],
-                    "usda_compliance": metadata["usda_compliance"],
                     "regional_optimization": metadata.get("regional_optimization", False),
                     "real_time_data": metadata.get("real_time_data", False),
                     "api_integration": metadata.get("api_enabled", False),
@@ -974,7 +976,7 @@ class EventCarbonCalculator:
                 {
                     "usda_factors_based": True,
                     "verification_status": "factors_verified",
-                    "data_source": "USDA Agricultural Research Service",
+                    "data_source": self._stated_source(result),
                     "confidence_level": "medium",
                     "confidence_score": 0.5,
                 }
@@ -982,18 +984,46 @@ class EventCarbonCalculator:
             return result
 
     @staticmethod
+    def _stated_source(result: Dict[str, Any]) -> str:
+        """The source a calculation stated for itself: its `data_source`, else the factors it
+        listed in `data_sources`. Never an agency it did not cite (OV-FJ-C17)."""
+        own = result.get("data_source")
+        return join_sources([own] if own else result.get("data_sources"))
+
+    @staticmethod
+    def _state_trazo_estimate(result: Dict[str, Any]) -> Dict[str, Any]:
+        """Undo `_add_enhanced_usda_metadata`'s published stamp on a figure no published factor made.
+
+        That step marks every US result `factors_verified` with `usda_factors_based: True`, which
+        the record API serves as "epa_usda_sourced". Once each figure kept its own source (OV-FJ-C17)
+        a general event read "Trazo estimate of …" beside that label (review of back #516). A
+        figure resting on a Trazo default is an `estimate`; a zero is the absence of an input,
+        `no_factor_applied` (the rule the pest, soil and reported-fuel-only paths already follow).
+        """
+        result["usda_factors_based"] = False
+        if result.get("co2e"):
+            result["verification_status"] = VERIFICATION_STATUS_ESTIMATE
+            breakdown = result.setdefault("breakdown", {})
+            reasons = breakdown.setdefault("estimate_reasons", [])
+            if "trazo_estimate_factor" not in reasons:
+                reasons.append("trazo_estimate_factor")
+        else:
+            result["verification_status"] = "no_factor_applied"
+        return result
+
+    @staticmethod
     def _state_chemical_basis(result: Dict[str, Any], status: str, data_sources) -> Dict[str, Any]:
         """Put back what an input figure rests on after `_add_enhanced_usda_metadata` (2026-11-13).
 
-        That step stamps every US result `factors_verified`, `usda_factors_based: True` and a
-        blanket "USDA Agricultural Research Service" source. For a chemical figure the status
+        That step stamps every US result `factors_verified` and `usda_factors_based: True` (and
+        wrote a blanket "USDA Agricultural Research Service" source until 2026-11-22). For a chemical figure the status
         follows its basis: an estimate in any part keeps `estimate` and never carries the flag the
         app badges "From recorded inputs"; the source column names the factors actually applied.
         """
         result["verification_status"] = status
         if status == VERIFICATION_STATUS_ESTIMATE:
             result["usda_factors_based"] = False
-        result["data_source"] = ("; ".join(data_sources or []) or "No factor applied")[:200]
+        result["data_source"] = join_sources(data_sources)
         # Same step, same blanket: "USDA emission factors with regional adjustments" and a
         # `usda_compliance: True` that nothing reads, on a figure built from EPA, IPCC, academic
         # and Trazo factors.
@@ -2039,8 +2069,14 @@ class EventCarbonCalculator:
             # ENHANCED: Use structured equipment data
             equipment_data = self._get_structured_equipment_data(event, crop_name)
 
+            from carbon.choices import FUEL_TYPE_FACTORS
+
+            from .verified_emission_factors import VerifiedEmissionFactors
+
             base_emissions = 0.0
             cost_estimate = 0.0
+            # Set only where recorded fuel meets a published factor; hour-rate and fixed figures cite none.
+            published_source = None
 
             if event.type == "FC":  # Fuel Consumption
                 # `fuel_amount` is normalized to **liters** (or kWh for electric) by
@@ -2053,6 +2089,13 @@ class EventCarbonCalculator:
                 fuel_type = equipment_data["fuel_type"].lower()
 
                 emission_factor = self.FUEL_EMISSION_FACTORS.get(fuel_type, self.FUEL_EMISSION_FACTORS["diesel"])
+                # The figure cites the factor it applied (OV-FJ-C17): the fuel's own EPA row, or the
+                # operating country's grid factor, never the blanket agency it used to name.
+                published_source = (
+                    VerifiedEmissionFactors.get_country_electricity_factor().source
+                    if fuel_type == "electric"
+                    else FUEL_TYPE_FACTORS.get(fuel_type, FUEL_TYPE_FACTORS["diesel"])["source"]
+                )
 
                 if fuel_type == "electric":
                     # fuel_amount is kWh, factor is per-kWh
@@ -2116,13 +2159,12 @@ class EventCarbonCalculator:
                 # (avoids factor drift when EPA/USDA updates are applied).
                 repair_fuel = self._extract_numeric_value(getattr(event, "fuel_consumed", "0"), default=0.0)
                 if repair_fuel > 0:
-                    from .verified_emission_factors import VerifiedEmissionFactors
-
                     fuel_unit = getattr(event, "fuel_unit", "L") or "L"
                     # Convert to gallons for EPA diesel factor (10.21 kg CO2/gal)
                     repair_fuel_gallons = repair_fuel / 3.78541 if fuel_unit == "L" else repair_fuel
                     diesel_factor = VerifiedEmissionFactors.EPA_DIESEL_FACTORS["agricultural_equipment"]
                     base_emissions = repair_fuel_gallons * diesel_factor.value
+                    published_source = diesel_factor.source
                 else:
                     base_emissions = 0.0
                 cost_estimate = float(event.maintenance_cost or 0)
@@ -2140,7 +2182,7 @@ class EventCarbonCalculator:
                 "calculation_method": (
                     "usda_fuel_factors_enhanced" if event.type == "FC" else "equipment_estimation_enhanced"
                 ),
-                "data_source": "USDA Agricultural Research Service" if event.type == "FC" else "Industry Standards",
+                "data_source": published_source or "Industry Standards",
                 "verification_status": "factors_verified" if event.type == "FC" else "estimated",
                 "breakdown": {
                     "fuel_amount": equipment_data["fuel_amount"],
@@ -2163,7 +2205,13 @@ class EventCarbonCalculator:
                 "recommendations": recommendations,
             }
 
-            return self._add_enhanced_usda_metadata(result, event)
+            enriched = self._add_enhanced_usda_metadata(result, event)
+            # Recorded fuel times a published factor keeps the published label. An hour-rate
+            # estimate (maintenance, repair) or a zero (calibration, inspection, a breakdown with no
+            # fuel) does not: no published factor made it (review of back #516).
+            if not (published_source and base_emissions):
+                return self._state_trazo_estimate(enriched)
+            return enriched
 
         except Exception as e:
             return {"co2e": 0.0, "usda_factors_based": False, "error": str(e)}
@@ -2652,7 +2700,8 @@ class EventCarbonCalculator:
                 "recommendations": recommendations,
             }
 
-            return self._add_enhanced_usda_metadata(result, event)
+            # Nothing is counted for a business event, so no factor stands behind its zero.
+            return self._state_trazo_estimate(self._add_enhanced_usda_metadata(result, event))
 
         except Exception as e:
             return {
@@ -2908,10 +2957,10 @@ class EventCarbonCalculator:
                     "confidence_level": calculation_result["confidence_level"],
                 },
                 "recommendations": recommendations,
-                "transparency_note": f"Calculated using EPA-verified factors for {general_event_type} activities",
+                "transparency_note": f"Trazo estimate for {general_event_type} activities; no published factor applies",
             }
 
-            return self._add_enhanced_usda_metadata(result, event)
+            return self._state_trazo_estimate(self._add_enhanced_usda_metadata(result, event))
 
         except Exception as e:
             logger.warning(f"Error calculating general event impact: {e}")

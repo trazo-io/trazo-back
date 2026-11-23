@@ -533,7 +533,11 @@ class EventSerializer(serializers.ModelSerializer):
         """
         try:
             from carbon.models import CarbonEntry
-            from carbon.services.verified_emission_factors import VERIFICATION_STATUS_ESTIMATE
+            from carbon.services.verified_emission_factors import (
+                VERIFICATION_STATUS_ESTIMATE,
+                calculation_as_served,
+                stated_data_source,
+            )
 
             if hasattr(event, "history") and event.history:
                 event_class_name = event.__class__.__name__
@@ -568,6 +572,10 @@ class EventSerializer(serializers.ModelSerializer):
                     estimate = carbon_entry.verification_status == VERIFICATION_STATUS_ESTIMATE
                     factors_based = bool(carbon_entry.usda_factors_based) and not (area_estimate or estimate)
                     baseline = carbon_entry.baseline_data if isinstance(carbon_entry.baseline_data, dict) else {}
+                    # OV-FJ-C17: rows stored before 2026-11-22 carry "USDA Agricultural Research
+                    # Service" as their source, an agency that published none of the factors
+                    # applied. Served as not stated (None) until the activity is saved again.
+                    source = stated_data_source(carbon_entry.data_source)
                     return {
                         "co2e": float(carbon_entry.co2e_amount or carbon_entry.amount),
                         "usda_factors_based": factors_based,
@@ -584,8 +592,8 @@ class EventSerializer(serializers.ModelSerializer):
                             )
                         ),
                         "estimate_reasons": list(baseline.get("estimate_reasons") or []) if estimate else [],
-                        "calculation_method": carbon_entry.data_source or "calculated",
-                        "data_source": carbon_entry.data_source or "CarbonEntry",
+                        "calculation_method": source if carbon_entry.data_source else "calculated",
+                        "data_source": source if carbon_entry.data_source else "CarbonEntry",
                         "recommendations": [],
                         "event_type": event_class_name.lower().replace("event", ""),
                         "timestamp": carbon_entry.created_at.isoformat() if carbon_entry.created_at else None,
@@ -593,7 +601,8 @@ class EventSerializer(serializers.ModelSerializer):
 
             # Backward compat: older events may have carbon in extra_data
             if hasattr(event, "extra_data") and event.extra_data and "carbon_calculation" in event.extra_data:
-                return event.extra_data["carbon_calculation"]
+                stored = event.extra_data["carbon_calculation"]
+                return calculation_as_served(stored) if isinstance(stored, dict) else stored
 
             # No stored carbon data — this is normal for weather/general events
             # or events whose signal hasn't fired yet. Never recalculate here.

@@ -505,9 +505,10 @@ class CarbonEntry(models.Model):
         max_length=50, default="estimated", help_text="factors_verified, estimated, calculation_error"
     )
     data_source = models.CharField(
-        max_length=200,
+        # 500 since 2026-11-22: a figure's sources, joined whole (join_sources), no longer cut at 200.
+        max_length=500,
         default="Unknown",
-        help_text="Source of emission factors (e.g., USDA Agricultural Research Service)",
+        help_text="The source of each factor the figure applied, joined with '; '",
     )
 
     # Enhanced verification fields for offset verification system - MVP 2-tier system

@@ -3869,7 +3869,9 @@ class AuditExportService:
         if self.carbon_in_scope:
             elements.append(
                 Paragraph(
-                    "Emission factors sourced from EPA 40 CFR Part 98 and USDA Agricultural Research Service.",
+                    # Per input class, as the carbon table's note says it. Until 2026-11-22 this
+                    # named USDA ARS, which publishes none of the factors applied (OV-FJ-C17).
+                    f"Emission factors sourced per input class: {FACTOR_SOURCES_BY_CLASS}.",
                     self._styles["footer_note"],
                 )
             )
