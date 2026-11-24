@@ -217,7 +217,7 @@ class PacketCarriesTheFilingTests(_Farm):
         # Reworded 2026-09-07: the cover prints the plan author as a fallback, so it must not
         # also claim there is no name. It still has to say the profile answer is missing —
         # that is what this test is for — and now says so without contradicting the line above.
-        self.assertIn("205.401(b) asks for the person responsible", cover)
+        self.assertIn("205.401(b) asks for the name of the person completing the application", cover)
         self.assertIn("plan author", cover)
 
 

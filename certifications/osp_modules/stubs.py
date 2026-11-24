@@ -1318,12 +1318,14 @@ G6_4_HANDLING = Module(
                         "Agua Potable Segura?",
                     ),
                     coaching=text(
-                        "§ 205.605(b) allows chlorine in wash water provided residual chlorine at the last "
-                        "point of product contact does not exceed the SDWA maximum residual disinfectant "
-                        "limit — 4 ppm for chlorine, 0.8 ppm for chlorine dioxide.",
-                        "§ 205.605(b) permite cloro en el agua de lavado siempre que el cloro residual en el "
-                        "último punto de contacto con el producto no exceda el límite máximo de desinfectante "
-                        "residual de la SDWA — 4 ppm para cloro, 0,8 ppm para dióxido de cloro.",
+                        "§ 205.605(b)(12) permits chlorine in water used in direct crop or food contact at levels "
+                        "the FDA or EPA approve, provided the use is followed by a rinse with potable water at "
+                        "or below the Safe Drinking Water Act maximum residual disinfectant limit: 4 ppm for "
+                        "chlorine, 0.8 ppm for chlorine dioxide.",
+                        "§ 205.605(b)(12) permite cloro en el agua de contacto directo con el cultivo o el "
+                        "alimento en los niveles que aprueben la FDA o la EPA, siempre que después se enjuague "
+                        "con agua potable en o por debajo del límite máximo de desinfectante residual de la "
+                        "Ley de Agua Potable Segura: 4 ppm para cloro, 0,8 ppm para dióxido de cloro.",
                     ),
                     nop_cite="§ 205.605(b)",
                     visible_when=(Condition("wash_water_chlorine_added", "truthy"),),

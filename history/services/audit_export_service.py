@@ -2994,7 +2994,7 @@ class AuditExportService:
             f"dossier. The remaining {gap:.1f} acres are not represented by a parcel record "
             f"here — operator to confirm to the inspector whether that land is non-crop "
             f"(roads, buildings, buffers, unfarmed) or carries production certified "
-            f"separately (see 7 CFR 205.272 split-operation status below)."
+            f"separately (see the split-operation status below)."
         )
 
     def _farming_method_phrase(self, est):
@@ -10308,9 +10308,11 @@ class AuditExportService:
         if missing_ipm:
             elements.append(
                 Paragraph(
-                    f"<b>[WARNING] NOP 7 CFR 205.206(a):</b> {len(missing_ipm)} pest event(s) "
-                    "missing IPM strategy. Operations must document the cultural, mechanical, "
-                    "or biological prevention practices used before any pest-control intervention.",
+                    f"<b>[WARNING] NOP 7 CFR 205.206:</b> {len(missing_ipm)} pest event(s) "
+                    "missing IPM strategy. Paragraph (a) asks for practices that prevent pests, "
+                    "(b) to (d) list the mechanical, physical and biological controls, and (e) "
+                    "allows a pest-control substance only when those practices are insufficient. "
+                    "Record which of them came before this intervention.",
                     self._warning_style(),
                 )
             )
@@ -10359,8 +10361,9 @@ class AuditExportService:
             elements.append(
                 Paragraph(
                     f"{len(cultural_events)} preventive cultural practice(s) documented. § 205.206(a) "
-                    "requires cultural, mechanical and biological practices before any pest-control "
-                    "substance; these records are the basis for that sequence.",
+                    "asks for practices that prevent pests, and § 205.206(e) allows a pest-control "
+                    "substance only when the practices in (a) to (d) are insufficient; these records "
+                    "are the first step of that sequence.",
                     self._styles["footer_note"],
                 )
             )
@@ -10919,7 +10922,7 @@ class AuditExportService:
         elements = [
             Spacer(1, 10),
             Paragraph(
-                "<b>Weather Response &amp; Protective Measures (7 CFR 205.201(a)(3))</b>",
+                "<b>Weather Response &amp; Protective Measures (7 CFR 205.201(a)(1))</b>",
                 self._sub_header_style(),
             ),
         ]
@@ -13823,9 +13826,11 @@ class AuditExportService:
             elements.append(
                 self._body(
                     "No structured buffer-zone or adjoining-land-use record is on file for "
-                    "this parcel. Under 7 CFR 205.202(c) the operation must maintain buffer "
-                    "zones sufficient to prevent contact with prohibited substances applied "
-                    "to adjoining land, and document drift-prevention measures."
+                    "this parcel. 7 CFR 205.202(c) asks for distinct, defined boundaries and "
+                    "buffer zones that prevent the unintended application of a prohibited "
+                    "substance to the crop or its contact with one applied to adjoining land, "
+                    "and 7 CFR 205.201(a)(5) asks the plan to describe the practices and "
+                    "barriers that prevent that contact."
                 )
             )
             elements.append(
@@ -14786,7 +14791,9 @@ class AuditExportService:
     def _build_field_history_section(self):
         from product.models import ParcelCropHistory
 
-        elements = [self._section_header("Field History & Previous Land Use — 3-Year Crop Rotation (7 CFR 205.202(b))")]
+        elements = [
+            self._section_header("Field History, Previous Land Use and Crop Rotation (7 CFR 205.202(b), 205.205)")
+        ]
 
         parcel = None
         try:
@@ -17173,7 +17180,7 @@ class AuditExportService:
         elements = [
             self._spacer(0.15),
             Paragraph(
-                "<b>Supervisor Record Review (FSMA PSR § 112.161(b))</b>",
+                "<b>Supervisor Record Review</b>",
                 self._sub_header_style(),
             ),
         ]
@@ -17666,37 +17673,43 @@ class AuditExportService:
             declares_split = split_declaration == DECLARED_YES
             g2_lists_split = g2_lists_split_production(establishment)
             _g2_quote = f"G2.0 lists \u201c{g2_split_production_label()}\u201d as a fraud risk area"
-            _272_scope = (
-                "\u00a7 205.272 applies to any operation producing both organic and non-organic "
-                "product; the inspector confirms the operation's status on site."
+            _split_scope = (
+                "On a split operation the plan describes the practices and barriers that prevent "
+                "commingling (\u00a7 205.201(a)(5)); the inspector confirms the operation's status "
+                "on site."
             )
 
             if establishment.split_operation_plan:
                 split_plan_text = establishment.split_operation_plan
             elif declares_split:
-                split_plan_text = "Commingling prevention plan required (7 CFR 205.272)"
+                split_plan_text = (
+                    "The plan describes the practices and barriers that prevent commingling "
+                    "(7 CFR 205.201(a)(5)); none is recorded yet"
+                )
             elif split_declaration == DECLARED_NO and g2_lists_split:
                 split_plan_text = (
                     "The plan's answers disagree: G6.0 answers No (no split production), while "
-                    f"{_g2_quote}. The operator resolves this in the plan. {_272_scope}"
+                    f"{_g2_quote}. The operator resolves this in the plan. {_split_scope}"
                 )
             elif split_declaration != DECLARED_NO:
                 split_plan_text = (
                     "Not answered in the plan (G6.0), so this report states no split status. "
                     + (f"{_g2_quote}. " if g2_lists_split else "")
-                    + _272_scope
+                    + _split_scope
                 )
             else:
                 # ⚠️ "No commingling plan required" is a REGULATORY CONCLUSION, and this
-                # document was drawing it from one operator checkbox. § 205.272(a) binds any
-                # operation that produces both organic and non-organic product — including a
-                # harvested buffer crop — so the packet must report the declaration, not
-                # ratify it. Blue Oak's own OSP § 205.201(a)(6) describes selling the buffer
+                # document was drawing it from one operator checkbox. An operation that
+                # produces both organic and non-organic product (a harvested buffer crop
+                # included) is a split operation, whose plan describes the barriers between
+                # them (§ 205.201(a)(5); § 205.272(a) is addressed to handlers, OV-PK-CIT20),
+                # so the packet must report the declaration, not ratify it. Blue Oak's own OSP § 205.201(a)(6) describes selling the buffer
                 # rows conventional two pages above this cell reading "No".
                 split_plan_text = (
-                    "Operator declares a wholly organic operation — no parallel or split "
-                    "production. § 205.272 applies to any operation producing both organic "
-                    "and non-organic product; the inspector confirms this declaration on site."
+                    "Operator declares a wholly organic operation, with no parallel or split "
+                    "production. A split operation's plan describes the practices and barriers "
+                    "that prevent commingling (§ 205.201(a)(5)); the inspector confirms this "
+                    "declaration on site."
                 )
 
             # Wrap every cell in a Paragraph so long values word-wrap inside the
@@ -17805,7 +17818,7 @@ class AuditExportService:
                     P("SOE requires organic identification on sales documents"),
                 ],
                 [
-                    P("Split Operation (7 CFR 205.272)"),
+                    P("Split Operation (7 CFR 205.201(a)(5))"),
                     P("Yes" if declares_split else ("No" if split_declaration == DECLARED_NO else "Not answered")),
                     P(split_plan_text),
                 ],
@@ -17819,7 +17832,7 @@ class AuditExportService:
             if buffer_crop_parcels and not declares_split:
                 elements.append(
                     Paragraph(
-                        "<b>[REVIEW] 7 CFR 205.272:</b> "
+                        "<b>[REVIEW] 7 CFR 205.201(a)(5):</b> "
                         + (
                             "the operation is declared wholly organic, "
                             if split_declaration == DECLARED_NO and not g2_lists_split
@@ -17827,10 +17840,10 @@ class AuditExportService:
                         )
                         + f"but a crop is recorded as grown in the buffer on {buffer_crop_parcels}. "
                         "A harvested buffer crop may not be sold or represented as organic "
-                        "(§ 205.202(c)), which makes the operation split for § 205.272 purposes. "
-                        "Either record how the buffer crop is kept separate and identified, or "
-                        "state that it is not harvested — an inspector will ask, and the two "
-                        "statements in this packet currently disagree.",
+                        "(§ 205.202(c)), which makes it a split operation whose plan describes how the "
+                        "two are kept apart (§ 205.201(a)(5)). Either record how the buffer crop is "
+                        "kept separate and identified, or state that it is not harvested. An "
+                        "inspector will ask, and the two statements in this packet currently disagree.",
                         self._warning_style(),
                     )
                 )
@@ -17847,7 +17860,7 @@ class AuditExportService:
             if declares_split and not establishment.split_operation_plan:
                 elements.append(
                     Paragraph(
-                        "<b>[WARNING] NOP 7 CFR 205.272:</b> This is a split operation (organic + conventional) "
+                        "<b>[WARNING] NOP 7 CFR 205.201(a)(5):</b> This is a split operation (organic + conventional) "
                         "but no commingling prevention plan is documented. "
                         "Document labeling, storage separation, and equipment cleaning protocols.",
                         self._warning_style(),

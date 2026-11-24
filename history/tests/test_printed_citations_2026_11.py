@@ -35,6 +35,17 @@ claims no paragraph makes. Each wrong string below printed on a document a certi
          not one was on file.
   VID-05 the Common OSP record list cited cultivation to § 205.206(a)(1), which is crop rotation
          and nutrient management. Mechanical cultivation is § 205.206(c)(4).
+  CIT20  (2026-11-24) the right area, the wrong paragraph or word. A15: § 205.401(b) asks for
+         "the person completing the application", not "the person responsible for the
+         operation". B15: three years is § 205.202(b). B39: § 205.605(b)(12) asks for a potable
+         rinse at or below the drinking-water limit, not a cap on the wash water. C06:
+         practices are § 205.201(a)(1); (a)(3) is monitoring. C07: rotation is § 205.205. C16:
+         § 112.161(b) lists the records that need review, and a pesticide record is not one.
+         C21: § 205.202(c) has no documentation clause; the plan describes it under
+         § 205.201(a)(5). C22: § 205.206(a) is prevention; the "only when insufficient"
+         condition is (e). C23: split-operation barriers are § 205.201(a)(5); § 205.272(a) is
+         addressed to "The handler of an organic handling operation". D32b: retention is
+         § 205.103(b)(4). eCFR versioner API, 2026-11-01 edition, read 2026-11-24.
 
 HOW. The printing modules are read as Python and every string literal is collected (adjacent
 literals are joined by the parser, so a sentence split over several source lines is one string).
@@ -220,6 +231,68 @@ CASES = (
         "certifications/services/common_osp_records.py",
         ("7 CFR 205.206(a)(1)",),
         ("7 CFR 205.206(c)(4)",),
+    ),
+    (
+        "CIT20 A15",
+        "certifications/services/osp_module_pdf.py",
+        ("205.401(b) asks for the person responsible for the operation",),
+        ("§ 205.401(b) asks for the name of the person completing the application and, for a company",),
+    ),
+    (
+        "CIT20 A15",
+        "certifications/services/plan_review.py",
+        ("asks for the responsible person by name",),
+        ("§ 205.401(b) asks for the name of the person completing the application",),
+    ),
+    (
+        "CIT20 B15",
+        "certifications/osp_modules/g3_2_planting_stock.py",
+        ("36 months free of prohibited substances", "36 meses libre de sustancias"),
+        ("before the harvest (§ 205.202(b))", "antes de la cosecha (§ 205.202(b))"),
+    ),
+    (
+        "CIT20 B39",
+        "certifications/osp_modules/stubs.py",
+        (
+            "residual chlorine at the last point of product contact",
+            "último punto de contacto con el producto no exceda",
+        ),
+        ("provided the use is followed by a rinse with potable water", "se enjuague con agua potable"),
+    ),
+    (
+        "CIT20 C06 C07 C16 C21 C22 C23",
+        DOSSIER,
+        (
+            "Protective Measures (7 CFR 205.201(a)(3))",
+            "3-Year Crop Rotation (7 CFR 205.202(b))",
+            "Supervisor Record Review (FSMA",
+            "and document drift-prevention measures",
+            "prevention practices used before any pest-control intervention",
+            "requires cultural, mechanical and biological practices before any pest-control",
+            "Split Operation (7 CFR 205.272)",
+            "Commingling prevention plan required (7 CFR 205.272)",
+            "205.272 applies to any operation producing",
+            "split for § 205.272 purposes",
+            "[WARNING] NOP 7 CFR 205.272:</b> This is a split operation",
+            "see 7 CFR 205.272 split-operation status",
+        ),
+        (
+            "Protective Measures (7 CFR 205.201(a)(1))",
+            "Crop Rotation (7 CFR 205.202(b), 205.205)",
+            "<b>Supervisor Record Review</b>",
+            "and 7 CFR 205.201(a)(5) asks the plan to describe the practices and barriers",
+            "allows a pest-control substance only when those practices are insufficient",
+            "§ 205.206(e) allows a pest-control substance only when the practices in (a) to (d)",
+            "Split Operation (7 CFR 205.201(a)(5))",
+            "<b>[REVIEW] 7 CFR 205.201(a)(5):</b> ",
+            "<b>[WARNING] NOP 7 CFR 205.201(a)(5):</b> This is a split operation",
+        ),
+    ),
+    (
+        "CIT20 D32b",
+        "history/services/records_export.py",
+        ("These are your records (7 CFR 205.103)",),
+        ("(7 CFR 205.103(b)(4)).\n",),
     ),
 )
 
