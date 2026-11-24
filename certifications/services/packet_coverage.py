@@ -409,9 +409,13 @@ class FormCoverage:
     via_renewal_pages: bool = False
     #: Rows no parcel's route asks, each with the route's reason. Listed apart from open rows.
     route_skipped_rows: tuple = ()
+    #: (ref, where) for covered rows that cite no answering question and that the register places in
+    #: this packet (`packet_answers.stated_in_packet`). Still not closed, so they never make a form
+    #: `answered`; listed apart from open rows, as printed and unchecked, never as "still open".
+    printed_rows: tuple = ()
 
 
-def form_coverage(osp, certifier: str) -> list[FormCoverage]:
+def form_coverage(osp, certifier: str, printed_check=None) -> list[FormCoverage]:
     """Every form of `certifier` the packet carries content for, judged against this plan's answers.
 
     🔴 2026-09-30 (OSP alignment audit, T15/T16/T20). `coverage_rows` answers "which file carries
@@ -420,7 +424,7 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
     reads the answers. A form is `answered` only when every in-scope question on it is closed, and
     a form the operation files with its agent is never `answered` at all, whatever is filed in Trazo.
     """
-    from certifications.services.packet_answers import form_answer_states, form_is_answered
+    from certifications.services.packet_answers import form_answer_states, form_is_answered, stated_in_packet
 
     forms, _loaded = _load_forms(certifier)
     generated, _unlisted = _classify(forms)
@@ -430,6 +434,16 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
         # A form the agent asked Trazo not to reproduce has no rows here either (OV-PK-W01): the
         # question index, which lists every open row, prints none of its items.
         rows = states[id(form)] if form.reproduced else []
+        # `printed_check(item)` says whether the built packet shows the row where the register places
+        # it (`question_index.printed_locations`). Without one (any caller outside a packet build, or
+        # 04's first render, before the cover exists) nothing is named printed: the row stays open.
+        items = {item.ref: item for item in form.items}
+        printed = {}
+        if printed_check is not None:
+            for row in rows:
+                item = items.get(row.ref)
+                if row.state == "not_assessed" and stated_in_packet(item) and printed_check(item):
+                    printed[row.ref] = stated_in_packet(item)
         required = [row for row in rows if not row.optional]
         if form.filed_with_agent:
             standing = "filed_with_agent"
@@ -445,12 +459,15 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
                 document_id=form.document_id,
                 location="; ".join(locations),
                 standing=standing,
-                open_rows=tuple(row for row in rows if row.is_open and not row.optional),
-                optional_open_rows=tuple(row for row in rows if row.is_open and row.optional),
+                open_rows=tuple(row for row in rows if row.is_open and not row.optional and row.ref not in printed),
+                optional_open_rows=tuple(
+                    row for row in rows if row.is_open and row.optional and row.ref not in printed
+                ),
                 requires_signature=form.requires_signature,
                 accepted_format=form.accepted_format,
                 via_renewal_pages="02-annual-update.pdf" in form.packet_documents,
                 route_skipped_rows=tuple(row for row in rows if row.state == "not_on_route"),
+                printed_rows=tuple(printed.items()),
             )
         )
     return sorted(out, key=lambda f: f.form)

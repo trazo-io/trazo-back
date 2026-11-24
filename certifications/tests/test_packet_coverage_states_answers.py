@@ -282,6 +282,37 @@ class CoveragePageTests(_Plan):
         self.assertIn("2026 annual update was filed in Trazo on September 1, 2026", text)
         self.assertIn("not this form", text)
 
+    def test_a_printed_row_is_named_apart_only_when_the_build_finds_it(self):
+        """OV-PK-C04, O06: covered rows with no answering question (OTCO FACT-04's cells) were listed
+        "Still open ... not checked", under "the agent's own form is needed for them". Page 04 names
+        them printed only through the packet build's check (review of back #518); without it, or
+        when it finds nothing, they stay open. Either way the form is never answered on them."""
+        otco = OrganicSystemPlan.objects.create(
+            establishment=self.est, version_number=4, status="draft", certifier_name="Oregon Tilth Certified Organic"
+        )
+        fact04 = "FACT-04"
+        unchecked = next(f for f in form_coverage(otco, "otco") if f.document_id == fact04)
+        self.assertEqual(unchecked.printed_rows, ())
+        self.assertIn("Instructions (all separate locations)", [r.ref for r in unchecked.open_rows])
+        page = " ".join(_pdf_text(_coverage_pdf(otco)).split())
+        self.assertNotIn("Printed from your records", page)
+
+        checked = next(
+            f for f in form_coverage(otco, "otco", printed_check=lambda item: True) if f.document_id == fact04
+        )
+        printed = dict(checked.printed_rows)
+        self.assertIn("Instructions (all separate locations)", printed)
+        self.assertNotIn("Instructions (all separate locations)", [r.ref for r in checked.open_rows])
+        self.assertNotEqual(checked.standing, "answered")
+        page = " ".join(_pdf_text(_coverage_pdf(otco, printed_check=lambda item: True)).split())
+        self.assertIn(
+            "Printed from your records, not checked against this plan's answers: Instructions (all separate "
+            "locations) (workbooks/Field Acreage Crop Table - Form FACT-04.xlsx)",
+            page,
+        )
+        section = page[page.index("Field, Acreage, Crop Table (FACT-04)") :][:600]
+        self.assertNotIn("Instructions (all separate locations) not checked", section)
+
     def test_a_filed_update_page_says_it_supports_the_agents_form(self):
         wsda = OrganicSystemPlan.objects.create(
             establishment=self.est,

@@ -5948,6 +5948,23 @@ def _open_rows_sentence(open_rows) -> str:
     return "Still open: " + "; ".join(parts) + "."
 
 
+def _printed_rows_sentence(printed_rows) -> str:
+    """ "Printed from your records, not checked against this plan's answers: A5 (00-cover.pdf: Address)."
+
+    Covered rows that cite no answering question (`packet_answers.stated_in_packet`). They sat in the
+    "Still open" sentence, under a heading telling the grower the agent's own form was needed for them,
+    while the packet printed them (overall review 2026-11, OV-PK-C04, O06, W06). Named apart, with
+    the location the register states, and never as answered: nothing read this plan's answers for them.
+    """
+    from certifications.services.packet_scope import mark_omitted
+
+    grouped: dict[str, list[str]] = {}
+    for ref, where in printed_rows:
+        grouped.setdefault(where, []).append(ref)
+    parts = [f"{', '.join(refs)} ({mark_omitted(where)})" for where, refs in grouped.items()]
+    return "Printed from your records, not checked against this plan's answers: " + "; ".join(parts) + "."
+
+
 def _route_skipped_sentence(rows) -> str:
     """ "Not asked on these parcels' route: 2.4, 2.5 (Home Field East, ...: C2 is not refiled ...)."
 
@@ -5996,7 +6013,7 @@ def _filed_update_note(osp) -> str:
     )
 
 
-def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parcel_names) -> None:
+def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parcel_names, printed_check=None) -> None:
     """The form list for an agent Trazo holds a register for: answered, in part, filed with the agent."""
     from certifications.services.packet_coverage import coverage_rows, form_coverage, unreviewed_form_count
 
@@ -6011,7 +6028,7 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
         )
         return
 
-    forms = form_coverage(osp, certifier)
+    forms = form_coverage(osp, certifier, printed_check=printed_check)
     if not forms:
         # The register could not be read: list the packet's own files, unnumbered, and say so.
         story.append(Paragraph("Documents in this packet", styles["header"]))
@@ -6079,6 +6096,8 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             )
             if form.open_rows:
                 story.append(Paragraph(_escape(_open_rows_sentence(form.open_rows)), styles["meta"]))
+            if form.printed_rows:
+                story.append(Paragraph(_escape(_printed_rows_sentence(form.printed_rows)), styles["meta"]))
             if form.route_skipped_rows:
                 story.append(Paragraph(_escape(_route_skipped_sentence(form.route_skipped_rows)), styles["meta"]))
             if form.optional_open_rows:
@@ -6233,7 +6252,7 @@ def _coverage_fallback_documents(story, styles, stated_agent, parcel_names) -> N
         story.append(Paragraph(_escape(f"{title}: {_coverage_location(location, parcel_names)}"), styles["body"]))
 
 
-def _coverage_pdf(osp) -> bytes:
+def _coverage_pdf(osp, printed_check=None) -> bytes:
     """04 — what this packet covers, what it does not, and who authored it.
 
     CCOF's Guide routes by activity, so a reviewer already knows which forms a crop operation owes.
@@ -6274,7 +6293,7 @@ def _coverage_pdf(osp) -> bytes:
 
     parcel_names = [p.name for p in _packet_parcels(osp.establishment)]
     if is_own_agent:
-        _coverage_registered_forms(story, styles, osp, certifier, agent_label, parcel_names)
+        _coverage_registered_forms(story, styles, osp, certifier, agent_label, parcel_names, printed_check)
     else:
         _coverage_fallback_documents(story, styles, stated_agent, parcel_names)
 
@@ -6488,6 +6507,19 @@ def generate_osp_packet(osp, scope=None) -> bytes:
         from certifications.services.packet_review_notes import collect
 
         write("00-cover.pdf", _packet_cover_pdf(osp, review_notes=collect(list(entries))), first=True)
+
+        # 04 again, in its own place, now that every document it can point at is built. A covered row
+        # that cites no answering question is named as printed only where its cited headings are found
+        # in these bytes; the first render kept such rows open (review of back #518). That render fed
+        # the cover's review notes, and this one adds none.
+        from certifications.services.question_index import printed_locations
+
+        _texts: dict = {}
+        _coverage = _coverage_pdf(osp, printed_check=lambda item: bool(printed_locations(item, recorder, _texts)))
+        for _entry in entries:
+            if _entry[0] == "04-coverage-and-scope.pdf":
+                _entry[1] = _coverage
+        recorder.documents["04-coverage-and-scope.pdf"] = _coverage
 
         # 06, the agent-ordered index, built last because it cites the pages above (the cover's included).
         from certifications.services.question_index import index_pdf

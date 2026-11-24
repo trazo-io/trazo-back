@@ -115,6 +115,26 @@ CONTACT_ROLE_WORDS = {
 #: States that close a register row. Anything else is listed as open on the coverage page.
 CLOSED_STATES = frozenset({"answered", "not_applicable", "not_on_route"})
 
+
+def stated_in_packet(item) -> str:
+    """Where the packet prints a covered row that cites no answering question, or "".
+
+    Such a row is `not_assessed`: nothing here can read whether this plan answers it. Until
+    2026-11-24 pages 04 and 06 listed it as still open ("not checked against this plan's answers"),
+    and 04 told the grower the agent's own form was needed for it, while the packet printed it: every
+    cell of a complete FACT-04 table, the address on the cover (overall review 2026-11, OV-PK-C04,
+    O06, W06). It stays out of CLOSED_STATES, so no form reads as answered on its strength (OSP
+    alignment audit T15); the pages name it apart, at the location the register states, unchecked.
+    A row the register places outside the packet ("not in this packet; ...") stays open.
+    """
+    if item is None or getattr(item, "status", "") != "covered" or getattr(item, "questions", None):
+        return ""
+    where = " ".join(str(getattr(item, "where", "") or "").split())
+    if not where or where.lower().startswith("not in this packet"):
+        return ""
+    return where
+
+
 #: Worst state wins when a row cites several questions (or one question across several parcels).
 _SEVERITY = (
     "unknown_reference",

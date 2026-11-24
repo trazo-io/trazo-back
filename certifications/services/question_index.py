@@ -223,30 +223,60 @@ def _heading_locations(prints, recorder, texts_cache) -> list:
     02 includes every filed revision of the year, each marked as the filed document."""
     out = []
     for path, heading in _cited_headings(prints):
-        targets = [path]
-        if path == "02-annual-update.pdf":
-            targets += sorted(p for p in recorder.documents if p.startswith(REVISION_DIR))
-        needle = _norm(heading)
-        for target in targets:
-            data = recorder.documents.get(target)
-            if data is None:
-                continue
-            if target not in texts_cache:
-                texts_cache[target] = page_texts(data)
-                if target == "00-cover.pdf":
-                    texts_cache[target] = _cover_without_review_notes(texts_cache[target])
-            for number, text in enumerate(texts_cache[target], start=1):
-                if needle in text:
-                    out.append(
-                        Location(
-                            target,
-                            page=number,
-                            section=heading,
-                            note=FILED_NOTE if target in recorder.filed else "",
-                            kind="heading",
-                        )
-                    )
+        out.extend(_locate_heading(path, heading, recorder, texts_cache))
     return out
+
+
+def _locate_heading(path, heading, recorder, texts_cache) -> list:
+    """Every page of `path` (and, for 02, of each filed revision) whose text carries `heading`."""
+    out = []
+    targets = [path]
+    if path == "02-annual-update.pdf":
+        targets += sorted(p for p in recorder.documents if p.startswith(REVISION_DIR))
+    needle = _norm(heading)
+    for target in targets:
+        data = recorder.documents.get(target)
+        if data is None:
+            continue
+        if target not in texts_cache:
+            texts_cache[target] = page_texts(data)
+            if target == "00-cover.pdf":
+                texts_cache[target] = _cover_without_review_notes(texts_cache[target])
+        for number, text in enumerate(texts_cache[target], start=1):
+            if needle in text:
+                out.append(
+                    Location(
+                        target,
+                        page=number,
+                        section=heading,
+                        note=FILED_NOTE if target in recorder.filed else "",
+                        kind="heading",
+                    )
+                )
+    return out
+
+
+def printed_locations(item, recorder, texts_cache) -> list:
+    """Where the built packet prints a covered row that cites no answering question; [] if not shown.
+
+    `packet_answers.stated_in_packet` reads the register's fixed `where`, and a location there can be
+    conditional: CCOF ORGB41 F and G name facility pest tables that are left out when a farm has none
+    (review of back #518). So the row counts as printed only when EVERY heading its `prints` note
+    cites is found in the built bytes. A note that cites no heading (a workbook column, a module's
+    Not applicable header) cannot be read back here, and the row stays open.
+    """
+    from certifications.services.packet_answers import stated_in_packet
+
+    if not stated_in_packet(item):
+        return []
+    cited = _cited_headings(" ".join(str(getattr(item, "prints", "") or "").split()))
+    found = []
+    for path, heading in cited:
+        located = _locate_heading(path, heading, recorder, texts_cache)
+        if not located:
+            return []
+        found.extend(located)
+    return found
 
 
 def _sheet_names(data: bytes) -> list:
@@ -417,7 +447,15 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
                 unique[marker] = replace(kept, subjects=kept.subjects + extra)
         row.open_parts = list(unique.values())
     elif state.state != "answered":
-        row.open_parts.append(OpenPart(state.state, state.detail))
+        # A covered row with no answering question, found where the register says the packet prints
+        # it, is located, not open: listed as "not checked" it read as an open question the packet
+        # holds the answer to (overall review 2026-11, OV-PK-C04). Only headings found in these
+        # bytes count, and it is still never answered.
+        printed = printed_locations(item, recorder, texts_cache) if state.state == "not_assessed" else []
+        if printed:
+            row.locations.extend(printed)
+        else:
+            row.open_parts.append(OpenPart(state.state, state.detail))
     prints = " ".join(str(getattr(item, "prints", "") or "").split())
     if not row.locations and prints:
         row.locations.extend(_heading_locations(prints, recorder, texts_cache))
@@ -425,7 +463,8 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
     # certifier-facing `where`. `prints` is the register's own note, with placeholders
     # ("parcel-application-<name>.pdf"), function names and asides ("should also be §A"), and a
     # note starting "—" (nothing prints) would have read as a location. Rarely reached, because a
-    # row with no answering question already carries a "not checked" part; still never the note.
+    # row with no answering question already carries a "not checked" part, unless its cited
+    # headings were found (`printed_locations`); still never the note.
     where = " ".join(str(getattr(item, "where", "") or "").split())
     if not (row.locations or row.open_parts) and where:
         from certifications.services.packet_scope import mark_omitted
