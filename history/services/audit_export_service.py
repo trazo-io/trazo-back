@@ -7178,7 +7178,18 @@ class AuditExportService:
                     # ("Synthetic herbicide; not on § 205.601") — presence-of-prose would have
                     # printed glyphosate as "Restricted use" and moved it out of the [WARNING]
                     # block. See NationalListSubstance.is_conditionally_permitted.
-                    restriction = (getattr(nl, "restriction_notes", "") or "").strip()
+                    # Overall review 2026-11 (OV-MT-C13): on a § 205.601 row `restriction_notes` is a
+                    # paraphrase, and beside the citation it read as the rule. Seven groups narrowed,
+                    # widened or dropped part of today's annotation: peracetic acid lost its hydrogen
+                    # peroxide formulations, sodium hypochlorite printed "Same SDWA chlorine limit
+                    # applies." for the residual-chlorine rule. A § 205.601 row prints the rule's own
+                    # words (`rule_words`, read from eCFR) or no note. A § 205.602 note is the rule's
+                    # words already (migration 0039); any other note prints as before.
+                    if getattr(nl, "cfr_section", "") == "205.601":
+                        words = nl.rule_words
+                        restriction = words[1] if words else ""
+                    else:
+                        restriction = (getattr(nl, "restriction_notes", "") or "").strip()
                     conditional = bool(getattr(nl, "is_conditionally_permitted", False))
                     if nl.status == "allowed":
                         status_display = "Allowed"
