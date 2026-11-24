@@ -36,7 +36,7 @@ def _text(elements):
     return " ".join(out)
 
 
-class NationalListAnnotationTests(TestCase):
+class _AnnotationFixture(TestCase):
     def setUp(self):
         company = Company.objects.create(name="NL Co")
         est = Establishment.objects.create(name="NL Farm", company=company)
@@ -94,6 +94,8 @@ class NationalListAnnotationTests(TestCase):
         svc = AuditExportService(self.history, certification_type="organic")
         return _text(svc._build_chemical_log())
 
+
+class NationalListAnnotationTests(_AnnotationFixture):
     def test_an_annotated_entry_is_restricted_not_prohibited(self):
         self._event(
             self._substance(
@@ -152,3 +154,58 @@ class NationalListAnnotationTests(TestCase):
         self.assertIn("PROHIBITED", text)
         self.assertIn("disqualifies the crop", text)
         self.assertNotIn("Restricted use", text)
+
+
+class Section601RuleWordsTests(_AnnotationFixture):
+    """OV-MT-C13: a § 205.601 row's stored note is a paraphrase, and the dossier printed it beside
+    the citation as if it were the rule. It now prints the rule's own words, or nothing."""
+
+    def test_a_601_row_prints_the_rules_words_not_the_paraphrase(self):
+        from certifications.services.national_list_citations import RULE_WORDS_601
+
+        self._event(
+            self._substance(
+                "Peracetic acid",
+                "allowed",
+                "Equipment, seed, and asexual plant material disinfection only.",
+                section="205.601",
+                kind=NationalListSubstance.ANNOTATION_CONDITION,
+            ),
+            name="Jet-Ag",
+        )
+        text = " ".join(self._packet_text().split())
+        self.assertNotIn("Equipment, seed, and asexual plant material disinfection only.", text)
+        # The half the paraphrase dropped.
+        self.assertIn("Also permitted in hydrogen peroxide formulations", text)
+        self.assertIn(" ".join(RULE_WORDS_601["(a)(6)"].split())[:80], text)
+
+    def test_a_chlorine_material_prints_the_residual_limit_it_is_held_to(self):
+        self._event(
+            self._substance(
+                "Sodium hypochlorite",
+                "allowed",
+                "Same SDWA chlorine limit applies.",
+                section="205.601",
+                kind=NationalListSubstance.ANNOTATION_CONDITION,
+            ),
+            name="Clorox Germicidal Bleach",
+        )
+        text = " ".join(self._packet_text().split())
+        self.assertNotIn("Same SDWA chlorine limit applies.", text)
+        self.assertIn("maximum residual disinfectant limit under the Safe Drinking Water Act", text)
+
+    def test_a_601_row_with_no_words_of_its_own_prints_no_note(self):
+        """§ 205.601(f) lists pheromones by name only; a stored note there is Trazo's, not the rule's."""
+        self._event(
+            self._substance(
+                "Pheromones",
+                "allowed",
+                "Mating disruption dispensers only.",
+                section="205.601",
+                kind=NationalListSubstance.ANNOTATION_CONDITION,
+            ),
+            name="Isomate CM Flex",
+        )
+        text = self._packet_text()
+        self.assertIn("Pheromones", text)
+        self.assertNotIn("Mating disruption dispensers only.", text)
