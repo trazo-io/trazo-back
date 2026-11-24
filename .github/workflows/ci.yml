@@ -989,9 +989,10 @@ jobs:
       # stated (only the factors that made it, joined whole), a row stored before the fix is served
       # as not stated, a figure on a Trazo default is an estimate, and the audit cover states the
       # sources per input class. No sibling repo.
-      # 2026-11-24: users.tests.test_invitation_signup_password (new, 4 tests) pins OV-FJ-C03:
+      # 2026-11-24: users.tests.test_invitation_signup_password (new, 5 tests) pins OV-FJ-C03:
       # signing up through an invitation runs the server's password policy against the invitee's
-      # email and names, a refusal writes no user and leaves the invitation usable. No sibling repo.
+      # email and names, a refusal writes no user and leaves the invitation usable, and an
+      # invitation email with no "@" is refused, not a 500. No sibling repo.
       - name: Claim-safety and compliance suites
         env:
           SHARD: ${{ matrix.shard }}

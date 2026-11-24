@@ -69,3 +69,12 @@ class InvitationSignupPasswordTests(APITestCase):
         user = User.objects.get(email=self.invitation.email)
         self.assertTrue(user.check_password("Copper-Ridge-Walnut-73!"))
         self.assertTrue(WorksIn.objects.filter(company=self.company, user=user).exists())
+
+    def test_an_invitation_email_without_an_at_sign_is_refused_not_a_crash(self):
+        # `create_invitation` stores the email without a format check, and the personal-information
+        # rule indexed the part after "@": an IndexError, answered with a 500 (review of back #517).
+        self.invitation.email = "crewlead"
+        self.invitation.save(update_fields=["email"])
+        response = self._signup("1")
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertFalse(User.objects.filter(email="crewlead").exists())
