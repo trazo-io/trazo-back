@@ -2,6 +2,8 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
@@ -442,6 +444,17 @@ def signup_with_invitation(request):
         # Check if user already exists with this email
         if User.objects.filter(email=invitation.email).exists():
             return Response({"error": "An account with this email already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # The account is created here, so this is the one place its password policy can hold.
+        # Until 2026-11-24 it did not: every rule on this path ran in the browser only, and a POST
+        # straight to this endpoint set any password, "1" included (overall review 2026-11,
+        # OV-FJ-C03). Validated against an unsaved user carrying the invitation's email and the
+        # typed names, so the personal-information rules apply as they do on password reset.
+        candidate = User(email=invitation.email, first_name=first_name, last_name=last_name)
+        try:
+            validate_password(password, candidate)
+        except ValidationError as e:
+            return Response({"error": e.messages}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create user account
         with transaction.atomic():
