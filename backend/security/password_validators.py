@@ -203,9 +203,11 @@ class NoPersonalInformationValidator:
 
         # Check against user attributes
         if user.email:
-            email_parts = user.email.lower().split("@")
-            username = email_parts[0]
-            domain = email_parts[1].split(".")[0]
+            # `partition`, not `split("@")[1]`: an invitation's email is stored without a format
+            # check, and one with no "@" raised IndexError here, which signup answered with a 500
+            # (review of back #517). With no domain part the domain rule simply has nothing to test.
+            username, _at, domain_part = user.email.lower().partition("@")
+            domain = domain_part.split(".")[0]
 
             if len(username) >= 3 and username in password_lower:
                 raise ValidationError(
