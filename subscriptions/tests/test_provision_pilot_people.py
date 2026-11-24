@@ -133,7 +133,7 @@ class ProvisionPilotPeopleTests(TestCase):
             {
                 "first_name": "Dan",
                 "last_name": "Tollefsen",
-                "password": "a-Strong-pass-2026",
+                "password": "Copper-Ridge-Walnut-73!",
                 "invitation_code": invitation.invitation_code,
                 "accept_terms": True,
             },
@@ -287,7 +287,7 @@ class ProvisionPilotPeopleTests(TestCase):
             {
                 "first_name": "Dan",
                 "last_name": "Tollefsen",
-                "password": "a-Strong-pass-2026",
+                "password": "Copper-Ridge-Walnut-73!",
                 "invitation_code": invitation.invitation_code,
                 "accept_terms": True,
             },
