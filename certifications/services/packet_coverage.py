@@ -415,7 +415,7 @@ class FormCoverage:
     printed_rows: tuple = ()
 
 
-def form_coverage(osp, certifier: str) -> list[FormCoverage]:
+def form_coverage(osp, certifier: str, printed_check=None) -> list[FormCoverage]:
     """Every form of `certifier` the packet carries content for, judged against this plan's answers.
 
     🔴 2026-09-30 (OSP alignment audit, T15/T16/T20). `coverage_rows` answers "which file carries
@@ -434,12 +434,16 @@ def form_coverage(osp, certifier: str) -> list[FormCoverage]:
         # A form the agent asked Trazo not to reproduce has no rows here either (OV-PK-W01): the
         # question index, which lists every open row, prints none of its items.
         rows = states[id(form)] if form.reproduced else []
+        # `printed_check(item)` says whether the built packet shows the row where the register places
+        # it (`question_index.printed_locations`). Without one (any caller outside a packet build, or
+        # 04's first render, before the cover exists) nothing is named printed: the row stays open.
         items = {item.ref: item for item in form.items}
-        printed = {
-            row.ref: stated_in_packet(items.get(row.ref))
-            for row in rows
-            if row.state == "not_assessed" and stated_in_packet(items.get(row.ref))
-        }
+        printed = {}
+        if printed_check is not None:
+            for row in rows:
+                item = items.get(row.ref)
+                if row.state == "not_assessed" and stated_in_packet(item) and printed_check(item):
+                    printed[row.ref] = stated_in_packet(item)
         required = [row for row in rows if not row.optional]
         if form.filed_with_agent:
             standing = "filed_with_agent"
