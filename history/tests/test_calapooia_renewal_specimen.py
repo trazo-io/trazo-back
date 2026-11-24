@@ -648,10 +648,48 @@ class QuestionIndexSpecimenTests(_Seeded):
                     continue
                 entry = coverage[form.label]
                 page04 = [r.ref for r in entry.open_rows + entry.optional_open_rows]
-                ours = [r.ref for r in form.rows if r.state not in CLOSED_STATES]
+                # A covered row with no answering question that the register places in the packet is
+                # not closed, and not open either: both pages name it apart (OV-PK-C04, O06, W06).
+                printed04 = [ref for ref, _where in entry.printed_rows]
+                ours = [r.ref for r in form.rows if r.state not in CLOSED_STATES and r.open_parts]
+                printed_ours = [r.ref for r in form.rows if r.state not in CLOSED_STATES and not r.open_parts]
                 self.assertEqual(sorted(ours), sorted(page04), (slug, form.label))
+                self.assertEqual(sorted(printed_ours), sorted(printed04), (slug, form.label))
                 compared += 1
         self.assertGreater(compared, 10)
+
+    def test_a_row_the_packet_prints_is_named_apart_never_still_open(self):
+        """OV-PK-C04, O06, W06: 04 listed these as "Still open ... not checked against this plan's
+        answers", under a heading telling the grower the agent's own form was needed for them, and
+        06 printed the same, while the packet printed every one (the cover's address, FACT-04)."""
+        from certifications.services.packet_answers import CLOSED_STATES
+        from certifications.services.packet_coverage import form_coverage
+        from certifications.services.question_index import STATED_BY_REGISTER
+
+        printed_seen = 0
+        for slug in self.AGENTS:
+            data, index = self.built[slug]
+            page04 = " ".join(self._pages(data, "04-coverage-and-scope.pdf"))
+            rows06 = {(f.label, r.ref): r for f in index.forms for r in f.rows}
+            for entry in form_coverage(self._as(slug), slug):
+                if not entry.printed_rows:
+                    continue
+                # Never closed, so never what makes a form answered (OSP alignment audit T15).
+                self.assertNotEqual(entry.standing, "answered", (slug, entry.form))
+                for ref, where in entry.printed_rows:
+                    printed_seen += 1
+                    self.assertFalse(where.lower().startswith("not in this packet"), (slug, ref))
+                    self.assertNotIn(ref, [r.ref for r in entry.open_rows + entry.optional_open_rows])
+                    row = rows06[(entry.form, ref)]
+                    self.assertNotIn(row.state, CLOSED_STATES, (slug, ref))
+                    self.assertEqual(row.open_parts, [], (slug, ref, row.open_parts))
+                    self.assertTrue(row.locations or row.register_prints, (slug, ref))
+            if any(e.printed_rows for e in form_coverage(self._as(slug), slug)):
+                self.assertIn("printed from your records, not checked against this plan's answers", page04, slug)
+            if any(r.register_prints for r in rows06.values() if r.state not in CLOSED_STATES and not r.open_parts):
+                page06 = " ".join(self._pages(data, "06-question-index.pdf"))
+                self.assertIn(STATED_BY_REGISTER.lower(), page06, slug)
+        self.assertGreater(printed_seen, 5, "too few printed rows on the specimen to mean anything")
 
     def test_forms_follow_the_agents_order_and_rows_the_registers(self):
         from certifications.services.certifier_register import load_forms, load_published_inventory

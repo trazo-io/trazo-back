@@ -5948,6 +5948,23 @@ def _open_rows_sentence(open_rows) -> str:
     return "Still open: " + "; ".join(parts) + "."
 
 
+def _printed_rows_sentence(printed_rows) -> str:
+    """ "Printed from your records, not checked against this plan's answers: A5 (00-cover.pdf: Address)."
+
+    Covered rows that cite no answering question (`packet_answers.stated_in_packet`). They sat in the
+    "Still open" sentence, under a heading telling the grower the agent's own form was needed for them,
+    while the packet printed them (overall review 2026-11, OV-PK-C04, O06, W06). Named apart, with
+    the location the register states, and never as answered: nothing read this plan's answers for them.
+    """
+    from certifications.services.packet_scope import mark_omitted
+
+    grouped: dict[str, list[str]] = {}
+    for ref, where in printed_rows:
+        grouped.setdefault(where, []).append(ref)
+    parts = [f"{', '.join(refs)} ({mark_omitted(where)})" for where, refs in grouped.items()]
+    return "Printed from your records, not checked against this plan's answers: " + "; ".join(parts) + "."
+
+
 def _route_skipped_sentence(rows) -> str:
     """ "Not asked on these parcels' route: 2.4, 2.5 (Home Field East, ...: C2 is not refiled ...)."
 
@@ -6079,6 +6096,8 @@ def _coverage_registered_forms(story, styles, osp, certifier, agent_label, parce
             )
             if form.open_rows:
                 story.append(Paragraph(_escape(_open_rows_sentence(form.open_rows)), styles["meta"]))
+            if form.printed_rows:
+                story.append(Paragraph(_escape(_printed_rows_sentence(form.printed_rows)), styles["meta"]))
             if form.route_skipped_rows:
                 story.append(Paragraph(_escape(_route_skipped_sentence(form.route_skipped_rows)), styles["meta"]))
             if form.optional_open_rows:

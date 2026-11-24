@@ -378,6 +378,8 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
 
     A part that does not apply is kept and printed with the answer that decides it (run 6, R6-01):
     dropping it left the register's placeholder standing in for a decided question."""
+    from certifications.services.packet_answers import stated_in_packet
+
     row = IndexRow(ref=state.ref, asks=_short(getattr(item, "asks", "")), state=state.state, optional=state.optional)
     if state.parts:
         for question_key, parcel, part_state, part_detail in state.parts:
@@ -416,6 +418,11 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
                 extra = tuple(s for s in part.subjects if s not in kept.subjects)
                 unique[marker] = replace(kept, subjects=kept.subjects + extra)
         row.open_parts = list(unique.values())
+    elif state.state == "not_assessed" and stated_in_packet(item):
+        # Printed where the register says, and not read against the answers: the location line
+        # below says both. Listed as "not checked" it read as an open question the packet holds the
+        # answer to (overall review 2026-11, OV-PK-C04).
+        pass
     elif state.state != "answered":
         row.open_parts.append(OpenPart(state.state, state.detail))
     prints = " ".join(str(getattr(item, "prints", "") or "").split())
@@ -424,8 +431,9 @@ def index_row(state, item, recorder, manifest, texts_cache) -> IndexRow:
     # The register stands in only when the packet gives nothing else for the row, in its
     # certifier-facing `where`. `prints` is the register's own note, with placeholders
     # ("parcel-application-<name>.pdf"), function names and asides ("should also be §A"), and a
-    # note starting "—" (nothing prints) would have read as a location. Rarely reached, because a
-    # row with no answering question already carries a "not checked" part; still never the note.
+    # note starting "—" (nothing prints) would have read as a location. Reached by a covered row
+    # with no answering question that the register places in the packet (`stated_in_packet`): its
+    # line says the location is the register's and was not checked against answers. Never the note.
     where = " ".join(str(getattr(item, "where", "") or "").split())
     if not (row.locations or row.open_parts) and where:
         from certifications.services.packet_scope import mark_omitted
