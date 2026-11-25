@@ -254,10 +254,15 @@ CASES = (
         "CIT20 B39",
         "certifications/osp_modules/stubs.py",
         (
-            "residual chlorine at the last point of product contact",
-            "último punto de contacto con el producto no exceda",
+            # Review of back #520: the compiled template said it too, without "residual".
+            "at the last point of product contact",
+            "último punto de contacto con el producto",
         ),
-        ("provided the use is followed by a rinse with potable water", "se enjuague con agua potable"),
+        (
+            "provided the use is followed by a rinse with potable water",
+            "se enjuague con agua potable",
+            "Chlorine in wash water, final rinse: {answer}.",
+        ),
     ),
     (
         "CIT20 C06 C07 C16 C21 C22 C23",
@@ -278,7 +283,7 @@ CASES = (
         ),
         (
             "Protective Measures (7 CFR 205.201(a)(1))",
-            "Crop Rotation (7 CFR 205.202(b), 205.205)",
+            "Field History & Previous Land Use (7 CFR 205.202(b)) and Crop Rotation (7 CFR 205.205)",
             "<b>Supervisor Record Review</b>",
             "and 7 CFR 205.201(a)(5) asks the plan to describe the practices and barriers",
             "allows a pest-control substance only when those practices are insufficient",

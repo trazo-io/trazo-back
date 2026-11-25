@@ -14792,7 +14792,9 @@ class AuditExportService:
         from product.models import ParcelCropHistory
 
         elements = [
-            self._section_header("Field History, Previous Land Use and Crop Rotation (7 CFR 205.202(b), 205.205)")
+            self._section_header(
+                "Field History & Previous Land Use (7 CFR 205.202(b)) and Crop Rotation (7 CFR 205.205)"
+            )
         ]
 
         parcel = None
