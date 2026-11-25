@@ -51,15 +51,15 @@ G3_2_PLANTING_STOCK = Module(
             "Two different clocks apply, and they are often confused. Selling the PLANTING "
             "STOCK itself as organic requires at least one year of organic management first "
             "(§ 205.204(a)(4)). Selling the CROP those plants produce as organic depends on "
-            "the land requirement instead — 36 months free of prohibited substances "
-            "(§ 205.202). Trees bought nonorganic and planted on compliant land can bear an "
+            "the land requirement instead: no prohibited substance applied for the 3 years "
+            "before the harvest (§ 205.202(b)). Trees bought nonorganic and planted on compliant land can bear an "
             "organic crop; the trees themselves are not organic stock until the year has "
             "passed.",
             "Aplican dos plazos distintos, y con frecuencia se confunden. Vender el MATERIAL "
             "DE PLANTACIÓN como orgánico requiere primero al menos un año de manejo orgánico "
             "(§ 205.204(a)(4)). Vender como orgánico el CULTIVO que producen esas plantas "
-            "depende en cambio del requisito de la tierra — 36 meses libre de sustancias "
-            "prohibidas (§ 205.202). Los árboles comprados como no orgánicos y plantados en "
+            "depende en cambio del requisito de la tierra: ninguna sustancia prohibida aplicada "
+            "en los 3 años antes de la cosecha (§ 205.202(b)). Los árboles comprados como no orgánicos y plantados en "
             "tierra conforme pueden dar un cultivo orgánico; los árboles mismos no son "
             "material orgánico hasta que pase el año.",
         ),

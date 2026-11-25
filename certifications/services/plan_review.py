@@ -422,7 +422,7 @@ def plan_review(osp, *, reference: Optional[datetime] = None) -> PlanReview:
             ReviewFinding(
                 code="responsible_person_missing",
                 message="No responsible person is set for the farm (set it when you edit the farm); "
-                "§ 205.401(b) asks for the responsible person by name",
+                "§ 205.401(b) asks for the name of the person completing the application",
                 count=1,
                 module_key="certification_contract",
             )

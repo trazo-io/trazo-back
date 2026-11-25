@@ -3765,14 +3765,16 @@ def _packet_cover_pdf(osp, review_notes=None) -> bytes:
             Paragraph(
                 (
                     (
-                        "§ 205.401(b) asks for the person responsible for the operation by name. Set the "
+                        "§ 205.401(b) asks for the name of the person completing the application and, for a "
+                        "company, the person authorized to act on its behalf. Set the "
                         "responsible person when you edit the farm, so this line is the operation's own "
                         "answer rather than the plan author Trazo fell back to."
                     )
                     if ctx["responsible_person"]
                     else (
-                        "§ 205.401(b) asks for the person responsible for the operation by name. None "
-                        "is stated in Trazo: set the responsible person when you edit the farm."
+                        "§ 205.401(b) asks for the name of the person completing the application and, for a "
+                        "company, the person authorized to act on its behalf. None is stated in "
+                        "Trazo: set the responsible person when you edit the farm."
                     )
                 ),
                 styles["meta"],
