@@ -153,6 +153,25 @@ class ExcludedGroundF8(_Farm):
 
 
 class WizardShowsWhatSectionDPrints(_Farm):
+    def test_an_unanswered_certifier_question_is_served_as_null(self):
+        """OV-RK-C15: `bool(None)` served an unanswered question to the wizard as "not notified"."""
+        user = User.objects.create_user(email="borders-null@test.com", password="x")
+        WorksIn.objects.create(user=user, company=self.company, role=WorksIn.COMPANY_ADMIN)
+        history = Production.objects.create(name="2026", start_date=timezone.now(), parcel=self.parcel)
+        GeneralEvent.objects.create(
+            history=history,
+            date=timezone.now(),
+            is_contamination_incident=True,
+            contamination_source="spray_drift",
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+        data = client.get(
+            f"/api/companies/{self.company.id}/establishments/{self.est.id}/parcels/{self.parcel.id}/application/"
+        ).json()
+        self.assertEqual(len(data["contamination_incidents"]), 1)
+        self.assertIsNone(data["contamination_incidents"][0]["certifier_notified"])
+
     def test_the_payload_carries_both_lists_as_codes(self):
         user = User.objects.create_user(email="borders@test.com", password="x")
         WorksIn.objects.create(user=user, company=self.company, role=WorksIn.COMPANY_ADMIN)

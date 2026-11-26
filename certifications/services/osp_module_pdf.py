@@ -2473,8 +2473,11 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     "Certifier notified"
                     + (f" {e.certifier_notification_date.isoformat()}" if e.certifier_notification_date else "")
                 )
+            elif e.certifier_notified is False:
+                bits.append("Certifier not notified (answered No); § 205.400(f)(1) requires it immediately")
             else:
-                bits.append("Certifier notification not recorded — § 205.400(f)(1) requires it immediately")
+                # OV-RK-C15: not answered is its own state, never read as No.
+                bits.append("Certifier notification not answered; § 205.400(f)(1) requires it immediately")
             for b in bits:
                 out.append(Paragraph(_escape(b), styles["meta"]))
 
