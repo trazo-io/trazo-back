@@ -993,6 +993,11 @@ jobs:
       # signing up through an invitation runs the server's password policy against the invitee's
       # email and names, a refusal writes no user and leaves the invitation usable, and an
       # invitation email with no "@" is refused, not a 500. No sibling repo.
+      # 2026-11-25: history.tests.test_certifier_notified_not_answered (new, 6 tests) pins
+      # OV-RK-C15: an unanswered "certifier notified?" defaults to null and prints "Not answered"
+      # in the incident log and the CSV, a stored No still prints No, and a general event's CSV row
+      # lines up with the header (its notes printed under Carbon, which an organic export drops).
+      # No sibling repo.
       - name: Claim-safety and compliance suites
         env:
           SHARD: ${{ matrix.shard }}
@@ -1367,6 +1372,7 @@ jobs:
             backend.security.tests.test_checks \
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_invitation_signup_password \
+            history.tests.test_certifier_notified_not_answered \
             users.tests.test_user_privilege_fields_read_only \
             users.tests.test_superuser_from_environment \
             users.tests.test_account_takeover_chain \

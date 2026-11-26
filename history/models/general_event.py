@@ -70,9 +70,14 @@ class GeneralEvent(CommonEvent):
         null=True,
         help_text="Date corrective action was completed",
     )
+    # Three states (OV-RK-C15, 2026-11-25): True notified, False not notified, None not answered.
+    # It defaulted to False, so an incident whose grower skipped the question printed "No" on
+    # the dossier, an answer nobody gave.
     certifier_notified = models.BooleanField(
-        default=False,
-        help_text="Whether the certifying agent was notified of the contamination incident",
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Whether the certifying agent was notified of the contamination incident (null: not answered)",
     )
     certifier_notification_date = models.DateField(
         blank=True,

@@ -17933,10 +17933,15 @@ class AuditExportService:
                         # A corrective action is what the certifier came to read.
                         self._cell(cev.corrective_action_taken),
                         self._cell(_fmt_date(cev.corrective_action_date) if cev.corrective_action_date else None),
+                        # Three states (OV-RK-C15): an unanswered question is never printed "No".
                         self._cell(
                             f"Yes ({_fmt_date(cev.certifier_notification_date)})"
                             if cev.certifier_notified and cev.certifier_notification_date
-                            else ("Yes" if cev.certifier_notified else "No")
+                            else (
+                                "Yes"
+                                if cev.certifier_notified
+                                else ("No" if cev.certifier_notified is False else "Not answered")
+                            )
                         ),
                     ]
                 )
@@ -19284,7 +19289,17 @@ class AuditExportService:
                         _fmt_date(ev.certifier_notification_date) if ev.certifier_notification_date else "date not set"
                     )
                     parts.append(f"Certifier notified: {date_str}")
-                notes = " | ".join(parts) if parts else notes
+                elif ev.certifier_notified is False:
+                    parts.append("Certifier notified: No")
+                else:
+                    parts.append("Certifier notified: not answered")
+                # The grower's own note rides after the structured summary. It used to be
+                # replaced by it whenever any part existed, and the three-state line above
+                # always adds one (review of back #521).
+                observation = (ev.observation or "").strip()
+                if observation:
+                    parts.append(observation)
+                notes = " | ".join(parts)
             source_doc = self._event_transcription_text(ev)
             if source_doc:
                 notes = source_doc if notes == _val(None) else f"{notes} | {source_doc}"
@@ -19299,6 +19314,10 @@ class AuditExportService:
                         "",
                         "",
                         "",
+                        "",
+                        # Method. Missing since the Rate column landed (2026-08-01), so the operator
+                        # printed under Method and the notes under Carbon, which an organic export
+                        # drops: an incident's notes never reached the CSV (found with OV-RK-C15).
                         "",
                         _val(ev.performed_by),
                         str(_photo_count(ev)),

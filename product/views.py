@@ -181,7 +181,8 @@ class ParcelViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                     "date": e.date.date().isoformat() if e.date else None,
                     "source": e.contamination_source or "",
                     "description": e.description or "",
-                    "certifier_notified": bool(e.certifier_notified),
+                    # True, False, or None when the grower did not answer (OV-RK-C15).
+                    "certifier_notified": e.certifier_notified,
                     "certifier_notification_date": (
                         e.certifier_notification_date.isoformat() if e.certifier_notification_date else None
                     ),
