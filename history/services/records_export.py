@@ -110,6 +110,7 @@ def export_establishment_records_zip(establishment) -> bytes:
     """Return ZIP bytes: one CSV per record family plus parcels, productions,
     sales and photo references. Owner-facing raw data; no plan gating."""
     from carbon.models import CarbonEntry
+    from certifications.models import AdjoiningLandAffidavit, LandownerAffidavit, Supplier, SupplierCertificate
     from fieldnotes.models import FieldNote, FieldNoteConfirmation
     from history.models import (
         BusinessEvent,
@@ -122,7 +123,7 @@ def export_establishment_records_zip(establishment) -> bytes:
         SoilManagementEvent,
         WeatherEvent,
     )
-    from product.models import Parcel
+    from product.models import Parcel, ParcelCropHistory, ParcelPlannedCrop
 
     est_filter = {"history__parcel__establishment": establishment}
     families = {
@@ -142,6 +143,17 @@ def export_establishment_records_zip(establishment) -> bytes:
         ),
         "sales_records.csv": SalesRecord.objects.filter(production__parcel__establishment=establishment),
         "parcels.csv": Parcel.objects.filter(establishment=establishment),
+        # The records that sit on a parcel or a supplier rather than on a season (overall review
+        # 2026-11, M7-S14): a file called complete left out the 36-month field history, the planned
+        # crops, both affidavits and the supplier register. Scoped the way `parcels.csv` is, through
+        # the establishment. A signed scan is listed by its stored file name (the FileField column);
+        # a supplier certificate names its filed copy by `document_id`, like the other documents.
+        "parcel_crop_history.csv": ParcelCropHistory.objects.filter(parcel__establishment=establishment),
+        "parcel_planned_crops.csv": ParcelPlannedCrop.objects.filter(parcel__establishment=establishment),
+        "landowner_affidavits.csv": LandownerAffidavit.objects.filter(parcel__establishment=establishment),
+        "adjoining_land_affidavits.csv": AdjoiningLandAffidavit.objects.filter(parcel__establishment=establishment),
+        "suppliers.csv": Supplier.objects.filter(establishment=establishment),
+        "supplier_certificates.csv": SupplierCertificate.objects.filter(supplier__establishment=establishment),
         # Carbon entries are DERIVED records about this farm, and they belong to the farm.
         #
         # Added 2026-08-29, when removing the multi-standard export picker made carbon
@@ -289,6 +301,10 @@ def export_establishment_records_zip(establishment) -> bytes:
             + "These are your records. Keep them for at least five years after they are created\n"
             + "(7 CFR 205.103(b)(4)).\n"
             + "sale_harvest_links.csv joins sales_records.id to production_events.id (harvest lots).\n"
+            + "parcel_crop_history.csv, parcel_planned_crops.csv, landowner_affidavits.csv and\n"
+            + "adjoining_land_affidavits.csv carry parcel_id (parcels.csv); suppliers.csv and\n"
+            + "supplier_certificates.csv carry the supplier register (supplier_id joins suppliers.id).\n"
+            + "A signed affidavit scan is listed by its stored file name in signed_document.\n"
             + "\nNot in this export (run 7, R7-08); each lives where noted:\n"
             + "- Organic System Plan versions, sections, annual updates and change notifications:\n"
             + "  the OSP renewal packet (filed annual updates as their frozen PDFs).\n"

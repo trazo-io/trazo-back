@@ -1342,6 +1342,11 @@ class UpdateChemicalEventSerializer(CustomFieldsMixin, serializers.ModelSerializ
         if phi_days is not None and phi_days < 0:
             raise serializers.ValidationError({"phi_days": "Pre-Harvest Interval (PHI) cannot be negative"})
 
+        # M7-I1: "transitional" names the farm's status, not this input's basis; a record (a tank
+        # line included) is never newly given it (history/services/organic_basis.py).
+        from history.services.organic_basis import refuse_new_refused_basis
+
+        refuse_new_refused_basis(self, data, "organic_approved")
         _validate_carrier_volume(self, data)
         _validate_application_window(self, data)
         _validate_tank_line_fuel(self, data)
@@ -2592,7 +2597,29 @@ class UpdateProductionEventSerializer(CustomFieldsMixin, serializers.ModelSerial
         if seed_cert_status is None and self.instance is not None:
             seed_cert_status = getattr(self.instance, "seed_certification_status", None)
         pl_type = production_type or (getattr(self.instance, "type", "") if self.instance else "")
-        if pl_type in SEED_SOURCED_SUBTYPES and seed_cert_status in NON_ORGANIC_SEED_STATUSES:
+        # A non-organic transplant of an annual crop is probably an annual seedling, judged under
+        # § 205.204(a)(3) and § 205.290, not (a)(1), so it owes no supplier search (see
+        # `is_annual_seedling_transplant`; the dossier prints the conditional (a)(3) REVIEW line).
+        # The activity form creates with `parcels` and no `history`, so the season is unknown here:
+        # a TR on that path is judged where the season is resolved
+        # (`EventViewSet._refuse_stock_without_search`), with the same message.
+        from history.models.production_event import is_annual_seedling_transplant
+
+        _stock_production = data.get("history") or (getattr(self.instance, "history", None) if self.instance else None)
+        _request = self.context.get("request")
+        _season_resolved_later = bool(
+            _stock_production is None
+            and pl_type == "TR"
+            and _request is not None
+            and hasattr(_request.data, "get")
+            and _request.data.get("parcels")
+        )
+        if (
+            pl_type in SEED_SOURCED_SUBTYPES
+            and seed_cert_status in NON_ORGANIC_SEED_STATUSES
+            and not _season_resolved_later
+            and not is_annual_seedling_transplant(pl_type, _stock_production)
+        ):
             attempts = data.get("seed_search_attempts")
             if attempts is None and self.instance is not None:
                 attempts = getattr(self.instance, "seed_search_attempts", None)
@@ -7150,6 +7177,12 @@ class UpdateSoilManagementEventSerializer(CustomFieldsMixin, serializers.ModelSe
         """
         attrs = super().validate(attrs)
         instance = getattr(self, "instance", None)
+
+        # M7-I1: "transitional" names the farm's status, not the amendment's basis; a record is
+        # never newly given it (history/services/organic_basis.py).
+        from history.services.organic_basis import refuse_new_refused_basis
+
+        refuse_new_refused_basis(self, attrs, "amendment_organic_approved")
 
         def _field(name):
             if name in attrs:

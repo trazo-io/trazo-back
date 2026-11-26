@@ -611,6 +611,8 @@ ORGANIC_APPROVED = [
     ("usda_nop_approved", "NOP seal on label (legacy entry)"),
     ("organic_equivalent", "Grower-assessed as equivalent (legacy entry — no listing)"),
     ("not_organic", "No organic basis - conventional use only"),
+    # NEVER offered again (M7-I1, 2026-11-24): it names the farm's status, not the input's basis,
+    # and is refused on new writes (ORGANIC_APPROVED_REFUSED_ON_WRITE). Kept so a stored row renders.
     ("transitional", "Transitional - In certification process"),
 ]
 
@@ -646,6 +648,32 @@ ORGANIC_PROHIBITED_VALUES = frozenset({"not_organic", "no", "transitional"})
 #: Run 8 (R8-08): an answer that is neither: the grower has not confirmed what shows the input is
 #: allowed. Never earns an organic claim (not in the OK set) and is not a finding of prohibition.
 ORGANIC_UNRESOLVED_VALUES = frozenset({"unverified"})
+
+#: The bases a form may OFFER today, in the order the forms show them: the four lawful bases, then
+#: the two honest answers when there is none ("not yet confirmed", "no organic basis"). Every other
+#: value in ORGANIC_APPROVED is a stored answer only; it keeps its label and its classification above
+#: so a record already holding it reads as it did. trazo-app mirrors this list as
+#: `ORGANIC_APPROVED_OFFERED` (config/events/enums.ts), and `organicBasisOffered.test.ts` there holds
+#: the spray and soil selects, the tank-mix lines and quick add to it.
+ORGANIC_APPROVED_OFFERED = (
+    "omri_listed",
+    "wsda_listed",
+    "nop_seal_on_label",
+    "certifier_approved",
+    "unverified",
+    "not_organic",
+)
+
+#: Stored values a record may no longer be GIVEN: refused on create, and on an edit or a correction
+#: that changes the value to one of them. An edit that leaves the stored value as it is still saves
+#: (`history/services/organic_basis.py`). Their classification above is unchanged.
+#:
+#: "transitional" ("Transitional - In certification process", overall review 2026-11-24, M7-I1)
+#: describes the OPERATION, a farm in its 36 months of conversion, not the input. A grower on a
+#: transitional farm picked it in good faith, and it is a prohibited-substance answer (on purpose:
+#: `product/tests/test_transition_status.py`), so one pick on a fish fertilizer record moved a
+#: certified parcel's § 205.202(b) line to "In transition, 964 days remaining".
+ORGANIC_APPROVED_REFUSED_ON_WRITE = frozenset({"transitional"})
 
 
 # ============================================================================

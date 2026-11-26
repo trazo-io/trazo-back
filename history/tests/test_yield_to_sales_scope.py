@@ -1611,3 +1611,153 @@ class Run8UnknownOrganicBasisTests(TestCase):
         from history.services.audit_export_service import _organic_basis_cell
 
         self.assertTrue(_organic_basis_cell(self._event("unverified")).startswith("Not yet confirmed"))
+
+
+class BoxWeightPathTests(TestCase):
+    """M7-P4, M7-P5, M7-P6: the boxes-to-pounds path of the Yield-to-Sales section.
+
+    Harvest in lb, sales in boxes, so the section converts at a weight per box. It used to print
+    PASS for an estimate above the harvest (two-sided tolerance), say "Trazo does not convert
+    between units" two lines above the conversion, credit "USDA-AMS packing-house references" for
+    every default whether or not it had a source, and tell the reader to set a field no app
+    control writes.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(email="bwp@test.com", password="x")
+        cls.company = Company.objects.create(name="BWP Co")
+        cls.establishment = Establishment.objects.create(name="BWP Farm", company=cls.company, state="CA")
+        cls.parcel = Parcel.objects.create(name="Block", establishment=cls.establishment, area=6.0)
+
+    def _season(self, crop, *, harvest_lb, boxes, box_weight_lb=None):
+        product = Product.objects.create(name=crop)
+        history = Production.objects.create(
+            name=f"{crop} season",
+            start_date=timezone.now() - timedelta(days=200),
+            finish_date=timezone.now() - timedelta(days=10),
+            product=product,
+            parcel=self.parcel,
+            operator=self.user,
+            earning=0.0,
+            production_amount=harvest_lb,
+            reputation=0.0,
+            confidence_score=0.0,
+            public_views=0,
+            unique_visitors=0,
+            is_outdoor=True,
+            published=True,
+            box_weight_lb=box_weight_lb,
+        )
+        ProductionEvent.objects.create(
+            history=history,
+            type="HA",
+            date=timezone.now() - timedelta(days=40),
+            created_by=self.user,
+            yield_quantity=harvest_lb,
+            yield_unit="lb",
+        )
+        SalesRecord.objects.create(
+            production=history,
+            sale_date=timezone.now().date(),
+            buyer_name="Sample Valley Packing Co.",
+            quantity=boxes,
+            quantity_unit="boxes",
+            organic_on_invoice=True,
+            sale_amount=5000,
+        )
+        return history
+
+    def _text(self, history):
+        from history.services.audit_export_service import AuditExportService
+
+        out = []
+        for el in AuditExportService(history, certification_type="all")._build_mass_balance_section():
+            text = getattr(el, "text", None)
+            if text:
+                out.append(str(text))
+            for row in getattr(el, "_cellvalues", None) or []:
+                out.extend(str(c.text) for c in row if getattr(c, "text", None))
+        return " || ".join(out)
+
+    # -- M7-P6 -------------------------------------------------------------------------------
+
+    def test_a_sold_estimate_above_the_harvest_within_ten_percent_is_review_not_pass(self):
+        # 260 boxes x 40 lb = 10,400 lb sold against 10,000 lb harvested: 4% over.
+        text = self._text(self._season("Apples", harvest_lb=10000, boxes=260, box_weight_lb=40))
+        self.assertIn("Yield-to-sales reconciliation:</b> REVIEW", text)
+        self.assertNotIn("Yield-to-sales reconciliation:</b> PASS", text)
+        self.assertIn("more than the", text)
+
+    def test_shrink_inside_the_tolerance_on_the_positive_side_still_passes(self):
+        # 240 boxes x 40 lb = 9,600 lb sold against 10,000 lb harvested: 4% shrink.
+        text = self._text(self._season("Apples", harvest_lb=10000, boxes=240, box_weight_lb=40))
+        self.assertIn("Yield-to-sales reconciliation:</b> PASS", text)
+
+    def test_the_lot_line_does_not_say_trazo_does_not_convert_when_the_section_then_converts(self):
+        text = self._text(self._season("Apples", harvest_lb=10000, boxes=240, box_weight_lb=40))
+        self.assertNotIn("does not convert between units", text)
+        self.assertIn("converts the boxes at", text)
+
+    def test_without_a_box_weight_the_lot_line_keeps_its_does_not_convert_sentence(self):
+        # No default for this crop and no recorded weight: nothing converts, so the sentence is true.
+        text = self._text(self._season("Kumquats", harvest_lb=10000, boxes=240))
+        self.assertIn("does not convert between units", text)
+
+    # -- M7-P5 and M7-P4 ----------------------------------------------------------------------
+
+    def test_a_recorded_box_weight_prints_no_default_footer(self):
+        text = self._text(self._season("Apples", harvest_lb=10000, boxes=240, box_weight_lb=40))
+        self.assertNotIn("industry standards", text)
+        self.assertNotIn("USDA-AMS packing-house", text)
+        self.assertNotIn("Trazo estimate (unsourced)", text)
+
+    def test_every_default_names_the_crop_and_weight_and_says_it_is_unsourced(self):
+        """No default carries a source read from a frozen copy, so none may print one (M7-P5)."""
+        for crop, boxes, weight in (("Avocados", 360, 25), ("Blueberries", 750, 12), ("Apples", 220, 42)):
+            with self.subTest(crop=crop):
+                text = self._text(self._season(crop, harvest_lb=10000, boxes=boxes))
+                self.assertIn(f"default of {weight} lb per box for {crop.lower()}", text)
+                self.assertIn("Trazo estimate (unsourced)", text)
+                self.assertNotIn("USDA", text)
+                self.assertNotIn("Marketing Order", text)
+
+    def test_the_default_footer_is_not_printed_when_the_estimate_never_ran(self):
+        """An avocado season with sales in lb (or no amounts) computes no estimate, so it used no default."""
+        history = self._season("Avocados", harvest_lb=10000, boxes=360)
+        SalesRecord.objects.filter(production=history).update(quantity_unit="lb", quantity=9000)
+        text = self._text(history)
+        self.assertNotIn("default of", text)
+        self.assertNotIn("Trazo estimate (unsourced)", text)
+        SalesRecord.objects.filter(production=history).update(quantity_unit="boxes", quantity=360)
+        Production.objects.filter(pk=history.pk).update(production_amount=0)
+        ProductionEvent.objects.filter(history=history, type="HA").update(yield_quantity=None)
+        text = self._text(history)
+        self.assertNotIn("default of", text)
+
+    def test_the_lot_line_and_the_estimate_share_one_test(self):
+        """Where the estimate does not run (no weight for the crop), the lot line must not promise one."""
+        text = self._text(self._season("Kumquats", harvest_lb=10000, boxes=240))
+        self.assertNotIn("converts the boxes", text)
+
+    def test_a_recorded_weight_is_not_called_assumed(self):
+        text = self._text(self._season("Apples", harvest_lb=10000, boxes=240, box_weight_lb=40))
+        self.assertIn("converts the boxes at the box weight recorded on this production", text)
+        self.assertNotIn("assumed", text)
+
+    def test_a_default_weight_is_called_a_default_in_the_lot_line(self):
+        text = self._text(self._season("Apples", harvest_lb=10000, boxes=220))
+        self.assertIn("converts the boxes at a default weight per box", text)
+
+    def test_no_printed_text_names_the_box_weight_field_or_tells_the_reader_to_set_it(self):
+        for crop, boxes, weight in (("Apples", 220, None), ("Kumquats", 240, None), ("Apples", 240, 40)):
+            with self.subTest(crop=crop, weight=weight):
+                text = self._text(self._season(crop, harvest_lb=10000, boxes=boxes, box_weight_lb=weight))
+                self.assertNotIn("box_weight_lb", text)
+                self.assertNotIn("set the box weight", text.lower())
+                self.assertNotIn("Set the", text)
+
+    def test_no_default_is_sourced_until_a_source_is_read_from_a_frozen_copy(self):
+        from history.services.audit_export_service import AuditExportService as S
+
+        self.assertEqual(S.CROP_DEFAULT_BOX_WEIGHT_SOURCES, {})

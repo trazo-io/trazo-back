@@ -10,6 +10,7 @@ Covers:
 """
 
 import re
+from datetime import timedelta
 
 from django.test import TestCase
 from django.utils import timezone
@@ -259,6 +260,156 @@ class ComplianceSnapshotTests(TestCase):
         rows = self._rows_by_requirement()
         status, _ = rows["Contamination prevention (§ 205.272)"]
         self.assertEqual(status, "DOCUMENTED")
+
+    # ---- M7-I3: "shared" is read from the register, custom hire and hired sprays too ----
+
+    def _harvest(self, **kw):
+        kw.setdefault("shared_with_conventional", False)
+        return ProductionEvent.objects.create(
+            history=self.history, type="HA", date=timezone.now(), area_covered=1.0, **kw
+        )
+
+    def _documented_cleaning(self, days_ago=1):
+        return ProductionEvent.objects.create(
+            history=self.history,
+            type="EM",
+            date=timezone.now() - timedelta(days=days_ago),
+            area_covered=0.0,
+            cleaning_date=timezone.now().date(),
+            cleaning_method="Pressure wash",
+            cleaned_by="Miguel",
+        )
+
+    def _contamination_row(self):
+        return self._rows_by_requirement()["Contamination prevention (§ 205.272)"]
+
+    def _coverage_cells(self):
+        service = AuditExportService(self.history, certification_type="organic")
+        table = next(f for f in service._build_shared_equipment_coverage_subtable() if isinstance(f, Table))
+        return " ".join(getattr(c, "text", "") or "" for row in table._cellvalues for c in row)
+
+    def _register(self, **kw):
+        from certifications.models import ProductionEquipment
+
+        kw.setdefault("use", "harvest")
+        return ProductionEquipment.objects.create(establishment=self.establishment, name="Bin trailer", **kw)
+
+    def test_register_item_not_dedicated_is_a_review_never_a_pass_or_a_fail(self):
+        self._harvest()
+        self._register(dedicated_organic=False, ownership="own")
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+        self.assertNotIn("No equipment shared", detail)
+        self.assertIn("confirm whether any was used this season", detail)
+
+    def test_a_rented_register_item_is_a_review_too(self):
+        self._harvest()
+        self._register(dedicated_organic=True, ownership="rent")
+        status, _ = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+
+    def test_the_register_review_does_not_turn_on_the_cleaning_log(self):
+        """A farm-wide, undated register cannot make an earlier season FAIL for lacking a cleaning."""
+        self._harvest()
+        self._register(dedicated_organic=False)
+        self.assertEqual(self._contamination_row()[0], "REVIEW")
+        self._documented_cleaning()
+        self.assertEqual(self._contamination_row()[0], "REVIEW")
+
+    def test_a_dedicated_owned_register_item_still_reads_as_nothing_shared(self):
+        self._harvest()
+        self._register(dedicated_organic=True, ownership="own")
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "DOCUMENTED")
+        self.assertIn("No equipment shared", detail)
+
+    def test_a_register_query_failure_is_not_swallowed_into_a_pass(self):
+        from unittest import mock
+
+        from company.models import Establishment as Est
+
+        self._harvest()
+        with mock.patch.object(
+            Est, "production_equipment", new_callable=mock.PropertyMock, side_effect=RuntimeError("db")
+        ):
+            with self.assertRaises(RuntimeError):
+                self._rows_by_requirement()
+
+    def test_custom_operator_pass_is_reviewed_by_its_link_and_the_coverage_table_agrees(self):
+        self._harvest(operator_is_custom=True, performed_by="Valley Custom Harvest")
+        # Another cleaning on file elsewhere does not cover a custom operator's machine.
+        self._documented_cleaning()
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("0/1 custom-operator or hired-applicator pass(es)", detail)
+        cells = self._coverage_cells()
+        self.assertIn("Valley Custom Harvest", cells)
+        self.assertIn("REVIEW \u2014 no cleaning event linked", cells)
+
+    def test_a_custom_operator_pass_with_its_cleaning_linked_is_covered_in_both_places(self):
+        self._harvest(
+            operator_is_custom=True,
+            performed_by="Valley Custom Harvest",
+            equipment_cleaning_event=self._documented_cleaning(),
+        )
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "DOCUMENTED")
+        self.assertIn("All 1 custom-operator pass(es)", detail)
+        cells = self._coverage_cells()
+        self.assertIn("Cleaned", cells)
+        self.assertNotIn("REVIEW", cells)
+
+    def test_ticked_passes_keep_the_aggregate_verdict_beside_an_unlinked_custom_pass(self):
+        """Four harvests ticked shared and a documented cleaning log were PASS. One custom hulling
+        pass added later must add its own REVIEW, not turn the ticked four into 0/5."""
+        for _ in range(4):
+            self._harvest(shared_with_conventional=True)
+        self._documented_cleaning()
+        self.assertEqual(self._contamination_row()[0], "DOCUMENTED")
+        self._harvest(operator_is_custom=True, performed_by="Valley Custom Huller")
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("0/1 custom-operator or hired-applicator pass(es)", detail)
+        self.assertNotIn("0/5", detail)
+
+    def _pcb_spray(self):
+        return ChemicalEvent.objects.create(
+            history=self.history,
+            type="PE",
+            commercial_name="Spinosad",
+            date=timezone.now(),
+            applied_by_pcb=True,
+            pcb_name="Valley Aerial Spray",
+        )
+
+    def test_a_hired_spray_is_a_review_asking_for_the_contractors_statement_even_with_an_unrelated_cleaning(self):
+        self._harvest()
+        self._pcb_spray()
+        self._documented_cleaning()
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("contractor's cleaning statement", detail)
+        self.assertIn("Valley Aerial Spray", self._coverage_cells())
+
+    def test_a_hired_spray_with_no_cleaning_log_is_a_review_not_a_fail(self):
+        self._harvest()
+        self._pcb_spray()
+        status, _ = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+
+    def test_a_linked_custom_pass_and_a_hired_spray_share_one_tally(self):
+        self._harvest(operator_is_custom=True, equipment_cleaning_event=self._documented_cleaning())
+        self._pcb_spray()
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("1/2 custom-operator or hired-applicator pass(es)", detail)
+
+    def test_a_shared_ticked_pass_with_a_documented_cleaning_still_takes_the_existing_branch(self):
+        self._harvest(shared_with_conventional=True)
+        self._documented_cleaning()
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "DOCUMENTED")
+        self.assertIn("EM cleaning event(s) on file", detail)
 
     def test_contamination_prevention_partial_em_is_review(self):
         ProductionEvent.objects.create(

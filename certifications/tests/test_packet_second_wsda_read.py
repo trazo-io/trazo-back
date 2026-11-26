@@ -328,7 +328,9 @@ class TheAuditExhibitTests(_Farm):
         )
         self.assertIsNone(sample_trail(self.est).balance.packed_out)
         text = _text(_audit_trail_exhibit_pdf(self.osp))
-        self.assertIn("is on no sale, pack-out or loss record in Trazo for this lot. State where it went", text)
+        # No loss record type exists in Trazo, so the sentence names only the records that do.
+        self.assertIn("is on no sale or pack-out record in Trazo for this lot. State where it went", text)
+        self.assertNotIn("loss record", text)
         self.assertNotIn("culled", text)
         self.assertNotIn("shrink", text)
 
@@ -343,7 +345,9 @@ class TheAuditExhibitTests(_Farm):
         }
         self.osp.save(update_fields=["sections"])
         rows = {row.name: row for row in document_table(self.est, self.osp)}
-        self.assertIn("Invoice number + Lot ID", rows["Settlement statements"].linking_element)
+        # A sale carries no Lot ID column; the settlement links through the invoice number.
+        self.assertIn("Invoice number on the sales record", rows["Settlement statements"].linking_element)
+        self.assertNotIn("Lot ID", rows["Settlement statements"].linking_element)
         text = _text(_audit_trail_exhibit_pdf(self.osp))
         # Any model field name, under whatever the model is called (`History.lot_id` until
         # 2026-11-15, `Production.lot_id`, or the evidence map's `history.Production.lot_id`).

@@ -194,6 +194,17 @@ def _uses_non_organic_seed(event) -> bool:
     return getattr(event, "seed_certification_status", None) in NON_ORGANIC_SEED_STATUSES
 
 
+def _owes_availability_search(event) -> bool:
+    """Non-organic seed or stock under § 205.204(a)(1). A non-organic transplant of an annual crop is
+    probably an annual seedling, which § 205.204(a)(3) governs (a variance, not a search), so the
+    readiness card and the write-time nudge do not ask it for the (a)(1) ground or searches."""
+    from history.models.production_event import is_annual_seedling_transplant
+
+    return _uses_non_organic_seed(event) and not is_annual_seedling_transplant(
+        getattr(event, "type", None), getattr(event, "history", None)
+    )
+
+
 def _named_a_seed_treatment(event) -> bool:
     """A treatment was actually applied — "None" in the box is an answer, not a treatment."""
     treatment = str(getattr(event, "seed_treatment", None) or "").strip()
@@ -219,7 +230,7 @@ PLANTING_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
         key="seed_nonavailability_reason",
         label="reason organic seed was unavailable",
         cfr_cite="§ 205.204(a)(1)",
-        applies_when=_uses_non_organic_seed,
+        applies_when=_owes_availability_search,
     ),
     # The certifier EXPECTATION of three contacts. Deliberately a readiness check and not a
     # save-blocking validator: § 205.204 sets no count, and USDA's Guide for Organic Crop
@@ -229,7 +240,7 @@ PLANTING_EVENT_REQUIRED_FIELDS: list[RequiredField] = [
         key="seed_search_attempts",
         label="three documented supplier searches",
         cfr_cite="§ 205.204(a)(1)",
-        applies_when=_uses_non_organic_seed,
+        applies_when=_owes_availability_search,
         present=lambda ev: _seed_search_documented(ev, minimum=3),
     ),
     # USDA's Seed Records Part C pairs every named treatment with a "Documentation of Allowed

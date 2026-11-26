@@ -332,12 +332,35 @@ def _seed_treatment_basis_display(event):
     from history.models import ProductionEvent
 
     basis = (getattr(event, "seed_treatment_allowed_basis", None) or "").strip()
-    if basis:
-        return dict(ProductionEvent.SEED_TREATMENT_BASIS_CHOICES).get(basis, basis)
     treatment = (getattr(event, "seed_treatment", None) or "").strip()
-    if treatment and treatment.lower() not in NO_TREATMENT_ANSWERS:
+    from certifications.services.common_osp_workbooks import names_a_treatment
+
+    # The same reading the Materials List uses: "None", "N/A", "None - raw, untreated organic seed"
+    # and "no coating" all say nothing was applied; the bare-word set adds the Spanish answers.
+    if treatment and (treatment.lower() in NO_TREATMENT_ANSWERS or not names_a_treatment(treatment)):
+        # "None - raw, untreated" has no allowability basis to give: printing "treatment allowed
+        # for organic production" beside it asserts a treatment (M7-S4). The one basis that agrees
+        # with the answer, "Untreated" (written by the serializer from this same answer), stays.
+        return dict(ProductionEvent.SEED_TREATMENT_BASIS_CHOICES)[basis] if basis == "untreated" else None
+    if basis:
+        if basis in ("omri_listed", "certifier_approved"):
+            # The two picks that name a third party take the Input Log's wording and helper
+            # (`_organic_basis_cell`, back #500), so "OMRI-listed product (catalog entry on file)"
+            # cannot print where planting records have no link to the OMRI catalogue, and the
+            # certifier's review reads as the grower's selection.
+            return _organic_basis_cell(event, raw=basis)
+        return dict(ProductionEvent.SEED_TREATMENT_BASIS_CHOICES).get(basis, basis)
+    if treatment:
         return "Not recorded — \u00a7 205.204(a)(2) asks why the treatment is allowed"
     return None
+
+
+def _is_shared_operation(ev):
+    """A production record that needs cleaning coverage under § 205.272: the grower ticked
+    "shared with conventional", or a custom operator did the pass (their machine may have been in a
+    conventional block the same morning). The summary row and the coverage subtable both read this,
+    so they cannot disagree about which operations are in scope."""
+    return bool(ev.shared_with_conventional or ev.operator_is_custom)
 
 
 def _applied_by(ev):
@@ -4195,7 +4218,23 @@ class AuditExportService:
         # (Equipment Maintenance) events carrying cleaning date + method + performer.
         # One shared-equipment exposure ⇒ at least one fully-documented EM event
         # should exist. Rinse-step documentation lands in P0-6.
-        any_shared_equipment = any(ev.shared_with_conventional for ev in production_events)
+        #
+        # "Shared" is decided from every place the operation can say it, not from the one
+        # production-record checkbox: the equipment register (an item that is not dedicated to
+        # organic, or comes from outside by rent, borrow or custom hire: the same test the G6.0
+        # table uses), a pass by a custom operator, and a spray applied by a pest control
+        # business. Reading the checkbox alone printed PASS "No equipment shared" beside a
+        # register that said the bin trailer also carries conventional fruit (M7-I3).
+        from certifications.services.production_equipment import needs_cleaning
+
+        # The register is farm-wide and undated, so it can only ever ask "confirm whether any of
+        # these was used this season": a REVIEW, never a FAIL and never the old "No equipment
+        # shared" PASS (a rented sprayer added today must not turn an earlier season's dossier red).
+        register_shared_items = (
+            [item for item in est.production_equipment.all() if needs_cleaning(item)] if est is not None else []
+        )
+        pcb_sprays = [ev for ev in chemicals if getattr(ev, "applied_by_pcb", False)]
+        shared_operations = [ev for ev in production_events if _is_shared_operation(ev) and ev.type != "EM"]
         em_cleaning_events = [ev for ev in production_events if ev.type == "EM"]
 
         def _is_documented_cleaning(ev):
@@ -4203,25 +4242,26 @@ class AuditExportService:
 
         em_fully_documented = sum(1 for ev in em_cleaning_events if _is_documented_cleaning(ev))
 
-        # §E-5 — per-operation cleaning evidence. The aggregate test above answers "does this
-        # operation keep cleaning records at all"; it cannot answer "was THIS shared-equipment
-        # pass preceded by a cleaning", which is what § 205.272 actually asks. Where a grower
-        # links the covering EM event, report that directly.
-        #
-        # The aggregate remains the verdict when NO links are in use, so an operation that has
-        # not adopted the field is judged exactly as before rather than being retroactively
-        # downgraded for a record-keeping feature that did not exist when it logged its season.
-        # A cleaning event is not an operation that needs cleaning coverage — asking the
-        # wash-down record to reference a wash-down is circular, and counting it would report
-        # "1/2 covered" for a season with exactly one harvest and its cleaning.
-        shared_operations = [ev for ev in production_events if ev.shared_with_conventional and ev.type != "EM"]
-        linked_shared_operations = [ev for ev in shared_operations if ev.equipment_cleaning_event_id]
-        covered_shared_operations = [
-            ev
-            for ev in linked_shared_operations
-            if _is_documented_cleaning(ev.equipment_cleaning_event)
-            and (not ev.date or not ev.equipment_cleaning_event.date or ev.equipment_cleaning_event.date <= ev.date)
-        ]
+        # §E-5 per-operation cleaning evidence. Passes the grower ticked "shared" are judged by the
+        # aggregate cleaning log unless the grower links the covering EM event (an operation that
+        # has not adopted the link is not retroactively downgraded). A custom operator's pass that
+        # was NOT ticked shared, and a spray a pest control business applied, are judged by what
+        # covers THAT pass: a linked documented cleaning, or for a hired spray the contractor's
+        # own cleaning statement (a spray record has no link field). The farm's own cleaning log
+        # cannot stand in for a contractor's rig. Both verdicts are combined below.
+        # A cleaning event is not an operation that needs cleaning coverage (circular).
+        ticked_operations = [ev for ev in shared_operations if ev.shared_with_conventional]
+        custom_operations = [ev for ev in shared_operations if not ev.shared_with_conventional]
+        linked_shared_operations = [ev for ev in ticked_operations if ev.equipment_cleaning_event_id]
+
+        def _cleaning_covers(ev):
+            return bool(
+                ev.equipment_cleaning_event_id
+                and _is_documented_cleaning(ev.equipment_cleaning_event)
+                and (not ev.date or not ev.equipment_cleaning_event.date or ev.equipment_cleaning_event.date <= ev.date)
+            )
+
+        covered_shared_operations = [ev for ev in linked_shared_operations if _cleaning_covers(ev)]
 
         # Contamination incidents per § 205.201(b). Both fields must be non-empty.
         contamination_events = [ev for ev in gen_events if ev.is_contamination_incident]
@@ -4860,7 +4900,93 @@ class AuditExportService:
         # - no EM events at all → FAIL (no cleaning record created)
         # - EM events exist but all incomplete / partially documented → REVIEW
         # - all EM events fully documented → PASS
-        if not any_shared_equipment:
+        contamination_parts = []  # (status, detail, said-or-None)
+        if ticked_operations:
+            if linked_shared_operations:
+                # The grower is using per-operation links, so report what they actually establish.
+                covered = len(covered_shared_operations)
+                total = len(ticked_operations)
+                if covered == total:
+                    contamination_parts.append(
+                        (
+                            "PASS",
+                            f"All {total} shared-equipment operation(s) reference a documented "
+                            "cleaning event performed beforehand",
+                            None,
+                        )
+                    )
+                else:
+                    contamination_parts.append(
+                        (
+                            "REVIEW",
+                            f"{covered}/{total} shared-equipment operation(s) reference a documented "
+                            "prior cleaning — link the covering EM cleaning event on the remainder",
+                            said("contamination_prevention.cleaning_unlinked", covered=covered, total=total),
+                        )
+                    )
+            elif not em_cleaning_events:
+                contamination_parts.append(
+                    (
+                        "FAIL",
+                        "Shared equipment in use but no Equipment Maintenance cleaning events on file",
+                        said("contamination_prevention.no_cleaning"),
+                    )
+                )
+            elif em_fully_documented < len(em_cleaning_events):
+                contamination_parts.append(
+                    (
+                        "REVIEW",
+                        f"{em_fully_documented}/{len(em_cleaning_events)} EM cleaning events fully documented — "
+                        "remaining events missing date / method / performer",
+                        said(
+                            "contamination_prevention.cleaning_incomplete",
+                            documented=em_fully_documented,
+                            total=len(em_cleaning_events),
+                        ),
+                    )
+                )
+            else:
+                contamination_parts.append(
+                    (
+                        "PASS",
+                        f"{em_fully_documented} EM cleaning event(s) on file with date + method + performer for "
+                        "shared-equipment exposure",
+                        None,
+                    )
+                )
+        outside_passes = len(custom_operations) + len(pcb_sprays)
+        if outside_passes:
+            covered_outside = sum(1 for ev in custom_operations if _cleaning_covers(ev))
+            if covered_outside == outside_passes:
+                contamination_parts.append(
+                    (
+                        "PASS",
+                        f"All {outside_passes} custom-operator pass(es) reference a documented cleaning event "
+                        "performed beforehand",
+                        None,
+                    )
+                )
+            else:
+                contamination_parts.append(
+                    (
+                        "REVIEW",
+                        f"{covered_outside}/{outside_passes} custom-operator or hired-applicator pass(es) are "
+                        "covered by a documented cleaning: link the covering EM cleaning event on a custom "
+                        "pass, and file the contractor's cleaning statement for a hired spray",
+                        None,
+                    )
+                )
+        if register_shared_items:
+            contamination_parts.append(
+                (
+                    "REVIEW",
+                    f"The equipment register lists {len(register_shared_items)} item(s) not dedicated to organic "
+                    "production or brought in from outside: confirm whether any was used this season and file "
+                    "its cleaning record",
+                    None,
+                )
+            )
+        if not contamination_parts:
             snapshot_rows.append(
                 (
                     "Contamination prevention (§ 205.272)",
@@ -4868,69 +4994,15 @@ class AuditExportService:
                     "No equipment shared with conventional operations",
                 )
             )
-        elif linked_shared_operations:
-            # The grower is using per-operation links, so report what they actually establish.
-            covered = len(covered_shared_operations)
-            total = len(shared_operations)
-            if covered == total:
-                snapshot_rows.append(
-                    (
-                        "Contamination prevention (§ 205.272)",
-                        "PASS",
-                        (
-                            f"All {total} shared-equipment operation(s) reference a documented "
-                            "cleaning event performed beforehand"
-                        ),
-                    )
-                )
-            else:
-                snapshot_rows.append(
-                    (
-                        "Contamination prevention (§ 205.272)",
-                        "REVIEW",
-                        (
-                            f"{covered}/{total} shared-equipment operation(s) reference a documented "
-                            "prior cleaning — link the covering EM cleaning event on the remainder"
-                        ),
-                        said("contamination_prevention.cleaning_unlinked", covered=covered, total=total),
-                    )
-                )
-        elif not em_cleaning_events:
-            snapshot_rows.append(
-                (
-                    "Contamination prevention (§ 205.272)",
-                    "FAIL",
-                    "Shared equipment in use but no Equipment Maintenance cleaning events on file",
-                    said("contamination_prevention.no_cleaning"),
-                )
-            )
-        elif em_fully_documented < len(em_cleaning_events):
-            snapshot_rows.append(
-                (
-                    "Contamination prevention (§ 205.272)",
-                    "REVIEW",
-                    (
-                        f"{em_fully_documented}/{len(em_cleaning_events)} EM cleaning events fully documented — "
-                        "remaining events missing date / method / performer"
-                    ),
-                    said(
-                        "contamination_prevention.cleaning_incomplete",
-                        documented=em_fully_documented,
-                        total=len(em_cleaning_events),
-                    ),
-                )
-            )
         else:
-            snapshot_rows.append(
-                (
-                    "Contamination prevention (§ 205.272)",
-                    "PASS",
-                    (
-                        f"{em_fully_documented} EM cleaning event(s) on file with date + method + performer for "
-                        "shared-equipment exposure"
-                    ),
-                )
-            )
+            _order = {"PASS": 0, "REVIEW": 1, "FAIL": 2}
+            _worst = max(_order[part[0]] for part in contamination_parts)
+            _shown = [part for part in contamination_parts if _order[part[0]] == _worst] if _worst else None
+            _status = {v: k for k, v in _order.items()}[_worst]
+            _detail = "; ".join(part[1] for part in (_shown or contamination_parts))
+            _spoken = contamination_parts[0][2] if len(contamination_parts) == 1 else None
+            row = ("Contamination prevention (§ 205.272)", _status, _detail)
+            snapshot_rows.append(row + (_spoken,) if _spoken else row)
 
         # Pest threshold rationale
         #
@@ -8543,9 +8615,59 @@ class AuditExportService:
             return elements
 
         # Seed source information from production events
-        if events_with_seed:
-            # Use the first event with seed source as the representative
-            seed_ev = events_with_seed[0]
+        from history.models.production_event import is_annual_seedling_transplant
+
+        # One block per seed record, in date order (M7-S1). The block used to read the first row
+        # of an unordered query, so a second planting's origin, non-GMO answer, exemption ground and
+        # supplier searches never printed, and the first one's answers read as covering it.
+        def _search_table(attempts):
+            search_headers = ["Supplier Contacted", "Date", "Result", "Notes"]
+            search_data = [[self._hdr(h) for h in search_headers]]
+            for attempt in attempts:
+                if isinstance(attempt, dict):
+                    # `supplier` is the pre-2026-08-15 key written by the planting form.
+                    # Migration 0161 rewrites stored rows and the serializer normalises
+                    # new ones, but a packet must never print a blank supplier column for
+                    # a row that has the name under the old key: that column IS the
+                    # § 205.204(a)(1) evidence.
+                    supplier = attempt.get("supplier_name") or attempt.get("supplier") or ""
+                    search_data.append(
+                        [
+                            self._cell(supplier),
+                            self._cell(attempt.get("date_contacted", "")),
+                            self._cell(attempt.get("result", "")),
+                            self._cell(attempt.get("notes", "")),
+                        ]
+                    )
+            if len(search_data) <= 1:
+                return None
+            t = Table(search_data, colWidths=[1.5 * inch, 0.8 * inch, 1.2 * inch, 3.0 * inch], repeatRows=1)
+            t.setStyle(self._base_table_style())
+            return t
+
+        def _by_date(e):
+            return (e.date is None, e.date.timestamp() if e.date else 0.0, e.pk or 0)
+
+        # Blocks are for planting and transplanting records. A Seed Search (SS) record is a search,
+        # not a planting: it has no origin or excluded-methods answer to print as "Not recorded", so
+        # its searches are listed under their own heading after the blocks. A supplier or lot on
+        # some other record belongs to the traceability table below, not to a block.
+        for _seed_index, seed_ev in enumerate(
+            sorted([e for e in events_with_seed if e.type in ("PL", "TR")], key=_by_date)
+        ):
+            elements.append(self._spacer(0.1 if _seed_index else 0.02))
+            elements.append(
+                self._body(
+                    "<b>"
+                    + _esc(_fmt_date(seed_ev.date))
+                    + ", "
+                    + _esc(production_type_display(seed_ev))
+                    + ", "
+                    + (_esc(seed_ev.variety) if (seed_ev.variety or "").strip() else "variety not recorded")
+                    + "</b>"
+                )
+            )
+            elements.append(self._spacer(0.04))
             # "Seed Origin", not "Seed Source". MEASURED complaint from the Planting teardown:
             # printed as "Seed Source: Commercial" an inspector reads it as the SUPPLIER, which
             # it is not — it is where the stock came from as a category. The teardown proposed
@@ -8653,7 +8775,45 @@ class AuditExportService:
             # prints "Ground for the exemption: not recorded" underneath a certified-organic
             # planting — a fabricated finding, which is the one thing a certifier packet must
             # never contain. The STATUS is the only thing that claims an exemption.
-            _claims_seed_exemption = seed_ev.seed_certification_status in NON_ORGANIC_SEED_STATUSES
+            #
+            # A non-organic transplant that is not planting stock is an annual seedling, and for
+            # it § 205.204(a)(1) is not the ground (M7-S3). eCFR (frozen 2026-08-05), § 205.2:
+            # "Planting stock. Any plant or plant tissue other than annual seedlings but including
+            # rhizomes, shoots, leaf or stem cuttings, roots, or tubers, used in plant production or
+            # propagation." § 205.204(a)(3): "Nonorganically produced annual seedlings may be used
+            # to produce an organic crop when a temporary variance has been granted in accordance
+            # with § 205.290(a)(2)". Trazo records no variance, so the line says that.
+            _annual_seedling_tr = seed_ev.seed_certification_status in NON_ORGANIC_SEED_STATUSES and (
+                is_annual_seedling_transplant(seed_ev.type, self.production)
+            )
+            _claims_seed_exemption = (
+                seed_ev.seed_certification_status in NON_ORGANIC_SEED_STATUSES and not _annual_seedling_tr
+            )
+            if _annual_seedling_tr:
+                # Trazo records no "annual seedling" fact, so this is the crop's classification, not
+                # a finding: the line says what each reading would mean.
+                elements.append(self._spacer(0.05))
+                elements.append(
+                    Paragraph(
+                        "<b>[REVIEW] 7 CFR 205.204(a)(3) / 205.290(a)(2):</b> recorded as a transplant of "
+                        "an annual crop. If it is an annual seedling (\u00a7 205.2: grown from seed, in the "
+                        "field less than one year), \u00a7 205.204(a)(3) allows a nonorganic one only under "
+                        "a temporary variance granted under \u00a7 205.290(a)(2); no variance is recorded "
+                        "in Trazo. If it is planting stock (a crown, set, slip, tuber or cutting), "
+                        "\u00a7 205.204(a)(1) applies.",
+                        self._warning_style(),
+                    )
+                )
+                _reason_key = (getattr(seed_ev, "seed_nonavailability_reason", None) or "").strip()
+                if _reason_key:
+                    from history.models import ProductionEvent as _PE2
+
+                    elements.append(
+                        self._body(
+                            "Ground recorded (\u00a7 205.204(a)(1)): "
+                            + _esc(dict(_PE2.SEED_NONAVAILABILITY_REASON_CHOICES).get(_reason_key, _reason_key))
+                        )
+                    )
             if _claims_seed_exemption:
                 from history.models import ProductionEvent as _PE
 
@@ -8671,36 +8831,19 @@ class AuditExportService:
                 )
             if search_attempts and isinstance(search_attempts, list) and len(search_attempts) > 0:
                 elements.append(self._spacer(0.1))
-                elements.append(self._body("<b>Organic Seed Commercial-Availability Search (7 CFR 205.204(a)(1))</b>"))
+                elements.append(
+                    self._body(
+                        "<b>Supplier searches recorded on this record</b>"
+                        if _annual_seedling_tr
+                        else "<b>Organic Seed Commercial-Availability Search (7 CFR 205.204(a)(1))</b>"
+                    )
+                )
                 elements.append(self._spacer(0.05))
 
-                search_headers = ["Supplier Contacted", "Date", "Result", "Notes"]
-                search_header_row = [self._hdr(h) for h in search_headers]
-                search_data = [search_header_row]
-
-                for attempt in search_attempts:
-                    if isinstance(attempt, dict):
-                        # `supplier` is the pre-2026-08-15 key written by the planting form.
-                        # Migration 0161 rewrites stored rows and the serializer normalises
-                        # new ones, but a packet must never print a blank supplier column for
-                        # a row that has the name under the old key — that column IS the
-                        # § 205.204(a)(1) evidence.
-                        supplier = attempt.get("supplier_name") or attempt.get("supplier") or ""
-                        search_data.append(
-                            [
-                                self._cell(supplier),
-                                self._cell(attempt.get("date_contacted", "")),
-                                self._cell(attempt.get("result", "")),
-                                self._cell(attempt.get("notes", "")),
-                            ]
-                        )
-
-                if len(search_data) > 1:
-                    sw = [1.5 * inch, 0.8 * inch, 1.2 * inch, 3.0 * inch]
-                    t = Table(search_data, colWidths=sw, repeatRows=1)
-                    t.setStyle(self._base_table_style())
-                    elements.append(t)
-            elif seed_ev.seed_certification_status in (
+                search_table = _search_table(search_attempts)
+                if search_table is not None:
+                    elements.append(search_table)
+            elif not _annual_seedling_tr and seed_ev.seed_certification_status in (
                 "non_organic_untreated",
                 "non_organic_treated",
             ):
@@ -8722,6 +8865,29 @@ class AuditExportService:
                         self._styles["footer_note"],
                     )
                 )
+
+        _search_events = sorted(
+            [
+                e
+                for e in all_prod_events
+                if e.type == "SS" and isinstance(e.seed_search_attempts, list) and e.seed_search_attempts
+            ],
+            key=_by_date,
+        )
+        if _search_events:
+            elements.append(self._spacer(0.1))
+            elements.append(self._body("<b>Seed searches</b>"))
+            for ss_ev in _search_events:
+                search_table = _search_table(ss_ev.seed_search_attempts)
+                if search_table is not None:
+                    elements.append(self._spacer(0.05))
+                    elements.append(
+                        self._body(
+                            _esc(_fmt_date(ss_ev.date))
+                            + (f", {_esc(ss_ev.variety)}" if (ss_ev.variety or "").strip() else "")
+                        )
+                    )
+                    elements.append(search_table)
 
         # Planting event details
         if planting_events:
@@ -10393,9 +10559,14 @@ class AuditExportService:
             for ev in related_events(self.production, "history_productionevent_events")
             # EM events ARE the cleaning records; they belong in the cleaning-log table above,
             # not in the list of operations that need one.
-            if (ev.shared_with_conventional or ev.operator_is_custom) and ev.type != "EM"
+            if _is_shared_operation(ev) and ev.type != "EM"
         ]
-        if not operations:
+        pcb_sprays = [
+            ev
+            for ev in related_events(self.production, "history_chemicalevent_events")
+            if getattr(ev, "applied_by_pcb", False)
+        ]
+        if not operations and not pcb_sprays:
             return []
 
         rows = []
@@ -10423,6 +10594,23 @@ class AuditExportService:
                     self._cell("Yes" if ev.operator_is_custom else "No"),
                     self._cell(ev.performed_by),
                     self._cell(coverage),
+                ]
+            )
+
+        # A spray a pest control business applied is the same exposure as a custom operator's pass
+        # (the summary row counts it), but a chemical record carries no cleaning link, so the row
+        # says so, and the summary row asks for the contractor's own cleaning statement.
+        for ev in pcb_sprays:
+            rows.append(
+                [
+                    self._cell(_fmt_date(ev.date)),
+                    self._cell(CHEMICAL_TYPE_LABELS.get(ev.type, _val(ev.type))),
+                    self._cell("No"),
+                    self._cell("Yes"),
+                    self._cell(_applied_by(ev)),
+                    self._cell(
+                        "REVIEW: hired applicator, file the contractor's cleaning statement (a spray record has no cleaning link)"
+                    ),
                 ]
             )
 
@@ -12688,6 +12876,16 @@ class AuditExportService:
     }
     DEFAULT_BOX_WEIGHT_TOLERANCE = 0.10
 
+    # The source of each default above. EMPTY on purpose: the old comment block over the table
+    # named USDA-AMS programmes (a "Marketing Order 915" Hass carton, a "California Navel Marketing"
+    # carton, "shipping point inspection standards"), and none of those was read against a frozen
+    # copy: 7 CFR Part 915 is "Avocados Grown in South Florida", not Hass, and the others name no
+    # locatable programme. Every default therefore prints as "Trazo estimate (unsourced)" (M7-P5).
+    # Add a crop here only with a source READ from a frozen copy in the repo, never copied from a
+    # code comment, and never to make a line look sourced.
+    CROP_DEFAULT_BOX_WEIGHT_SOURCES = {}
+    UNSOURCED_BOX_WEIGHT = "Trazo estimate (unsourced)"
+
     # Harvest yields and sale quantities are typed in two different vocabularies. MEASURED on
     # real records: `yield_unit` holds kg / lbs / tons / t / lb / bins, while a SalesRecord's
     # `quantity_unit` is restricted to History.UNIT_CHOICES (which offers "bins" since
@@ -12841,6 +13039,26 @@ class AuditExportService:
                 return (float(explicit), self.DEFAULT_BOX_WEIGHT_TOLERANCE)
             except (TypeError, ValueError):
                 pass
+        crop_type = self._box_weight_default_key()
+        if crop_type:
+            return self.CROP_DEFAULT_BOX_WEIGHTS[crop_type]
+        return (None, self.DEFAULT_BOX_WEIGHT_TOLERANCE)
+
+    def _box_estimate_runs(self, harvest_amount, harvest_unit, quantity_sold, sold_unit):
+        """Whether the boxes-to-pounds estimate is computed: the ONE test the estimate branch and the
+        lot line above it share, so neither says something the other contradicts."""
+        if not (harvest_amount and quantity_sold and _is_box_unit(sold_unit)):
+            return False
+        if self._box_weight_for_production()[0] is None or self._canonical_unit(harvest_unit) != "lb":
+            return False
+        try:
+            float(harvest_amount)
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    def _box_weight_default_key(self):
+        """The CROP_DEFAULT_BOX_WEIGHTS key for this production's crop, or "" when it has none."""
         crop_type = ""
         try:
             product = getattr(self.production, "product", None)
@@ -12848,9 +13066,7 @@ class AuditExportService:
                 crop_type = (getattr(product, "crop_type", "") or getattr(product, "name", "") or "").strip().lower()
         except Exception:
             crop_type = ""
-        if crop_type and crop_type in self.CROP_DEFAULT_BOX_WEIGHTS:
-            return self.CROP_DEFAULT_BOX_WEIGHTS[crop_type]
-        return (None, self.DEFAULT_BOX_WEIGHT_TOLERANCE)
+        return crop_type if crop_type in self.CROP_DEFAULT_BOX_WEIGHTS else ""
 
     def _build_mass_balance_section(self):
         elements = [self._section_header("Yield-to-Sales Reconciliation (§ 205.103(b)(2) / § 205.2)")]
@@ -13095,6 +13311,23 @@ class AuditExportService:
             )
             text, review = balance_statement(lot, season_open=self.production.finish_date is None, as_at=_as_of)
             if lot.difference is None:
+                # `balance_statement` says "Trazo does not convert between units" for a harvest in lb
+                # and sales in boxes, and the boxes-to-pounds estimate below converts them at a box
+                # weight. On that path the sentence is untrue two blocks later (M7-P6), so say what
+                # is true: no recorded balance, one estimate.
+                if getattr(lot, "not_computed_code", "") == "units_differ" and self._box_estimate_runs(
+                    harvest_amount, harvest_unit, quantity_sold, sold_unit
+                ):
+                    _weight_basis = (
+                        "at the box weight recorded on this production"
+                        if getattr(self.production, "box_weight_lb", None) is not None
+                        else "at a default weight per box"
+                    )
+                    text = text.replace(
+                        ", and Trazo does not convert between units",
+                        ", so no balance is recorded; the boxes-to-pounds estimate below converts the boxes "
+                        + _weight_basis,
+                    )
                 text += " Reconcile from the itemised sales below."
             lot_not_computed = lot.difference is None
             if review:
@@ -13553,11 +13786,15 @@ class AuditExportService:
         elements.append(self._spacer(0.04))
 
         box_weight, tolerance = self._box_weight_for_production()
-        box_weight_source = (
-            "explicit production.box_weight_lb"
-            if getattr(self.production, "box_weight_lb", None) is not None
-            else "crop-default lookup"
-        )
+        # Where the weight per box came from. A default prints its crop, its weight and its source
+        # (or says it has none); the footer names the default only when one was actually used.
+        default_box_weight_used = None
+        if getattr(self.production, "box_weight_lb", None) is not None:
+            box_weight_source = "box weight recorded on this production"
+        else:
+            _default_crop = self._box_weight_default_key()
+            _default_src = self.CROP_DEFAULT_BOX_WEIGHT_SOURCES.get(_default_crop) or self.UNSOURCED_BOX_WEIGHT
+            box_weight_source = f"default for {_default_crop or '-'}: {_default_src}"
 
         harvest_lb = None
         if harvest_amount and self._canonical_unit(harvest_unit) == "lb":
@@ -13600,11 +13837,10 @@ class AuditExportService:
         elif box_weight is None:
             elements.append(
                 self._body(
-                    f"Box weight is not configured for this production (product "
-                    f"crop-type \u201c{getattr(self.production.product, 'crop_type', '') or getattr(self.production.product, 'name', '') or '-'}\u201d). "
-                    "Set the <b>box_weight_lb</b> field on the production record to enable "
-                    "the boxes-to-pounds reconciliation, or consult the USDA-AMS "
-                    "Marketing Order for the crop-specific standard."
+                    f"No box weight is recorded for this production and Trazo holds no default for its "
+                    f"crop-type \u201c{getattr(self.production.product, 'crop_type', '') or getattr(self.production.product, 'name', '') or '-'}\u201d, "
+                    "so the boxes-to-pounds reconciliation is skipped. Reconcile the boxes sold "
+                    "to pounds from the pack-out or invoice documents."
                 )
             )
         elif harvest_lb is None:
@@ -13616,6 +13852,9 @@ class AuditExportService:
                 )
             )
         else:
+            # Only here has the estimate actually been computed, so only here was a default used.
+            if getattr(self.production, "box_weight_lb", None) is None:
+                default_box_weight_used = (_default_crop, box_weight, _default_src)
             boxes = float(quantity_sold)
             estimated_lb = boxes * box_weight
             delta_lb = harvest_lb - estimated_lb
@@ -13623,7 +13862,11 @@ class AuditExportService:
                 delta_pct = (delta_lb / harvest_lb) * 100.0
             else:
                 delta_pct = 0.0
-            within_tolerance = abs(delta_pct) <= (tolerance * 100.0)
+            # One-sided (M7-P6): the tolerance is a SHRINK allowance, so it applies only where the
+            # harvest exceeds the sold estimate. An estimate above the harvest cannot be shrink, and
+            # the old two-sided test printed PASS for an oversold lot up to the tolerance ("-5.0%").
+            oversold = estimated_lb > harvest_lb
+            within_tolerance = (not oversold) and delta_pct <= (tolerance * 100.0)
             status_label = "PASS" if within_tolerance else "REVIEW"
             # Only when harvest exceeds sold: a partly sold open season lands outside any shrink
             # tolerance by construction, the gap being product not sold yet, and neither PASS nor
@@ -13665,7 +13908,8 @@ class AuditExportService:
                     # Not "Calculated Shrinkage": the number is harvest minus sold, and nothing on
                     # record says the difference is shrink (audit 2026-10, T22).
                     "Harvest minus sold",
-                    f"{shrink_lb:+,.0f} lb ({shrink_pct:+.1f}%) vs \u00b1{tolerance * 100.0:.0f}% tolerance",
+                    f"{shrink_lb:+,.0f} lb ({shrink_pct:+.1f}%) vs {tolerance * 100.0:.0f}% shrink tolerance "
+                    "(applies only where the harvest exceeds the estimate)",
                 )
             )
             elements.append(
@@ -13674,11 +13918,22 @@ class AuditExportService:
                     status_label,
                 )
             )
-            if not within_tolerance and not open_and_unsold:
+            if oversold:
+                elements.append(
+                    Paragraph(
+                        f"<b>[REVIEW]</b> The boxes sold, at {box_weight:g} lb per box, come to "
+                        f"{estimated_lb:,.0f} lb, which is {-delta_lb:,.0f} lb more than the "
+                        f"{harvest_lb:,.0f} lb harvested. Shrink cannot explain a sale above the "
+                        "harvest: check the quantity sold, the weight per box, and whether harvest "
+                        "records are missing.",
+                        self._warning_style(),
+                    )
+                )
+            elif not within_tolerance and not open_and_unsold:
                 elements.append(
                     Paragraph(
                         f"<b>[REVIEW]</b> Harvest minus sold is {shrink_pct:+.1f}%, "
-                        f"outside the \u00b1{tolerance * 100.0:.0f}% tolerance configured for this "
+                        f"outside the {tolerance * 100.0:.0f}% tolerance configured for this "
                         "crop. No record in Trazo states what the difference was; a difference "
                         "this size warrants an inspector review of pack-out documentation "
                         "(pack-out weights, shrink logs, grade-down allocations).",
@@ -13692,14 +13947,21 @@ class AuditExportService:
                 "Yield-to-sales reconciliation supports the § 205.2 audit-trail definition "
                 "and the § 205.103(b)(2) SOE enhanced-traceability requirement by "
                 "connecting inputs purchased and harvest yield to the sales quantity shipped. "
-                "Box weight defaults are industry standards drawn from USDA-AMS packing-house "
-                "references; set the box weight on the production record to override it for a "
-                "given season. The \u00b110% tolerance reflects typical specialty-"
+                "The 10% shrink tolerance reflects typical specialty-"
                 "crop pack-out shrink and is advisory: a larger delta is a reason to "
                 "review the records, not a finding on its own.",
                 self._styles["footer_note"],
             )
         )
+        if default_box_weight_used is not None:
+            _crop, _weight, _src = default_box_weight_used
+            elements.append(
+                Paragraph(
+                    f"No box weight is recorded for this production, so the estimate above uses a "
+                    f"default of {_weight:g} lb per box for {_esc(_crop)}. Source: {_esc(_src)}.",
+                    self._styles["footer_note"],
+                )
+            )
 
         return elements
 
@@ -14024,42 +14286,34 @@ class AuditExportService:
             self._spacer(0.12),
             self._body("<b>Adjoining Land Use Verification — neighbour attestation (7 CFR 205.202(c))</b>"),
         ]
-        headers = ["Neighbour", "Side", "Materials Used", "Distance", "Notify?", "Signed"]
+        # The wording of every state comes from `adjoining_land_text`, the reader the OSP packet
+        # prints from too, so one affidavit reads the same in both documents (the dossier kept its
+        # own copy and drifted: a dash before "not on adjoining fields" against the packet's parentheses).
+        from certifications.services import adjoining_land_text as alt
+
+        headers = ["Neighbour", "Side", "Materials Used", "Distance", "Notify?", "Organic status", "Signed"]
         data = [[self._hdr(h) for h in headers]]
         unsigned = []
         for a in affidavits:
-            # Three states again: an affirmative "none of the above", a list, or silence.
-            if a.declares_no_materials is True:
-                materials = "None of the listed materials (declared)"
-            elif a.materials_display():
-                materials = a.materials_display()
-                if a.not_used_on_adjoining_fields is True:
-                    materials += " — not on adjoining fields"
-            else:
-                materials = "Not answered"
-
-            distance = (
-                f"{a.distance_to_organic_property_ft} ft" if a.distance_to_organic_property_ft is not None else "—"
-            )
-            # A neighbour who did not answer has not refused; say so rather than printing "No".
-            notify = {True: "Yes", False: "No", None: "Not answered"}[a.agrees_to_notify]
-            if a.is_signed():
-                signed = _fmt_date(a.neighbor_signed_date) if a.neighbor_signed_date else "Document on file"
-            else:
-                signed = "UNSIGNED"
+            signed = alt.signed_statement(a, _fmt_date)
+            if signed is None:
+                signed = alt.UNSIGNED
                 unsigned.append(a)
             data.append(
                 [
                     self._cell(a.neighbor_name or "—"),
                     self._cell(a.get_border_side_display() if a.border_side else "—"),
-                    self._cell(materials),
-                    self._cell(distance),
-                    self._cell(notify),
+                    self._cell(alt.materials_statement(a)),
+                    self._cell(alt.distance_statement(a) or "—"),
+                    self._cell(alt.notify_statement(a)),
+                    self._cell(alt.certification_statement(a)),
                     self._cell(signed),
                 ]
             )
         t = Table(
-            data, colWidths=[1.3 * inch, 0.7 * inch, 2.0 * inch, 0.7 * inch, 0.8 * inch, 0.9 * inch], repeatRows=1
+            data,
+            colWidths=[1.1 * inch, 0.6 * inch, 1.6 * inch, 0.6 * inch, 0.7 * inch, 1.3 * inch, 0.9 * inch],
+            repeatRows=1,
         )
         t.setStyle(self._base_table_style())
         elements.append(t)

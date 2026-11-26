@@ -23,7 +23,14 @@ from .activity import Activity
 from .common_event import CommonEvent
 from .weather_event import WeatherEvent
 from .chemical_event import ChemicalEvent
-from .production_event import ProductionEvent
+from .production_event import (
+    ANNUAL_SEEDLING_CROP_CATEGORIES,
+    VEGETATIVELY_PROPAGATED_CROP_WORDS,
+    crop_is_annual_seedling_crop,
+    is_annual_seedling_transplant,
+    documented_seed_searches,
+    ProductionEvent,
+)
 from .general_event import GeneralEvent
 from .history_scan import COUNTED_SCAN_BOT_SCORE_MAX, HistoryScanQuerySet, HistoryScan
 from .equipment_event import EquipmentEvent
@@ -49,6 +56,11 @@ __all__ = [
     "CommonEvent",
     "WeatherEvent",
     "ChemicalEvent",
+    "ANNUAL_SEEDLING_CROP_CATEGORIES",
+    "VEGETATIVELY_PROPAGATED_CROP_WORDS",
+    "crop_is_annual_seedling_crop",
+    "is_annual_seedling_transplant",
+    "documented_seed_searches",
     "ProductionEvent",
     "GeneralEvent",
     "COUNTED_SCAN_BOT_SCORE_MAX",
