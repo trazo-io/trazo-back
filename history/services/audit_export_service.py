@@ -18111,8 +18111,8 @@ class AuditExportService:
                             else "the plan does not declare a split operation, "
                         )
                         + f"but a crop is recorded as grown in the buffer on {buffer_crop_parcels}. "
-                        "A harvested buffer crop may not be sold or represented as organic "
-                        "(§ 205.202(c)), which makes it a split operation whose plan describes how the "
+                        "A harvested buffer crop is kept out of the organic crop, which makes this a split "
+                        "operation whose plan describes how the "
                         "two are kept apart (§ 205.201(a)(5)). Either record how the buffer crop is "
                         "kept separate and identified, or state that it is not harvested. An "
                         "inspector will ask, and the two statements in this packet currently disagree.",

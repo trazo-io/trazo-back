@@ -677,7 +677,9 @@ class BufferDisposition:
 def buffer_dispositions(establishment) -> list:
     """Every buffer-crop pick on record, with the sales that carried it off the farm.
 
-    § 205.202(c) crop may never be sold as organic, and USDA's own Buffer Crop Disposition Record
+    Buffer crop is kept out of the organic crop (a buffer-management practice the certifying
+    agent checks; § 205.202(c) requires the buffer itself, OV-PK-CIT19), and USDA's own Buffer
+    Crop Disposition Record
     asks for the disposition and the paperwork proving it. The exhibit walks ONE lot, so on a farm
     whose buffer row is on a different block than the traced lot — the usual case — the packet
     showed the operator's claim that buffer records are kept and not one of them (WSDA specimen
