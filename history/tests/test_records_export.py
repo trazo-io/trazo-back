@@ -11,6 +11,7 @@ Pins three things:
 
 import io
 import zipfile
+from datetime import date
 
 from django.test import TestCase
 from django.utils import timezone
@@ -106,3 +107,72 @@ class RecordsExportTests(TestCase):
         self.assertNotIn(
             "require_compliance_exports", source.replace("stay behind\n    `require_compliance_exports`", "")
         )
+
+
+class RecordsExportCoversParcelAndSupplierRecordsTests(TestCase):
+    """M7-S14: a file called complete left out field history, planned crops, both affidavits and
+    the supplier register. Every row is the requesting company's; another company's never appears."""
+
+    def _farm(self, name):
+        company = Company.objects.create(name=f"{name} Co")
+        est = Establishment.objects.create(name=name, company=company)
+        parcel = Parcel.objects.create(name=f"{name} parcel", establishment=est, area=5.0)
+        return company, est, parcel
+
+    def _seed(self, est, parcel, tag):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from certifications.models import AdjoiningLandAffidavit, LandownerAffidavit, Supplier, SupplierCertificate
+        from documents.models import GeneratedDocument
+        from product.models import ParcelCropHistory, ParcelPlannedCrop
+
+        ParcelCropHistory.objects.create(parcel=parcel, year=2024, crop_grown=f"Crop {tag}")
+        ParcelPlannedCrop.objects.create(parcel=parcel, crop=f"Planned {tag}")
+        LandownerAffidavit.objects.create(parcel=parcel, previous_manager_name=f"Manager {tag}")
+        AdjoiningLandAffidavit.objects.create(
+            parcel=parcel, neighbor_name=f"Neighbour {tag}", signed_document=f"adjoining_land_affidavits/{tag}.pdf"
+        )
+        supplier = Supplier.objects.create(establishment=est, name=f"Supplier {tag}", certifier_name=f"Certifier {tag}")
+        doc = GeneratedDocument.objects.create(
+            establishment=est,
+            folder="uploads",
+            source="upload",
+            title=f"Cert {tag}",
+            file=SimpleUploadedFile(f"cert-{tag}.pdf", b"x", content_type="application/pdf"),
+        )
+        SupplierCertificate.objects.create(supplier=supplier, document=doc, issued_on=date(2026, 1, 5))
+
+    def test_each_family_has_a_csv_with_only_this_companys_rows(self):
+        from history.services.records_export import export_establishment_records_zip
+
+        _company, est, parcel = self._farm("Mine")
+        _other_company, other_est, other_parcel = self._farm("Theirs")
+        self._seed(est, parcel, "MINE")
+        self._seed(other_est, other_parcel, "THEIRS")
+
+        zf = zipfile.ZipFile(io.BytesIO(export_establishment_records_zip(est)))
+        expected = {
+            "parcel_crop_history.csv": "Crop MINE",
+            "parcel_planned_crops.csv": "Planned MINE",
+            "landowner_affidavits.csv": "Manager MINE",
+            "adjoining_land_affidavits.csv": "Neighbour MINE",
+            "suppliers.csv": "Supplier MINE",
+            "supplier_certificates.csv": "2026-01-05",
+        }
+        for name, needle in expected.items():
+            self.assertIn(name, zf.namelist())
+            body = zf.read(name).decode("utf-8")
+            self.assertIn(needle, body, name)
+            self.assertNotIn("THEIRS", body, f"{name} leaked another company's row")
+        self.assertEqual(len(zf.read("supplier_certificates.csv").decode().strip().splitlines()), 2)
+        self.assertIn("adjoining_land_affidavits/MINE.pdf", zf.read("adjoining_land_affidavits.csv").decode("utf-8"))
+
+    def test_the_readme_no_longer_lists_them_as_missing(self):
+        from history.services.records_export import export_establishment_records_zip
+
+        _company, est, _parcel = self._farm("Readme")
+        readme = zipfile.ZipFile(io.BytesIO(export_establishment_records_zip(est))).read("README.txt").decode("utf-8")
+        not_in = readme.split("Not in this export")[1].lower()
+        for word in ("supplier", "affidavit", "crop history", "planned crop"):
+            self.assertNotIn(word, not_in)
+        self.assertIn("suppliers.csv", readme)

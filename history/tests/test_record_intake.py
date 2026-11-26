@@ -525,6 +525,21 @@ class SprayColumnsTests(IntakeFarm):
         fields = self.spray_one(organic_basis="CERTIFIER_APPROVED").importable[0].payload["fields"]
         self.assertEqual(fields["organic_approved"], "certifier_approved")
 
+    def test_transitional_is_a_row_error_and_never_named_as_a_code(self):
+        """M7-I1: "transitional" names the farm's status, not the input's basis (`organic_basis`).
+
+        Stored, it is a prohibited-substance answer that restarts a certified parcel's 36-month
+        clock, so a sheet's "Transitional" never becomes a record's basis by this path either.
+        """
+        for text in ("transitional", "TRANSITIONAL"):
+            reason = self.refusal(organic_basis=text)
+            self.assertIn(f'organic_basis {text!r}: "Transitional" describes a farm in conversion', reason)
+            self.assertIn(
+                "omri_listed, wsda_listed, nop_seal_on_label, certifier_approved, unverified, not_organic", reason
+            )
+        # The list of codes an unknown basis is refused with no longer offers it.
+        self.assertNotIn("transitional", self.refusal(organic_basis="OMRI"))
+
     def test_a_day_only_spray_row_is_marked_time_not_on_the_source_record(self):
         # A file without any spray column: the day-only rule is not opt-in.
         execute(self.one(), self.farm, self.operator, BATCH)

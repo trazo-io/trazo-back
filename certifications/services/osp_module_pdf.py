@@ -2385,25 +2385,13 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
         rows = list(parcel.adjoining_land_affidavits.all().order_by("border_side", "id"))
         if not rows:
             out.append(Paragraph("No adjoining-land affidavit on file for this parcel.", styles["body"]))
+        # One reading of the affidavit, shared with the dossier (`adjoining_land_text`): the signed
+        # "none of these materials", "not on adjoining fields", the distance and the neighbour's
+        # organic status were dropped here, and a signed scan with no typed date read "unsigned".
+        from certifications.services.adjoining_land_text import packet_line
+
         for a in rows:
-            signed = a.neighbor_signed_date.isoformat() if a.neighbor_signed_date else "unsigned"
-            side = a.get_border_side_display() if a.border_side else "—"
-            out.append(
-                Paragraph(
-                    _escape(
-                        f"{side}: {a.neighbor_name}"
-                        + (f" ({a.neighbor_farm_name})" if a.neighbor_farm_name else "")
-                        + f" — signed {signed}"
-                        + (
-                            f"; materials: {a.materials_display()}"
-                            if hasattr(a, "materials_display") and a.materials_display()
-                            else ""
-                        )
-                        + ("; agrees to notify before application" if a.agrees_to_notify else "")
-                    ),
-                    styles["body"],
-                )
-            )
+            out.append(Paragraph(_escape(packet_line(a)), styles["body"]))
 
     elif embed == "parcel_change_notifications":
         from certifications.models import OSPChangeNotification
@@ -5592,12 +5580,18 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                     styles["meta"],
                 )
             )
-        story.append(Paragraph("<b>2. Harvest records</b> — link: Lot ID + harvest date + parcel", styles["body"]))
+        story.append(
+            Paragraph(
+                "<b>2. Harvest records</b> (link: the pick's lot code + harvest date + parcel)",
+                styles["body"],
+            )
+        )
         if trail.harvests:
             for h in trail.harvests:
                 bits = [h["date"] or "undated"]
                 if h["quantity"]:
                     bits.append(h["quantity"])
+                bits.append(f"lot code {h['lot_code']}" if h["lot_code"] else "no lot code on this pick")
                 if h["block"]:
                     bits.append(f"block {h['block']}")
                 if h["storage"]:
@@ -5606,7 +5600,7 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
         else:
             story.append(Paragraph("• No harvest event is recorded on this season.", styles["meta"]))
         story.append(
-            Paragraph("<b>3. Storage</b> — link: storage location on the harvest record + Lot ID", styles["body"])
+            Paragraph("<b>3. Storage</b> (link: storage location and lot code on the harvest record)", styles["body"])
         )
         if trail.storage_locations:
             for loc in trail.storage_locations:
@@ -5617,7 +5611,8 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
             )
         story.append(
             Paragraph(
-                "<b>4. Sales records</b> — link: invoice / bill of lading number + Lot ID + buyer; organic status as identified on the invoice",
+                "<b>4. Sales records</b> (link: invoice / bill of lading number + buyer + the harvest picks the sale "
+                "names, by lot code; organic status as identified on the invoice)",
                 styles["body"],
             )
         )
@@ -5629,6 +5624,16 @@ def _audit_trail_exhibit_pdf(osp) -> bytes:
                 bits.append(_labelled("invoice", sale["invoice"], _INVOICE_WRITTEN))
             if sale["bol"]:
                 bits.append(_labelled("BOL", sale["bol"], _BOL_WRITTEN))
+            if sale["lot_codes"]:
+                uncoded = sale["picks_named"] - sale["coded_picks"]
+                text = "from pick lot code " + ", ".join(sale["lot_codes"])
+                if uncoded > 0:
+                    text += f" (+{uncoded} named pick{'s' if uncoded != 1 else ''} with no lot code)"
+                bits.append(text)
+            elif sale["picks_named"]:
+                bits.append("names a harvest pick with no lot code")
+            else:
+                bits.append("names no harvest pick")
             bits.append("organic status on invoice: " + ("Yes" if sale["organic_on_invoice"] else "No"))
             if sale["label_category"]:
                 bits.append(f"label claim: {sale['label_category']}")

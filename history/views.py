@@ -4061,6 +4061,9 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
                 # The raw-manure floor, against the season found just above. See
                 # `_refuse_manure_below_floor`.
                 self._refuse_manure_below_floor(history, event_type, serializer.validated_data)
+                # The seed-search rule for a transplant, against the season found just above (the
+                # serializer cannot see it when the form sends `parcels` only).
+                self._refuse_stock_without_search(history, event_type, serializer.validated_data)
 
                 index = self._next_event_index(history)
 
@@ -4139,6 +4142,39 @@ class EventViewSet(CompanyNestedViewSet, viewsets.ModelViewSet):
         crop_type = getattr(history, "crop_type", None)
         if crop_type is not None and below_minimum(interval, crop_type):
             raise ValidationError(below_minimum_error(crop_type))
+
+    @staticmethod
+    def _refuse_stock_without_search(history, event_type, validated):
+        """Non-organic planting stock needs a documented supplier search, 7 CFR 205.204(a)(1).
+
+        The production serializer runs this only when it knows the season. The activity form sends
+        `parcels`, so for a transplant (TR) it defers to here, where the season's crop is known.
+        A transplant of an annual crop is probably an annual seedling, which § 205.204(a)(3)
+        governs instead (`is_annual_seedling_transplant`), so it owes no search. Same message and
+        key as the serializer.
+        """
+        if int(event_type) != PRODUCTION_EVENT_TYPE or validated.get("type") != "TR":
+            return
+        from common.field_registry import NON_ORGANIC_SEED_STATUSES
+
+        from .models.production_event import documented_seed_searches, is_annual_seedling_transplant
+
+        if validated.get("seed_certification_status") not in NON_ORGANIC_SEED_STATUSES:
+            return
+        if is_annual_seedling_transplant("TR", history) or documented_seed_searches(
+            validated.get("seed_search_attempts")
+        ):
+            return
+        raise ValidationError(
+            {
+                "seed_search_attempts": [
+                    "Non-organic seed or planting stock may only be used when an equivalent "
+                    "organic variety is not commercially available (7 CFR 205.204(a)(1)).",
+                    "Record at least one supplier you contacted, so the record shows the "
+                    "ground for the exemption. Certifiers typically look for three.",
+                ]
+            }
+        )
 
     @staticmethod
     def _refuse_inside_closed_season(history, event_when):

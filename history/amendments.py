@@ -249,6 +249,13 @@ def apply_amendment(*, event, event_type, field_name, new_value, reason, user):
     except DjangoValidationError as exc:
         raise AmendmentError({field_name: " ".join(exc.messages)})
 
+    # M7-I1: a correction never newly gives a record "transitional" as its organic basis, as the
+    # create and edit paths refuse it (`organic_basis`). Correcting AWAY from it stays open.
+    from history.services.organic_basis import ORGANIC_BASIS_FIELDS, TRANSITIONAL_BASIS_SENTENCE, is_refused_change
+
+    if field_name in ORGANIC_BASIS_FIELDS and is_refused_change(coerced, original):
+        raise AmendmentError({field_name: TRANSITIONAL_BASIS_SENTENCE})
+
     # A tank's one pass burns its fuel once, on the line that carries the pass (tank_mix.py): fuel
     # corrected onto another line would be counted nowhere, so it is refused and pointed there.
     if field_name == "application_fuel_consumed" and coerced is not None:

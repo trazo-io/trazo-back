@@ -141,3 +141,66 @@ class SalesRecordIsInsideTheAuditTrailTests(TestCase):
         production = self._production(finish_date=timezone.now(), retention_until=None)
         with self.assertRaises(RecordLocked):
             assert_child_record_deletable("sales records", production)
+
+
+class SalesRecordLeavesALogEntryTests(TestCase):
+    """M7-P10: an open season's sale can be hard-deleted, and `SalesRecord` was not registered with
+    django-auditlog, so an invoiced sale vanished with no trace."""
+
+    def setUp(self):
+        self.production = Production.objects.create(
+            name="Open season", start_date=timezone.now(), product=Product.objects.create(name="Walnut")
+        )
+
+    def _sale(self):
+        from history.models import SalesRecord
+
+        return SalesRecord.objects.create(
+            production=self.production,
+            sale_date=date(2026, 9, 1),
+            buyer_name="Packer Co",
+            quantity=100,
+            quantity_unit="lb",
+            invoice_number="INV-9",
+        )
+
+    def _entries(self, pk):
+        from django.contrib.contenttypes.models import ContentType
+
+        from auditlog.models import LogEntry
+
+        from history.models import SalesRecord
+
+        return LogEntry.objects.filter(content_type=ContentType.objects.get_for_model(SalesRecord), object_pk=str(pk))
+
+    def test_create_update_and_delete_are_all_logged_and_the_delete_keeps_the_invoice(self):
+        from auditlog.models import LogEntry
+
+        sale = self._sale()
+        pk = sale.pk
+        sale.buyer_name = "Packer Co Two"
+        sale.save()
+        sale.delete()
+        actions = set(self._entries(pk).values_list("action", flat=True))
+        self.assertEqual(actions, {LogEntry.Action.CREATE, LogEntry.Action.UPDATE, LogEntry.Action.DELETE})
+        deleted = self._entries(pk).get(action=LogEntry.Action.DELETE)
+        self.assertIn("INV-9", str(deleted.changes))
+
+    def test_naming_picks_on_a_sale_logs_nothing_per_pick_and_a_clear_cannot_leak_other_events(self):
+        """`m2m_fields` is deliberately not used: its `post_clear` handler logs every event in the
+        database, and every add stringifies each pick with extra queries."""
+        from history.models import ProductionEvent
+
+        picks = [
+            ProductionEvent.objects.create(
+                history=self.production, type=ProductionEvent.HARVESTING, description="pick", date=timezone.now()
+            )
+            for _ in range(3)
+        ]
+        sale = self._sale()
+        before = self._entries(sale.pk).count()
+        sale.harvest_events.set(picks)
+        sale.harvest_events.clear()
+        self.assertEqual(self._entries(sale.pk).count(), before)
+        for entry in self._entries(sale.pk):
+            self.assertNotIn("harvest_events", str(entry.changes))

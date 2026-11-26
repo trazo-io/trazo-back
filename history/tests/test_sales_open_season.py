@@ -230,7 +230,10 @@ class OpenSeasonPacketTests(_OpenSeason):
         self._sale(season, qty=200, unit="boxes")  # 2,400 lb sold against 1,000 lb picked
 
         text = self._pdf_text(season)
-        self.assertIn("outside the", text)
+        # M7-P6: an estimate above the harvest is its own REVIEW line (the shrink tolerance is
+        # one-sided), no longer "outside the tolerance".
+        self.assertIn("more than the", text)
+        self.assertIn("Yield-to-sales reconciliation:</b> REVIEW", text)
         self.assertNotIn("Not assessed: season open", text)
 
     def test_sales_that_cannot_be_summed_are_not_called_no_sale(self):

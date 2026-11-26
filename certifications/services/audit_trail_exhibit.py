@@ -92,19 +92,21 @@ LINKING_ELEMENTS: dict = {
     "rotation_records": ("Crop rotation on a parcel", "Parcel + year in the field history — links seasons in sequence"),
     "storage_records": (
         "Storing harvested crop",
-        "Storage location on the harvest record + Lot ID — links harvest to sale",
+        "Storage location and lot code on the harvest record: the sale names the harvest picks it draws from",
     ),
     "post_harvest_production": (
         "Post-harvest handling (washing, sorting, packing)",
-        "Lot ID + date on the post-harvest event — links harvest to sale",
+        "Date on the post-harvest event, on the season that carries the Lot ID: links the handling to the season and its harvest",
     ),
     "invoices": (
         "Selling the crop",
-        "Invoice number + Lot ID + buyer on the sales record — links back to the harvest records it draws from",
+        "Invoice number + buyer on the sales record: the sale names the harvest picks it draws from, and each "
+        "pick carries its own lot code",
     ),
     "bill_of_lading": (
         "Shipping the crop to the buyer",
-        "Bill of lading number on the sales record + Lot ID — links the shipment to the sale",
+        "Bill of lading number on the sales record: links the shipment to the sale, which names the harvest "
+        "picks it draws from",
     ),
     "purchase_records": (
         "Buying inputs, seed or planting stock",
@@ -178,7 +180,7 @@ OPERATOR_COMPLETES = "(the operator's own document — state the linking element
 EXTERNAL_LINKING_ELEMENTS = {
     "settlement_statements": (
         "The handler's final statement for the crop delivered",
-        "Invoice number + Lot ID on the sales record — the statement settles that invoice (held by the "
+        "Invoice number on the sales record: the statement settles that invoice (held by the "
         "operation, outside Trazo)",
     ),
     "contracts": (
@@ -564,7 +566,7 @@ def balance_statement(balance, *, season_open: bool = False, as_at: str = "") ->
         )
     if reading == "unaccounted":
         return (
-            line + f" \u00b7 {qty} harvested is on no sale, pack-out or loss record in "
+            line + f" \u00b7 {qty} harvested is on no sale or pack-out record in "
             "Trazo for this lot. State where it went.",
             False,
         )
@@ -609,7 +611,7 @@ class SampleTrail:
     #: the samples): dicts of date, kind, block, source, supplier, lot, rootstock. Every one of them,
     #: whatever the seed's origin; Part B2 lists only the plantings that name a purchase.
     plantings: list = field(default_factory=list)
-    harvests: list = field(default_factory=list)  # dicts: date, quantity, unit, storage, block
+    harvests: list = field(default_factory=list)  # dicts: date, quantity, storage, block, lot_code
     storage_locations: list = field(default_factory=list)
     sales: list = field(
         default_factory=list
@@ -782,10 +784,16 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
                 "quantity": _fmt_qty(ev.yield_quantity, ev.yield_unit),
                 "storage": (ev.storage_location or "").strip(),
                 "block": (ev.block_id or "").strip(),
+                "lot_code": (ev.harvest_lot_code or "").strip(),
             }
         )
     trail.storage_locations = sorted({h["storage"] for h in trail.harvests if h["storage"]})
-    sales = list(SalesRecord.objects.live().filter(production=season).order_by("sale_date", "pk"))
+    sales = list(
+        SalesRecord.objects.live()
+        .filter(production=season)
+        .prefetch_related("harvest_events")
+        .order_by("sale_date", "pk")
+    )
     trail.balance = _lot_balance(harvest_events, sales)
     for sale in sales:
         trail.sales.append(
@@ -796,6 +804,12 @@ def sample_trail(establishment) -> Optional[SampleTrail]:
                 "quantity": _fmt_qty(sale.quantity, sale.quantity_unit),
                 "invoice": sale.invoice_number or "",
                 "bol": sale.bill_of_lading or "",
+                # The picks this sale names (`harvest_events`), by their own lot codes. A sale that
+                # names no pick, or a pick with no code, contributes nothing: the line then says
+                # so instead of supplying a code.
+                "picks_named": len(sale.harvest_events.all()),
+                "coded_picks": sum(1 for ev in sale.harvest_events.all() if (ev.harvest_lot_code or "").strip()),
+                "lot_codes": sorted({(ev.harvest_lot_code or "").strip() for ev in sale.harvest_events.all()} - {""}),
                 "organic_on_invoice": bool(sale.organic_on_invoice),
                 "label_category": (sale.get_organic_label_category_display() if sale.organic_label_category else ""),
             }

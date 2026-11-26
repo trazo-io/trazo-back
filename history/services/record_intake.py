@@ -51,7 +51,9 @@ Column (model field): what it accepts.
 * `purchase_date`: `YYYY-MM-DD`. `quantity_purchased` + `quantity_purchased_unit`: a pair, the
   units of `amount_unit` for a spray.
 * `organic_basis` (`organic_approved`): one of the model's codes, in any case. Nothing is mapped:
-  "OMRI" is not `omri_listed`, it is a refused row.
+  "OMRI" is not `omri_listed`, it is a refused row. `transitional` is refused too: it names the
+  farm's status, not the input's basis, and is kept only for records that already hold it
+  (`organic_basis.py`).
 * `wind_from`: N NE E SE S SW W NW calm. `wind_speed_mph`: 0 to 150. `air_temperature_f`: -40 to 140.
 * `carrier_volume` + `carrier_volume_unit`: both or neither; `gal_per_acre`, `gal_total` (one parcel
   only), `l_per_ha`.
@@ -107,7 +109,15 @@ from django.db import transaction
 
 from rest_framework.exceptions import ValidationError as ApiValidationError
 
-from common.field_registry import UNIT_AMENDMENT, UNIT_APPLICATION_RATE, UNIT_AREA, UNIT_VOLUME, UNIT_YIELD
+from common.field_registry import (
+    ORGANIC_APPROVED_OFFERED,
+    ORGANIC_APPROVED_REFUSED_ON_WRITE,
+    UNIT_AMENDMENT,
+    UNIT_APPLICATION_RATE,
+    UNIT_AREA,
+    UNIT_VOLUME,
+    UNIT_YIELD,
+)
 from documents.models import GeneratedDocument
 from history.constants import (
     CHEMICAL_EVENT_TYPE,
@@ -118,6 +128,7 @@ from history.constants import (
 from history.models import ChemicalEvent, PestManagementEvent, Production, ProductionEvent, SoilManagementEvent
 from history.services import multi_target, tank_mix
 from history.services.cogpro_import import ImportPlan, RowResult, _as_event_datetime
+from history.services.organic_basis import TRANSITIONAL_BASIS_SENTENCE, is_refused_change
 from history.services.record_source import KIND_TRANSCRIPTION, SOURCE_KEY, source_ref, write_record
 
 #: Fixed namespace so the group id of one sheet row is the same on every run: a retry after a
@@ -491,7 +502,9 @@ def _model_problems(exc, row, column_of) -> list:
         text = " ".join(messages)
         model_field = ChemicalEvent._meta.get_field(name) if name in _SPRAY_COLUMN_OF else None
         if model_field is not None and model_field.choices:
-            text += f" One of: {', '.join(str(code) for code, _label in model_field.choices)}."
+            # A stored-only basis is never named as one to type (M7-I1, `organic_basis`).
+            codes = [str(code) for code, _label in model_field.choices if code not in ORGANIC_APPROVED_REFUSED_ON_WRITE]
+            text += f" One of: {', '.join(codes)}."
         raw = row.get(column, "")
         out.append(f"{column} {raw!r}: {text}" if raw else f"{column}: {text}")
     return out
@@ -533,6 +546,13 @@ def _spray_values(row, day, column_of, problems) -> Optional[dict]:
             name = _FIELD_OF[column]
             probe[name] = _choice_code(_chemical_field(name), row[column])
             checked.add(name)
+    # M7-I1: "transitional" names the farm's status, not the input's basis. A record is never given it,
+    # by this path either (`organic_basis`); the sentence says what to write instead.
+    if is_refused_change(probe.get("organic_approved")):
+        problems.append(
+            f"organic_basis {row['organic_basis']!r}: {TRANSITIONAL_BASIS_SENTENCE} In this file that is one "
+            f"of: {', '.join(ORGANIC_APPROVED_OFFERED)}."
+        )
 
     if row["purchase_date"]:
         purchased = _parse_iso_date(row["purchase_date"])

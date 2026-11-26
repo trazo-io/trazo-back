@@ -32,6 +32,74 @@ from history.harvest_grades import MAX_GRADE_LENGTH
 
 from .common_event import CommonEvent
 
+#: Crop categories whose commercial crops are ordinarily sown or transplanted as annual seedlings.
+#: Forage (can be perennial), "other" (hops, cotton) and "herb" (often perennial) are NOT here, and
+#: neither are the nursery-stock categories (tree_fruit, tree_nut, berry).
+ANNUAL_SEEDLING_CROP_CATEGORIES = frozenset({"vegetable", "grain", "oilseed", "legume"})
+
+#: Crops that are planted from rhizomes, crowns, tubers, cloves, slips or cuttings, or are perennial,
+#: even where their category is an annual one. § 205.2 lists "rhizomes, shoots, leaf or stem cuttings,
+#: roots, or tubers" as planting stock. Matched as a substring of the crop's name or slug. "mixed"
+#: covers the seeded "Mixed Vegetables" entry, whose members are not known. Anything not provably
+#: an annual seedling crop keeps the § 205.204(a)(1) rule.
+VEGETATIVELY_PROPAGATED_CROP_WORDS = (
+    "asparagus",
+    "rhubarb",
+    "artichoke",
+    "garlic",
+    "potato",
+    "horseradish",
+    "hops",
+    "ginger",
+    "turmeric",
+    "cassava",
+    "yam",
+    "taro",
+    "sunchoke",
+    "shallot",
+    "cane",
+    "mint",
+    "mixed",
+)
+
+
+def crop_is_annual_seedling_crop(crop_type) -> bool:
+    """Positive test: an annual-category crop that is not on the vegetatively-propagated list."""
+    if crop_type is None or getattr(crop_type, "category", None) not in ANNUAL_SEEDLING_CROP_CATEGORIES:
+        return False
+    label = f"{getattr(crop_type, 'name', '')} {getattr(crop_type, 'slug', '')}".lower()
+    return not any(word in label for word in VEGETATIVELY_PROPAGATED_CROP_WORDS)
+
+
+def documented_seed_searches(attempts) -> list:
+    """The search rows that name a supplier (the pre-2026-08-15 `supplier` key counts too)."""
+    if not isinstance(attempts, list):
+        return []
+    return [
+        a for a in attempts if isinstance(a, dict) and str(a.get("supplier_name") or a.get("supplier") or "").strip()
+    ]
+
+
+def is_annual_seedling_transplant(subtype, production) -> bool:
+    """Is this a transplant (TR) that is, by its crop, probably an annual seedling?
+
+    § 205.2 (eCFR, frozen 2026-08-05): "Planting stock. Any plant or plant tissue other than annual
+    seedlings but including rhizomes, shoots, leaf or stem cuttings, roots, or tubers". A
+    nonorganic annual seedling is not covered by the § 205.204(a)(1) commercial-availability
+    allowance; § 205.204(a)(3) allows it only "when a temporary variance has been granted in
+    accordance with § 205.290(a)(2)". The supplier-search obligation belongs to seed and planting
+    stock (M7-S3).
+
+    Trazo records no "annual seedling" fact, so this is a heuristic on the season's crop
+    (`crop_is_annual_seedling_crop`), TRUE only when the crop is positively an annual one. A rootstock
+    does not change that for an annual crop (a grafted tomato is still an annual seedling). An
+    unknown production or crop returns False and keeps today's (a)(1) behaviour. The dossier words
+    the result conditionally for the same reason.
+    """
+    if subtype != "TR":
+        return False
+    return crop_is_annual_seedling_crop(getattr(production, "crop_type", None))
+
 
 class ProductionEvent(CommonEvent):
     PLANTING = "PL"
@@ -1068,7 +1136,13 @@ class ProductionEvent(CommonEvent):
         # (which is what the API actually runs — DRF never calls clean()) so the two cannot
         # drift apart again. TR is included: transplanting non-organic nursery stock carries
         # the same obligation and, on a perennial orchard, is the more common record.
-        if self.type in SEED_SOURCED_SUBTYPES and self.seed_certification_status in NON_ORGANIC_SEED_STATUSES:
+        # A non-organic annual seedling (a TR that is not planting stock) is judged under
+        # § 205.204(a)(3) and § 205.290, not (a)(1): see `is_annual_seedling_transplant`.
+        if (
+            self.type in SEED_SOURCED_SUBTYPES
+            and self.seed_certification_status in NON_ORGANIC_SEED_STATUSES
+            and not is_annual_seedling_transplant(self.type, self.history)
+        ):
             attempts = self.seed_search_attempts or []
             documented = [
                 a

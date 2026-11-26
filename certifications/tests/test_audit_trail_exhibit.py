@@ -154,7 +154,7 @@ class SampleTrailTests(_ExhibitBase):
         flat = " ".join(self._exhibit_text()[0].split())
         self.assertIn("Harvested 9,200 lb (2 harvest records)", flat)
         self.assertIn("sold 8,000 lb (1 sale)", flat)
-        self.assertIn("1,200 lb harvested is on no sale, pack-out or loss record in Trazo for this lot", flat)
+        self.assertIn("1,200 lb harvested is on no sale or pack-out record in Trazo for this lot", flat)
 
     def test_sales_above_the_harvest_are_flagged(self):
         season = self._finished_season()
@@ -388,3 +388,84 @@ class ReviewOf193Tests(_ExhibitBase):
         b2 = self._b2()
         self.assertIn("2026-07-14 · block UT · 6,200 lb: harvest pick with no lot code.", b2)
         self.assertIn("2026-07-21 · block LT · 6,200 lb: harvest pick with no lot code.", b2)
+
+
+class LotCodesOnTheTrailTests(_ExhibitBase):
+    """M7-P2: step 4's heading promised the lot and buyer, and neither step 2 nor step 4 printed a lot
+    code. The sale names the picks it draws from; each pick carries its own code."""
+
+    def _pick(self, season, code, day=14):
+        pick = ProductionEvent.objects.create(
+            history=season,
+            type=ProductionEvent.HARVESTING,
+            description="pick",
+            date=timezone.make_aware(datetime(2026, 7, day)),
+            yield_quantity=6700,
+            yield_unit="lb",
+        )
+        ProductionEvent.objects.filter(pk=pick.pk).update(harvest_lot_code=code)
+        return pick
+
+    def _sale(self, season, **kw):
+        defaults = dict(
+            production=season,
+            sale_date=date(2026, 8, 25),
+            buyer_name="Organically Grown Company",
+            quantity=6700,
+            quantity_unit="lb",
+            invoice_number="INV-2026-0912",
+            organic_on_invoice=True,
+        )
+        defaults.update(kw)
+        return SalesRecord.objects.create(**defaults)
+
+    def test_each_pick_and_the_sale_that_names_it_print_the_lot_code(self):
+        season = self._finished_season()
+        first = self._pick(season, "BLU-UT-20260714")
+        self._pick(season, "BLU-UT-20260715", day=15)
+        sale = self._sale(season)
+        sale.harvest_events.set([first])
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("lot code BLU-UT-20260714", flat)
+        self.assertIn("lot code BLU-UT-20260715", flat)
+        self.assertIn("from pick lot code BLU-UT-20260714", flat)
+        self.assertNotIn("from pick lot code BLU-UT-20260714, BLU-UT-20260715", flat)
+
+    def test_a_sale_naming_no_pick_and_a_pick_without_a_code_say_so(self):
+        season = self._finished_season()
+        coded = self._pick(season, "")
+        sale = self._sale(season)
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("no lot code on this pick", flat)
+        self.assertIn("names no harvest pick", flat)
+        sale.harvest_events.set([coded])
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("names a harvest pick with no lot code", flat)
+
+    def test_the_headings_and_part_a_describe_the_link_that_exists(self):
+        common_osp_records.confirm(self.osp, ["post_harvest_production", "invoices"], user=self.user)
+        season = self._finished_season()
+        self._sale(season)
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertNotIn("links harvest to sale", flat)
+        self.assertNotIn("+ Lot ID", flat)
+        self.assertIn("the sale names the harvest picks it draws from", flat)
+        self.assertNotIn("+ Lot ID + buyer", flat)
+
+    def test_a_sale_naming_three_picks_with_one_code_counts_the_uncoded_ones(self):
+        season = self._finished_season()
+        picks = [self._pick(season, "BLU-UT-A"), self._pick(season, "", day=15), self._pick(season, "", day=16)]
+        self._sale(season).harvest_events.set(picks)
+        flat = " ".join(self._exhibit_text()[0].split())
+        self.assertIn("from pick lot code BLU-UT-A (+2 named picks with no lot code)", flat)
+
+    def test_no_loss_record_is_claimed(self):
+        """No loss record type exists, so the unaccounted-harvest sentence names sales and pack-out only."""
+        from certifications.services.audit_trail_exhibit import balance_statement
+
+        season = self._finished_season()
+        self._pick(season, "BLU-UT-20260714")
+        self._sale(season, quantity=4000)
+        sentence, _review = balance_statement(sample_trail(self.est).balance)
+        self.assertIn("is on no sale or pack-out record", sentence)
+        self.assertNotIn("loss", sentence)

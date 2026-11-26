@@ -533,6 +533,120 @@ class ParcelApplicationEvidenceTests(_Farm):
         text = _pdf_text(generate_module_pdf(self.v2, "parcel_application", parcel=self.parcel))
         self.assertIn("West: Marta Ruiz-Delgado (Muddy Creek home place) — signed 2027-01-20", text)
 
+    def _adjoining_text(self, **kw):
+        AdjoiningLandAffidavit.objects.create(
+            parcel=self.parcel, neighbor_name="Marta Ruiz-Delgado", border_side="W", **kw
+        )
+        text = _pdf_text(generate_module_pdf(self.v2, "parcel_application", parcel=self.parcel))
+        return " ".join(text.split())
+
+    def test_adjoining_affidavit_prints_what_the_neighbour_signed(self):
+        """M7-S8: the packet dropped the neighbour's signed "none of these materials", the distance
+        and the neighbour's organic certification, all of which the dossier prints."""
+        flat = self._adjoining_text(
+            neighbor_signed_date=date(2027, 1, 20),
+            declares_no_materials=True,
+            distance_to_organic_property_ft=150,
+            neighbor_is_certified_organic=True,
+            neighbor_certifier_name="Oregon Tilth",
+            agrees_to_notify=True,
+        )
+        self.assertIn("signed 2027-01-20", flat)
+        self.assertIn("None of the listed materials (declared)", flat)
+        self.assertIn("150 ft", flat)
+        self.assertIn("certifier: Oregon Tilth", flat)
+        self.assertNotIn("unsigned", flat.lower())
+
+    def test_adjoining_affidavit_says_not_on_adjoining_fields(self):
+        flat = self._adjoining_text(
+            neighbor_signed_date=date(2027, 1, 20),
+            materials_used=["herbicides"],
+            not_used_on_adjoining_fields=True,
+        )
+        self.assertIn("Herbicides (not on adjoining fields)", flat)
+        # Unanswered stays unanswered, never a "No".
+        self.assertIn("agrees to notify before application: Not answered", flat)
+        self.assertIn("organic status not answered", flat)
+
+    def test_a_signed_scan_without_a_typed_date_is_not_called_unsigned(self):
+        """It printed "signed unsigned": the packet read only `neighbor_signed_date`, the dossier
+        reads `is_signed()`."""
+        flat = self._adjoining_text(signed_document="adjoining_land_affidavits/neighbour.pdf")
+        self.assertIn("signed (signed copy on file, no date typed)", flat)
+        self.assertNotIn("unsigned", flat.lower())
+
+    def test_an_affidavit_with_neither_date_nor_scan_is_said_to_be_unsigned(self):
+        flat = self._adjoining_text()
+        self.assertIn("not signed by the neighbour", flat)
+        self.assertNotIn("signed unsigned", flat)
+
+    def test_the_dossier_and_the_packet_say_the_same_of_one_affidavit(self):
+        """Render both documents for the same affidavit and compare the statements. The dossier kept
+        its own copy of the wording and drifted ("; not on adjoining fields" after a dash against
+        the packet's parentheses) and left out the neighbour's organic status."""
+        from certifications.services import adjoining_land_text as alt
+        from history.services.audit_export_service import AuditExportService
+
+        for kw in (
+            dict(
+                neighbor_signed_date=date(2027, 1, 20),
+                materials_used=["herbicides"],
+                not_used_on_adjoining_fields=True,
+                distance_to_organic_property_ft=150,
+                neighbor_is_certified_organic=True,
+                neighbor_certifier_name="Oregon Tilth",
+                agrees_to_notify=True,
+            ),
+            dict(signed_document="adjoining_land_affidavits/neighbour.pdf", declares_no_materials=True),
+            dict(),
+        ):
+            with self.subTest(**{k: str(v) for k, v in kw.items()}):
+                AdjoiningLandAffidavit.objects.all().delete()
+                affidavit = AdjoiningLandAffidavit.objects.create(
+                    parcel=self.parcel, neighbor_name="Marta Ruiz-Delgado", border_side="W", **kw
+                )
+                packet = " ".join(
+                    _pdf_text(generate_module_pdf(self.v2, "parcel_application", parcel=self.parcel)).split()
+                )
+                season = Production.objects.create(
+                    name="Adjoining 2027",
+                    parcel=self.parcel,
+                    product=Product.objects.create(name="Carrots"),
+                    start_date=datetime(2027, 3, 1, tzinfo=dt_tz.utc),
+                )
+                cells = []
+                for flowable in AuditExportService(
+                    season, certification_type="organic"
+                )._adjoining_land_affidavit_rows():
+                    for row in getattr(flowable, "_cellvalues", None) or []:
+                        cells.extend(str(getattr(c, "text", c)) for c in row)
+                dossier = " | ".join(cells)
+                season.delete()
+                statements = [
+                    alt.materials_statement(affidavit),
+                    alt.notify_statement(affidavit),
+                    alt.certification_statement(affidavit),
+                ]
+                signed = alt.signed_statement(affidavit)
+                statements.append(
+                    "signed (signed copy on file, no date typed)"
+                    if signed == alt.DOCUMENT_ON_FILE
+                    else f"signed {signed}" if signed else "not signed by the neighbour"
+                )
+                if alt.distance_statement(affidavit):
+                    statements.append(alt.distance_statement(affidavit))
+                for statement in statements:
+                    self.assertIn(statement, packet)
+                for statement in (
+                    alt.materials_statement(affidavit),
+                    alt.notify_statement(affidavit),
+                    alt.certification_statement(affidavit),
+                    alt.distance_statement(affidavit),
+                    signed or alt.UNSIGNED,
+                ):
+                    if statement:
+                        self.assertIn(statement, dossier)
+
     def test_land_history_includes_the_logged_seasons(self):
         """The typed years AND the years Trazo recorded, with the inputs applied."""
         from history.models import ChemicalEvent
