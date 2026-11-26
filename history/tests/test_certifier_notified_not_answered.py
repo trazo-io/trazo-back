@@ -110,6 +110,19 @@ class CertifierNotifiedHasThreeStates(TestCase):
         self.assertIn("Rows 1-2 held from organic sale.", row["Notes"])
         self.assertEqual(row["Method"], "")
 
+    def test_the_growers_note_survives_the_structured_summary(self):
+        """Review of #521: the three-state line made `parts` non-empty, which dropped the note."""
+        GeneralEvent.objects.create(
+            history=self.history,
+            date=self.now,
+            name="Drift at the west fence",
+            is_contamination_incident=True,
+            observation="Neighbour sprayed on a rising wind; deposit on the outside two rows.",
+        )
+        notes = self._csv_notes()
+        self.assertIn("Neighbour sprayed on a rising wind", notes)
+        self.assertIn("Certifier notified: not answered", notes)
+
     def test_the_soe_section_is_read(self):
         """Non-vacuity: the helpers above must find a rendered section to read."""
         self._incident()

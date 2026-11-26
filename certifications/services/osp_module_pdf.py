@@ -2474,7 +2474,9 @@ def _parcel_embed_flowables(embed: str, parcel, styles, osp=None) -> list:
                     + (f" {e.certifier_notification_date.isoformat()}" if e.certifier_notification_date else "")
                 )
             elif e.certifier_notified is False:
-                bits.append("Certifier not notified (answered No); § 205.400(f)(1) requires it immediately")
+                # Worded as before, not as "answered No": every row stored before history 0268
+                # holds False whether or not the grower touched the question (review of #521).
+                bits.append("Certifier notification not recorded; § 205.400(f)(1) requires it immediately")
             else:
                 # OV-RK-C15: not answered is its own state, never read as No.
                 bits.append("Certifier notification not answered; § 205.400(f)(1) requires it immediately")

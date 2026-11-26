@@ -502,7 +502,8 @@ class ParcelApplicationEvidenceTests(_Farm):
             certifier_notified=False,
         )
         text = _pdf_text(generate_module_pdf(self.v2, "parcel_application", parcel=self.parcel))
-        self.assertIn("Certifier not notified (answered No)", text)
+        self.assertIn("Certifier notification not recorded", text)
+        self.assertNotIn("Certifier notification not answered", text)
 
     def test_an_unanswered_certifier_question_is_not_printed_as_no(self):
         """OV-RK-C15: the question defaulted to False, so skipping it read as "not notified"."""
@@ -518,7 +519,7 @@ class ParcelApplicationEvidenceTests(_Farm):
         )
         text = _pdf_text(generate_module_pdf(self.v2, "parcel_application", parcel=self.parcel))
         self.assertIn("Certifier notification not answered", text)
-        self.assertNotIn("answered No", text)
+        self.assertNotIn("Certifier notification not recorded", text)
 
     def test_adjoining_land_affidavit_is_counted_on_the_parcel_application(self):
         AdjoiningLandAffidavit.objects.create(

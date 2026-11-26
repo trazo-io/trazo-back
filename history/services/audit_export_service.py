@@ -19293,7 +19293,13 @@ class AuditExportService:
                     parts.append("Certifier notified: No")
                 else:
                     parts.append("Certifier notified: not answered")
-                notes = " | ".join(parts) if parts else notes
+                # The grower's own note rides after the structured summary. It used to be
+                # replaced by it whenever any part existed, and the three-state line above
+                # always adds one (review of back #521).
+                observation = (ev.observation or "").strip()
+                if observation:
+                    parts.append(observation)
+                notes = " | ".join(parts)
             source_doc = self._event_transcription_text(ev)
             if source_doc:
                 notes = source_doc if notes == _val(None) else f"{notes} | {source_doc}"
