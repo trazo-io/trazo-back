@@ -998,6 +998,10 @@ jobs:
       # in the incident log and the CSV, a stored No still prints No, and a general event's CSV row
       # lines up with the header (its notes printed under Carbon, which an organic export drops).
       # No sibling repo.
+      # 2026-11-26: history.tests.test_null_unanswered_certifier_notified (new, 2 tests) pins the
+      # OV-RK-C15 backfill: only False with no notification date becomes None, a dry run saves
+      # nothing, a second run changes nothing, and restore from the file or log:<id> puts False
+      # back. No sibling repo.
       - name: Claim-safety and compliance suites
         env:
           SHARD: ${{ matrix.shard }}
@@ -1373,6 +1377,7 @@ jobs:
             users.tests.test_signup_alerts_and_terms \
             users.tests.test_invitation_signup_password \
             history.tests.test_certifier_notified_not_answered \
+            history.tests.test_null_unanswered_certifier_notified \
             users.tests.test_user_privilege_fields_read_only \
             users.tests.test_superuser_from_environment \
             users.tests.test_account_takeover_chain \
