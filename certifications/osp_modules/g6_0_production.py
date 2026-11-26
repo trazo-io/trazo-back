@@ -25,16 +25,19 @@ G6_0_PRODUCTION = Module(
         text(
             "Field or farm parcels under organic management must have distinct, defined "
             "boundaries and buffer zones sufficient to prevent contact with a prohibited "
-            "substance applied on adjoining land — and any crop grown in a buffer zone can "
-            "never be sold, labeled, or represented as organic (§ 205.202(c)). Where organic "
+            "substance applied on adjoining land (§ 205.202(c)). Crop grown inside a buffer is "
+            "kept out of the organic crop: the plan says what becomes of it (left unharvested, "
+            "destroyed, or sold as nonorganic) and the certifying agent checks the records. "
+            "Where organic "
             "and conventional production share one operation, the organic system plan must "
             "describe the management practices and physical barriers that keep them from "
             "commingling (§ 205.201(a)(5)).",
             "Las parcelas bajo manejo orgánico deben tener límites definidos y zonas de "
             "amortiguamiento suficientes para prevenir el contacto con una sustancia "
-            "prohibida aplicada en tierras colindantes — y el cultivo que crece en una zona "
-            "de amortiguamiento nunca puede venderse, etiquetarse ni representarse como "
-            "orgánico (§ 205.202(c)). Cuando la producción orgánica y la convencional "
+            "prohibida aplicada en tierras colindantes (§ 205.202(c)). El cultivo que crece "
+            "dentro de un amortiguamiento se mantiene fuera del cultivo orgánico: el plan "
+            "dice qué pasa con él (no se cosecha, se destruye o se vende como no orgánico) y "
+            "el agente certificador revisa los registros. Cuando la producción orgánica y la convencional "
             "comparten una misma operación, el plan del sistema orgánico debe describir las "
             "prácticas de manejo y las barreras físicas que evitan que se mezclen "
             "(§ 205.201(a)(5)).",
@@ -426,8 +429,8 @@ G6_0_PRODUCTION = Module(
                     "defined boundaries and buffer zones sufficient to prevent the "
                     "unintended application of a prohibited substance to the crop, or "
                     "contact with a prohibited substance applied on adjoining land that is "
-                    "not organically managed (§ 205.202(c)). Any crop grown in a buffer zone "
-                    "may never be sold, labeled, or represented as organic. The exact buffer "
+                    "not organically managed (§ 205.202(c)). Crop grown inside a buffer zone is "
+                    "kept out of the organic crop, and the plan says what becomes of it. The exact buffer "
                     "width and layout for each border is recorded on that parcel's Parcel "
                     "Application — this page documents the strategy you apply across the "
                     "operation.",
@@ -435,9 +438,9 @@ G6_0_PRODUCTION = Module(
                     "de amortiguamiento suficientes para prevenir la aplicación involuntaria "
                     "de una sustancia prohibida al cultivo, o el contacto con una sustancia "
                     "prohibida aplicada en tierras colindantes que no están bajo manejo "
-                    "orgánico (§ 205.202(c)). El cultivo que crece en una zona de "
-                    "amortiguamiento nunca puede venderse, etiquetarse ni representarse como "
-                    "orgánico. El ancho y trazado exacto del amortiguamiento de cada límite "
+                    "orgánico (§ 205.202(c)). El cultivo que crece dentro de una zona de "
+                    "amortiguamiento se mantiene fuera del cultivo orgánico, y el plan dice qué "
+                    "pasa con él. El ancho y trazado exacto del amortiguamiento de cada límite "
                     "se registra en la Solicitud de Parcela correspondiente — esta página "
                     "documenta la estrategia que aplica en toda la operación.",
                 ),
@@ -452,11 +455,11 @@ G6_0_PRODUCTION = Module(
                     ),
                     coaching=text(
                         "Select every strategy this operation uses across its parcels. "
-                        "Buffer-zone crop — whether harvested or left standing — can never "
-                        "be sold, labeled, or represented as organic (§ 205.202(c)).",
+                        "Buffer-zone crop, harvested or left standing, is kept out of the "
+                        "organic crop, and the records show what became of it.",
                         "Selecciona cada estrategia que la operación usa en sus parcelas. El cultivo de la zona de "
-                        "amortiguamiento — cosechado o dejado en pie — nunca puede venderse, etiquetarse ni "
-                        "representarse como orgánico (§ 205.202(c)).",
+                        "amortiguamiento, cosechado o dejado en pie, se mantiene fuera del cultivo orgánico, y "
+                        "los registros muestran qué pasó con él.",
                     ),
                     nop_cite="§ 205.202(c)",
                     compiles_to=CompileRule(

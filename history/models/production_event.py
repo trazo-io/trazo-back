@@ -675,7 +675,9 @@ class ProductionEvent(CommonEvent):
             "handler — CCOF's 'invoices, pack-out summaries, or other final statements'."
         ),
     )
-    # § 205.202(c): buffer-row crop may never be sold or represented as organic.
+    # Buffer-row crop is kept out of the organic crop. § 205.202(c) requires the buffer, not
+    # this; it is the buffer management the plan describes and the certifier checks (WSDA
+    # AGR 3025, Nov. 2024, lists diverting it to the nonorganic market; OV-PK-CIT19).
     # NULL means the question was not answered, NOT that no buffer exists.
     buffer_disposition = models.CharField(
         max_length=30,

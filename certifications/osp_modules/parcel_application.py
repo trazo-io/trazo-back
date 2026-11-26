@@ -645,10 +645,10 @@ PARCEL_APPLICATION = Module(
                 text(
                     "For each border with conventional or prohibited-use land, record the "
                     "adjoining use, the buffer type and width, and what grows in the buffer "
-                    "— buffer crop may never be sold as organic (§ 205.202(c)).",
+                    "(§ 205.202(c)). Buffer crop is kept out of the organic crop.",
                     "Para cada límite con tierra convencional o de uso prohibido, registra el uso colindante, el "
-                    "tipo y ancho del amortiguamiento, y qué crece en él — el cultivo del amortiguamiento nunca "
-                    "puede venderse como orgánico (§ 205.202(c)).",
+                    "tipo y ancho del amortiguamiento, y qué crece en él (§ 205.202(c)). El cultivo del "
+                    "amortiguamiento se mantiene fuera del cultivo orgánico.",
                 ),
             ),
             questions=(

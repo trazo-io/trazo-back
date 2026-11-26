@@ -46,6 +46,11 @@ claims no paragraph makes. Each wrong string below printed on a document a certi
          condition is (e). C23: split-operation barriers are § 205.201(a)(5); § 205.272(a) is
          addressed to "The handler of an organic handling operation". D32b: retention is
          § 205.103(b)(4). eCFR versioner API, 2026-11-01 edition, read 2026-11-24.
+  CIT19  (2026-11-26) a buffer crop "can never be sold, labeled, or represented as organic
+         (§ 205.202(c))". (c) requires distinct, defined boundaries and buffer zones and says
+         nothing of the crop grown in one. Keeping that crop out of the organic crop is buffer
+         management the plan describes and the certifier checks: WSDA AGR 3025 (Nov. 2024) lists
+         "Diverting harvested crop from inside the site boundaries to the nonorganic market".
 
 HOW. The printing modules are read as Python and every string literal is collected (adjacent
 literals are joined by the parser, so a sentence split over several source lines is one string).
@@ -292,6 +297,30 @@ CASES = (
             "<b>[REVIEW] 7 CFR 205.201(a)(5):</b> ",
             "<b>[WARNING] NOP 7 CFR 205.201(a)(5):</b> This is a split operation",
         ),
+    ),
+    (
+        "CIT19",
+        "certifications/osp_modules/g6_0_production.py",
+        ("never be sold", "nunca puede venderse"),
+        ("Crop grown inside a buffer is kept out of the organic crop", "se mantiene fuera del cultivo orgánico"),
+    ),
+    (
+        "CIT19",
+        "certifications/osp_modules/parcel_application.py",
+        ("never be sold", "nunca puede venderse"),
+        ("Buffer crop is kept out of the organic crop.",),
+    ),
+    (
+        "CIT19",
+        "certifications/services/osp_module_pdf.py",
+        ("may never be sold or represented as organic",),
+        ("Crop from a buffer row is kept out of the organic crop.",),
+    ),
+    (
+        "CIT19",
+        DOSSIER,
+        ("buffer crop may not be sold or represented as organic",),
+        ("A harvested buffer crop is kept out of the organic crop",),
     ),
     (
         "CIT20 D32b",
