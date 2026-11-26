@@ -4250,8 +4250,11 @@ class AuditExportService:
         # own cleaning statement (a spray record has no link field). The farm's own cleaning log
         # cannot stand in for a contractor's rig. Both verdicts are combined below.
         # A cleaning event is not an operation that needs cleaning coverage (circular).
-        ticked_operations = [ev for ev in shared_operations if ev.shared_with_conventional]
-        custom_operations = [ev for ev in shared_operations if not ev.shared_with_conventional]
+        # A custom operator's pass is held to the custom rule whether or not "shared" is also
+        # ticked: the coverage table reports every such pass as "no cleaning event linked" unless one
+        # is linked, so the aggregate log must not be able to PASS it.
+        custom_operations = [ev for ev in shared_operations if ev.operator_is_custom]
+        ticked_operations = [ev for ev in shared_operations if not ev.operator_is_custom]
         linked_shared_operations = [ev for ev in ticked_operations if ev.equipment_cleaning_event_id]
 
         def _cleaning_covers(ev):
@@ -4973,7 +4976,11 @@ class AuditExportService:
                         f"{covered_outside}/{outside_passes} custom-operator or hired-applicator pass(es) are "
                         "covered by a documented cleaning: link the covering EM cleaning event on a custom "
                         "pass, and file the contractor's cleaning statement for a hired spray",
-                        None,
+                        said(
+                            "contamination_prevention.outside_passes",
+                            covered=covered_outside,
+                            total=outside_passes,
+                        ),
                     )
                 )
         if register_shared_items:
@@ -4983,7 +4990,7 @@ class AuditExportService:
                     f"The equipment register lists {len(register_shared_items)} item(s) not dedicated to organic "
                     "production or brought in from outside: confirm whether any was used this season and file "
                     "its cleaning record",
-                    None,
+                    said("contamination_prevention.register", count=len(register_shared_items)),
                 )
             )
         if not contamination_parts:
@@ -5000,7 +5007,16 @@ class AuditExportService:
             _shown = [part for part in contamination_parts if _order[part[0]] == _worst] if _worst else None
             _status = {v: k for k, v in _order.items()}[_worst]
             _detail = "; ".join(part[1] for part in (_shown or contamination_parts))
-            _spoken = contamination_parts[0][2] if len(contamination_parts) == 1 else None
+            # The card renders ONE code per row. One shown part keeps its own code; several are sent
+            # as `contamination_prevention.combined` whose params list each part's code and data, so
+            # the card writes every part in the reader's language from the sentences it already has.
+            _spoken_parts = [part[2] for part in (_shown or contamination_parts) if part[2]]
+            if len(_spoken_parts) != len(_shown or contamination_parts):
+                _spoken = None
+            elif len(_spoken_parts) == 1:
+                _spoken = _spoken_parts[0]
+            else:
+                _spoken = said("contamination_prevention.combined", parts=_spoken_parts)
             row = ("Contamination prevention (§ 205.272)", _status, _detail)
             snapshot_rows.append(row + (_spoken,) if _spoken else row)
 

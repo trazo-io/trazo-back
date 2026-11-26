@@ -372,6 +372,50 @@ class ComplianceSnapshotTests(TestCase):
         self.assertIn("0/1 custom-operator or hired-applicator pass(es)", detail)
         self.assertNotIn("0/5", detail)
 
+    def test_a_pass_that_is_both_ticked_shared_and_custom_is_not_passed_by_an_unrelated_cleaning(self):
+        self._harvest(shared_with_conventional=True, operator_is_custom=True, performed_by="Valley Custom Harvest")
+        self._documented_cleaning()
+        status, detail = self._contamination_row()
+        self.assertEqual(status, "REVIEW")
+        self.assertIn("0/1 custom-operator or hired-applicator pass(es)", detail)
+        self.assertIn("REVIEW \u2014 no cleaning event linked", self._coverage_cells())
+
+    # ---- the row's sentence code, so the farm card can write it in the reader's language ----
+
+    def _row_code(self):
+        service = AuditExportService(self.history, certification_type="organic")
+        row = next(r for r in service.compliance_snapshot_rows() if r["label"].startswith("Contamination prevention"))
+        return row["detail_code"], row["params"]
+
+    def test_the_register_part_carries_its_own_code_and_count(self):
+        self._harvest()
+        self._register(dedicated_organic=False)
+        self.assertEqual(self._row_code(), ("contamination_prevention.register", {"count": 1}))
+
+    def test_the_custom_and_hired_part_carries_its_own_code_and_tally(self):
+        self._harvest(operator_is_custom=True)
+        self._pcb_spray()
+        self.assertEqual(self._row_code(), ("contamination_prevention.outside_passes", {"covered": 0, "total": 2}))
+
+    def test_a_legacy_part_keeps_its_code(self):
+        self._harvest(shared_with_conventional=True)
+        self.assertEqual(self._row_code(), ("contamination_prevention.no_cleaning", {}))
+
+    def test_several_parts_are_sent_as_one_combined_code_listing_each_part(self):
+        self._harvest(shared_with_conventional=True)
+        self._register(dedicated_organic=False)
+        self._pcb_spray()
+        code, params = self._row_code()
+        # A FAIL (no cleaning log) outranks the two REVIEW parts, which are then not shown.
+        self.assertEqual(code, "contamination_prevention.no_cleaning")
+        self._documented_cleaning()
+        code, params = self._row_code()
+        self.assertEqual(code, "contamination_prevention.combined")
+        self.assertEqual(
+            [p["code"] for p in params["parts"]],
+            ["contamination_prevention.outside_passes", "contamination_prevention.register"],
+        )
+
     def _pcb_spray(self):
         return ChemicalEvent.objects.create(
             history=self.history,

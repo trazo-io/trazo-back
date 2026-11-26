@@ -32,7 +32,6 @@ from history.harvest_grades import MAX_GRADE_LENGTH
 
 from .common_event import CommonEvent
 
-
 #: Crop categories whose commercial crops are ordinarily sown or transplanted as annual seedlings.
 #: Forage (can be perennial), "other" (hops, cotton) and "herb" (often perennial) are NOT here, and
 #: neither are the nursery-stock categories (tree_fruit, tree_nut, berry).

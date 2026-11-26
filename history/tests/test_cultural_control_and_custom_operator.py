@@ -241,7 +241,7 @@ class ContaminationSnapshotTests(OrchardBase):
         now = timezone.now()
         self._shared(now, cleaning=self._cleaning(now - timezone.timedelta(days=1)))
         text = self._snapshot_text()
-        self.assertIn("shared-equipment operation(s) reference a documented", text)
+        self.assertIn("All 1 custom-operator pass(es) reference a documented", text)
 
     def test_a_partly_linked_season_is_reported_as_a_fraction(self):
         now = timezone.now()
@@ -249,7 +249,7 @@ class ContaminationSnapshotTests(OrchardBase):
         self._shared(now, cleaning=cleaning)
         self._shared(now, cleaning=None)
         text = self._snapshot_text()
-        self.assertIn("1/2 shared-equipment operation(s)", text)
+        self.assertIn("1/2 custom-operator or hired-applicator pass(es)", text)
 
     def test_a_cleaning_record_is_not_itself_an_operation_needing_coverage(self):
         """Asking the wash-down record to reference a wash-down is circular.
@@ -266,14 +266,22 @@ class ContaminationSnapshotTests(OrchardBase):
         self._shared(now, cleaning=cleaning)
 
         text = self._snapshot_text()
-        self.assertIn("All 1 shared-equipment operation(s) reference a documented", text)
+        self.assertIn("All 1 custom-operator pass(es) reference a documented", text)
         self.assertNotIn("1/2", text)
 
     def test_an_operation_not_using_links_is_judged_exactly_as_before(self):
         """No retroactive downgrade for a feature that did not exist last season."""
         now = timezone.now()
         self._cleaning(now - timezone.timedelta(days=1))
-        self._shared(now, cleaning=None)
+        # Ticked shared by the grower, no custom operator: the aggregate cleaning log decides.
+        ProductionEvent.objects.create(
+            history=self.history,
+            type="HA",
+            date=now,
+            description="Harvest",
+            area_covered=44.5,
+            shared_with_conventional=True,
+        )
         text = self._snapshot_text()
         # The legacy aggregate verdict, not the new per-operation wording.
         self.assertNotIn("shared-equipment operation(s) reference", text)
